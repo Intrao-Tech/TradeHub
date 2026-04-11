@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Prisma
+backend/prisma/migrations/**/migration_lock.toml
+
+# Docker
+docker-data/
+
+# Uploaded files (local dev)
+uploads/
+
+# PDF renders from analysis (not needed in repo)
+page_*.png
+
+# Docs / specs (keep locally, not in repo)
+*.docx
+*.pdf
+*.doc

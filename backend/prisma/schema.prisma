@@ -1,0 +1,589 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// 1. ACCOUNT (auth base for everyone)
+// ============================================
+
+model Account {
+  id             BigInt    @id @default(autoincrement())
+  email          String    @unique @db.VarChar(255)
+  password_hash  String?   @db.VarChar(255)
+  google_id      String?   @unique @db.VarChar(100)
+  phone          String?   @db.VarChar(20)
+  phone_verified Boolean   @default(false)
+  status         String    @default("ACTIVE") @db.VarChar(20)
+  created_at     DateTime  @default(now()) @db.Timestamptz()
+  updated_at     DateTime  @updatedAt @db.Timestamptz()
+  last_login_at  DateTime? @db.Timestamptz()
+
+  client_profile ClientProfile?
+  staff_member   StaffMember?
+  refresh_tokens RefreshToken[]
+  notifications  Notification[]
+  audit_logs     AuditLog[]
+
+  @@map("account")
+}
+
+// ============================================
+// 2. REFRESH TOKEN
+// ============================================
+
+model RefreshToken {
+  id         BigInt   @id @default(autoincrement())
+  account_id BigInt
+  token      String   @unique @db.VarChar(500)
+  expires_at DateTime @db.Timestamptz()
+  created_at DateTime @default(now()) @db.Timestamptz()
+
+  account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
+
+  @@index([account_id])
+  @@map("refresh_token")
+}
+
+// ============================================
+// 3. CLIENT PROFILE (shared PK = account.id)
+// ============================================
+
+model ClientProfile {
+  id                         BigInt   @id
+  display_name               String   @db.VarChar(150)
+  slug                       String   @unique @db.VarChar(150)
+  avatar_url                 String?  @db.VarChar(500)
+  bio                        String?
+  city                       String?  @db.VarChar(100)
+  postcode_area              String?  @db.VarChar(10)
+  verification_level         String   @default("UNVERIFIED") @db.VarChar(30)
+  stripe_connect_account_id  String?  @db.VarChar(200)
+  stripe_onboarding_complete Boolean  @default(false)
+  created_at                 DateTime @default(now()) @db.Timestamptz()
+  updated_at                 DateTime @updatedAt @db.Timestamptz()
+
+  account          Account          @relation(fields: [id], references: [id], onDelete: Cascade)
+  worker_profile   WorkerProfile?
+  employer_profile EmployerProfile?
+
+  documents               Document[]
+  verification_milestones VerificationMilestone[]
+  referrals               Referral[]
+  user_subscriptions      UserSubscription[]
+
+  @@index([postcode_area])
+  @@map("client_profile")
+}
+
+// ============================================
+// 4. WORKER PROFILE (shared PK = client_profile.id)
+// ============================================
+
+model WorkerProfile {
+  id               BigInt    @id
+  years_experience Int?      @db.SmallInt
+  day_rate_min     Decimal?  @db.Decimal(8, 2)
+  day_rate_max     Decimal?  @db.Decimal(8, 2)
+  available_from   DateTime? @db.Timestamptz()
+  is_available     Boolean   @default(true)
+  rating_avg       Decimal   @default(0) @db.Decimal(3, 2)
+  rating_count     Int       @default(0)
+  created_at       DateTime  @default(now()) @db.Timestamptz()
+  updated_at       DateTime  @updatedAt @db.Timestamptz()
+
+  client_profile ClientProfile @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  worker_specialisations WorkerSpecialisation[]
+  portfolio_items        PortfolioItem[]
+  referral_offers        ReferralOffer[]
+  collaborations_as_worker Collaboration[] @relation("CollabWorker")
+
+  @@index([is_available, available_from])
+  @@index([rating_avg(sort: Desc), rating_count(sort: Desc)])
+  @@map("worker_profile")
+}
+
+// ============================================
+// 5. EMPLOYER PROFILE (shared PK = client_profile.id)
+// ============================================
+
+model EmployerProfile {
+  id             BigInt   @id
+  company_name   String?  @db.VarChar(200)
+  company_number String?  @db.VarChar(20)
+  team_size      Int?     @db.SmallInt
+  rating_avg     Decimal  @default(0) @db.Decimal(3, 2)
+  rating_count   Int      @default(0)
+  created_at     DateTime @default(now()) @db.Timestamptz()
+  updated_at     DateTime @updatedAt @db.Timestamptz()
+
+  client_profile ClientProfile @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  collaborations_as_employer Collaboration[] @relation("CollabEmployer")
+
+  @@map("employer_profile")
+}
+
+// ============================================
+// 6. STAFF MEMBER (shared PK = account.id)
+// ============================================
+
+model StaffMember {
+  id           BigInt   @id
+  display_name String   @db.VarChar(100)
+  staff_role   String   @db.VarChar(20)
+  created_at   DateTime @default(now()) @db.Timestamptz()
+
+  account            Account            @relation(fields: [id], references: [id], onDelete: Cascade)
+  moderation_actions ModerationAction[]
+
+  @@map("staff_member")
+}
+
+// ============================================
+// 7. DOCUMENT (file storage -> client_profile)
+// ============================================
+
+model Document {
+  id                BigInt    @id @default(autoincrement())
+  client_profile_id BigInt
+  doc_type          String    @db.VarChar(30)
+  file_url          String    @db.VarChar(500)
+  status            String    @default("PENDING") @db.VarChar(20)
+  reviewed_at       DateTime? @db.Timestamptz()
+  created_at        DateTime  @default(now()) @db.Timestamptz()
+
+  client_profile           ClientProfile          @relation(fields: [client_profile_id], references: [id], onDelete: Cascade)
+  moderation_items         ModerationItem[]
+  portfolio_item_documents PortfolioItemDocument[]
+
+  @@index([client_profile_id, status])
+  @@map("document")
+}
+
+// ============================================
+// 8. MODERATION ITEM (staff work queue)
+// ============================================
+
+model ModerationItem {
+  id          BigInt   @id @default(autoincrement())
+  document_id BigInt?
+  entity_type String   @db.VarChar(30)
+  entity_id   BigInt
+  queue_type  String   @db.VarChar(20)
+  priority    Int      @default(5) @db.SmallInt
+  status      String   @default("OPEN") @db.VarChar(20)
+  created_at  DateTime @default(now()) @db.Timestamptz()
+  updated_at  DateTime @updatedAt @db.Timestamptz()
+
+  document           Document?          @relation(fields: [document_id], references: [id])
+  moderation_actions ModerationAction[]
+
+  @@index([queue_type, status, priority])
+  @@index([entity_type, entity_id])
+  @@map("moderation_item")
+}
+
+// ============================================
+// 9. MODERATION ACTION (audit trail)
+// ============================================
+
+model ModerationAction {
+  id                 BigInt   @id @default(autoincrement())
+  moderation_item_id BigInt
+  staff_member_id    BigInt
+  action_type        String   @db.VarChar(20)
+  notes              String?
+  created_at         DateTime @default(now()) @db.Timestamptz()
+
+  moderation_item ModerationItem @relation(fields: [moderation_item_id], references: [id], onDelete: Cascade)
+  staff_member    StaffMember    @relation(fields: [staff_member_id], references: [id])
+
+  @@index([moderation_item_id])
+  @@map("moderation_action")
+}
+
+// ============================================
+// 10. SPECIALISATION (reference data)
+// ============================================
+
+model Specialisation {
+  id   Int    @id @default(autoincrement())
+  name String @unique @db.VarChar(100)
+  slug String @unique @db.VarChar(100)
+
+  worker_specialisations WorkerSpecialisation[]
+
+  @@map("specialisation")
+}
+
+model WorkerSpecialisation {
+  worker_id         BigInt
+  specialisation_id Int
+  is_primary        Boolean @default(false)
+
+  worker_profile WorkerProfile  @relation(fields: [worker_id], references: [id], onDelete: Cascade)
+  specialisation Specialisation @relation(fields: [specialisation_id], references: [id], onDelete: Cascade)
+
+  @@id([worker_id, specialisation_id])
+  @@index([specialisation_id])
+  @@map("worker_specialisation")
+}
+
+// ============================================
+// 11. PORTFOLIO ITEM (base for subtypes)
+// ============================================
+
+model PortfolioItem {
+  id          BigInt    @id @default(autoincrement())
+  worker_id   BigInt
+  item_type   String    @db.VarChar(20)
+  title       String    @db.VarChar(200)
+  description String?
+  sort_order  Int       @default(0) @db.SmallInt
+  verified    Boolean   @default(false)
+  verified_by String?   @db.VarChar(20)
+  verified_at DateTime? @db.Timestamptz()
+  created_at  DateTime  @default(now()) @db.Timestamptz()
+  updated_at  DateTime  @updatedAt @db.Timestamptz()
+
+  worker_profile WorkerProfile @relation(fields: [worker_id], references: [id], onDelete: Cascade)
+
+  experience_detail        ExperienceDetail?
+  project_detail           ProjectDetail?
+  certification_detail     CertificationDetail?
+  portfolio_media          PortfolioMedia[]
+  portfolio_item_documents PortfolioItemDocument[]
+
+  @@index([worker_id, sort_order])
+  @@map("portfolio_item")
+}
+
+// ============================================
+// 12. EXPERIENCE DETAIL (shared PK = portfolio_item.id)
+// ============================================
+
+model ExperienceDetail {
+  id           BigInt    @id
+  company_name String?   @db.VarChar(200)
+  role         String?   @db.VarChar(150)
+  start_date   DateTime? @db.Timestamptz()
+  end_date     DateTime? @db.Timestamptz()
+
+  portfolio_item PortfolioItem @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  @@map("experience_detail")
+}
+
+// ============================================
+// 13. PROJECT DETAIL (shared PK = portfolio_item.id)
+// ============================================
+
+model ProjectDetail {
+  id            BigInt    @id
+  project_type  String?   @db.VarChar(100)
+  site_postcode String?   @db.VarChar(10)
+  completed_at  DateTime? @db.Timestamptz()
+  project_value Decimal?  @db.Decimal(12, 2)
+
+  portfolio_item PortfolioItem @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  @@map("project_detail")
+}
+
+// ============================================
+// 14. CERTIFICATION DETAIL (shared PK = portfolio_item.id)
+// ============================================
+
+model CertificationDetail {
+  id           BigInt    @id
+  cert_type    String    @db.VarChar(100)
+  cert_number  String?   @db.VarChar(100)
+  issuing_body String?   @db.VarChar(200)
+  issued_at    DateTime? @db.Timestamptz()
+  expires_at   DateTime? @db.Timestamptz()
+
+  portfolio_item PortfolioItem @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  @@map("certification_detail")
+}
+
+// ============================================
+// 15. PORTFOLIO MEDIA
+// ============================================
+
+model PortfolioMedia {
+  id                BigInt   @id @default(autoincrement())
+  portfolio_item_id BigInt
+  media_url         String   @db.VarChar(500)
+  caption           String?  @db.VarChar(300)
+  sort_order        Int      @default(0) @db.SmallInt
+  created_at        DateTime @default(now()) @db.Timestamptz()
+
+  portfolio_item PortfolioItem @relation(fields: [portfolio_item_id], references: [id], onDelete: Cascade)
+
+  @@index([portfolio_item_id, sort_order])
+  @@map("portfolio_media")
+}
+
+// ============================================
+// 16. PORTFOLIO ITEM DOCUMENT (M:M junction)
+// ============================================
+
+model PortfolioItemDocument {
+  portfolio_item_id BigInt
+  document_id       BigInt
+
+  portfolio_item PortfolioItem @relation(fields: [portfolio_item_id], references: [id], onDelete: Cascade)
+  document       Document      @relation(fields: [document_id], references: [id], onDelete: Cascade)
+
+  @@id([portfolio_item_id, document_id])
+  @@map("portfolio_item_document")
+}
+
+// ============================================
+// 17. VERIFICATION MILESTONE
+// ============================================
+
+model VerificationMilestone {
+  id                BigInt    @id @default(autoincrement())
+  client_profile_id BigInt
+  milestone_type    String    @db.VarChar(30)
+  achieved_at       DateTime  @default(now()) @db.Timestamptz()
+  expires_at        DateTime? @db.Timestamptz()
+  evidence_ref      String?   @db.VarChar(500)
+  notes             String?
+  created_at        DateTime  @default(now()) @db.Timestamptz()
+
+  client_profile ClientProfile @relation(fields: [client_profile_id], references: [id], onDelete: Cascade)
+
+  @@index([client_profile_id])
+  @@map("verification_milestone")
+}
+
+// ============================================
+// 18. REFERRAL
+// ============================================
+
+model Referral {
+  id               BigInt    @id @default(autoincrement())
+  referrer_id      BigInt
+  status           String    @default("OPEN") @db.VarChar(20)
+  title            String    @db.VarChar(200)
+  description      String?
+  project_type     String?   @db.VarChar(100)
+  postcode_area    String?   @db.VarChar(10)
+  estimated_value  Decimal?  @db.Decimal(12, 2)
+  commission_pct   Decimal?  @db.Decimal(5, 2)
+  platform_fee_pct Decimal   @default(2.00) @db.Decimal(5, 2)
+  client_name      String?   @db.VarChar(200)
+  client_phone     String?   @db.VarChar(20)
+  client_email     String?   @db.VarChar(255)
+  created_at       DateTime  @default(now()) @db.Timestamptz()
+  updated_at       DateTime  @updatedAt @db.Timestamptz()
+
+  referrer       ClientProfile   @relation(fields: [referrer_id], references: [id])
+  referral_offers ReferralOffer[]
+  collaborations  Collaboration[]
+
+  @@index([referrer_id])
+  @@index([status, postcode_area])
+  @@map("referral")
+}
+
+// ============================================
+// 19. REFERRAL OFFER
+// ============================================
+
+model ReferralOffer {
+  id           BigInt    @id @default(autoincrement())
+  referral_id  BigInt
+  recipient_id BigInt
+  status       String    @default("PENDING") @db.VarChar(20)
+  message      String?
+  responded_at DateTime? @db.Timestamptz()
+  created_at   DateTime  @default(now()) @db.Timestamptz()
+
+  referral  Referral      @relation(fields: [referral_id], references: [id], onDelete: Cascade)
+  recipient WorkerProfile @relation(fields: [recipient_id], references: [id])
+
+  @@unique([referral_id, recipient_id])
+  @@index([recipient_id, status])
+  @@map("referral_offer")
+}
+
+// ============================================
+// 20. COLLABORATION
+// ============================================
+
+model Collaboration {
+  id            BigInt    @id @default(autoincrement())
+  worker_id     BigInt
+  employer_id   BigInt
+  initiated_by  String    @db.VarChar(10)
+  referral_id   BigInt?
+  status        String    @default("PENDING") @db.VarChar(20)
+  project_type  String?   @db.VarChar(100)
+  site_postcode String?   @db.VarChar(10)
+  agreed_amount Decimal?  @db.Decimal(12, 2)
+  started_at    DateTime? @db.Timestamptz()
+  ended_at      DateTime? @db.Timestamptz()
+  flagged       Boolean   @default(false)
+  flag_reason   String?   @db.VarChar(300)
+  confirmed_at  DateTime? @db.Timestamptz()
+  created_at    DateTime  @default(now()) @db.Timestamptz()
+  updated_at    DateTime  @updatedAt @db.Timestamptz()
+
+  worker   WorkerProfile   @relation("CollabWorker", fields: [worker_id], references: [id])
+  employer EmployerProfile @relation("CollabEmployer", fields: [employer_id], references: [id])
+  referral Referral?       @relation(fields: [referral_id], references: [id])
+
+  reviews            Review[]
+  escrow_transaction EscrowTransaction?
+
+  @@index([worker_id])
+  @@index([employer_id])
+  @@index([status])
+  @@map("collaboration")
+}
+
+// ============================================
+// 21. REVIEW (max 2 per collaboration)
+// ============================================
+
+model Review {
+  id                   BigInt    @id @default(autoincrement())
+  collaboration_id     BigInt
+  reviewer_role        String    @db.VarChar(10)
+  overall_rating       Int       @db.SmallInt
+  quality_rating       Int?      @db.SmallInt
+  reliability_rating   Int?      @db.SmallInt
+  communication_rating Int?      @db.SmallInt
+  payment_rating       Int?      @db.SmallInt
+  safety_rating        Int?      @db.SmallInt
+  comment              String?
+  is_published         Boolean   @default(false)
+  published_at         DateTime? @db.Timestamptz()
+  created_at           DateTime  @default(now()) @db.Timestamptz()
+
+  collaboration Collaboration @relation(fields: [collaboration_id], references: [id])
+
+  @@unique([collaboration_id, reviewer_role])
+  @@index([collaboration_id])
+  @@map("review")
+}
+
+// ============================================
+// 22. ESCROW TRANSACTION (1:0..1 with collaboration)
+// ============================================
+
+model EscrowTransaction {
+  id                       BigInt    @id @default(autoincrement())
+  collaboration_id         BigInt    @unique
+  status                   String    @default("CREATED") @db.VarChar(20)
+  job_amount               Decimal   @db.Decimal(12, 2)
+  platform_fee             Decimal   @db.Decimal(12, 2)
+  referral_commission      Decimal   @default(0) @db.Decimal(12, 2)
+  worker_payout            Decimal   @db.Decimal(12, 2)
+  currency                 String    @default("GBP") @db.VarChar(3)
+  stripe_payment_intent_id String?   @unique @db.VarChar(200)
+  stripe_charge_id         String?   @unique @db.VarChar(200)
+  stripe_transfer_id       String?   @unique @db.VarChar(200)
+  stripe_refund_id         String?   @db.VarChar(200)
+  deposit_confirmed_at     DateTime? @db.Timestamptz()
+  released_at              DateTime? @db.Timestamptz()
+  refunded_at              DateTime? @db.Timestamptz()
+  disputed_at              DateTime? @db.Timestamptz()
+  created_at               DateTime  @default(now()) @db.Timestamptz()
+  updated_at               DateTime  @updatedAt @db.Timestamptz()
+
+  collaboration Collaboration @relation(fields: [collaboration_id], references: [id])
+
+  @@map("escrow_transaction")
+}
+
+// ============================================
+// 23. SUBSCRIPTION PLAN (inactive by default)
+// ============================================
+
+model SubscriptionPlan {
+  id            Int      @id @default(autoincrement())
+  name          String   @db.VarChar(50)
+  price_monthly Decimal  @db.Decimal(8, 2)
+  price_yearly  Decimal? @db.Decimal(8, 2)
+  max_referrals Int?
+  features      Json     @default("{}")
+  is_active     Boolean  @default(false)
+
+  user_subscriptions UserSubscription[]
+
+  @@map("subscription_plan")
+}
+
+// ============================================
+// 24. USER SUBSCRIPTION
+// ============================================
+
+model UserSubscription {
+  id                   BigInt    @id @default(autoincrement())
+  client_profile_id    BigInt
+  plan_id              Int
+  stripe_sub_id        String?   @db.VarChar(100)
+  status               String    @default("active") @db.VarChar(20)
+  is_current           Boolean   @default(true)
+  current_period_start DateTime? @db.Timestamptz()
+  current_period_end   DateTime? @db.Timestamptz()
+  created_at           DateTime  @default(now()) @db.Timestamptz()
+
+  client_profile ClientProfile    @relation(fields: [client_profile_id], references: [id], onDelete: Cascade)
+  plan           SubscriptionPlan @relation(fields: [plan_id], references: [id])
+
+  @@index([client_profile_id, is_current])
+  @@map("user_subscription")
+}
+
+// ============================================
+// 25. NOTIFICATION
+// ============================================
+
+model Notification {
+  id         BigInt    @id @default(autoincrement())
+  account_id BigInt
+  type       String    @db.VarChar(50)
+  title      String    @db.VarChar(200)
+  body       String?
+  data       Json      @default("{}")
+  read_at    DateTime? @db.Timestamptz()
+  channel    String    @default("IN_APP") @db.VarChar(10)
+  sent_at    DateTime? @db.Timestamptz()
+  created_at DateTime  @default(now()) @db.Timestamptz()
+
+  account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
+
+  @@index([account_id, created_at(sort: Desc)])
+  @@map("notification")
+}
+
+// ============================================
+// 26. AUDIT LOG
+// ============================================
+
+model AuditLog {
+  id          BigInt   @id @default(autoincrement())
+  account_id  BigInt?
+  action      String   @db.VarChar(100)
+  entity_type String?  @db.VarChar(50)
+  entity_id   BigInt?
+  metadata    Json     @default("{}")
+  ip_address  String?  @db.VarChar(45)
+  created_at  DateTime @default(now()) @db.Timestamptz()
+
+  account Account? @relation(fields: [account_id], references: [id])
+
+  @@index([account_id, created_at(sort: Desc)])
+  @@map("audit_log")
+}
