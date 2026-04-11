@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { api, getToken } from '../api';
 
 type JobPostRow = {
@@ -181,8 +182,13 @@ export default function JobBoardPage() {
   return (
     <div>
       <h1>Job Board</h1>
-      {listError ? <div style={{ color: 'red', marginBottom: 8 }}>{listError}</div> : null}
-      {actionError ? <div style={{ color: 'red', marginBottom: 8 }}>{actionError}</div> : null}
+      {!loggedIn && (
+        <div className="alert alert-info">
+          Browsing as guest. <Link to="/login">Sign in</Link> to apply or post jobs.
+        </div>
+      )}
+      {listError ? <div className="alert alert-error">{listError}</div> : null}
+      {actionError ? <div className="alert alert-error">{actionError}</div> : null}
 
       <div style={{ marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <label>

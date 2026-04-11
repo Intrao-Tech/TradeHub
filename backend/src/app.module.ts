@@ -22,12 +22,17 @@ import { JobApplicationModule } from './job-application/job-application.module';
 import { ConversationModule } from './conversation/conversation.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
+import { StripeModule } from './stripe/stripe.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     PrismaModule,
+    StripeModule,
+    MailModule,
     AuthModule,
     AccountModule,
     ClientProfileModule,
@@ -48,6 +53,7 @@ import { PortfolioModule } from './portfolio/portfolio.module';
     JobPostModule,
     JobApplicationModule,
     ConversationModule,
+    WebhooksModule,
   ],
 })
 export class AppModule {}

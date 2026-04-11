@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { api, setTokens } from '../api';
 
 type RegisterResponse = {
@@ -21,10 +21,12 @@ export default function RegisterPage({ onRegister }: Props) {
   const [role, setRole] = useState<Role>('WORKER');
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    setLoading(true);
     try {
       const body: Record<string, unknown> = {
         email,
@@ -41,78 +43,83 @@ export default function RegisterPage({ onRegister }: Props) {
       });
       setTokens(data.access_token, data.refresh_token);
       onRegister();
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <div>
-      <h1>Register</h1>
-      {error ? (
-        <div style={{ color: 'red', marginBottom: 8 }}>{error}</div>
-      ) : null}
-      <form onSubmit={handleSubmit}>
-        <div>
+    <div className="auth-shell">
+      <div className="auth-card">
+        <h1>Create your account</h1>
+        <p className="muted">Join TradeHub as a worker or employer.</p>
+
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <form onSubmit={handleSubmit} className="auth-form stack">
           <label>
-            Email{' '}
+            Email
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
               required
             />
           </label>
-        </div>
-        <div>
           <label>
-            Password{' '}
+            Password
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder="at least 8 characters"
+              autoComplete="new-password"
               required
               minLength={8}
             />
           </label>
-        </div>
-        <div>
           <label>
-            Display name{' '}
+            Display name
             <input
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Mike Builder"
               required
               minLength={2}
             />
           </label>
-        </div>
-        <div>
           <label>
-            Role{' '}
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as Role)}
-            >
-              <option value="WORKER">WORKER</option>
-              <option value="EMPLOYER">EMPLOYER</option>
+            I am a
+            <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
+              <option value="WORKER">Worker / Tradesperson</option>
+              <option value="EMPLOYER">Employer / Contractor</option>
             </select>
           </label>
-        </div>
-        <div>
           <label>
-            Phone (optional){' '}
+            Phone <span className="muted small">(optional)</span>
             <input
-              type="text"
+              type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              placeholder="+44 ..."
+              autoComplete="tel"
             />
           </label>
-        </div>
-        <button type="submit">Register</button>
-      </form>
+          <button type="submit" className="btn-block" disabled={loading}>
+            {loading ? 'Creating account…' : 'Create account'}
+          </button>
+        </form>
+
+        <p className="muted small center" style={{ marginTop: 20 }}>
+          Already have an account? <Link to="/login">Sign in</Link>
+        </p>
+      </div>
     </div>
   );
 }

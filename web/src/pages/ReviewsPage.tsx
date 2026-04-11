@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { api } from '../api';
+import { Link } from 'react-router-dom';
+import { api, getToken } from '../api';
 
 type ReviewRow = {
   overall_rating?: number;
@@ -45,6 +46,7 @@ function optionalRating(name: string, value: string, onChange: (v: string) => vo
 }
 
 export default function ReviewsPage() {
+  const loggedIn = !!getToken();
   const [error, setError] = useState('');
   const [workerId, setWorkerId] = useState('');
   const [employerId, setEmployerId] = useState('');
@@ -213,6 +215,13 @@ export default function ReviewsPage() {
         {jsonPre(employerReviews)}
       </section>
 
+      {!loggedIn && (
+        <div className="alert alert-info">
+          You are browsing as a guest. <Link to="/login">Sign in</Link> to write reviews.
+        </div>
+      )}
+
+      {loggedIn && (
       <section style={{ marginBottom: 24 }}>
         <h2>Create review</h2>
         <form onSubmit={handleCreateReview} style={{ display: 'grid', gap: 8, maxWidth: 420 }}>
@@ -250,6 +259,7 @@ export default function ReviewsPage() {
         <h3>Create response</h3>
         {jsonPre(createResult)}
       </section>
+      )}
     </div>
   );
 }

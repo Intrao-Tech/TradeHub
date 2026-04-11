@@ -2,19 +2,26 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
+import Stripe from 'stripe';
 import { PrismaService } from '../prisma/prisma.service';
+import { STRIPE_CLIENT } from '../stripe/stripe.module';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 
-const PLACEHOLDER_PI_PREFIX = 'pi_placeholder_';
-
 @Injectable()
 export class EscrowService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    @Inject(STRIPE_CLIENT) private readonly stripe: Stripe | null,
+  ) {}
 
   async create(collaborationId: bigint, employerClientProfileId: bigint, dto: CreateEscrowDto) {
     const collaboration = await this.prisma.collaboration.findUnique({
@@ -94,17 +101,65 @@ export class EscrowService {
   }
 
   async initiateDeposit(escrowId: bigint, employerClientProfileId: bigint) {
+    if (!this.stripe) {
+      throw new ServiceUnavailableException(
+        'Stripe is not configured (STRIPE_SECRET_KEY missing)',
+      );
+    }
     const escrow = await this.getEscrowOrThrow(escrowId);
     if (escrow.collaboration.employer_id !== employerClientProfileId) {
       throw new ForbiddenException('Only the employer can initiate deposit');
     }
-    return this.prisma.escrowTransaction.update({
+    if (escrow.status === 'HELD' || escrow.status === 'RELEASED') {
+      throw new ConflictException(`Escrow already ${escrow.status.toLowerCase()}`);
+    }
+
+    const amount = new Prisma.Decimal(escrow.job_amount).toNumber();
+    const amountPence = Math.round(amount * 100);
+    const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+
+    const session = await this.stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'gbp',
+            product_data: {
+              name: `TradeHub escrow #${escrowId}`,
+              description: `Collaboration #${escrow.collaboration_id}`,
+            },
+            unit_amount: amountPence,
+          },
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        escrow_id: escrowId.toString(),
+        collaboration_id: escrow.collaboration_id.toString(),
+      },
+      payment_intent_data: {
+        metadata: {
+          escrow_id: escrowId.toString(),
+          collaboration_id: escrow.collaboration_id.toString(),
+        },
+      },
+      success_url: `${frontendUrl}/collaborations?escrow_funded=${escrowId}`,
+      cancel_url: `${frontendUrl}/collaborations?escrow_canceled=${escrowId}`,
+    });
+
+    await this.prisma.escrowTransaction.update({
       where: { id: escrowId },
       data: {
         status: 'DEPOSIT_PENDING',
-        stripe_payment_intent_id: `${PLACEHOLDER_PI_PREFIX}${escrowId}`,
+        stripe_payment_intent_id:
+          typeof session.payment_intent === 'string'
+            ? session.payment_intent
+            : session.payment_intent?.id ?? null,
       },
     });
+
+    return { checkout_url: session.url, session_id: session.id };
   }
 
   async confirmDeposit(escrowId: bigint) {

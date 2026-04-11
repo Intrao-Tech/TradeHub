@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
 
 type ClientProfile = {
@@ -28,7 +29,6 @@ function rolesFromAccount(me: AccountMe): string[] {
 export default function DashboardPage() {
   const [me, setMe] = useState<AccountMe | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [unreadError, setUnreadError] = useState('');
   const [unreadCount, setUnreadCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -43,79 +43,105 @@ export default function DashboardPage() {
           setLoadError(err instanceof Error ? err.message : String(err));
         }
       }
+      try {
+        const count = await api<number>('/notifications/unread-count');
+        if (!cancelled) setUnreadCount(count);
+      } catch {
+        /* ignore, not critical */
+      }
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  async function fetchUnreadCount() {
-    setUnreadError('');
-    setUnreadCount(null);
-    try {
-      const count = await api<number>('/notifications/unread-count');
-      setUnreadCount(count);
-    } catch (err) {
-      setUnreadError(err instanceof Error ? err.message : String(err));
-    }
-  }
+  const roles = me ? rolesFromAccount(me) : [];
 
   return (
-    <div>
-      <h1>Dashboard</h1>
-      {loadError ? (
-        <div style={{ color: 'red', marginBottom: 8 }}>{loadError}</div>
-      ) : null}
+    <>
+      <div className="page-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p className="muted">Your account overview and quick actions.</p>
+        </div>
+        {unreadCount !== null && (
+          <Link to="/notifications" className="btn">
+            Notifications <span className="badge badge-primary">{unreadCount}</span>
+          </Link>
+        )}
+      </div>
 
-      {!me && !loadError ? <div>Loading…</div> : null}
+      {loadError && <div className="alert alert-error">{loadError}</div>}
+      {!me && !loadError && <div className="empty-state">Loading your account…</div>}
 
-      {me ? (
-        <>
-          <h2>Account</h2>
-          <div>id: {String(me.id)}</div>
-          <div>email: {me.email}</div>
-          <div>status: {me.status}</div>
-
-          <h2>Role</h2>
-          <div>{rolesFromAccount(me).join(' / ') || '(none)'}</div>
+      {me && (
+        <div className="grid-2">
+          <div className="card">
+            <h2>Account</h2>
+            <dl className="kv">
+              <dt>ID</dt><dd>{String(me.id)}</dd>
+              <dt>Email</dt><dd>{me.email}</dd>
+              <dt>Status</dt><dd><span className="badge badge-success">{me.status}</span></dd>
+              <dt>Roles</dt>
+              <dd>
+                {roles.length ? (
+                  roles.map((r) => <span key={r} className="badge badge-primary" style={{ marginRight: 6 }}>{r}</span>)
+                ) : (
+                  <span className="muted">none</span>
+                )}
+              </dd>
+            </dl>
+          </div>
 
           {me.client_profile ? (
-            <>
+            <div className="card">
               <h2>Client profile</h2>
-              <div>display_name: {me.client_profile.display_name}</div>
-              <div>slug: {me.client_profile.slug}</div>
-              <div>verification_level: {me.client_profile.verification_level}</div>
-            </>
+              <dl className="kv">
+                <dt>Display name</dt><dd>{me.client_profile.display_name}</dd>
+                <dt>Slug</dt><dd><code>{me.client_profile.slug}</code></dd>
+                <dt>Verification</dt>
+                <dd><span className="badge">{me.client_profile.verification_level}</span></dd>
+              </dl>
+              <div className="row" style={{ marginTop: 14 }}>
+                <Link to="/profile" className="btn">Edit profile</Link>
+              </div>
+            </div>
           ) : (
-            <div>No client_profile</div>
+            <div className="card">
+              <h2>Client profile</h2>
+              <p className="muted">No client profile yet.</p>
+            </div>
           )}
 
-          {me.client_profile?.worker_profile ? (
-            <>
-              <h2>Worker profile</h2>
-              <pre>{JSON.stringify(me.client_profile.worker_profile, null, 2)}</pre>
-            </>
-          ) : null}
+          <div className="card">
+            <h2>Quick actions</h2>
+            <div className="stack-sm stack">
+              <Link to="/jobs" className="btn">Browse jobs</Link>
+              <Link to="/workers" className="btn">Find workers</Link>
+              <Link to="/my-applications" className="btn">My applications</Link>
+              <Link to="/inbox" className="btn">Inbox</Link>
+            </div>
+          </div>
 
-          {me.client_profile?.employer_profile ? (
-            <>
-              <h2>Employer profile</h2>
-              <pre>{JSON.stringify(me.client_profile.employer_profile, null, 2)}</pre>
-            </>
-          ) : null}
-        </>
-      ) : null}
-
-      <h2>Notifications</h2>
-      {unreadError ? (
-        <div style={{ color: 'red', marginBottom: 8 }}>{unreadError}</div>
-      ) : null}
-      <button type="button" onClick={fetchUnreadCount}>
-        Get unread count
-      </button>
-      {unreadCount !== null ? (
-        <pre style={{ marginTop: 8 }}>{JSON.stringify(unreadCount, null, 2)}</pre>
-      ) : null}
-    </div>
+          {(me.client_profile?.worker_profile || me.client_profile?.employer_profile) && (
+            <div className="card">
+              <h2>Profile data</h2>
+              {me.client_profile?.worker_profile && (
+                <>
+                  <h4>Worker</h4>
+                  <pre>{JSON.stringify(me.client_profile.worker_profile, null, 2)}</pre>
+                </>
+              )}
+              {me.client_profile?.employer_profile && (
+                <>
+                  <h4>Employer</h4>
+                  <pre>{JSON.stringify(me.client_profile.employer_profile, null, 2)}</pre>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </>
   );
 }

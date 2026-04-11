@@ -1,5 +1,5 @@
-import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
 import { api, getToken, clearTokens } from './api';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -15,75 +15,116 @@ import NotificationsPage from './pages/NotificationsPage';
 import JobBoardPage from './pages/JobBoardPage';
 import MyApplicationsPage from './pages/MyApplicationsPage';
 import InboxPage from './pages/InboxPage';
+import OAuthCallbackPage from './pages/OAuthCallbackPage';
+
+type NavItem = { to: string; label: string };
+
+const PUBLIC_NAV: NavItem[] = [
+  { to: '/jobs', label: 'Jobs' },
+  { to: '/workers', label: 'Workers' },
+  { to: '/employers', label: 'Employers' },
+  { to: '/reviews', label: 'Reviews' },
+];
+
+const PRIVATE_NAV: NavItem[] = [
+  { to: '/dashboard', label: 'Dashboard' },
+  { to: '/profile', label: 'My Profile' },
+  { to: '/my-applications', label: 'Applications' },
+  { to: '/collaborations', label: 'Collaborations' },
+  { to: '/referrals', label: 'Referrals' },
+  { to: '/inbox', label: 'Inbox' },
+  { to: '/notifications', label: 'Notifications' },
+  { to: '/admin', label: 'Admin' },
+];
+
+function Protected({ loggedIn, children }: { loggedIn: boolean; children: React.ReactElement }) {
+  const location = useLocation();
+  if (!loggedIn) {
+    return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+  }
+  return children;
+}
 
 function App() {
   const [loggedIn, setLoggedIn] = useState(!!getToken());
 
+  const refreshAuth = useCallback(() => setLoggedIn(!!getToken()), []);
+
   useEffect(() => {
-    const check = () => setLoggedIn(!!getToken());
-    window.addEventListener('storage', check);
-    return () => window.removeEventListener('storage', check);
-  }, []);
+    window.addEventListener('storage', refreshAuth);
+    window.addEventListener('auth-changed', refreshAuth);
+    return () => {
+      window.removeEventListener('storage', refreshAuth);
+      window.removeEventListener('auth-changed', refreshAuth);
+    };
+  }, [refreshAuth]);
 
   const handleLogout = async () => {
     try { await api('/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
     clearTokens();
     setLoggedIn(false);
+    window.dispatchEvent(new Event('auth-changed'));
+  };
+
+  const onAuthSuccess = () => {
+    setLoggedIn(true);
+    window.dispatchEvent(new Event('auth-changed'));
   };
 
   return (
     <BrowserRouter>
-      <nav style={{ padding: '10px 20px', background: '#1a1a2e', display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <strong style={{ color: '#e94560', marginRight: '20px', fontSize: '18px' }}>TradeHub</strong>
-        <Link to="/jobs" style={navLink}>Job Board</Link>
-        {loggedIn ? (
-          <>
-            <Link to="/dashboard" style={navLink}>Dashboard</Link>
-            <Link to="/profile" style={navLink}>My Profile</Link>
-            <Link to="/workers" style={navLink}>Workers</Link>
-            <Link to="/employers" style={navLink}>Employers</Link>
-            <Link to="/collaborations" style={navLink}>Collaborations</Link>
-            <Link to="/referrals" style={navLink}>Referrals</Link>
-            <Link to="/reviews" style={navLink}>Reviews</Link>
-            <Link to="/notifications" style={navLink}>Notifications</Link>
-            <Link to="/my-applications" style={navLink}>My Applications</Link>
-            <Link to="/inbox" style={navLink}>Inbox</Link>
-            <Link to="/admin" style={navLink}>Admin</Link>
-            <button onClick={handleLogout} style={{ ...navLink, background: 'none', border: '1px solid #e94560', cursor: 'pointer', padding: '4px 12px', borderRadius: '4px' }}>
-              Logout
-            </button>
-          </>
-        ) : (
-          <>
-            <Link to="/login" style={navLink}>Login</Link>
-            <Link to="/register" style={navLink}>Register</Link>
-          </>
-        )}
+      <nav className="nav">
+        <div className="nav-inner">
+          <NavLink to={loggedIn ? '/dashboard' : '/jobs'} className="nav-brand">
+            Trade<span>Hub</span>
+          </NavLink>
+          {PUBLIC_NAV.map((n) => (
+            <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+              {n.label}
+            </NavLink>
+          ))}
+          {loggedIn && PRIVATE_NAV.map((n) => (
+            <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+              {n.label}
+            </NavLink>
+          ))}
+          <div className="nav-spacer" />
+          {loggedIn ? (
+            <div className="nav-user">
+              <button type="button" className="btn-ghost" onClick={handleLogout}>Logout</button>
+            </div>
+          ) : (
+            <>
+              <NavLink to="/login" className="nav-link">Login</NavLink>
+              <NavLink to="/register" className="btn btn-primary" style={{ marginLeft: 4 }}>Sign up</NavLink>
+            </>
+          )}
+        </div>
       </nav>
 
-      <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-        <Routes>
-          <Route path="/login" element={<LoginPage onLogin={() => setLoggedIn(true)} />} />
-          <Route path="/register" element={<RegisterPage onRegister={() => setLoggedIn(true)} />} />
-          <Route path="/dashboard" element={loggedIn ? <DashboardPage /> : <Navigate to="/login" />} />
-          <Route path="/profile" element={loggedIn ? <ProfilePage /> : <Navigate to="/login" />} />
-          <Route path="/jobs" element={<JobBoardPage />} />
-          <Route path="/workers" element={<WorkerSearchPage />} />
-          <Route path="/employers" element={<EmployerSearchPage />} />
-          <Route path="/collaborations" element={loggedIn ? <CollaborationsPage /> : <Navigate to="/login" />} />
-          <Route path="/referrals" element={loggedIn ? <ReferralsPage /> : <Navigate to="/login" />} />
-          <Route path="/reviews" element={<ReviewsPage />} />
-          <Route path="/notifications" element={loggedIn ? <NotificationsPage /> : <Navigate to="/login" />} />
-          <Route path="/admin" element={loggedIn ? <AdminPage /> : <Navigate to="/login" />} />
-          <Route path="/my-applications" element={loggedIn ? <MyApplicationsPage /> : <Navigate to="/login" />} />
-          <Route path="/inbox" element={loggedIn ? <InboxPage /> : <Navigate to="/login" />} />
-          <Route path="/" element={<Navigate to={loggedIn ? '/dashboard' : '/login'} />} />
-        </Routes>
-      </div>
+      <Routes>
+        <Route path="/login" element={<LoginPage onLogin={onAuthSuccess} />} />
+        <Route path="/register" element={<RegisterPage onRegister={onAuthSuccess} />} />
+        <Route path="/oauth/callback" element={<OAuthCallbackPage onLogin={onAuthSuccess} />} />
+
+        <Route path="/jobs" element={<div className="page"><JobBoardPage /></div>} />
+        <Route path="/workers" element={<div className="page"><WorkerSearchPage /></div>} />
+        <Route path="/employers" element={<div className="page"><EmployerSearchPage /></div>} />
+        <Route path="/reviews" element={<div className="page"><ReviewsPage /></div>} />
+
+        <Route path="/dashboard" element={<Protected loggedIn={loggedIn}><div className="page"><DashboardPage /></div></Protected>} />
+        <Route path="/profile" element={<Protected loggedIn={loggedIn}><div className="page"><ProfilePage /></div></Protected>} />
+        <Route path="/collaborations" element={<Protected loggedIn={loggedIn}><div className="page"><CollaborationsPage /></div></Protected>} />
+        <Route path="/referrals" element={<Protected loggedIn={loggedIn}><div className="page"><ReferralsPage /></div></Protected>} />
+        <Route path="/notifications" element={<Protected loggedIn={loggedIn}><div className="page"><NotificationsPage /></div></Protected>} />
+        <Route path="/admin" element={<Protected loggedIn={loggedIn}><div className="page"><AdminPage /></div></Protected>} />
+        <Route path="/my-applications" element={<Protected loggedIn={loggedIn}><div className="page"><MyApplicationsPage /></div></Protected>} />
+        <Route path="/inbox" element={<Protected loggedIn={loggedIn}><div className="page"><InboxPage /></div></Protected>} />
+
+        <Route path="/" element={<Navigate to={loggedIn ? '/dashboard' : '/jobs'} replace />} />
+      </Routes>
     </BrowserRouter>
   );
 }
-
-const navLink: React.CSSProperties = { color: '#eee', textDecoration: 'none', fontSize: '14px' };
 
 export default App;

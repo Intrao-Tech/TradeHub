@@ -5,9 +5,12 @@ import {
   UseGuards,
   Get,
   Req,
+  Res,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -21,7 +24,10 @@ import type { CurrentUserPayload } from '../common/decorators/current-user.decor
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly config: ConfigService,
+  ) {}
 
   @Post('register')
   @ApiOperation({ summary: 'Register with email/password' })
@@ -67,12 +73,31 @@ export class AuthController {
   @Get('google')
   @UseGuards(GoogleAuthGuard)
   @ApiOperation({ summary: 'Initiate Google OAuth flow' })
-  googleAuth() {}
+  googleAuth() {
+    /* Passport redirects to Google */
+  }
 
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
-  @ApiOperation({ summary: 'Google OAuth callback' })
-  googleCallback(@Req() req: { user: { googleId: string; email: string; displayName: string } }) {
-    return this.authService.handleGoogleLogin(req.user);
+  @ApiOperation({ summary: 'Google OAuth callback — redirects to frontend with tokens' })
+  async googleCallback(
+    @Req() req: { user: { googleId: string; email: string; displayName: string }; query: Record<string, string | undefined> },
+    @Res() res: Response,
+  ) {
+    const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:3000');
+    try {
+      const tokens = await this.authService.handleGoogleLogin(req.user);
+      const next = (req.query?.state && decodeURIComponent(req.query.state)) || '/dashboard';
+      const params = new URLSearchParams({
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        next,
+      });
+      return res.redirect(`${frontendUrl}/oauth/callback?${params.toString()}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Google login failed';
+      const params = new URLSearchParams({ error: message });
+      return res.redirect(`${frontendUrl}/oauth/callback?${params.toString()}`);
+    }
   }
 }
