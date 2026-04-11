@@ -1,5 +1,5 @@
 -- ============================================
--- TradeHub UK - Database Schema v7
+-- TradeHub UK - Database Schema v8
 -- PostgreSQL 16 | Redgate Data Modeler
 -- IDs: BIGSERIAL / BIGINT
 -- Dates: TIMESTAMPTZ everywhere
@@ -245,6 +245,33 @@ CREATE INDEX idx_ws_spec ON worker_specialisation (specialisation_id);
 
 
 -- ============================================
+-- 10b. TAG (granular skills / keywords)
+-- ============================================
+
+CREATE TABLE tag (
+    id      SERIAL PRIMARY KEY,
+    name    VARCHAR(100) NOT NULL,
+    slug    VARCHAR(100) NOT NULL,
+
+    CONSTRAINT tag_name_unique UNIQUE (name),
+    CONSTRAINT tag_slug_unique UNIQUE (slug)
+);
+
+CREATE TABLE worker_tag (
+    worker_id   BIGINT NOT NULL,
+    tag_id      INT    NOT NULL,
+
+    PRIMARY KEY (worker_id, tag_id),
+    CONSTRAINT fk_wt_worker FOREIGN KEY (worker_id)
+        REFERENCES worker_profile(id) ON DELETE CASCADE,
+    CONSTRAINT fk_wt_tag FOREIGN KEY (tag_id)
+        REFERENCES tag(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_wt_tag ON worker_tag (tag_id);
+
+
+-- ============================================
 -- 11. PORTFOLIO ITEM (base for all subtypes)
 -- ============================================
 
@@ -434,7 +461,7 @@ CREATE INDEX idx_ro_recipient ON referral_offer (recipient_id, status);
 
 
 -- ============================================
--- 20. COLLABORATION (worker <-> employer, optional referral origin)
+-- 20. COLLABORATION (worker <-> employer, optional referral/job origin)
 -- ============================================
 
 CREATE TABLE collaboration (
@@ -443,6 +470,7 @@ CREATE TABLE collaboration (
     employer_id     BIGINT NOT NULL,
     initiated_by    VARCHAR(10) NOT NULL,
     referral_id     BIGINT,
+    job_post_id     BIGINT,
     status          VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     project_type    VARCHAR(100),
     site_postcode   VARCHAR(10),
@@ -624,3 +652,178 @@ CREATE TABLE audit_log (
 );
 
 CREATE INDEX idx_audit_account ON audit_log (account_id, created_at DESC);
+
+
+-- ============================================
+-- 27. JOB POST (employer vacancy board)
+-- ============================================
+
+CREATE TABLE job_post (
+    id              BIGSERIAL PRIMARY KEY,
+    employer_id     BIGINT NOT NULL,
+    title           VARCHAR(200) NOT NULL,
+    description     TEXT,
+    postcode_area   VARCHAR(10),
+    site_address    VARCHAR(300),
+    pay_type        VARCHAR(15) NOT NULL,
+    day_rate_min    DECIMAL(8, 2),
+    day_rate_max    DECIMAL(8, 2),
+    fixed_price     DECIMAL(12, 2),
+    duration_days   INT,
+    start_date      TIMESTAMPTZ,
+    status          VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+    is_urgent       BOOLEAN NOT NULL DEFAULT FALSE,
+    expires_at      TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT fk_jp_employer FOREIGN KEY (employer_id)
+        REFERENCES employer_profile(id),
+    CONSTRAINT chk_jp_pay_type CHECK (pay_type IN ('DAY_RATE', 'FIXED_PRICE')),
+    CONSTRAINT chk_jp_status CHECK (status IN ('DRAFT', 'OPEN', 'CLOSED', 'FILLED'))
+);
+
+CREATE INDEX idx_jp_employer ON job_post (employer_id);
+CREATE INDEX idx_jp_status_postcode ON job_post (status, postcode_area);
+
+
+-- ============================================
+-- 27b. JOB POST SPECIALISATION (M:M -- which skills a job requires)
+-- ============================================
+
+CREATE TABLE job_post_specialisation (
+    job_post_id       BIGINT NOT NULL,
+    specialisation_id INT    NOT NULL,
+
+    PRIMARY KEY (job_post_id, specialisation_id),
+    CONSTRAINT fk_jps_post FOREIGN KEY (job_post_id)
+        REFERENCES job_post(id) ON DELETE CASCADE,
+    CONSTRAINT fk_jps_spec FOREIGN KEY (specialisation_id)
+        REFERENCES specialisation(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_jps_spec ON job_post_specialisation (specialisation_id);
+
+
+-- ============================================
+-- 27c. JOB POST TAG (M:M -- which tags/keywords a job requires)
+-- ============================================
+
+CREATE TABLE job_post_tag (
+    job_post_id BIGINT NOT NULL,
+    tag_id      INT    NOT NULL,
+
+    PRIMARY KEY (job_post_id, tag_id),
+    CONSTRAINT fk_jpt_post FOREIGN KEY (job_post_id)
+        REFERENCES job_post(id) ON DELETE CASCADE,
+    CONSTRAINT fk_jpt_tag FOREIGN KEY (tag_id)
+        REFERENCES tag(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_jpt_tag ON job_post_tag (tag_id);
+
+
+-- ============================================
+-- 28. JOB APPLICATION (bidirectional: worker applies OR employer invites)
+--     initiated_by = WORKER  -> worker applied, no auto-chat
+--     initiated_by = EMPLOYER -> employer sent invitation, auto-creates conversation
+-- ============================================
+
+CREATE TABLE job_application (
+    id              BIGSERIAL PRIMARY KEY,
+    job_post_id     BIGINT NOT NULL,
+    worker_id       BIGINT NOT NULL,
+    initiated_by    VARCHAR(10) NOT NULL,
+    status          VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    cover_message   TEXT,
+    proposed_rate   DECIMAL(8, 2),
+    responded_at    TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT fk_ja_job FOREIGN KEY (job_post_id)
+        REFERENCES job_post(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ja_worker FOREIGN KEY (worker_id)
+        REFERENCES worker_profile(id),
+    CONSTRAINT ja_one_per_worker UNIQUE (job_post_id, worker_id),
+    CONSTRAINT chk_ja_initiated CHECK (initiated_by IN ('WORKER', 'EMPLOYER')),
+    CONSTRAINT chk_ja_status CHECK (status IN (
+        'PENDING', 'REVIEWED', 'SHORTLISTED', 'ACCEPTED', 'REJECTED', 'WITHDRAWN'
+    ))
+);
+
+CREATE INDEX idx_ja_job_status ON job_application (job_post_id, status);
+CREATE INDEX idx_ja_worker_status ON job_application (worker_id, status);
+
+
+-- ============================================
+-- 29. CONVERSATION
+-- ============================================
+
+CREATE TABLE conversation (
+    id              BIGSERIAL PRIMARY KEY,
+    last_message_at TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+
+-- ============================================
+-- 30. CONVERSATION PARTICIPANT (M:M between conversation and account)
+--     Defines who is in the chat + per-user read state.
+--     For 1:1 chats: exactly 2 rows per conversation.
+--     Extensible to group chats (N rows per conversation).
+-- ============================================
+
+CREATE TABLE conversation_participant (
+    conversation_id BIGINT NOT NULL,
+    account_id      BIGINT NOT NULL,
+    last_read_at    TIMESTAMPTZ,
+    joined_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    PRIMARY KEY (conversation_id, account_id),
+    CONSTRAINT fk_convp_conv FOREIGN KEY (conversation_id)
+        REFERENCES conversation(id) ON DELETE CASCADE,
+    CONSTRAINT fk_convp_account FOREIGN KEY (account_id)
+        REFERENCES account(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_convp_account ON conversation_participant (account_id);
+
+
+-- ============================================
+-- 31. MESSAGE
+--     Composite FK (conversation_id, sender_id) -> conversation_participant
+--     ensures sender is a participant of the conversation.
+--     No direct FK to account -- relationship goes through participant.
+--
+--     message_type:
+--       TEXT           = regular text
+--       JOB_INVITATION = employer invited worker (metadata: { job_post_id })
+--       SYSTEM         = platform-generated
+--     Unread = messages where created_at > participant.last_read_at
+-- ============================================
+
+CREATE TABLE message (
+    id              BIGSERIAL PRIMARY KEY,
+    conversation_id BIGINT NOT NULL,
+    sender_id       BIGINT NOT NULL,
+    content         TEXT NOT NULL,
+    message_type    VARCHAR(20) NOT NULL DEFAULT 'TEXT',
+    metadata        JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT fk_msg_participant FOREIGN KEY (conversation_id, sender_id)
+        REFERENCES conversation_participant(conversation_id, account_id),
+    CONSTRAINT chk_msg_type CHECK (message_type IN ('TEXT', 'JOB_INVITATION', 'SYSTEM'))
+);
+
+CREATE INDEX idx_msg_conv_time ON message (conversation_id, created_at);
+
+
+-- ============================================
+-- FK added after job_post is created (collaboration.job_post_id)
+-- ============================================
+
+ALTER TABLE collaboration
+    ADD CONSTRAINT fk_collab_job_post FOREIGN KEY (job_post_id)
+        REFERENCES job_post(id);

@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
 
@@ -489,6 +489,336 @@ async function main() {
     },
   });
   console.log('  Audit log entry');
+
+  // ── Tags ─────────────────────────────────────────────────────
+  const tagNames = [
+    'Commercial Wiring',
+    'Domestic Rewiring',
+    'EV Charger Installation',
+    'Underfloor Heating',
+    'Loft Conversion',
+    'Kitchen Fitting',
+    'Bathroom Tiling',
+    'Plastering',
+    'Scaffolding',
+    'Roofing Repair',
+    'Gas Boiler Installation',
+    'Fire Alarm Systems',
+    'CCTV Installation',
+    'Damp Proofing',
+    'Insulation',
+    'Painting & Decorating',
+    'Concrete Work',
+    'Drainage',
+    'Solar Panel Installation',
+    'Smart Home Wiring',
+  ];
+
+  const tagSlug = (name: string) =>
+    name
+      .toLowerCase()
+      .replace(/&/g, 'and')
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]+/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+
+  await prisma.tag.createMany({
+    data: tagNames.map((name) => ({ name, slug: tagSlug(name) })),
+    skipDuplicates: true,
+  });
+  const tagRows = await prisma.tag.findMany({ where: { name: { in: tagNames } } });
+  const tagIdByName = new Map(tagRows.map((t) => [t.name, t.id]));
+  console.log(`  ${tagRows.length} tags`);
+
+  // ── Worker tags ──────────────────────────────────────────────
+  await prisma.workerTag.createMany({
+    data: [
+      { worker_id: workerAccounts[0].id, tag_id: tagIdByName.get('Commercial Wiring')! },
+      { worker_id: workerAccounts[0].id, tag_id: tagIdByName.get('Loft Conversion')! },
+      { worker_id: workerAccounts[0].id, tag_id: tagIdByName.get('Kitchen Fitting')! },
+      { worker_id: workerAccounts[1].id, tag_id: tagIdByName.get('Domestic Rewiring')! },
+      { worker_id: workerAccounts[1].id, tag_id: tagIdByName.get('EV Charger Installation')! },
+      { worker_id: workerAccounts[1].id, tag_id: tagIdByName.get('Smart Home Wiring')! },
+      { worker_id: workerAccounts[1].id, tag_id: tagIdByName.get('Fire Alarm Systems')! },
+      { worker_id: workerAccounts[2].id, tag_id: tagIdByName.get('Gas Boiler Installation')! },
+      { worker_id: workerAccounts[2].id, tag_id: tagIdByName.get('Underfloor Heating')! },
+      { worker_id: workerAccounts[2].id, tag_id: tagIdByName.get('Drainage')! },
+      { worker_id: workerAccounts[3].id, tag_id: tagIdByName.get('Loft Conversion')! },
+      { worker_id: workerAccounts[3].id, tag_id: tagIdByName.get('Plastering')! },
+      { worker_id: workerAccounts[3].id, tag_id: tagIdByName.get('Painting & Decorating')! },
+      { worker_id: workerAccounts[3].id, tag_id: tagIdByName.get('Roofing Repair')! },
+      { worker_id: workerAccounts[4].id, tag_id: tagIdByName.get('Bathroom Tiling')! },
+      { worker_id: workerAccounts[4].id, tag_id: tagIdByName.get('Kitchen Fitting')! },
+      { worker_id: workerAccounts[4].id, tag_id: tagIdByName.get('Plastering')! },
+    ],
+    skipDuplicates: true,
+  });
+  console.log('  Worker tags (3–5 per worker)');
+
+  // ── Job posts ────────────────────────────────────────────────
+  const jp1 = await prisma.jobPost.create({
+    data: {
+      employer_id: employerAccounts[0].id,
+      title: 'Electrician needed for office refit',
+      description: 'Commercial office strip-out and refit; need a qualified electrician for containment, tray, and fit-out.',
+      postcode_area: 'EC1',
+      pay_type: 'DAY_RATE',
+      day_rate_min: new Prisma.Decimal(250),
+      day_rate_max: new Prisma.Decimal(350),
+      duration_days: 10,
+      status: 'OPEN',
+      is_urgent: false,
+    },
+  });
+  const jp2 = await prisma.jobPost.create({
+    data: {
+      employer_id: employerAccounts[0].id,
+      title: 'Plumber for new build bathrooms',
+      description: 'New build development: first and second fix for multiple bathroom units.',
+      postcode_area: 'E14',
+      pay_type: 'FIXED_PRICE',
+      fixed_price: new Prisma.Decimal(4500),
+      duration_days: 15,
+      status: 'OPEN',
+      is_urgent: false,
+    },
+  });
+  const jp3 = await prisma.jobPost.create({
+    data: {
+      employer_id: employerAccounts[1].id,
+      title: 'Full kitchen renovation',
+      description: 'Rip-out, electrics, carpentry and finishing for a high-end residential kitchen.',
+      postcode_area: 'SW1',
+      pay_type: 'DAY_RATE',
+      day_rate_min: new Prisma.Decimal(200),
+      day_rate_max: new Prisma.Decimal(280),
+      status: 'OPEN',
+      is_urgent: true,
+    },
+  });
+  const jp4 = await prisma.jobPost.create({
+    data: {
+      employer_id: employerAccounts[1].id,
+      title: 'Loft conversion specialist',
+      description: 'Dormer loft conversion including stairs, insulation, and plastering.',
+      postcode_area: 'N1',
+      pay_type: 'FIXED_PRICE',
+      fixed_price: new Prisma.Decimal(12000),
+      duration_days: 30,
+      status: 'OPEN',
+      is_urgent: false,
+    },
+  });
+  const jp5 = await prisma.jobPost.create({
+    data: {
+      employer_id: employerAccounts[2].id,
+      title: 'Emergency gas boiler repair',
+      description: 'Commercial unit: boiler down; need Gas Safe engineer urgently.',
+      postcode_area: 'SE1',
+      pay_type: 'DAY_RATE',
+      day_rate_min: new Prisma.Decimal(300),
+      day_rate_max: new Prisma.Decimal(400),
+      status: 'OPEN',
+      is_urgent: true,
+    },
+  });
+
+  await prisma.jobPostSpecialisation.createMany({
+    data: [
+      { job_post_id: jp1.id, specialisation_id: specRecords[1].id },
+      { job_post_id: jp2.id, specialisation_id: specRecords[2].id },
+      { job_post_id: jp3.id, specialisation_id: specRecords[3].id },
+      { job_post_id: jp3.id, specialisation_id: specRecords[1].id },
+      { job_post_id: jp4.id, specialisation_id: specRecords[3].id },
+      { job_post_id: jp5.id, specialisation_id: specRecords[2].id },
+    ],
+    skipDuplicates: true,
+  });
+  await prisma.jobPostTag.createMany({
+    data: [
+      { job_post_id: jp1.id, tag_id: tagIdByName.get('Commercial Wiring')! },
+      { job_post_id: jp2.id, tag_id: tagIdByName.get('Bathroom Tiling')! },
+      { job_post_id: jp2.id, tag_id: tagIdByName.get('Underfloor Heating')! },
+      { job_post_id: jp3.id, tag_id: tagIdByName.get('Kitchen Fitting')! },
+      { job_post_id: jp4.id, tag_id: tagIdByName.get('Loft Conversion')! },
+      { job_post_id: jp4.id, tag_id: tagIdByName.get('Plastering')! },
+      { job_post_id: jp5.id, tag_id: tagIdByName.get('Gas Boiler Installation')! },
+    ],
+    skipDuplicates: true,
+  });
+  console.log('  5 job posts with specialisations and tags');
+
+  // ── Job applications ───────────────────────────────────────────
+  await prisma.jobApplication.createMany({
+    data: [
+      {
+        job_post_id: jp1.id,
+        worker_id: workerAccounts[0].id,
+        initiated_by: 'WORKER',
+        status: 'PENDING',
+        cover_message: '10 years commercial experience',
+      },
+      {
+        job_post_id: jp1.id,
+        worker_id: workerAccounts[1].id,
+        initiated_by: 'WORKER',
+        status: 'REVIEWED',
+      },
+      {
+        job_post_id: jp2.id,
+        worker_id: workerAccounts[2].id,
+        initiated_by: 'WORKER',
+        status: 'SHORTLISTED',
+        cover_message: 'Specialist in bathroom installations',
+      },
+      {
+        job_post_id: jp4.id,
+        worker_id: workerAccounts[3].id,
+        initiated_by: 'WORKER',
+        status: 'ACCEPTED',
+      },
+    ],
+    skipDuplicates: true,
+  });
+  await prisma.jobApplication.createMany({
+    data: [
+      {
+        job_post_id: jp5.id,
+        worker_id: workerAccounts[2].id,
+        initiated_by: 'EMPLOYER',
+        status: 'PENDING',
+      },
+    ],
+    skipDuplicates: true,
+  });
+  console.log('  Job applications (including employer invitation)');
+
+  // ── Conversations & messages ─────────────────────────────────
+  const conv1 = await prisma.conversation.create({ data: {} });
+  await prisma.conversationParticipant.createMany({
+    data: [
+      { conversation_id: conv1.id, account_id: employerAccounts[0].id },
+      { conversation_id: conv1.id, account_id: workerAccounts[0].id },
+    ],
+  });
+  const c1t1 = new Date('2026-04-10T10:00:00.000Z');
+  const c1t2 = new Date('2026-04-10T10:15:00.000Z');
+  await prisma.message.create({
+    data: {
+      conversation_id: conv1.id,
+      sender_id: employerAccounts[0].id,
+      content: 'Hi Mike, saw your application for the office refit. Can you start next week?',
+      message_type: 'TEXT',
+      created_at: c1t1,
+    },
+  });
+  await prisma.message.create({
+    data: {
+      conversation_id: conv1.id,
+      sender_id: workerAccounts[0].id,
+      content: "Yes, I'm available from Monday. What's the site access like?",
+      message_type: 'TEXT',
+      created_at: c1t2,
+    },
+  });
+  await prisma.conversation.update({
+    where: { id: conv1.id },
+    data: { last_message_at: c1t2 },
+  });
+  await prisma.conversationParticipant.update({
+    where: {
+      conversation_id_account_id: {
+        conversation_id: conv1.id,
+        account_id: workerAccounts[0].id,
+      },
+    },
+    data: { last_read_at: c1t2 },
+  });
+
+  const conv2 = await prisma.conversation.create({ data: {} });
+  await prisma.conversationParticipant.createMany({
+    data: [
+      { conversation_id: conv2.id, account_id: employerAccounts[2].id },
+      { conversation_id: conv2.id, account_id: workerAccounts[2].id },
+    ],
+  });
+  const c2t1 = new Date('2026-04-10T11:00:00.000Z');
+  const c2t2 = new Date('2026-04-10T11:05:00.000Z');
+  await prisma.message.create({
+    data: {
+      conversation_id: conv2.id,
+      sender_id: employerAccounts[2].id,
+      content: 'Hi Dave, we have an emergency boiler job. Are you available?',
+      message_type: 'JOB_INVITATION',
+      metadata: { job_post_id: String(jp5.id) },
+      created_at: c2t1,
+    },
+  });
+  await prisma.message.create({
+    data: {
+      conversation_id: conv2.id,
+      sender_id: workerAccounts[2].id,
+      content: "I can come tomorrow morning. What's the address?",
+      message_type: 'TEXT',
+      created_at: c2t2,
+    },
+  });
+  await prisma.conversation.update({
+    where: { id: conv2.id },
+    data: { last_message_at: c2t2 },
+  });
+  await prisma.conversationParticipant.update({
+    where: {
+      conversation_id_account_id: {
+        conversation_id: conv2.id,
+        account_id: workerAccounts[2].id,
+      },
+    },
+    data: { last_read_at: c2t2 },
+  });
+
+  const conv3 = await prisma.conversation.create({ data: {} });
+  await prisma.conversationParticipant.createMany({
+    data: [
+      { conversation_id: conv3.id, account_id: workerAccounts[0].id },
+      { conversation_id: conv3.id, account_id: modAccount.id },
+    ],
+  });
+  const c3t1 = new Date('2026-04-10T09:00:00.000Z');
+  const c3t2 = new Date('2026-04-10T09:02:00.000Z');
+  await prisma.message.create({
+    data: {
+      conversation_id: conv3.id,
+      sender_id: workerAccounts[0].id,
+      content: 'Hi, I have a question about the verification process',
+      message_type: 'TEXT',
+      created_at: c3t1,
+    },
+  });
+  await prisma.message.create({
+    data: {
+      conversation_id: conv3.id,
+      sender_id: modAccount.id,
+      content: 'Of course! What would you like to know?',
+      message_type: 'TEXT',
+      created_at: c3t2,
+    },
+  });
+  await prisma.conversation.update({
+    where: { id: conv3.id },
+    data: { last_message_at: c3t2 },
+  });
+  await prisma.conversationParticipant.update({
+    where: {
+      conversation_id_account_id: {
+        conversation_id: conv3.id,
+        account_id: modAccount.id,
+      },
+    },
+    data: { last_read_at: c3t2 },
+  });
+  console.log('  3 conversations with messages');
 
   console.log('\nSeed completed successfully!');
   console.log('──────────────────────────────────────────');

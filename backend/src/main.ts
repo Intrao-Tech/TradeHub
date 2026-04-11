@@ -4,12 +4,20 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { BigIntSerializationInterceptor } from './common/interceptors/bigint-serialization.interceptor';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
+import { RedisIoAdapter } from './conversation/redis-io.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.setGlobalPrefix('api');
   app.enableCors();
+
+  const redisUrl = process.env.REDIS_URL;
+  const redisAdapter = new RedisIoAdapter(app);
+  if (redisUrl) {
+    await redisAdapter.connectToRedis(redisUrl);
+  }
+  app.useWebSocketAdapter(redisAdapter);
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -37,6 +45,7 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`TradeHub API running on http://localhost:${port}/api`);
   console.log(`Swagger docs: http://localhost:${port}/api/docs`);
+  console.log(`WebSocket chat: ws://localhost:${port}/chat`);
 }
 
 bootstrap();

@@ -27,6 +27,7 @@ model Account {
   refresh_tokens RefreshToken[]
   notifications  Notification[]
   audit_logs     AuditLog[]
+  conversation_participants ConversationParticipant[]
 
   @@map("account")
 }
@@ -101,6 +102,8 @@ model WorkerProfile {
   portfolio_items        PortfolioItem[]
   referral_offers        ReferralOffer[]
   collaborations_as_worker Collaboration[] @relation("CollabWorker")
+  worker_tags              WorkerTag[]
+  job_applications         JobApplication[]
 
   @@index([is_available, available_from])
   @@index([rating_avg(sort: Desc), rating_count(sort: Desc)])
@@ -124,6 +127,7 @@ model EmployerProfile {
   client_profile ClientProfile @relation(fields: [id], references: [id], onDelete: Cascade)
 
   collaborations_as_employer Collaboration[] @relation("CollabEmployer")
+  job_posts                  JobPost[]
 
   @@map("employer_profile")
 }
@@ -216,7 +220,8 @@ model Specialisation {
   name String @unique @db.VarChar(100)
   slug String @unique @db.VarChar(100)
 
-  worker_specialisations WorkerSpecialisation[]
+  worker_specialisations     WorkerSpecialisation[]
+  job_post_specialisations   JobPostSpecialisation[]
 
   @@map("specialisation")
 }
@@ -426,6 +431,7 @@ model Collaboration {
   employer_id   BigInt
   initiated_by  String    @db.VarChar(10)
   referral_id   BigInt?
+  job_post_id   BigInt?
   status        String    @default("PENDING") @db.VarChar(20)
   project_type  String?   @db.VarChar(100)
   site_postcode String?   @db.VarChar(10)
@@ -441,6 +447,7 @@ model Collaboration {
   worker   WorkerProfile   @relation("CollabWorker", fields: [worker_id], references: [id])
   employer EmployerProfile @relation("CollabEmployer", fields: [employer_id], references: [id])
   referral Referral?       @relation(fields: [referral_id], references: [id])
+  job_post JobPost?        @relation(fields: [job_post_id], references: [id])
 
   reviews            Review[]
   escrow_transaction EscrowTransaction?
@@ -586,4 +593,161 @@ model AuditLog {
 
   @@index([account_id, created_at(sort: Desc)])
   @@map("audit_log")
+}
+
+// ============================================
+// 27. TAG (reference data)
+// ============================================
+
+model Tag {
+  id   Int    @id @default(autoincrement())
+  name String @unique @db.VarChar(100)
+  slug String @unique @db.VarChar(100)
+
+  worker_tags   WorkerTag[]
+  job_post_tags JobPostTag[]
+
+  @@map("tag")
+}
+
+model WorkerTag {
+  worker_id BigInt
+  tag_id    Int
+
+  worker_profile WorkerProfile @relation(fields: [worker_id], references: [id], onDelete: Cascade)
+  tag            Tag           @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@id([worker_id, tag_id])
+  @@index([tag_id])
+  @@map("worker_tag")
+}
+
+// ============================================
+// 28. JOB POST
+// ============================================
+
+model JobPost {
+  id            BigInt    @id @default(autoincrement())
+  employer_id   BigInt
+  title         String    @db.VarChar(200)
+  description   String?
+  postcode_area String?   @db.VarChar(10)
+  site_address  String?   @db.VarChar(300)
+  pay_type      String    @db.VarChar(15)
+  day_rate_min  Decimal?  @db.Decimal(8, 2)
+  day_rate_max  Decimal?  @db.Decimal(8, 2)
+  fixed_price   Decimal?  @db.Decimal(12, 2)
+  duration_days Int?
+  start_date    DateTime? @db.Timestamptz()
+  status        String    @default("OPEN") @db.VarChar(20)
+  is_urgent     Boolean   @default(false)
+  expires_at    DateTime? @db.Timestamptz()
+  created_at    DateTime  @default(now()) @db.Timestamptz()
+  updated_at    DateTime  @updatedAt @db.Timestamptz()
+
+  employer         EmployerProfile         @relation(fields: [employer_id], references: [id])
+  specialisations  JobPostSpecialisation[]
+  tags             JobPostTag[]
+  applications     JobApplication[]
+  collaborations   Collaboration[]
+
+  @@index([employer_id])
+  @@index([status, postcode_area])
+  @@map("job_post")
+}
+
+model JobPostSpecialisation {
+  job_post_id       BigInt
+  specialisation_id Int
+
+  job_post       JobPost        @relation(fields: [job_post_id], references: [id], onDelete: Cascade)
+  specialisation Specialisation @relation(fields: [specialisation_id], references: [id], onDelete: Cascade)
+
+  @@id([job_post_id, specialisation_id])
+  @@index([specialisation_id])
+  @@map("job_post_specialisation")
+}
+
+model JobPostTag {
+  job_post_id BigInt
+  tag_id      Int
+
+  job_post JobPost @relation(fields: [job_post_id], references: [id], onDelete: Cascade)
+  tag      Tag     @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@id([job_post_id, tag_id])
+  @@index([tag_id])
+  @@map("job_post_tag")
+}
+
+// ============================================
+// 29. JOB APPLICATION
+// ============================================
+
+model JobApplication {
+  id            BigInt    @id @default(autoincrement())
+  job_post_id   BigInt
+  worker_id     BigInt
+  initiated_by  String    @db.VarChar(10)
+  status        String    @default("PENDING") @db.VarChar(20)
+  cover_message String?
+  proposed_rate Decimal?  @db.Decimal(8, 2)
+  responded_at  DateTime? @db.Timestamptz()
+  created_at    DateTime  @default(now()) @db.Timestamptz()
+  updated_at    DateTime  @updatedAt @db.Timestamptz()
+
+  job_post       JobPost       @relation(fields: [job_post_id], references: [id], onDelete: Cascade)
+  worker_profile WorkerProfile @relation(fields: [worker_id], references: [id])
+
+  @@unique([job_post_id, worker_id])
+  @@index([job_post_id, status])
+  @@index([worker_id, status])
+  @@map("job_application")
+}
+
+// ============================================
+// 30. CONVERSATION & MESSAGES
+// ============================================
+
+model Conversation {
+  id              BigInt    @id @default(autoincrement())
+  last_message_at DateTime? @db.Timestamptz()
+  created_at      DateTime  @default(now()) @db.Timestamptz()
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@map("conversation")
+}
+
+model ConversationParticipant {
+  conversation_id BigInt
+  account_id      BigInt
+  last_read_at    DateTime? @db.Timestamptz()
+  joined_at       DateTime  @default(now()) @db.Timestamptz()
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  account      Account      @relation(fields: [account_id], references: [id], onDelete: Cascade)
+
+  messages Message[]
+
+  @@id([conversation_id, account_id])
+  @@index([account_id])
+  @@map("conversation_participant")
+}
+
+model Message {
+  id              BigInt   @id @default(autoincrement())
+  conversation_id BigInt
+  sender_id       BigInt
+  content         String
+  message_type    String   @default("TEXT") @db.VarChar(20)
+  metadata        Json     @default("{}")
+  created_at      DateTime @default(now()) @db.Timestamptz()
+
+  conversation Conversation              @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  participant  ConversationParticipant @relation(fields: [conversation_id, sender_id], references: [conversation_id, account_id])
+
+  @@index([conversation_id, created_at])
+  @@map("message")
 }
