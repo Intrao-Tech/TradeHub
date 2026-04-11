@@ -1,106 +1,122 @@
 # TradeHub UK
 
-B2B platform for UK construction tradespeople. Matching workers with employers, verified reviews, referral exchange, escrow payments.
+B2B platform for UK construction tradespeople.
 
 ## Ports
 
-| Service    | Port |
-|------------|------|
-| Frontend   | 3000 |
-| Backend    | 8081 |
-| PostgreSQL | 5433 (Docker) |
-| Swagger    | http://localhost:8081/api/docs |
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8081/api |
+| Swagger | http://localhost:8081/api/docs |
+| Prisma Studio | http://localhost:5555 |
+| PostgreSQL | localhost:5433 |
 
-## Quick start (dev)
+## First time setup
 
 ```bash
-# 1. Start database
 docker compose up -d
-
-# 2. Backend
 cd backend
-cp .env.dev .env          # already has working dev defaults
+cp .env.dev .env
 npm install
 npx prisma generate
 npx prisma migrate dev --name init
 npm run db:seed
-npm run start:dev         # http://localhost:8081/api
-
-# 3. Frontend (separate terminal)
-cd web
+cd ../web
 npm install
-npm run dev               # http://localhost:3000
+```
+
+## Daily run
+
+```bash
+docker compose up -d                     # if not already running
+
+# terminal 1
+cd backend && npm run start:dev
+
+# terminal 2
+cd web && npm run dev
+```
+
+## Useful commands
+
+```bash
+cd backend
+npx prisma studio                        # browse DB in browser
+npx prisma migrate reset                 # wipe DB + re-migrate + re-seed
+npx prisma migrate dev --name <name>     # create new migration after schema change
+```
+
+## Reset database
+
+```bash
+cd backend
+npx prisma migrate reset
+```
+Drops everything, re-runs all migrations, re-seeds test data.
+
+## Deploy to prod
+
+Works with Railway / Render / Fly.io / any VPS.
+
+1. Set env vars from `backend/.env.prod` (fill all empty values)
+2. Set `web/.env.production` with your domain
+
+```bash
+# Backend
+cd backend
+npm ci
+npx prisma generate
+npx prisma migrate deploy
+npm run build
+node dist/main.js
+
+# Frontend
+cd web
+npm ci
+npm run build
+# serve web/dist/ via nginx / Vercel / Netlify
 ```
 
 ## Credentials
 
-### Where to put them
+| What | Dev file | Prod file |
+|------|----------|-----------|
+| Backend (DB, JWT, Stripe, etc.) | `backend/.env.dev` | `backend/.env.prod` |
+| Frontend API URL | `web/.env` | `web/.env.production` |
 
-| What | File | Notes |
-|------|------|-------|
-| DB, JWT, API keys | `backend/.env` | Copied from `.env.dev` (local) or `.env.prod` (deploy) |
-| Frontend API URL | `web/.env` | `VITE_API_URL` |
-
-### Dev (local) -- already filled in `.env.dev`
-
-| Key | Value |
-|-----|-------|
-| DB | `postgresql://tradehub:tradehub_dev@localhost:5433/tradehub` |
-| JWT_SECRET | `tradehub-dev-jwt-secret-change-in-prod` |
-| JWT_REFRESH_SECRET | `tradehub-dev-refresh-secret-change-in-prod` |
-| GOOGLE_CLIENT_ID | empty (Google OAuth disabled until set) |
-| STRIPE_SECRET_KEY | empty (escrow stubbed until set) |
-| RESEND_API_KEY | empty (email disabled until set) |
-
-### Prod -- fill in `.env.prod` before deploy
+Dev defaults work out of the box. For prod, fill `backend/.env.prod`:
 
 | Key | Where to get |
 |-----|-------------|
-| DATABASE_URL | Your hosted PostgreSQL (Neon / Supabase / Railway) |
+| DATABASE_URL | Neon / Supabase / Railway |
 | JWT_SECRET | `openssl rand -hex 32` |
 | JWT_REFRESH_SECRET | `openssl rand -hex 32` |
-| GOOGLE_CLIENT_ID + SECRET | https://console.cloud.google.com/apis/credentials |
-| STRIPE_SECRET_KEY | https://dashboard.stripe.com/apikeys |
-| STRIPE_WEBHOOK_SECRET | Stripe webhook settings |
-| RESEND_API_KEY | https://resend.com/api-keys |
+| GOOGLE_CLIENT_ID + SECRET | console.cloud.google.com |
+| STRIPE_SECRET_KEY | dashboard.stripe.com |
+| RESEND_API_KEY | resend.com |
 
-## Test accounts (after seed)
+## Test accounts
 
-Password for all: `Password123!`
+Password: `Password123!`
 
 | Role | Email |
 |------|-------|
 | Admin | admin@tradehub.co.uk |
 | Moderator | moderator@tradehub.co.uk |
 | Worker | mike.builder@example.com |
-| Worker | sarah.sparks@example.com |
-| Worker | dave.pipes@example.com |
 | Employer | james@acmebuild.co.uk |
-| Employer | lisa@homeworks.co.uk |
-
-## Scripts
-
-```bash
-# Dev
-./scripts/dev.ps1         # Start everything locally (Docker + backend + frontend)
-
-# Prod build
-./scripts/build-prod.ps1  # Build backend + frontend for deployment
-```
 
 ## Project structure
 
 ```
 TradeHub/
-├── backend/          NestJS REST API
-│   ├── prisma/       Schema + migrations + seed
-│   ├── src/          16 modules (auth, profiles, portfolio, etc.)
-│   ├── .env.dev      Dev credentials (committed, safe)
-│   ├── .env.prod     Prod credentials (NOT committed, fill manually)
-│   └── .env          Active config (copy from .dev or .prod)
-├── web/              React + Vite (test UI, will be restyled)
-│   ├── src/pages/    11 pages covering all API endpoints
-│   └── .env          VITE_API_URL
+├── backend/            NestJS REST API
+│   ├── prisma/         Schema + migrations + seed
+│   ├── src/            16 modules
+│   ├── .env.dev        Dev defaults (safe, committed)
+│   └── .env.prod       Prod secrets (NOT committed)
+├── web/                React + Vite test UI
 ├── docker-compose.yml
-└── schema.sql        SQL DDL for Redgate visualization
+└── schema.sql          DDL for Redgate
 ```
