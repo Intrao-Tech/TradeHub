@@ -5,10 +5,13 @@ node_modules/
 dist/
 build/
 
-# Environment
+# Environment - active .env and prod secrets are NEVER committed
 .env
 .env.local
 .env.*.local
+.env.prod
+# .env.dev IS committed (safe dev defaults)
+# .env.production IS committed for frontend (just a URL)
 
 # IDE
 .idea/
