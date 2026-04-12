@@ -95,6 +95,7 @@ export class AuthService {
     email: string;
     googleId: string;
     displayName: string;
+    role?: 'WORKER' | 'EMPLOYER';
   }) {
     let account = await this.prisma.account.findUnique({
       where: { google_id: profile.googleId },
@@ -120,13 +121,37 @@ export class AuthService {
               create: {
                 display_name: profile.displayName,
                 slug,
-                worker_profile: { create: {} },
+                ...(profile.role === 'EMPLOYER'
+                  ? { employer_profile: { create: {} } }
+                  : { worker_profile: { create: {} } }),
               },
             },
           },
         });
+        void this.mail.sendWelcome(account.email, profile.displayName);
       }
     }
+
+    await this.prisma.account.update({
+      where: { id: account.id },
+      data: { last_login_at: new Date() },
+    });
+
+    return this.issueTokens(account.id, account.email);
+  }
+
+  async staffLogin(dto: LoginDto) {
+    const account = await this.prisma.account.findUnique({
+      where: { email: dto.email },
+      include: { staff_member: true },
+    });
+    if (!account || !account.password_hash)
+      throw new UnauthorizedException('Invalid credentials');
+    if (!account.staff_member)
+      throw new UnauthorizedException('Not a staff account');
+
+    const valid = await bcrypt.compare(dto.password, account.password_hash);
+    if (!valid) throw new UnauthorizedException('Invalid credentials');
 
     await this.prisma.account.update({
       where: { id: account.id },

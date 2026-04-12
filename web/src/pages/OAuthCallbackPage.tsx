@@ -1,15 +1,18 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
 import { setTokens } from '../api';
 
 type Props = { onLogin: () => void };
 
 export default function OAuthCallbackPage({ onLogin }: Props) {
-  const navigate = useNavigate();
   const [params] = useSearchParams();
   const [error, setError] = useState('');
+  const handled = useRef(false);
 
   useEffect(() => {
+    if (handled.current) return;
+    handled.current = true;
+
     const access = params.get('access_token');
     const refresh = params.get('refresh_token');
     const errParam = params.get('error');
@@ -26,8 +29,8 @@ export default function OAuthCallbackPage({ onLogin }: Props) {
 
     setTokens(access, refresh);
     onLogin();
-    navigate(next, { replace: true });
-  }, [params, navigate, onLogin]);
+    window.location.replace(next);
+  }, []);
 
   return (
     <div className="auth-shell">
@@ -40,8 +43,8 @@ export default function OAuthCallbackPage({ onLogin }: Props) {
           </>
         ) : (
           <>
-            <h1>Signing you in…</h1>
-            <p className="muted">Finishing Google authentication.</p>
+            <h1>Signing you in...</h1>
+            <p className="muted">Redirecting...</p>
           </>
         )}
       </div>

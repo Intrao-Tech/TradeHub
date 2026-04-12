@@ -149,6 +149,20 @@ export default function CollaborationsPage() {
     }
   }
 
+  async function fundEscrow(escrowId: string | number) {
+    setActionError('');
+    try {
+      const out = await api<{ checkout_url: string }>(`/escrow/${escrowId}/deposit`, {
+        method: 'POST',
+      });
+      if (out.checkout_url) {
+        window.open(out.checkout_url, '_blank');
+      }
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return (
     <div>
       <h1>Collaborations</h1>
@@ -249,7 +263,21 @@ export default function CollaborationsPage() {
                       <button type="button" onClick={() => void viewEscrow(id)}>
                         View Escrow
                       </button>
-                      {escrowByCollab[key] != null ? jsonPre(escrowByCollab[key]) : null}
+                      {escrowByCollab[key] != null && (
+                        <>
+                          {jsonPre(escrowByCollab[key])}
+                          {(escrowByCollab[key] as Record<string, unknown>)?.status === 'CREATED' ||
+                           (escrowByCollab[key] as Record<string, unknown>)?.status === 'DEPOSIT_PENDING' ? (
+                            <button
+                              type="button"
+                              style={{ background: '#635bff', color: '#fff', fontWeight: 600, marginTop: 4 }}
+                              onClick={() => void fundEscrow((escrowByCollab[key] as Record<string, unknown>).id as string)}
+                            >
+                              Fund via Stripe
+                            </button>
+                          ) : null}
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

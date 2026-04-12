@@ -4,6 +4,7 @@ import Stripe from 'stripe';
 import { PrismaService } from '../prisma/prisma.service';
 import { STRIPE_CLIENT } from '../stripe/stripe.module';
 import { MailService } from '../mail/mail.service';
+import { VerificationService } from '../verification/verification.service';
 
 @Injectable()
 export class StripeWebhookService {
@@ -16,6 +17,7 @@ export class StripeWebhookService {
     private readonly config: ConfigService,
     @Inject(STRIPE_CLIENT) private readonly stripe: Stripe | null,
     private readonly mail: MailService,
+    private readonly verification: VerificationService,
   ) {
     this.platformSecret = this.config.get<string>('STRIPE_WEBHOOK_SECRET') || '';
     this.connectSecret = this.config.get<string>('STRIPE_CONNECT_WEBHOOK_SECRET') || '';
@@ -95,6 +97,11 @@ export class StripeWebhookService {
         this.logger.log(`Connect lifecycle :: ${event.type} on account ${event.account ?? '—'}`);
         break;
 
+      case 'identity.verification_session.verified':
+      case 'identity.verification_session.requires_input':
+        await this.verification.handleWebhookEvent(event);
+        break;
+
       default:
         this.logger.debug(`Unhandled event type: ${event.type}`);
     }
@@ -122,6 +129,31 @@ export class StripeWebhookService {
       },
     });
     this.logger.log(`Escrow ${escrow.id} marked HELD (pi=${pi.id})`);
+
+    try {
+      const full = await this.prisma.escrowTransaction.findUnique({
+        where: { id: escrow.id },
+        include: {
+          collaboration: {
+            include: {
+              worker: { include: { client_profile: { include: { account: true } } } },
+              employer: { include: { client_profile: { include: { account: true } } } },
+            },
+          },
+        },
+      });
+      if (full) {
+        const amountGbp = full.job_amount.toString();
+        const workerEmail = full.collaboration.worker.client_profile.account.email;
+        const workerName = full.collaboration.worker.client_profile.display_name;
+        const employerEmail = full.collaboration.employer.client_profile.account.email;
+        const employerName = full.collaboration.employer.client_profile.display_name;
+        void this.mail.sendEscrowFunded(employerEmail, employerName, String(escrow.id), amountGbp);
+        void this.mail.sendEscrowFunded(workerEmail, workerName, String(escrow.id), amountGbp);
+      }
+    } catch (err) {
+      this.logger.warn('Failed to send escrow funded email', err);
+    }
   }
 
   private async onPaymentIntentFailed(pi: Stripe.PaymentIntent): Promise<void> {

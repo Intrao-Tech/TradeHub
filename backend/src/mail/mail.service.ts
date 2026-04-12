@@ -8,10 +8,12 @@ export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private transporter: Transporter | null = null;
   private fromAddress = '';
+  private frontendUrl = '';
 
   constructor(private readonly config: ConfigService) {}
 
   onModuleInit() {
+    this.frontendUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3001';
     const host = this.config.get<string>('SMTP_HOST') || 'smtp.gmail.com';
     const port = Number(this.config.get<string>('SMTP_PORT') || 587);
     const user = this.config.get<string>('SMTP_USER') || '';
@@ -57,7 +59,7 @@ export class MailService implements OnModuleInit {
       <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
         <h2 style="color: #0f766e;">Welcome, ${escapeHtml(displayName)} 👋</h2>
         <p>Your TradeHub account is ready. You can now browse jobs, connect with workers, and manage your projects.</p>
-        <p><a href="http://localhost:3000/dashboard" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">Open your dashboard</a></p>
+        <p><a href="${this.frontendUrl}/dashboard" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">Open your dashboard</a></p>
         <p style="color:#64748b;font-size:13px;">If you didn't create this account, ignore this email.</p>
       </div>
     `;
@@ -76,7 +78,7 @@ export class MailService implements OnModuleInit {
         <h2 style="color: #0f766e;">Escrow funded</h2>
         <p>Hi ${escapeHtml(displayName)},</p>
         <p>Escrow <strong>#${escrowId}</strong> for <strong>£${escapeHtml(amountGbp)}</strong> has been funded and is now held securely by TradeHub.</p>
-        <p><a href="http://localhost:3000/collaborations" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">View collaboration</a></p>
+        <p><a href="${this.frontendUrl}/collaborations" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">View collaboration</a></p>
       </div>
     `;
     await this.send(to, subject, html);

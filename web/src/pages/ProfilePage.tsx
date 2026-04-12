@@ -1,4 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 
 const DOC_TYPES = [
@@ -666,6 +667,10 @@ export default function ProfilePage() {
       ) : null}
 
       {cp ? (
+        <VerificationSection />
+      ) : null}
+
+      {cp ? (
         <section style={sectionStyle}>
           <h2>My Documents</h2>
           <button type="button" onClick={loadDocuments} style={{ marginBottom: 12 }}>
@@ -730,5 +735,69 @@ export default function ProfilePage() {
         </section>
       ) : null}
     </div>
+  );
+}
+
+function VerificationSection() {
+  const [searchParams] = useSearchParams();
+  const justCompleted = searchParams.get('verification') === 'complete';
+  const [status, setStatus] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api<{ verification_level: string }>('/verification/status')
+      .then((d) => setStatus(d.verification_level))
+      .catch(() => setStatus('UNVERIFIED'));
+  }, []);
+
+  async function startVerification() {
+    setError('');
+    setLoading(true);
+    try {
+      const res = await api<{ verification_url: string }>('/verification/start', {
+        method: 'POST',
+      });
+      if (res.verification_url) {
+        window.open(res.verification_url, '_blank');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const verified = status === 'IDENTITY_VERIFIED';
+
+  return (
+    <section style={{ border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 20 }}>
+      <h2>Identity Verification</h2>
+      {justCompleted && (
+        <div style={{ color: '#0f766e', marginBottom: 8 }}>
+          Verification submitted — status will update shortly.
+        </div>
+      )}
+      <p>
+        Status:{' '}
+        <strong style={{ color: verified ? '#16a34a' : '#d97706' }}>
+          {status ?? 'loading...'}
+        </strong>
+      </p>
+      {verified ? (
+        <p style={{ color: '#16a34a' }}>Your identity has been verified.</p>
+      ) : (
+        <>
+          <p className="muted small">
+            Verify your identity with a passport, driving licence, or national ID card.
+            This helps build trust with other users on TradeHub.
+          </p>
+          {error && <div style={{ color: 'red', marginBottom: 8 }}>{error}</div>}
+          <button type="button" onClick={startVerification} disabled={loading}>
+            {loading ? 'Starting...' : 'Verify my identity'}
+          </button>
+        </>
+      )}
+    </section>
   );
 }

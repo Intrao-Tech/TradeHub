@@ -11,6 +11,7 @@ import CollaborationsPage from './pages/CollaborationsPage';
 import ReferralsPage from './pages/ReferralsPage';
 import ReviewsPage from './pages/ReviewsPage';
 import AdminPage from './pages/AdminPage';
+import InternalLoginPage from './pages/InternalLoginPage';
 import NotificationsPage from './pages/NotificationsPage';
 import JobBoardPage from './pages/JobBoardPage';
 import MyApplicationsPage from './pages/MyApplicationsPage';
@@ -34,7 +35,6 @@ const PRIVATE_NAV: NavItem[] = [
   { to: '/referrals', label: 'Referrals' },
   { to: '/inbox', label: 'Inbox' },
   { to: '/notifications', label: 'Notifications' },
-  { to: '/admin', label: 'Admin' },
 ];
 
 function Protected({ loggedIn, children }: { loggedIn: boolean; children: React.ReactElement }) {
@@ -117,7 +117,8 @@ function App() {
         <Route path="/collaborations" element={<Protected loggedIn={loggedIn}><div className="page"><CollaborationsPage /></div></Protected>} />
         <Route path="/referrals" element={<Protected loggedIn={loggedIn}><div className="page"><ReferralsPage /></div></Protected>} />
         <Route path="/notifications" element={<Protected loggedIn={loggedIn}><div className="page"><NotificationsPage /></div></Protected>} />
-        <Route path="/admin" element={<Protected loggedIn={loggedIn}><div className="page"><AdminPage /></div></Protected>} />
+        <Route path="/internal" element={<InternalLoginPage onLogin={onAuthSuccess} />} />
+        <Route path="/internal/admin" element={<Protected loggedIn={loggedIn}><div className="page"><AdminPage /></div></Protected>} />
         <Route path="/my-applications" element={<Protected loggedIn={loggedIn}><div className="page"><MyApplicationsPage /></div></Protected>} />
         <Route path="/inbox" element={<Protected loggedIn={loggedIn}><div className="page"><InboxPage /></div></Protected>} />
 

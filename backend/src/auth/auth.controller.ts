@@ -70,6 +70,13 @@ export class AuthController {
     return this.authService.logoutAll(user.accountId);
   }
 
+  @Post('staff/login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Staff / admin login' })
+  staffLogin(@Body() dto: LoginDto) {
+    return this.authService.staffLogin(dto);
+  }
+
   @Get('google')
   @UseGuards(GoogleAuthGuard)
   @ApiOperation({ summary: 'Initiate Google OAuth flow' })
@@ -81,17 +88,33 @@ export class AuthController {
   @UseGuards(GoogleAuthGuard)
   @ApiOperation({ summary: 'Google OAuth callback — redirects to frontend with tokens' })
   async googleCallback(
-    @Req() req: { user: { googleId: string; email: string; displayName: string }; query: Record<string, string | undefined> },
+    @Req() req: {
+      user: { googleId: string; email: string; displayName: string };
+      query: Record<string, string | undefined>;
+    },
     @Res() res: Response,
   ) {
     const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:3000');
     try {
-      const tokens = await this.authService.handleGoogleLogin(req.user);
-      const next = (req.query?.state && decodeURIComponent(req.query.state)) || '/dashboard';
+      let role: 'WORKER' | 'EMPLOYER' = 'WORKER';
+      let returnTo = '/dashboard';
+      try {
+        const raw = req.query?.state;
+        if (raw) {
+          const parsed = JSON.parse(decodeURIComponent(raw));
+          if (parsed.role === 'EMPLOYER') role = 'EMPLOYER';
+          if (parsed.return_to) returnTo = parsed.return_to;
+        }
+      } catch { /* ignore bad state */ }
+
+      const tokens = await this.authService.handleGoogleLogin({
+        ...req.user,
+        role,
+      });
       const params = new URLSearchParams({
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
-        next,
+        next: returnTo,
       });
       return res.redirect(`${frontendUrl}/oauth/callback?${params.toString()}`);
     } catch (err) {

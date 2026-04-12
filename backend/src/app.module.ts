@@ -22,6 +22,7 @@ import { JobApplicationModule } from './job-application/job-application.module';
 import { ConversationModule } from './conversation/conversation.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
+import { VerificationModule } from './verification/verification.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { StripeModule } from './stripe/stripe.module';
 import { MailModule } from './mail/mail.module';
@@ -53,6 +54,7 @@ import { MailModule } from './mail/mail.module';
     JobPostModule,
     JobApplicationModule,
     ConversationModule,
+    VerificationModule,
     WebhooksModule,
   ],
 })
