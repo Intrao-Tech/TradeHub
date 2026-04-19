@@ -79,7 +79,7 @@ if (violations.length) {
     console.error(`  ${v.file}:${v.line}  [${v.rule}]`)
     console.error(`    ${v.text}\n`)
   }
-  console.error('See web/CLAUDE.md and docs/brand/PALETTE.md for allowed tokens.')
+  console.error('See web/CLAUDE.md and src/tokens/semantic.json for allowed tokens.')
   process.exit(1)
 }
 
