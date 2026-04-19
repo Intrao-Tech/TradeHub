@@ -1,5 +1,28 @@
 import { useState, useEffect } from 'react';
+import { Flag, RefreshCw, Handshake } from 'lucide-react';
 import { api } from '../api';
+import { EmptyState } from '@/components/EmptyState';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 type CollaborationRow = {
   id: string | number;
@@ -19,12 +42,25 @@ type ListResponse = {
   limit: number;
 };
 
-function jsonPre(data: unknown) {
-  return (
-    <pre style={{ background: '#f5f5f5', padding: 12, overflow: 'auto', fontSize: 12 }}>
-      {data == null ? '' : JSON.stringify(data, null, 2)}
-    </pre>
-  );
+function statusVariant(
+  status: string,
+): 'default' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' | 'outline' {
+  switch (status) {
+    case 'COMPLETED':
+      return 'success';
+    case 'IN_PROGRESS':
+      return 'info';
+    case 'CONFIRMED':
+      return 'secondary';
+    case 'DISPUTED':
+      return 'danger';
+    case 'REJECTED':
+      return 'danger';
+    case 'PENDING':
+      return 'warning';
+    default:
+      return 'outline';
+  }
 }
 
 export default function CollaborationsPage() {
@@ -40,6 +76,7 @@ export default function CollaborationsPage() {
   const [createAmount, setCreateAmount] = useState('');
   const [createReferralId, setCreateReferralId] = useState('');
 
+  const [flagOpenId, setFlagOpenId] = useState<string | null>(null);
   const [flagReasons, setFlagReasons] = useState<Record<string, string>>({});
   const [escrowJob, setEscrowJob] = useState<Record<string, string>>({});
   const [escrowFee, setEscrowFee] = useState<Record<string, string>>({});
@@ -114,6 +151,7 @@ export default function CollaborationsPage() {
         body: JSON.stringify({ reason }),
       });
       setLastActionJson(out);
+      setFlagOpenId(null);
       await loadCollaborations();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
@@ -164,190 +202,324 @@ export default function CollaborationsPage() {
   }
 
   return (
-    <div>
-      <h1>Collaborations</h1>
-      {listError ? <div style={{ color: 'red', marginBottom: 8 }}>{listError}</div> : null}
-      {actionError ? <div style={{ color: 'red', marginBottom: 8 }}>{actionError}</div> : null}
-
-      <div style={{ marginBottom: 16 }}>
-        <button type="button" onClick={() => void loadCollaborations()}>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Collaborations</h1>
+          <p className="text-sm text-fg-muted">
+            Manage your active and past work agreements.
+          </p>
+        </div>
+        <Button type="button" variant="outline" onClick={() => void loadCollaborations()}>
+          <RefreshCw />
           Refresh list
-        </button>
+        </Button>
       </div>
 
-      <h2>My collaborations</h2>
-      {list?.items?.length ? (
-        <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 24, fontSize: 13 }}>
-          <thead>
-            <tr>
-              <th style={th}>id</th>
-              <th style={th}>worker_id</th>
-              <th style={th}>employer_id</th>
-              <th style={th}>status</th>
-              <th style={th}>project_type</th>
-              <th style={th}>agreed_amount</th>
-              <th style={th}>started_at</th>
-              <th style={th}>ended_at</th>
-              <th style={th}>actions</th>
-            </tr>
-          </thead>
-          <tbody>
+      {listError ? (
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {listError}
+        </div>
+      ) : null}
+      {actionError ? (
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {actionError}
+        </div>
+      ) : null}
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold tracking-tight">My collaborations</h2>
+        {list?.items?.length ? (
+          <div className="grid gap-4 md:grid-cols-2">
             {list.items.map((c) => {
               const id = c.id;
               const key = String(id);
+              const escrow = escrowByCollab[key] as Record<string, unknown> | undefined;
+              const escrowStatus = escrow?.status as string | undefined;
+              const escrowFundable =
+                escrowStatus === 'CREATED' || escrowStatus === 'DEPOSIT_PENDING';
               return (
-                <tr key={key}>
-                  <td style={td}>{String(id)}</td>
-                  <td style={td}>{String(c.worker_id)}</td>
-                  <td style={td}>{String(c.employer_id)}</td>
-                  <td style={td}>{c.status}</td>
-                  <td style={td}>{c.project_type ?? '—'}</td>
-                  <td style={td}>{c.agreed_amount != null ? String(c.agreed_amount) : '—'}</td>
-                  <td style={td}>{c.started_at ?? '—'}</td>
-                  <td style={td}>{c.ended_at ?? '—'}</td>
-                  <td style={{ ...td, verticalAlign: 'top' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 200 }}>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                        <button type="button" onClick={() => void patchStatus(id, 'CONFIRMED')}>
-                          Confirm
-                        </button>
-                        <button type="button" onClick={() => void patchStatus(id, 'IN_PROGRESS')}>
-                          Start
-                        </button>
-                        <button type="button" onClick={() => void patchStatus(id, 'COMPLETED')}>
-                          Complete
-                        </button>
-                        <button type="button" onClick={() => void patchStatus(id, 'REJECTED')}>
-                          Reject
-                        </button>
-                        <button type="button" onClick={() => void patchStatus(id, 'DISPUTED')}>
-                          Dispute
-                        </button>
+                <Card key={key} className="flex flex-col">
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <CardTitle className="text-base">Collaboration #{key}</CardTitle>
+                        <CardDescription>
+                          worker {String(c.worker_id)} · employer {String(c.employer_id)}
+                        </CardDescription>
                       </div>
-                      <label>
-                        Flag reason{' '}
-                        <input
-                          value={flagReasons[key] ?? ''}
-                          onChange={(e) =>
-                            setFlagReasons((p) => ({ ...p, [key]: e.target.value }))
-                          }
-                          placeholder="reason"
-                          style={{ width: '100%' }}
-                        />
-                      </label>
-                      <button type="button" onClick={() => void flagCollaboration(id)}>
-                        Flag
-                      </button>
-                      <div style={{ borderTop: '1px solid #ccc', paddingTop: 6 }}>
-                        <div style={{ fontSize: 11, marginBottom: 4 }}>Create escrow (employer)</div>
-                        <input
+                      <Badge variant={statusVariant(c.status)}>{c.status}</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex-1 space-y-3 text-sm">
+                    <dl className="grid grid-cols-2 gap-2">
+                      <div>
+                        <dt className="text-xs text-fg-muted">Project type</dt>
+                        <dd>{c.project_type ?? '—'}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-fg-muted">Agreed amount</dt>
+                        <dd>{c.agreed_amount != null ? String(c.agreed_amount) : '—'}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-fg-muted">Started</dt>
+                        <dd>{c.started_at ?? '—'}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-fg-muted">Ended</dt>
+                        <dd>{c.ended_at ?? '—'}</dd>
+                      </div>
+                    </dl>
+
+                    <div className="space-y-2 rounded-md border border-border-default bg-subtle p-3">
+                      <p className="text-xs font-medium text-fg-muted">Create escrow (employer)</p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <Input
                           placeholder="job_amount"
                           value={escrowJob[key] ?? ''}
                           onChange={(e) =>
                             setEscrowJob((p) => ({ ...p, [key]: e.target.value }))
                           }
-                          style={{ width: '100%', marginBottom: 4 }}
                         />
-                        <input
+                        <Input
                           placeholder="platform_fee"
                           value={escrowFee[key] ?? ''}
                           onChange={(e) =>
                             setEscrowFee((p) => ({ ...p, [key]: e.target.value }))
                           }
-                          style={{ width: '100%', marginBottom: 4 }}
                         />
-                        <button type="button" onClick={() => void createEscrow(id)}>
-                          Create Escrow
-                        </button>
                       </div>
-                      <button type="button" onClick={() => void viewEscrow(id)}>
-                        View Escrow
-                      </button>
-                      {escrowByCollab[key] != null && (
-                        <>
-                          {jsonPre(escrowByCollab[key])}
-                          {(escrowByCollab[key] as Record<string, unknown>)?.status === 'CREATED' ||
-                           (escrowByCollab[key] as Record<string, unknown>)?.status === 'DEPOSIT_PENDING' ? (
-                            <button
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void createEscrow(id)}
+                        >
+                          Create escrow
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void viewEscrow(id)}
+                        >
+                          View escrow
+                        </Button>
+                      </div>
+                      {escrow ? (
+                        <div className="space-y-2">
+                          <pre className="rounded-md bg-raised text-fg p-2 text-xs overflow-auto">
+                            {JSON.stringify(escrow, null, 2)}
+                          </pre>
+                          {escrowFundable ? (
+                            <Button
                               type="button"
-                              style={{ background: '#635bff', color: '#fff', fontWeight: 600, marginTop: 4 }}
-                              onClick={() => void fundEscrow((escrowByCollab[key] as Record<string, unknown>).id as string)}
+                              size="sm"
+                              onClick={() => void fundEscrow(escrow.id as string)}
                             >
                               Fund via Stripe
-                            </button>
+                            </Button>
                           ) : null}
-                        </>
-                      )}
+                        </div>
+                      ) : null}
                     </div>
-                  </td>
-                </tr>
+                  </CardContent>
+                  <CardFooter className="flex flex-col items-stretch gap-2 border-t border-border-default pt-4">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void patchStatus(id, 'CONFIRMED')}
+                      >
+                        Confirm
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void patchStatus(id, 'IN_PROGRESS')}
+                      >
+                        Start
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void patchStatus(id, 'COMPLETED')}
+                      >
+                        Complete
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void patchStatus(id, 'REJECTED')}
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void patchStatus(id, 'DISPUTED')}
+                      >
+                        Dispute
+                      </Button>
+                      <Dialog
+                        open={flagOpenId === key}
+                        onOpenChange={(open) => setFlagOpenId(open ? key : null)}
+                      >
+                        <DialogTrigger asChild>
+                          <Button type="button" size="sm" variant="ghost">
+                            <Flag />
+                            Flag
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Flag collaboration #{key}</DialogTitle>
+                            <DialogDescription>
+                              Provide a reason. Staff will review.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-2">
+                            <Label htmlFor={`flag-${key}`}>Reason</Label>
+                            <Input
+                              id={`flag-${key}`}
+                              placeholder="e.g. payment dispute"
+                              value={flagReasons[key] ?? ''}
+                              onChange={(e) =>
+                                setFlagReasons((p) => ({ ...p, [key]: e.target.value }))
+                              }
+                            />
+                          </div>
+                          <DialogFooter>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => setFlagOpenId(null)}
+                            >
+                              Cancel
+                            </Button>
+                            <Button type="button" onClick={() => void flagCollaboration(id)}>
+                              Submit flag
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </CardFooter>
+                </Card>
               );
             })}
-          </tbody>
-        </table>
-      ) : (
-        <p>{list ? 'No collaborations.' : 'Loading…'}</p>
-      )}
-      {jsonPre(list)}
+          </div>
+        ) : list ? (
+          <EmptyState
+            icon={Handshake}
+            title="No collaborations yet"
+            description="Create one below or accept a referral offer."
+          />
+        ) : (
+          <p className="text-sm text-fg-muted">Loading…</p>
+        )}
 
-      <h2>Create collaboration</h2>
-      <p style={{ fontSize: 13 }}>
-        Employers: set worker_id only. Workers: set employer_id only.
-      </p>
-      <form onSubmit={handleCreateCollaboration} style={{ display: 'grid', gap: 8, maxWidth: 400 }}>
-        <label>
-          worker_id (employer){' '}
-          <input
-            type="number"
-            value={createWorkerId}
-            onChange={(e) => setCreateWorkerId(e.target.value)}
-          />
-        </label>
-        <label>
-          employer_id (worker){' '}
-          <input
-            type="number"
-            value={createEmployerId}
-            onChange={(e) => setCreateEmployerId(e.target.value)}
-          />
-        </label>
-        <label>
-          project_type{' '}
-          <input value={createProjectType} onChange={(e) => setCreateProjectType(e.target.value)} />
-        </label>
-        <label>
-          site_postcode{' '}
-          <input value={createPostcode} onChange={(e) => setCreatePostcode(e.target.value)} />
-        </label>
-        <label>
-          agreed_amount{' '}
-          <input
-            type="number"
-            step="any"
-            value={createAmount}
-            onChange={(e) => setCreateAmount(e.target.value)}
-          />
-        </label>
-        <label>
-          referral_id (optional){' '}
-          <input
-            type="number"
-            value={createReferralId}
-            onChange={(e) => setCreateReferralId(e.target.value)}
-          />
-        </label>
-        <button type="submit">Create Collaboration</button>
-      </form>
-      <h3>Last mutation response</h3>
-      {jsonPre(lastActionJson)}
+        {list ? (
+          <details className="rounded-md border border-border-default bg-raised">
+            <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-fg-muted">
+              Raw list JSON
+            </summary>
+            <pre className="rounded-b-md bg-subtle text-fg p-3 text-xs overflow-auto">
+              {JSON.stringify(list, null, 2)}
+            </pre>
+          </details>
+        ) : null}
+      </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Create collaboration</CardTitle>
+          <CardDescription>
+            Employers: set worker_id only. Workers: set employer_id only.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleCreateCollaboration} className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="c-worker-id">worker_id (employer)</Label>
+              <Input
+                id="c-worker-id"
+                type="number"
+                value={createWorkerId}
+                onChange={(e) => setCreateWorkerId(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-employer-id">employer_id (worker)</Label>
+              <Input
+                id="c-employer-id"
+                type="number"
+                value={createEmployerId}
+                onChange={(e) => setCreateEmployerId(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-project-type">project_type</Label>
+              <Input
+                id="c-project-type"
+                value={createProjectType}
+                onChange={(e) => setCreateProjectType(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-postcode">site_postcode</Label>
+              <Input
+                id="c-postcode"
+                value={createPostcode}
+                onChange={(e) => setCreatePostcode(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-amount">agreed_amount</Label>
+              <Input
+                id="c-amount"
+                type="number"
+                step="any"
+                value={createAmount}
+                onChange={(e) => setCreateAmount(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-referral-id">referral_id (optional)</Label>
+              <Input
+                id="c-referral-id"
+                type="number"
+                value={createReferralId}
+                onChange={(e) => setCreateReferralId(e.target.value)}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Button type="submit">Create collaboration</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      {lastActionJson ? (
+        <section className="space-y-2">
+          <h3 className="text-sm font-medium text-fg-muted">Last mutation response</h3>
+          <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+            {JSON.stringify(lastActionJson, null, 2)}
+          </pre>
+        </section>
+      ) : null}
     </div>
   );
 }
-
-const th: React.CSSProperties = {
-  border: '1px solid #ccc',
-  padding: 6,
-  textAlign: 'left',
-  background: '#eee',
-};
-const td: React.CSSProperties = { border: '1px solid #ccc', padding: 6 };

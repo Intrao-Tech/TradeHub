@@ -1,9 +1,21 @@
 import { useState, type FormEvent } from 'react';
+import { SlidersHorizontal, Search, Building2 } from 'lucide-react';
 import { api } from '../api';
+import { EmployerCard, type EmployerCardData } from '@/components/EmployerCard';
+import { EmptyState } from '@/components/EmptyState';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 
-type EmployerRow = {
-  id?: string | number;
-  company_name?: string | null;
+type EmployerRow = EmployerCardData & {
   rating_avg?: string | number;
   team_size?: number | null;
 };
@@ -15,13 +27,6 @@ type EmployerSearchResponse = {
   limit: number;
 };
 
-const cardStyle: React.CSSProperties = {
-  border: '1px solid #ccc',
-  borderRadius: 8,
-  padding: 12,
-  marginBottom: 12,
-};
-
 export default function EmployerSearchPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -29,6 +34,7 @@ export default function EmployerSearchPage() {
   const [results, setResults] = useState<EmployerSearchResponse | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   async function doSearch(e: FormEvent) {
     e.preventDefault();
@@ -43,6 +49,7 @@ export default function EmployerSearchPage() {
       }
       const data = await api<EmployerSearchResponse>(`/employer-profiles?${sp.toString()}`);
       setResults(data);
+      setMobileFiltersOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -50,63 +57,129 @@ export default function EmployerSearchPage() {
     }
   }
 
-  return (
-    <div>
-      <h1>Employer search</h1>
-      {error ? <div style={{ color: 'red', marginBottom: 8 }}>{error}</div> : null}
-
-      <form onSubmit={doSearch} style={{ marginBottom: 16 }}>
-        <div style={{ display: 'grid', gap: 8, maxWidth: 400 }}>
-          <label>
-            Search{' '}
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Company name contains…"
-            />
-          </label>
-          <label>
-            Page{' '}
-            <input
-              type="number"
-              value={page}
-              onChange={(e) => setPage(Number(e.target.value) || 1)}
-              min={1}
-            />
-          </label>
-          <label>
-            Limit{' '}
-            <input
-              type="number"
-              value={limit}
-              onChange={(e) => setLimit(Number(e.target.value) || 10)}
-              min={1}
-              max={100}
-            />
-          </label>
+  const filterForm = (
+    <form onSubmit={doSearch} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="es-search">Search</Label>
+        <Input
+          id="es-search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Company name contains…"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <Label htmlFor="es-page">Page</Label>
+          <Input
+            id="es-page"
+            type="number"
+            value={page}
+            onChange={(e) => setPage(Number(e.target.value) || 1)}
+            min={1}
+          />
         </div>
-        <button type="submit" style={{ marginTop: 12 }} disabled={loading}>
-          {loading ? 'Searching…' : 'Search Employers'}
-        </button>
-      </form>
+        <div className="space-y-2">
+          <Label htmlFor="es-limit">Limit</Label>
+          <Input
+            id="es-limit"
+            type="number"
+            value={limit}
+            onChange={(e) => setLimit(Number(e.target.value) || 10)}
+            min={1}
+            max={100}
+          />
+        </div>
+      </div>
+      <Button type="submit" disabled={loading} className="w-full">
+        <Search />
+        {loading ? 'Searching…' : 'Search employers'}
+      </Button>
+    </form>
+  );
 
-      {results ? (
-        <section>
-          <h2>Results ({results.total} total)</h2>
-          <pre style={{ background: '#f5f5f5', padding: 12, overflow: 'auto', marginBottom: 16 }}>
-            {JSON.stringify(results, null, 2)}
-          </pre>
-          {results.data.map((emp) => (
-            <div key={String(emp.id)} style={cardStyle}>
-              <div>
-                <strong>{emp.company_name ?? '(no name)'}</strong>
-              </div>
-              <div>Rating: {emp.rating_avg ?? '—'}</div>
-              <div>Team size: {emp.team_size ?? '—'}</div>
-            </div>
-          ))}
-        </section>
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Employer search</h1>
+        <p className="text-sm text-fg-muted">Find employers that hire on TradeHub.</p>
+      </div>
+
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {error}
+        </div>
       ) : null}
+
+      <div className="lg:hidden">
+        <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" className="w-full">
+              <SlidersHorizontal />
+              Filters
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-sm">
+            <SheetHeader>
+              <SheetTitle>Filters</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4">{filterForm}</div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+        <aside className="hidden lg:block">
+          <Card className="sticky top-20">
+            <CardHeader>
+              <CardTitle>Filters</CardTitle>
+            </CardHeader>
+            <CardContent>{filterForm}</CardContent>
+          </Card>
+        </aside>
+
+        <section className="space-y-4">
+          {results ? (
+            <>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold tracking-tight">
+                  {results.total} result{results.total === 1 ? '' : 's'}
+                </h2>
+              </div>
+              {results.data.length > 0 ? (
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {results.data.map((emp) => (
+                    <EmployerCard key={String(emp.id)} employer={emp} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={Building2}
+                  title="No employers found"
+                  description="Try another search."
+                />
+              )}
+              <details className="rounded-md border border-border-default bg-raised">
+                <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-fg-muted">
+                  Raw response
+                </summary>
+                <pre className="rounded-b-md bg-subtle text-fg p-3 text-xs overflow-auto">
+                  {JSON.stringify(results, null, 2)}
+                </pre>
+              </details>
+            </>
+          ) : (
+            <EmptyState
+              icon={Search}
+              title="Start searching"
+              description="Use the filters to find employers."
+            />
+          )}
+        </section>
+      </div>
     </div>
   );
 }

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Semantic aliases. Components reference ONLY these — never primitives. Each resolves via theme (light/dark).",
+  "color": {
+    "bg": {
+      "page":    { "$value": "{color.surface.page}",    "$type": "color" },
+      "raised":  { "$value": "{color.surface.raised}",  "$type": "color" },
+      "sunken":  { "$value": "{color.surface.sunken}",  "$type": "color" },
+      "subtle":  { "$value": "{color.neutral.50}",      "$type": "color" },
+      "muted":   { "$value": "{color.neutral.100}",     "$type": "color" }
+    },
+    "fg": {
+      "default":   { "$value": "{color.neutral.900}", "$type": "color" },
+      "muted":     { "$value": "{color.neutral.600}", "$type": "color" },
+      "subtle":    { "$value": "{color.neutral.500}", "$type": "color" },
+      "on-accent": { "$value": "#FFFFFF",             "$type": "color" },
+      "inverse":   { "$value": "{color.neutral.50}",  "$type": "color" }
+    },
+    "border": {
+      "default": { "$value": "{color.neutral.200}", "$type": "color" },
+      "strong":  { "$value": "{color.neutral.300}", "$type": "color" },
+      "subtle":  { "$value": "{color.neutral.100}", "$type": "color" }
+    },
+    "action": {
+      "primary":       { "$value": "{color.brand.600}", "$type": "color" },
+      "primary-hover": { "$value": "{color.brand.700}", "$type": "color" },
+      "primary-fg":    { "$value": "#FFFFFF",           "$type": "color" }
+    },
+    "focus": {
+      "ring": { "$value": "{color.brand.600}", "$type": "color" }
+    },
+    "state": {
+      "success": { "$value": "{color.state.success.600}", "$type": "color" },
+      "warning": { "$value": "{color.state.warning.600}", "$type": "color" },
+      "danger":  { "$value": "{color.state.danger.600}",  "$type": "color" },
+      "info":    { "$value": "{color.state.info.600}",    "$type": "color" },
+      "success-subtle": { "$value": "{color.state.success.50}", "$type": "color" },
+      "warning-subtle": { "$value": "{color.state.warning.50}", "$type": "color" },
+      "danger-subtle":  { "$value": "{color.state.danger.50}",  "$type": "color" },
+      "info-subtle":    { "$value": "{color.state.info.50}",    "$type": "color" }
+    },
+    "overlay": { "$value": "{color.neutral.950}", "$type": "color", "$description": "Modal / sheet scrim. Alpha applied per theme in themes/{light,dark}.json." }
+  }
+}

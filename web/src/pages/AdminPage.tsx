@@ -1,5 +1,32 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useState, type FormEvent } from 'react';
 import { api } from '../api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 const QUEUE_TYPES = [
   'VERIFICATION',
@@ -30,30 +57,39 @@ function errMsg(e: unknown) {
 
 function ErrorBox({ message }: { message: string }) {
   return message ? (
-    <div style={{ color: 'red', marginBottom: 8 }}>{message}</div>
+    <div
+      role="alert"
+      className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+    >
+      {message}
+    </div>
   ) : null;
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+function JsonBlock({ data }: { data: unknown }) {
+  if (data == null) return null;
   return (
-    <section
-      style={{
-        marginBottom: 32,
-        padding: 16,
-        border: '1px solid #ccc',
-        borderRadius: 8,
-      }}
-    >
-      <h2 style={{ marginTop: 0 }}>{title}</h2>
-      {children}
-    </section>
+    <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+      {JSON.stringify(data, null, 2)}
+    </pre>
   );
+}
+
+function queueStatusVariant(
+  status?: string,
+): 'default' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' | 'outline' {
+  switch (status) {
+    case 'COMPLETED':
+      return 'success';
+    case 'IN_PROGRESS':
+      return 'info';
+    case 'DISMISSED':
+      return 'secondary';
+    case 'OPEN':
+      return 'warning';
+    default:
+      return 'outline';
+  }
 }
 
 type ModerationQueueRow = {
@@ -369,519 +405,619 @@ export default function AdminPage() {
       : [];
 
   return (
-    <div>
-      <h1>Staff / Admin</h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Staff / Admin</h1>
+        <p className="text-sm text-fg-muted">
+          Moderation queue, document review, plans, specialisations, and audit log.
+        </p>
+      </div>
 
-      <Section title="Moderation Queue">
-        <ErrorBox message={queueErr} />
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
-          <label>
-            queue_type{' '}
-            <select
-              value={queueType}
-              onChange={(e) => setQueueType(e.target.value)}
-            >
-              {QUEUE_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            status{' '}
-            <select
-              value={queueStatus}
-              onChange={(e) => setQueueStatus(e.target.value)}
-            >
-              <option value="">(any)</option>
-              {QUEUE_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            page{' '}
-            <input
-              type="number"
-              min={1}
-              value={queuePage}
-              onChange={(e) => setQueuePage(Number(e.target.value) || 1)}
-            />
-          </label>
-          <label>
-            limit{' '}
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={queueLimit}
-              onChange={(e) => setQueueLimit(Number(e.target.value) || 10)}
-            />
-          </label>
-        </div>
-        <button type="button" onClick={() => void loadQueue()}>
-          Load Queue
-        </button>
-        {queueData != null ? (
-          <pre style={{ marginTop: 12, overflow: 'auto' }}>
-            {JSON.stringify(queueData, null, 2)}
-          </pre>
-        ) : null}
-        {queueItems.length > 0 ? (
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {queueItems.map((row) => (
-              <li
-                key={String(row.id)}
-                style={{
-                  borderBottom: '1px solid #eee',
-                  padding: '8px 0',
-                }}
-              >
-                <div>
-                  id={String(row.id)} · {row.entity_type} · entity_id=
-                  {String(row.entity_id)} · {row.queue_type} · {row.status} ·
-                  priority={row.priority} · document_id=
-                  {row.document_id != null ? String(row.document_id) : '—'}
+      <Tabs defaultValue="moderation" className="space-y-4">
+        <TabsList className="flex flex-wrap gap-1 h-auto">
+          <TabsTrigger value="moderation">Moderation</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="reviews">Reviews</TabsTrigger>
+          <TabsTrigger value="plans">Plans</TabsTrigger>
+          <TabsTrigger value="specialisations">Specialisations</TabsTrigger>
+          <TabsTrigger value="audit">Audit</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="moderation" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Moderation queue</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ErrorBox message={queueErr} />
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="space-y-2">
+                  <Label>Queue type</Label>
+                  <Select value={queueType} onValueChange={setQueueType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {QUEUE_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <button
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select
+                    value={queueStatus === '' ? '__any__' : queueStatus}
+                    onValueChange={(v) => setQueueStatus(v === '__any__' ? '' : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__any__">(any)</SelectItem>
+                      {QUEUE_STATUSES.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="q-page">Page</Label>
+                  <Input
+                    id="q-page"
+                    type="number"
+                    min={1}
+                    value={queuePage}
+                    onChange={(e) => setQueuePage(Number(e.target.value) || 1)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="q-limit">Limit</Label>
+                  <Input
+                    id="q-limit"
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={queueLimit}
+                    onChange={(e) => setQueueLimit(Number(e.target.value) || 10)}
+                  />
+                </div>
+              </div>
+              <Button type="button" onClick={() => void loadQueue()}>
+                Load queue
+              </Button>
+
+              {queueItems.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Entity</TableHead>
+                      <TableHead>Queue</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Priority</TableHead>
+                      <TableHead>Doc</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {queueItems.map((row) => (
+                      <TableRow key={String(row.id)}>
+                        <TableCell>{String(row.id)}</TableCell>
+                        <TableCell>
+                          {row.entity_type} · {String(row.entity_id)}
+                        </TableCell>
+                        <TableCell>{row.queue_type}</TableCell>
+                        <TableCell>
+                          <Badge variant={queueStatusVariant(row.status)}>{row.status}</Badge>
+                        </TableCell>
+                        <TableCell>{row.priority}</TableCell>
+                        <TableCell>
+                          {row.document_id != null ? String(row.document_id) : '—'}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const sid = String(row.id);
+                              setDetailId(sid);
+                              setActionModId(sid);
+                              void loadModerationDetail(sid);
+                            }}
+                          >
+                            View
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : null}
+              <JsonBlock data={queueData} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Item details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="detail-id">Moderation ID</Label>
+                  <Input
+                    id="detail-id"
+                    value={detailId}
+                    onChange={(e) => setDetailId(e.target.value)}
+                    placeholder="id"
+                  />
+                </div>
+                <Button
                   type="button"
                   onClick={() => {
-                    const sid = String(row.id);
-                    setDetailId(sid);
-                    setActionModId(sid);
-                    void loadModerationDetail(sid);
+                    const id = detailId.trim();
+                    if (id) void loadModerationDetail(id);
                   }}
                 >
-                  View Details
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+                  Load
+                </Button>
+              </div>
+              <ErrorBox message={detailErr} />
+              <JsonBlock data={moderationDetail} />
+            </CardContent>
+          </Card>
 
-        <h3>Item details</h3>
-        <div style={{ marginBottom: 8 }}>
-          <label>
-            moderation id (manual){' '}
-            <input
-              value={detailId}
-              onChange={(e) => setDetailId(e.target.value)}
-              placeholder="id"
-            />
-          </label>{' '}
-          <button
-            type="button"
-            onClick={() => {
-              const id = detailId.trim();
-              if (id) void loadModerationDetail(id);
-            }}
-          >
-            Load
-          </button>
-        </div>
-        <ErrorBox message={detailErr} />
-        {moderationDetail != null ? (
-          <pre style={{ overflow: 'auto' }}>
-            {JSON.stringify(moderationDetail, null, 2)}
-          </pre>
-        ) : null}
+          <Card>
+            <CardHeader>
+              <CardTitle>Add action</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ErrorBox message={actionErr} />
+              <form onSubmit={submitAction} className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="action-mod-id">Moderation ID</Label>
+                  <Input
+                    id="action-mod-id"
+                    value={actionModId}
+                    onChange={(e) => setActionModId(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Action type</Label>
+                  <Select value={actionType} onValueChange={setActionType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ACTION_TYPES.map((a) => (
+                        <SelectItem key={a} value={a}>
+                          {a}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="action-notes">Notes</Label>
+                  <Input
+                    id="action-notes"
+                    value={actionNotes}
+                    onChange={(e) => setActionNotes(e.target.value)}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Button type="submit">Submit action</Button>
+                </div>
+              </form>
+              <JsonBlock data={actionData} />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        <h3>Add Action</h3>
-        <ErrorBox message={actionErr} />
-        <form onSubmit={submitAction}>
-          <div style={{ marginBottom: 8 }}>
-            <label>
-              moderation id{' '}
-              <input
-                value={actionModId}
-                onChange={(e) => setActionModId(e.target.value)}
-                required
-              />
-            </label>
-          </div>
-          <div style={{ marginBottom: 8 }}>
-            <label>
-              action_type{' '}
-              <select
-                value={actionType}
-                onChange={(e) => setActionType(e.target.value)}
-              >
-                {ACTION_TYPES.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div style={{ marginBottom: 8 }}>
-            <label>
-              notes{' '}
-              <input
-                value={actionNotes}
-                onChange={(e) => setActionNotes(e.target.value)}
-              />
-            </label>
-          </div>
-          <button type="submit">POST action</button>
-        </form>
-        {actionData != null ? (
-          <pre style={{ marginTop: 8, overflow: 'auto' }}>
-            {JSON.stringify(actionData, null, 2)}
-          </pre>
-        ) : null}
-      </Section>
+        <TabsContent value="documents" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Document review</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ErrorBox message={docErr} />
+              <form onSubmit={patchDocumentStatus} className="grid gap-4 sm:grid-cols-[1fr_200px_auto] sm:items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="doc-id">Document ID</Label>
+                  <Input
+                    id="doc-id"
+                    type="number"
+                    value={docId}
+                    onChange={(e) => setDocId(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={docStatus} onValueChange={setDocStatus}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DOC_STATUSES.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type="submit">Update status</Button>
+              </form>
+              <JsonBlock data={docRes} />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <Section title="Document Review">
-        <ErrorBox message={docErr} />
-        <form onSubmit={patchDocumentStatus}>
-          <div style={{ marginBottom: 8 }}>
-            <label>
-              document_id{' '}
-              <input
-                type="number"
-                value={docId}
-                onChange={(e) => setDocId(e.target.value)}
-                required
-              />
-            </label>
-          </div>
-          <div style={{ marginBottom: 8 }}>
-            <label>
-              status{' '}
-              <select
-                value={docStatus}
-                onChange={(e) => setDocStatus(e.target.value)}
-              >
-                {DOC_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <button type="submit">PATCH status</button>
-        </form>
-        {docRes != null ? (
-          <pre style={{ marginTop: 8, overflow: 'auto' }}>
-            {JSON.stringify(docRes, null, 2)}
-          </pre>
-        ) : null}
-      </Section>
+        <TabsContent value="reviews" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Review publishing</CardTitle>
+              <CardDescription>Publish a review by ID.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ErrorBox message={publishErr} />
+              <form onSubmit={publishReview} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="review-id">Review ID</Label>
+                  <Input
+                    id="review-id"
+                    type="number"
+                    value={reviewId}
+                    onChange={(e) => setReviewId(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit">Publish review</Button>
+              </form>
+              <JsonBlock data={publishRes} />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <Section title="Review Publishing">
-        <ErrorBox message={publishErr} />
-        <form onSubmit={publishReview}>
-          <label>
-            review_id{' '}
-            <input
-              type="number"
-              value={reviewId}
-              onChange={(e) => setReviewId(e.target.value)}
-              required
-            />
-          </label>{' '}
-          <button type="submit">Publish Review</button>
-        </form>
-        {publishRes != null ? (
-          <pre style={{ marginTop: 8, overflow: 'auto' }}>
-            {JSON.stringify(publishRes, null, 2)}
-          </pre>
-        ) : null}
-      </Section>
+        <TabsContent value="plans" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Subscription plans</CardTitle>
+                <Button type="button" variant="outline" size="sm" onClick={() => void loadPlans()}>
+                  Load plans
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <ErrorBox message={plansErr} />
+              <JsonBlock data={plansData} />
+            </CardContent>
+          </Card>
 
-      <Section title="Subscription Plans">
-        <ErrorBox message={plansErr} />
-        <button type="button" onClick={() => void loadPlans()}>
-          Load Plans
-        </button>
-        {plansData != null ? (
-          <pre style={{ marginTop: 8, overflow: 'auto' }}>
-            {JSON.stringify(plansData, null, 2)}
-          </pre>
-        ) : null}
+          <Card>
+            <CardHeader>
+              <CardTitle>Create plan</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ErrorBox message={createPlanErr} />
+              <form onSubmit={createPlan} className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="plan-name">Name</Label>
+                  <Input
+                    id="plan-name"
+                    value={planName}
+                    onChange={(e) => setPlanName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="plan-monthly">Price monthly</Label>
+                  <Input
+                    id="plan-monthly"
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={planMonthly}
+                    onChange={(e) => setPlanMonthly(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="plan-yearly">Price yearly</Label>
+                  <Input
+                    id="plan-yearly"
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={planYearly}
+                    onChange={(e) => setPlanYearly(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="plan-maxref">Max referrals</Label>
+                  <Input
+                    id="plan-maxref"
+                    type="number"
+                    min={0}
+                    value={planMaxRef}
+                    onChange={(e) => setPlanMaxRef(e.target.value)}
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-sm text-fg sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={planActive}
+                    onChange={(e) => setPlanActive(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  is_active
+                </label>
+                <div className="sm:col-span-2">
+                  <Button type="submit">Create plan</Button>
+                </div>
+              </form>
+              <JsonBlock data={createPlanRes} />
+            </CardContent>
+          </Card>
 
-        <h3>Create Plan</h3>
-        <ErrorBox message={createPlanErr} />
-        <form onSubmit={createPlan}>
-          <div>
-            <label>
-              name <input value={planName} onChange={(e) => setPlanName(e.target.value)} required />
-            </label>
-          </div>
-          <div>
-            <label>
-              price_monthly{' '}
-              <input
-                type="number"
-                step="0.01"
-                min={0}
-                value={planMonthly}
-                onChange={(e) => setPlanMonthly(e.target.value)}
-                required
-              />
-            </label>
-          </div>
-          <div>
-            <label>
-              price_yearly{' '}
-              <input
-                type="number"
-                step="0.01"
-                min={0}
-                value={planYearly}
-                onChange={(e) => setPlanYearly(e.target.value)}
-              />
-            </label>
-          </div>
-          <div>
-            <label>
-              max_referrals{' '}
-              <input
-                type="number"
-                min={0}
-                value={planMaxRef}
-                onChange={(e) => setPlanMaxRef(e.target.value)}
-              />
-            </label>
-          </div>
-          <div>
-            <label>
-              <input
-                type="checkbox"
-                checked={planActive}
-                onChange={(e) => setPlanActive(e.target.checked)}
-              />{' '}
-              is_active
-            </label>
-          </div>
-          <button type="submit">Create Plan</button>
-        </form>
-        {createPlanRes != null ? (
-          <pre style={{ marginTop: 8, overflow: 'auto' }}>
-            {JSON.stringify(createPlanRes, null, 2)}
-          </pre>
-        ) : null}
+          <Card>
+            <CardHeader>
+              <CardTitle>Update plan</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ErrorBox message={updErr} />
+              <form onSubmit={updatePlan} className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="upd-plan-id">Plan ID</Label>
+                  <Input
+                    id="upd-plan-id"
+                    type="number"
+                    min={1}
+                    value={updPlanId}
+                    onChange={(e) => setUpdPlanId(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="upd-name">Name</Label>
+                  <Input
+                    id="upd-name"
+                    value={updName}
+                    onChange={(e) => setUpdName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="upd-monthly">Price monthly</Label>
+                  <Input
+                    id="upd-monthly"
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={updMonthly}
+                    onChange={(e) => setUpdMonthly(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="upd-yearly">Price yearly</Label>
+                  <Input
+                    id="upd-yearly"
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={updYearly}
+                    onChange={(e) => setUpdYearly(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="upd-maxref">Max referrals</Label>
+                  <Input
+                    id="upd-maxref"
+                    type="number"
+                    min={0}
+                    value={updMaxRef}
+                    onChange={(e) => setUpdMaxRef(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>is_active</Label>
+                  <Select
+                    value={updActive === '' ? '__omit__' : String(updActive)}
+                    onValueChange={(v) => {
+                      if (v === '__omit__') setUpdActive('');
+                      else setUpdActive(v === 'true');
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__omit__">(omit)</SelectItem>
+                      <SelectItem value="true">true</SelectItem>
+                      <SelectItem value="false">false</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="sm:col-span-2">
+                  <Button type="submit">Update plan</Button>
+                </div>
+              </form>
+              <JsonBlock data={updRes} />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        <h3>Update Plan</h3>
-        <ErrorBox message={updErr} />
-        <form onSubmit={updatePlan}>
-          <div>
-            <label>
-              plan_id{' '}
-              <input
-                type="number"
-                min={1}
-                value={updPlanId}
-                onChange={(e) => setUpdPlanId(e.target.value)}
-                required
-              />
-            </label>
-          </div>
-          <div>
-            <label>
-              name <input value={updName} onChange={(e) => setUpdName(e.target.value)} />
-            </label>
-          </div>
-          <div>
-            <label>
-              price_monthly{' '}
-              <input
-                type="number"
-                step="0.01"
-                min={0}
-                value={updMonthly}
-                onChange={(e) => setUpdMonthly(e.target.value)}
-              />
-            </label>
-          </div>
-          <div>
-            <label>
-              price_yearly{' '}
-              <input
-                type="number"
-                step="0.01"
-                min={0}
-                value={updYearly}
-                onChange={(e) => setUpdYearly(e.target.value)}
-              />
-            </label>
-          </div>
-          <div>
-            <label>
-              max_referrals{' '}
-              <input
-                type="number"
-                min={0}
-                value={updMaxRef}
-                onChange={(e) => setUpdMaxRef(e.target.value)}
-              />
-            </label>
-          </div>
-          <div>
-            <label>
-              is_active{' '}
-              <select
-                value={updActive === '' ? '' : String(updActive)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === '') setUpdActive('');
-                  else setUpdActive(v === 'true');
-                }}
-              >
-                <option value="">(omit)</option>
-                <option value="true">true</option>
-                <option value="false">false</option>
-              </select>
-            </label>
-          </div>
-          <button type="submit">Update Plan</button>
-        </form>
-        {updRes != null ? (
-          <pre style={{ marginTop: 8, overflow: 'auto' }}>
-            {JSON.stringify(updRes, null, 2)}
-          </pre>
-        ) : null}
-      </Section>
-
-      <Section title="Specialisation Management">
-        <ErrorBox message={specErr} />
-        <button type="button" onClick={() => void loadSpecialisations()}>
-          Load All
-        </button>
-        {specList != null ? (
-          <pre style={{ marginTop: 8, overflow: 'auto' }}>
-            {JSON.stringify(specList, null, 2)}
-          </pre>
-        ) : null}
-
-        <h3>Create</h3>
-        <ErrorBox message={createSpecErr} />
-        <form onSubmit={createSpecialisation}>
-          <label>
-            name{' '}
-            <input
-              value={specName}
-              onChange={(e) => setSpecName(e.target.value)}
-              required
-            />
-          </label>{' '}
-          <button type="submit">POST</button>
-        </form>
-        {createSpecRes != null ? (
-          <pre style={{ marginTop: 8, overflow: 'auto' }}>
-            {JSON.stringify(createSpecRes, null, 2)}
-          </pre>
-        ) : null}
-
-        {specRows.length > 0 ? (
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {specRows.map((s) => (
-              <li key={s.id} style={{ marginTop: 8 }}>
-                {s.id}: {s.name}{' '}
-                <button
+        <TabsContent value="specialisations" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Specialisations</CardTitle>
+                <Button
                   type="button"
-                  onClick={() => void deleteSpecialisation(s.id)}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadSpecialisations()}
                 >
-                  Delete
-                </button>
-                {delSpecErr[String(s.id)] ? (
-                  <div style={{ color: 'red', fontSize: 12 }}>
-                    {delSpecErr[String(s.id)]}
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </Section>
+                  Load all
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ErrorBox message={specErr} />
+              <form onSubmit={createSpecialisation} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="spec-name">Name</Label>
+                  <Input
+                    id="spec-name"
+                    value={specName}
+                    onChange={(e) => setSpecName(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit">Create</Button>
+              </form>
+              <ErrorBox message={createSpecErr} />
+              <JsonBlock data={createSpecRes} />
 
-      <Section title="Audit Log">
-        <ErrorBox message={auditErr} />
-        <form onSubmit={searchAudit}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            <label>
-              account_id{' '}
-              <input
-                value={auditAccountId}
-                onChange={(e) => setAuditAccountId(e.target.value)}
-              />
-            </label>
-            <label>
-              action{' '}
-              <input
-                value={auditAction}
-                onChange={(e) => setAuditAction(e.target.value)}
-              />
-            </label>
-            <label>
-              entity_type{' '}
-              <input
-                value={auditEntityType}
-                onChange={(e) => setAuditEntityType(e.target.value)}
-              />
-            </label>
-            <label>
-              from_date{' '}
-              <input
-                type="datetime-local"
-                value={auditFrom}
-                onChange={(e) => setAuditFrom(e.target.value)}
-              />
-            </label>
-            <label>
-              to_date{' '}
-              <input
-                type="datetime-local"
-                value={auditTo}
-                onChange={(e) => setAuditTo(e.target.value)}
-              />
-            </label>
-            <label>
-              page{' '}
-              <input
-                type="number"
-                min={1}
-                value={auditPage}
-                onChange={(e) => setAuditPage(Number(e.target.value) || 1)}
-              />
-            </label>
-            <label>
-              limit{' '}
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={auditLimit}
-                onChange={(e) => setAuditLimit(Number(e.target.value) || 20)}
-              />
-            </label>
-          </div>
-          <button type="submit" style={{ marginTop: 8 }}>
-            Search
-          </button>
-        </form>
-        {auditItems.length > 0 ? (
-          <ul style={{ marginTop: 12 }}>
-            {auditItems.map((row, i) => (
-              <li key={i}>
-                <pre style={{ whiteSpace: 'pre-wrap' }}>
-                  {JSON.stringify(row, null, 2)}
-                </pre>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {auditData != null ? (
-          <pre style={{ marginTop: 12, overflow: 'auto' }}>
-            {JSON.stringify(auditData, null, 2)}
-          </pre>
-        ) : null}
-      </Section>
+              {specRows.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {specRows.map((s) => (
+                      <TableRow key={s.id}>
+                        <TableCell>{s.id}</TableCell>
+                        <TableCell>{s.name}</TableCell>
+                        <TableCell>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void deleteSpecialisation(s.id)}
+                          >
+                            Delete
+                          </Button>
+                          {delSpecErr[String(s.id)] ? (
+                            <p className="mt-1 text-xs text-danger">
+                              {delSpecErr[String(s.id)]}
+                            </p>
+                          ) : null}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : null}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="audit" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Audit log</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ErrorBox message={auditErr} />
+              <form onSubmit={searchAudit} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="a-account">Account ID</Label>
+                  <Input
+                    id="a-account"
+                    value={auditAccountId}
+                    onChange={(e) => setAuditAccountId(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="a-action">Action</Label>
+                  <Input
+                    id="a-action"
+                    value={auditAction}
+                    onChange={(e) => setAuditAction(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="a-entity">Entity type</Label>
+                  <Input
+                    id="a-entity"
+                    value={auditEntityType}
+                    onChange={(e) => setAuditEntityType(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="a-from">From date</Label>
+                  <Input
+                    id="a-from"
+                    type="datetime-local"
+                    value={auditFrom}
+                    onChange={(e) => setAuditFrom(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="a-to">To date</Label>
+                  <Input
+                    id="a-to"
+                    type="datetime-local"
+                    value={auditTo}
+                    onChange={(e) => setAuditTo(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="a-page">Page</Label>
+                    <Input
+                      id="a-page"
+                      type="number"
+                      min={1}
+                      value={auditPage}
+                      onChange={(e) => setAuditPage(Number(e.target.value) || 1)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="a-limit">Limit</Label>
+                    <Input
+                      id="a-limit"
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={auditLimit}
+                      onChange={(e) => setAuditLimit(Number(e.target.value) || 20)}
+                    />
+                  </div>
+                </div>
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <Button type="submit">Search</Button>
+                </div>
+              </form>
+              {auditItems.length > 0 ? (
+                <ul className="space-y-2">
+                  {auditItems.map((row, i) => (
+                    <li key={i}>
+                      <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto whitespace-pre-wrap">
+                        {JSON.stringify(row, null, 2)}
+                      </pre>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <JsonBlock data={auditData} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

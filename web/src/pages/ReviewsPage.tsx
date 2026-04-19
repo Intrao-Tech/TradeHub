@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, getToken } from '../api';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { StarRating } from '@/components/StarRating';
+import { EmptyState } from '@/components/EmptyState';
+import { MessageSquare } from 'lucide-react';
 
 type ReviewRow = {
   overall_rating?: number;
@@ -22,28 +31,20 @@ type ReviewListResponse = {
   totalPages?: number;
 };
 
-function jsonPre(data: unknown) {
-  return (
-    <pre style={{ background: '#f5f5f5', padding: 12, overflow: 'auto', fontSize: 12 }}>
-      {data == null ? '' : JSON.stringify(data, null, 2)}
-    </pre>
-  );
-}
+type OptionalRatingKey =
+  | 'quality_rating'
+  | 'reliability_rating'
+  | 'communication_rating'
+  | 'payment_rating'
+  | 'safety_rating';
 
-function optionalRating(name: string, value: string, onChange: (v: string) => void) {
-  return (
-    <label style={{ display: 'block' }}>
-      {name} (1–5, optional){' '}
-      <input
-        type="number"
-        min={1}
-        max={5}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </label>
-  );
-}
+const OPTIONAL_LABELS: Record<OptionalRatingKey, string> = {
+  quality_rating: 'Quality',
+  reliability_rating: 'Reliability',
+  communication_rating: 'Communication',
+  payment_rating: 'Payment',
+  safety_rating: 'Safety',
+};
 
 export default function ReviewsPage() {
   const loggedIn = !!getToken();
@@ -134,32 +135,78 @@ export default function ReviewsPage() {
     }
   }
 
-  function renderReviewCards(items: ReviewRow[] | undefined) {
-    if (!items?.length) return <p>No reviews in this result.</p>;
+  function OptionalRatingField({
+    name,
+    value,
+    onChange,
+  }: {
+    name: OptionalRatingKey;
+    value: string;
+    onChange: (v: string) => void;
+  }) {
+    const numValue = value === '' ? 0 : Number(value);
     return (
-      <ul style={{ listStyle: 'none', padding: 0 }}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-fg">{OPTIONAL_LABELS[name]}</p>
+          <p className="text-xs text-fg-subtle">Optional</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <StarRating value={numValue} onChange={(n) => onChange(String(n))} label={OPTIONAL_LABELS[name]} />
+          {value !== '' ? (
+            <Button type="button" size="sm" variant="ghost" onClick={() => onChange('')}>
+              Clear
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  function renderReviewCards(items: ReviewRow[] | undefined) {
+    if (!items?.length) {
+      return (
+        <EmptyState
+          icon={MessageSquare}
+          title="No reviews"
+          description="No reviews in this result."
+        />
+      );
+    }
+    return (
+      <ul className="space-y-3">
         {items.map((rev, i) => (
-          <li
-            key={i}
-            style={{
-              border: '1px solid #ccc',
-              padding: 10,
-              marginBottom: 8,
-              borderRadius: 4,
-              fontSize: 14,
-            }}
-          >
-            <div>
-              <strong>Overall</strong>: {rev.overall_rating ?? '—'} |{' '}
-              <strong>Reviewer</strong>: {rev.reviewer_role ?? '—'} |{' '}
-              <strong>Published</strong>: {String(rev.is_published ?? false)}
-            </div>
-            <div style={{ fontSize: 12, color: '#444' }}>
-              Q {rev.quality_rating ?? '—'} · Rel {rev.reliability_rating ?? '—'} · Com{' '}
-              {rev.communication_rating ?? '—'} · Pay {rev.payment_rating ?? '—'} · Safe{' '}
-              {rev.safety_rating ?? '—'}
-            </div>
-            <div style={{ marginTop: 6 }}>{rev.comment ?? <em>No comment</em>}</div>
+          <li key={i}>
+            <Card>
+              <CardContent className="space-y-3 pt-6">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <StarRating value={rev.overall_rating ?? 0} size="md" label="Overall rating" />
+                    <span className="text-sm text-fg-muted">
+                      {rev.overall_rating ?? '—'} / 5
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {rev.reviewer_role ? (
+                      <Badge variant="outline">{rev.reviewer_role}</Badge>
+                    ) : null}
+                    <Badge variant={rev.is_published ? 'success' : 'warning'}>
+                      {rev.is_published ? 'Published' : 'Draft'}
+                    </Badge>
+                  </div>
+                </div>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-fg-muted sm:grid-cols-5">
+                  <SubRating label="Quality" value={rev.quality_rating} />
+                  <SubRating label="Reliability" value={rev.reliability_rating} />
+                  <SubRating label="Communication" value={rev.communication_rating} />
+                  <SubRating label="Payment" value={rev.payment_rating} />
+                  <SubRating label="Safety" value={rev.safety_rating} />
+                </dl>
+                <p className="text-sm text-fg">
+                  {rev.comment ? rev.comment : <em className="text-fg-subtle">No comment</em>}
+                </p>
+              </CardContent>
+            </Card>
           </li>
         ))}
       </ul>
@@ -167,98 +214,184 @@ export default function ReviewsPage() {
   }
 
   return (
-    <div>
-      <h1>Reviews</h1>
-      {error ? <div style={{ color: 'red', marginBottom: 8 }}>{error}</div> : null}
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-fg">Reviews</h1>
+        <p className="text-sm text-fg-muted">Browse published reviews and submit your own.</p>
+      </div>
 
-      <section style={{ marginBottom: 24 }}>
-        <h2>Search worker reviews</h2>
-        <form onSubmit={searchWorkerReviews} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <label>
-            worker_id{' '}
-            <input
-              type="number"
-              value={workerId}
-              onChange={(e) => setWorkerId(e.target.value)}
-              required
-            />
-          </label>
-          <button type="submit">Search</button>
-          <button type="button" onClick={() => void searchWorkerReviews()}>
-            Refresh
-          </button>
-        </form>
-        {renderReviewCards(workerReviews?.items)}
-        <h3>Raw JSON</h3>
-        {jsonPre(workerReviews)}
-      </section>
-
-      <section style={{ marginBottom: 24 }}>
-        <h2>Search employer reviews</h2>
-        <form onSubmit={searchEmployerReviews} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <label>
-            employer_id{' '}
-            <input
-              type="number"
-              value={employerId}
-              onChange={(e) => setEmployerId(e.target.value)}
-              required
-            />
-          </label>
-          <button type="submit">Search</button>
-          <button type="button" onClick={() => void searchEmployerReviews()}>
-            Refresh
-          </button>
-        </form>
-        {renderReviewCards(employerReviews?.items)}
-        <h3>Raw JSON</h3>
-        {jsonPre(employerReviews)}
-      </section>
-
-      {!loggedIn && (
-        <div className="alert alert-info">
-          You are browsing as a guest. <Link to="/login">Sign in</Link> to write reviews.
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {error}
         </div>
-      )}
+      ) : null}
 
-      {loggedIn && (
-      <section style={{ marginBottom: 24 }}>
-        <h2>Create review</h2>
-        <form onSubmit={handleCreateReview} style={{ display: 'grid', gap: 8, maxWidth: 420 }}>
-          <label>
-            collaboration_id *{' '}
-            <input
-              type="number"
-              value={collabId}
-              onChange={(e) => setCollabId(e.target.value)}
-              required
-            />
-          </label>
-          <label>
-            overall_rating (1–5) *{' '}
-            <input
-              type="number"
-              min={1}
-              max={5}
-              value={overallRating}
-              onChange={(e) => setOverallRating(e.target.value)}
-              required
-            />
-          </label>
-          {optionalRating('quality_rating', qualityRating, setQualityRating)}
-          {optionalRating('reliability_rating', reliabilityRating, setReliabilityRating)}
-          {optionalRating('communication_rating', communicationRating, setCommunicationRating)}
-          {optionalRating('payment_rating', paymentRating, setPaymentRating)}
-          {optionalRating('safety_rating', safetyRating, setSafetyRating)}
-          <label>
-            comment{' '}
-            <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} />
-          </label>
-          <button type="submit">Create Review</button>
-        </form>
-        <h3>Create response</h3>
-        {jsonPre(createResult)}
-      </section>
+      <Card>
+        <CardHeader>
+          <CardTitle>Search worker reviews</CardTitle>
+          <CardDescription>Look up reviews about a specific worker.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form
+            onSubmit={searchWorkerReviews}
+            className="flex flex-col gap-3 sm:flex-row sm:items-end"
+          >
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="worker-id">worker_id</Label>
+              <Input
+                id="worker-id"
+                type="number"
+                value={workerId}
+                onChange={(e) => setWorkerId(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit">Search</Button>
+              <Button type="button" variant="outline" onClick={() => void searchWorkerReviews()}>
+                Refresh
+              </Button>
+            </div>
+          </form>
+          {renderReviewCards(workerReviews?.items)}
+          <details className="text-xs text-fg-muted">
+            <summary className="cursor-pointer">Raw JSON</summary>
+            <pre className="mt-2 rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+              {workerReviews == null ? '' : JSON.stringify(workerReviews, null, 2)}
+            </pre>
+          </details>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Search employer reviews</CardTitle>
+          <CardDescription>Look up reviews about a specific employer.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form
+            onSubmit={searchEmployerReviews}
+            className="flex flex-col gap-3 sm:flex-row sm:items-end"
+          >
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="employer-id">employer_id</Label>
+              <Input
+                id="employer-id"
+                type="number"
+                value={employerId}
+                onChange={(e) => setEmployerId(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit">Search</Button>
+              <Button type="button" variant="outline" onClick={() => void searchEmployerReviews()}>
+                Refresh
+              </Button>
+            </div>
+          </form>
+          {renderReviewCards(employerReviews?.items)}
+          <details className="text-xs text-fg-muted">
+            <summary className="cursor-pointer">Raw JSON</summary>
+            <pre className="mt-2 rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+              {employerReviews == null ? '' : JSON.stringify(employerReviews, null, 2)}
+            </pre>
+          </details>
+        </CardContent>
+      </Card>
+
+      {!loggedIn ? (
+        <div
+          role="status"
+          className="rounded-md border border-info/40 bg-info-subtle px-3 py-2 text-sm text-info"
+        >
+          You are browsing as a guest.{' '}
+          <Link to="/login" className="font-medium underline underline-offset-4">
+            Sign in
+          </Link>{' '}
+          to write reviews.
+        </div>
+      ) : null}
+
+      {loggedIn ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Create review</CardTitle>
+            <CardDescription>
+              Rate a collaboration. Overall rating is required; sub-ratings are optional.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCreateReview} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="collab-id">collaboration_id *</Label>
+                <Input
+                  id="collab-id"
+                  type="number"
+                  value={collabId}
+                  onChange={(e) => setCollabId(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>overall_rating *</Label>
+                <div className="flex items-center gap-3">
+                  <StarRating
+                    value={overallRating === '' ? 0 : Number(overallRating)}
+                    onChange={(n) => setOverallRating(String(n))}
+                    label="Overall rating"
+                  />
+                  <span className="text-sm text-fg-muted">
+                    {overallRating || '0'} / 5
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-3 rounded-md border border-border-default p-4">
+                <OptionalRatingField name="quality_rating" value={qualityRating} onChange={setQualityRating} />
+                <OptionalRatingField name="reliability_rating" value={reliabilityRating} onChange={setReliabilityRating} />
+                <OptionalRatingField name="communication_rating" value={communicationRating} onChange={setCommunicationRating} />
+                <OptionalRatingField name="payment_rating" value={paymentRating} onChange={setPaymentRating} />
+                <OptionalRatingField name="safety_rating" value={safetyRating} onChange={setSafetyRating} />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="review-comment">Comment</Label>
+                <Textarea
+                  id="review-comment"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  rows={3}
+                  placeholder="Optional comment…"
+                />
+              </div>
+              <Button type="submit">Create review</Button>
+            </form>
+            <div className="mt-6 space-y-2">
+              <h3 className="text-sm font-semibold text-fg">Create response</h3>
+              <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+                {createResult == null ? '' : JSON.stringify(createResult, null, 2)}
+              </pre>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
+function SubRating({ label, value }: { label: string; value: number | null | undefined }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-fg-subtle">{label}</span>
+      {value != null ? (
+        <StarRating value={value} size="sm" label={label} />
+      ) : (
+        <span className="text-fg-subtle">—</span>
       )}
     </div>
   );

@@ -1,6 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { ArrowLeft, Check, MessageSquare, RefreshCw, Send } from 'lucide-react';
 import { api } from '../api';
+import { ConversationListItem, type ConversationListItemData } from '@/components/ConversationListItem';
+import { EmptyState } from '@/components/EmptyState';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 type LastMessage = {
   id?: string | number;
@@ -39,12 +54,26 @@ type MessagesResponse = {
   limit: number;
 };
 
-function jsonPre(data: unknown) {
-  return (
-    <pre style={{ background: '#f5f5f5', padding: 12, overflow: 'auto', fontSize: 12 }}>
-      {data == null ? '' : JSON.stringify(data, null, 2)}
-    </pre>
-  );
+function toConversationData(row: InboxItem): ConversationListItemData {
+  const name =
+    row.other_participant?.display_name ??
+    (row.other_participant?.account_id != null
+      ? `Account ${String(row.other_participant.account_id)}`
+      : 'Conversation');
+  return {
+    id: row.conversation.id,
+    other_party_name: name,
+    last_message_preview: row.last_message?.content ?? null,
+    last_message_at: row.conversation.last_message_at ?? row.last_message?.created_at ?? null,
+    unread_count: row.unread_count,
+  };
+}
+
+function formatTime(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function InboxPage() {
@@ -197,121 +226,283 @@ export default function InboxPage() {
     }
   }
 
+  // Derive who I am from the selected conversation's sender context.
+  // Simplistic heuristic: the "other participant" in the inbox row is the other person,
+  // so a message with sender_id matching inbox row's other_participant.account_id is theirs.
+  const activeInboxRow = inbox?.items.find(
+    (row) => String(row.conversation.id) === selectedId,
+  );
+  const otherPartyId = activeInboxRow?.other_participant?.account_id;
+
+  const sortedMessages = messages?.items
+    ? [...messages.items].sort((a, b) => {
+        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return ta - tb;
+      })
+    : [];
+
   return (
-    <div>
-      <h1>Inbox</h1>
-      {actionError ? <div style={{ color: 'red', marginBottom: 8 }}>{actionError}</div> : null}
-
-      <p>
-        Total unread:{' '}
-        <strong>
-          {unreadTotal != null ? unreadTotal : '—'}
-        </strong>
-        {unreadError ? <span style={{ color: 'red', marginLeft: 8 }}>{unreadError}</span> : null}
-      </p>
-
-      <button type="button" onClick={() => { void loadInbox(); void loadUnreadCount(); }} style={{ marginBottom: 12 }}>
-        Refresh inbox + unread
-      </button>
-
-      <h2>New conversation</h2>
-      <form onSubmit={startConversation} style={{ display: 'grid', gap: 8, maxWidth: 400, marginBottom: 24 }}>
-        <label>
-          recipient_id (account){' '}
-          <input type="number" value={newRecipientId} onChange={(e) => setNewRecipientId(e.target.value)} />
-        </label>
-        <label>
-          message{' '}
-          <textarea value={newMessageText} onChange={(e) => setNewMessageText(e.target.value)} rows={3} style={{ width: '100%' }} required />
-        </label>
-        <button type="submit">Start / continue conversation</button>
-      </form>
-
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div style={{ minWidth: 280 }}>
-          <h2>Conversations</h2>
-          {inboxError ? <div style={{ color: 'red' }}>{inboxError}</div> : null}
-          {inbox?.items?.length ? (
-            <ul style={{ listStyle: 'none', padding: 0, fontSize: 13 }}>
-              {inbox.items.map((row) => {
-                const cid = String(row.conversation.id);
-                const name = row.other_participant?.display_name ?? `account ${String(row.other_participant?.account_id ?? '?')}`;
-                const preview = row.last_message?.content ?? '—';
-                const unread = row.unread_count;
-                return (
-                  <li key={cid} style={{ border: '1px solid #ccc', padding: 8, marginBottom: 8 }}>
-                    <button
-                      type="button"
-                      onClick={() => void openConversation(row.conversation.id)}
-                      style={{ background: 'none', border: 'none', color: '#06c', cursor: 'pointer', fontWeight: 600, padding: 0, textAlign: 'left' }}
-                    >
-                      {name}
-                    </button>
-                    <div style={{ fontSize: 12, color: '#444', marginTop: 4 }}>{preview.slice(0, 120)}{preview.length > 120 ? '…' : ''}</div>
-                    <div style={{ fontSize: 11, marginTop: 4 }}>unread: {unread}</div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p>{inbox ? 'No conversations.' : 'Loading…'}</p>
-          )}
-          <h3>Raw inbox</h3>
-          {jsonPre(inbox)}
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Inbox</h1>
+          <p className="text-sm text-fg-muted">
+            Total unread:{' '}
+            <span className="font-semibold text-fg">
+              {unreadTotal != null ? unreadTotal : '—'}
+            </span>
+            {unreadError ? (
+              <span className="ml-2 text-danger">{unreadError}</span>
+            ) : null}
+          </p>
         </div>
-
-        <div style={{ flex: 1, minWidth: 320 }}>
-          <h2>Messages</h2>
-          {selectedId ? <p>conversation id: {selectedId}</p> : <p>Select a conversation.</p>}
-          {messagesError ? <div style={{ color: 'red' }}>{messagesError}</div> : null}
-          {messages?.items?.length ? (
-            <ul style={{ fontSize: 13, paddingLeft: 16 }}>
-              {[...messages.items]
-                .sort((a, b) => {
-                  const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-                  const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-                  return ta - tb;
-                })
-                .map((m) => (
-                  <li key={String(m.id)} style={{ marginBottom: 8 }}>
-                    <div>
-                      <strong>sender_id {String(m.sender_id)}</strong> · {m.message_type ?? 'TEXT'} · {m.created_at ?? '—'}
-                    </div>
-                    <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
-                  </li>
-                ))}
-            </ul>
-          ) : selectedId && !messagesError ? (
-            <p>{messages ? 'No messages.' : 'Loading…'}</p>
-          ) : null}
-
-          {selectedId ? (
-            <div style={{ marginTop: 12 }}>
-              <textarea
-                value={composeContent}
-                onChange={(e) => setComposeContent(e.target.value)}
-                placeholder="message"
-                rows={3}
-                style={{ width: '100%', maxWidth: 480 }}
-              />
-              <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" onClick={() => void sendMessage()}>
-                  Send
-                </button>
-                <button type="button" onClick={() => void markRead()}>
-                  Mark Read
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          <h3>Raw messages</h3>
-          {jsonPre(messages)}
-        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            void loadInbox();
+            void loadUnreadCount();
+          }}
+        >
+          <RefreshCw />
+          Refresh
+        </Button>
       </div>
 
-      <h2>Last action response</h2>
-      {jsonPre(lastActionJson)}
+      {actionError ? (
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {actionError}
+        </div>
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>New conversation</CardTitle>
+          <CardDescription>Start or continue a chat with another account.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            onSubmit={startConversation}
+            className="grid gap-4 sm:grid-cols-[200px_1fr_auto] sm:items-end"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="new-recipient">Recipient account ID</Label>
+              <Input
+                id="new-recipient"
+                type="number"
+                value={newRecipientId}
+                onChange={(e) => setNewRecipientId(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-message">Message</Label>
+              <Textarea
+                id="new-message"
+                rows={2}
+                value={newMessageText}
+                onChange={(e) => setNewMessageText(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit">Start</Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <div
+        className={cn(
+          'grid gap-4 lg:grid-cols-[320px_1fr]',
+          selectedId ? 'lg:grid-cols-[320px_1fr]' : '',
+        )}
+      >
+        <aside
+          className={cn(
+            'space-y-2',
+            selectedId ? 'hidden lg:block' : 'block',
+          )}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Conversations</CardTitle>
+            </CardHeader>
+            <CardContent className="p-2">
+              {inboxError ? (
+                <div
+                  role="alert"
+                  className="m-2 rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+                >
+                  {inboxError}
+                </div>
+              ) : null}
+              {inbox?.items?.length ? (
+                <ul className="flex flex-col gap-1">
+                  {inbox.items.map((row) => {
+                    const cid = String(row.conversation.id);
+                    return (
+                      <li key={cid}>
+                        <ConversationListItem
+                          conversation={toConversationData(row)}
+                          active={selectedId === cid}
+                          onSelect={(c) => void openConversation(c.id)}
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : inbox ? (
+                <div className="p-2">
+                  <EmptyState
+                    icon={MessageSquare}
+                    title="No conversations"
+                    description="Start one above."
+                  />
+                </div>
+              ) : (
+                <p className="p-3 text-sm text-fg-muted">Loading…</p>
+              )}
+            </CardContent>
+          </Card>
+        </aside>
+
+        <section
+          className={cn(
+            'flex min-h-[60vh] flex-col',
+            selectedId ? 'block' : 'hidden lg:block',
+          )}
+        >
+          <Card className="flex h-full min-h-[60vh] flex-col">
+            <CardHeader className="flex flex-row items-center gap-2 border-b border-border-default">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="lg:hidden"
+                aria-label="Back to inbox"
+                onClick={() => setSelectedId(null)}
+              >
+                <ArrowLeft />
+              </Button>
+              <div className="min-w-0 flex-1">
+                <CardTitle className="truncate text-base">
+                  {selectedId
+                    ? activeInboxRow?.other_participant?.display_name ??
+                      `Conversation ${selectedId}`
+                    : 'Messages'}
+                </CardTitle>
+                {selectedId ? (
+                  <CardDescription>ID: {selectedId}</CardDescription>
+                ) : (
+                  <CardDescription>Select a conversation.</CardDescription>
+                )}
+              </div>
+              {selectedId ? (
+                <Button type="button" variant="ghost" size="sm" onClick={() => void markRead()}>
+                  <Check />
+                  Mark read
+                </Button>
+              ) : null}
+            </CardHeader>
+
+            <CardContent className="flex flex-1 flex-col gap-3 p-4">
+              {messagesError ? (
+                <div
+                  role="alert"
+                  className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+                >
+                  {messagesError}
+                </div>
+              ) : null}
+
+              {selectedId ? (
+                sortedMessages.length > 0 ? (
+                  <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
+                    {sortedMessages.map((m) => {
+                      const theirs =
+                        otherPartyId != null &&
+                        String(m.sender_id) === String(otherPartyId);
+                      return (
+                        <div key={String(m.id)} className="flex flex-col">
+                          <div
+                            className={
+                              theirs
+                                ? 'mr-auto max-w-[75%] rounded-lg bg-subtle text-fg px-3 py-2 text-sm whitespace-pre-wrap'
+                                : 'ml-auto max-w-[75%] rounded-lg bg-primary text-primary-fg px-3 py-2 text-sm whitespace-pre-wrap'
+                            }
+                          >
+                            {m.content}
+                          </div>
+                          <span
+                            className={cn(
+                              'mt-1 text-xs text-fg-subtle',
+                              theirs ? 'mr-auto' : 'ml-auto',
+                            )}
+                          >
+                            {m.message_type && m.message_type !== 'TEXT'
+                              ? `${m.message_type} · `
+                              : ''}
+                            {formatTime(m.created_at)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : messages && !messagesError ? (
+                  <div className="flex flex-1 items-center justify-center">
+                    <EmptyState
+                      icon={MessageSquare}
+                      title="No messages yet"
+                      description="Send the first message below."
+                    />
+                  </div>
+                ) : (
+                  <p className="text-sm text-fg-muted">Loading…</p>
+                )
+              ) : (
+                <div className="flex flex-1 items-center justify-center">
+                  <EmptyState
+                    icon={MessageSquare}
+                    title="Select a conversation"
+                    description="Pick one from the list to view messages."
+                  />
+                </div>
+              )}
+
+              {selectedId ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void sendMessage();
+                  }}
+                  className="flex items-end gap-2 border-t border-border-default pt-3"
+                >
+                  <Input
+                    value={composeContent}
+                    onChange={(e) => setComposeContent(e.target.value)}
+                    placeholder="Write a message…"
+                    className="flex-1"
+                  />
+                  <Button type="submit" size="icon" aria-label="Send">
+                    <Send />
+                  </Button>
+                </form>
+              ) : null}
+            </CardContent>
+          </Card>
+        </section>
+      </div>
+
+      {lastActionJson ? (
+        <section className="space-y-2">
+          <h3 className="text-sm font-medium text-fg-muted">Last action response</h3>
+          <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+            {JSON.stringify(lastActionJson, null, 2)}
+          </pre>
+        </section>
+      ) : null}
     </div>
   );
 }

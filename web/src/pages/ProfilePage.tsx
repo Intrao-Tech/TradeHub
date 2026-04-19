@@ -1,6 +1,27 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 import { api } from '../api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const DOC_TYPES = [
   'ID_PHOTO',
@@ -13,6 +34,8 @@ const DOC_TYPES = [
   'PROJECT_PHOTO',
   'OTHER',
 ] as const;
+
+type PortfolioType = 'experience' | 'project' | 'certification';
 
 type PortfolioItem = {
   id: string | number;
@@ -42,12 +65,22 @@ type AccountMe = {
   } | null;
 };
 
-const sectionStyle: React.CSSProperties = {
-  border: '1px solid #ddd',
-  borderRadius: 8,
-  padding: 16,
-  marginBottom: 20,
-};
+function docStatusVariant(
+  status?: string,
+): 'default' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' | 'outline' {
+  switch (status) {
+    case 'APPROVED':
+      return 'success';
+    case 'REJECTED':
+      return 'danger';
+    case 'IN_REVIEW':
+      return 'info';
+    case 'PENDING':
+      return 'warning';
+    default:
+      return 'outline';
+  }
+}
 
 export default function ProfilePage() {
   const [account, setAccount] = useState<AccountMe | null>(null);
@@ -71,6 +104,7 @@ export default function ProfilePage() {
   const [teamSize, setTeamSize] = useState('');
 
   const [portfolio, setPortfolio] = useState<PortfolioItem[] | null>(null);
+  const [portfolioType, setPortfolioType] = useState<PortfolioType>('experience');
   const [documents, setDocuments] = useState<DocumentRow[] | null>(null);
   const [uploadDocType, setUploadDocType] = useState<string>(DOC_TYPES[0]);
   const [uploadResult, setUploadResult] = useState<unknown>(null);
@@ -372,368 +406,603 @@ export default function ProfilePage() {
 
   if (loadError && !account) {
     return (
-      <div>
-        <h1>My profile</h1>
-        <div style={{ color: 'red' }}>{loadError}</div>
+      <div className="space-y-4">
+        <h1 className="text-2xl font-semibold tracking-tight">My profile</h1>
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {loadError}
+        </div>
       </div>
     );
   }
 
   return (
-    <div>
-      <h1>My profile</h1>
-      {actionError ? <div style={{ color: 'red', marginBottom: 8 }}>{actionError}</div> : null}
-      {actionOk ? <div style={{ color: 'green', marginBottom: 8 }}>{actionOk}</div> : null}
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">My profile</h1>
+        <p className="text-sm text-fg-muted">
+          Manage your account, portfolio, and verification documents.
+        </p>
+      </div>
 
-      <section style={sectionStyle}>
-        <h2>Account (raw)</h2>
-        <pre style={{ background: '#f5f5f5', padding: 12, overflow: 'auto' }}>
-          {JSON.stringify(account, null, 2)}
-        </pre>
-        <button type="button" onClick={refreshAccount}>
-          Reload account
-        </button>
-      </section>
-
-      {cp ? (
-        <section style={sectionStyle}>
-          <h2>Update Client Profile</h2>
-          <form onSubmit={submitClient}>
-            <div style={{ display: 'grid', gap: 8, maxWidth: 480 }}>
-              <label>
-                Display name{' '}
-                <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-              </label>
-              <label>
-                Bio <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} />
-              </label>
-              <label>
-                City{' '}
-                <input value={city} onChange={(e) => setCity(e.target.value)} />
-              </label>
-              <label>
-                Postcode area{' '}
-                <input value={postcodeAreaClient} onChange={(e) => setPostcodeAreaClient(e.target.value)} />
-              </label>
-              <label>
-                Avatar URL{' '}
-                <input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} />
-              </label>
-            </div>
-            <button type="submit" style={{ marginTop: 8 }}>
-              Save client profile
-            </button>
-          </form>
-        </section>
-      ) : (
-        <p>No client profile on this account.</p>
-      )}
-
-      {cp && isWorker ? (
-        <section style={sectionStyle}>
-          <h2>Update Worker Profile</h2>
-          <form onSubmit={submitWorker}>
-            <div style={{ display: 'grid', gap: 8, maxWidth: 480 }}>
-              <label>
-                Years experience{' '}
-                <input
-                  type="number"
-                  value={yearsExperience}
-                  onChange={(e) => setYearsExperience(e.target.value)}
-                  min={0}
-                />
-              </label>
-              <label>
-                Day rate min{' '}
-                <input
-                  type="number"
-                  step="0.01"
-                  value={dayRateMin}
-                  onChange={(e) => setDayRateMin(e.target.value)}
-                />
-              </label>
-              <label>
-                Day rate max{' '}
-                <input
-                  type="number"
-                  step="0.01"
-                  value={dayRateMax}
-                  onChange={(e) => setDayRateMax(e.target.value)}
-                />
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={workerAvailable}
-                  onChange={(e) => setWorkerAvailable(e.target.checked)}
-                />{' '}
-                Is available
-              </label>
-            </div>
-            <button type="submit" style={{ marginTop: 8 }}>
-              Save worker profile
-            </button>
-          </form>
-        </section>
+      {actionError ? (
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {actionError}
+        </div>
+      ) : null}
+      {actionOk ? (
+        <div
+          role="status"
+          className="rounded-md border border-success/40 bg-success-subtle px-3 py-2 text-sm text-success"
+        >
+          {actionOk}
+        </div>
       ) : null}
 
-      {cp && isEmployer ? (
-        <section style={sectionStyle}>
-          <h2>Update Employer Profile</h2>
-          <form onSubmit={submitEmployer}>
-            <div style={{ display: 'grid', gap: 8, maxWidth: 480 }}>
-              <label>
-                Company name{' '}
-                <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
-              </label>
-              <label>
-                Company number{' '}
-                <input value={companyNumber} onChange={(e) => setCompanyNumber(e.target.value)} />
-              </label>
-              <label>
-                Team size{' '}
-                <input
-                  type="number"
-                  value={teamSize}
-                  onChange={(e) => setTeamSize(e.target.value)}
-                  min={0}
-                />
-              </label>
-            </div>
-            <button type="submit" style={{ marginTop: 8 }}>
-              Save employer profile
-            </button>
-          </form>
-        </section>
-      ) : null}
+      <Tabs defaultValue="profile" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
+        </TabsList>
 
-      {cp && isWorker ? (
-        <section style={sectionStyle}>
-          <h2>My Portfolio</h2>
-          <p>Worker ID: {workerId}</p>
-          <button type="button" onClick={loadPortfolio} style={{ marginBottom: 12 }}>
-            Load Portfolio
-          </button>
-          {portfolio ? (
-            <>
-              <pre style={{ background: '#f5f5f5', padding: 12, overflow: 'auto', marginBottom: 12 }}>
-                {JSON.stringify(portfolio, null, 2)}
+        <TabsContent value="profile" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Account</CardTitle>
+                  <CardDescription>Raw account data for debugging.</CardDescription>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={refreshAccount}>
+                  Reload
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+                {JSON.stringify(account, null, 2)}
               </pre>
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                {portfolio.map((item) => (
-                  <li
-                    key={String(item.id)}
-                    style={{
-                      border: '1px solid #ccc',
-                      padding: 8,
-                      marginBottom: 8,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      gap: 8,
-                    }}
-                  >
-                    <span>
-                      [{item.item_type}] {item.title}
-                    </span>
-                    <button type="button" onClick={() => deletePortfolioItem(item.id)}>
-                      Delete
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </>
+            </CardContent>
+          </Card>
+
+          {cp ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Client profile</CardTitle>
+                <CardDescription>Public details shown to other users.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={submitClient} className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="p-display-name">Display name</Label>
+                    <Input
+                      id="p-display-name"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="p-bio">Bio</Label>
+                    <Textarea
+                      id="p-bio"
+                      rows={3}
+                      value={bio}
+                      onChange={(e) => setBio(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="p-city">City</Label>
+                    <Input
+                      id="p-city"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="p-postcode">Postcode area</Label>
+                    <Input
+                      id="p-postcode"
+                      value={postcodeAreaClient}
+                      onChange={(e) => setPostcodeAreaClient(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="p-avatar">Avatar URL</Label>
+                    <Input
+                      id="p-avatar"
+                      value={avatarUrl}
+                      onChange={(e) => setAvatarUrl(e.target.value)}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Button type="submit">Save client profile</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          ) : (
+            <p className="text-sm text-fg-muted">No client profile on this account.</p>
+          )}
+
+          {cp && isWorker ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Worker profile</CardTitle>
+                <CardDescription>Rates, availability, and experience.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={submitWorker} className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="w-years">Years experience</Label>
+                    <Input
+                      id="w-years"
+                      type="number"
+                      value={yearsExperience}
+                      onChange={(e) => setYearsExperience(e.target.value)}
+                      min={0}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="w-rate-min">Day rate min</Label>
+                    <Input
+                      id="w-rate-min"
+                      type="number"
+                      step="0.01"
+                      value={dayRateMin}
+                      onChange={(e) => setDayRateMin(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="w-rate-max">Day rate max</Label>
+                    <Input
+                      id="w-rate-max"
+                      type="number"
+                      step="0.01"
+                      value={dayRateMax}
+                      onChange={(e) => setDayRateMax(e.target.value)}
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-fg sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={workerAvailable}
+                      onChange={(e) => setWorkerAvailable(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    Is available
+                  </label>
+                  <div className="sm:col-span-2">
+                    <Button type="submit">Save worker profile</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
           ) : null}
 
-          <h3>Add experience</h3>
-          <form onSubmit={addExperience} style={{ marginBottom: 16 }}>
-            <div style={{ display: 'grid', gap: 6, maxWidth: 480 }}>
-              <input
-                placeholder="Title *"
-                value={expTitle}
-                onChange={(e) => setExpTitle(e.target.value)}
-                required
-              />
-              <textarea
-                placeholder="Description"
-                value={expDescription}
-                onChange={(e) => setExpDescription(e.target.value)}
-              />
-              <input
-                placeholder="Company name"
-                value={expCompany}
-                onChange={(e) => setExpCompany(e.target.value)}
-              />
-              <input placeholder="Role" value={expRole} onChange={(e) => setExpRole(e.target.value)} />
-              <input
-                type="datetime-local"
-                value={expStart}
-                onChange={(e) => setExpStart(e.target.value)}
-              />
-              <input
-                type="datetime-local"
-                value={expEnd}
-                onChange={(e) => setExpEnd(e.target.value)}
-              />
-            </div>
-            <button type="submit" style={{ marginTop: 8 }}>
-              POST /portfolio/experience
-            </button>
-          </form>
+          {cp && isEmployer ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Employer profile</CardTitle>
+                <CardDescription>Company details.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={submitEmployer} className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="e-company">Company name</Label>
+                    <Input
+                      id="e-company"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="e-number">Company number</Label>
+                    <Input
+                      id="e-number"
+                      value={companyNumber}
+                      onChange={(e) => setCompanyNumber(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="e-team">Team size</Label>
+                    <Input
+                      id="e-team"
+                      type="number"
+                      value={teamSize}
+                      onChange={(e) => setTeamSize(e.target.value)}
+                      min={0}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Button type="submit">Save employer profile</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          ) : null}
 
-          <h3>Add project</h3>
-          <form onSubmit={addProject} style={{ marginBottom: 16 }}>
-            <div style={{ display: 'grid', gap: 6, maxWidth: 480 }}>
-              <input
-                placeholder="Title *"
-                value={projTitle}
-                onChange={(e) => setProjTitle(e.target.value)}
-                required
-              />
-              <textarea
-                placeholder="Description"
-                value={projDescription}
-                onChange={(e) => setProjDescription(e.target.value)}
-              />
-              <input
-                placeholder="Project type"
-                value={projType}
-                onChange={(e) => setProjType(e.target.value)}
-              />
-              <input
-                placeholder="Site postcode"
-                value={projPostcode}
-                onChange={(e) => setProjPostcode(e.target.value)}
-              />
-              <input
-                type="number"
-                step="0.01"
-                placeholder="Project value"
-                value={projValue}
-                onChange={(e) => setProjValue(e.target.value)}
-              />
-            </div>
-            <button type="submit" style={{ marginTop: 8 }}>
-              POST /portfolio/project
-            </button>
-          </form>
+          {cp ? <VerificationSection /> : null}
+        </TabsContent>
 
-          <h3>Add certification</h3>
-          <form onSubmit={addCertification}>
-            <div style={{ display: 'grid', gap: 6, maxWidth: 480 }}>
-              <input
-                placeholder="Title *"
-                value={certTitle}
-                onChange={(e) => setCertTitle(e.target.value)}
-                required
-              />
-              <textarea
-                placeholder="Description"
-                value={certDescription}
-                onChange={(e) => setCertDescription(e.target.value)}
-              />
-              <input
-                placeholder="Cert type *"
-                value={certType}
-                onChange={(e) => setCertType(e.target.value)}
-                required
-              />
-              <input
-                placeholder="Cert number"
-                value={certNumber}
-                onChange={(e) => setCertNumber(e.target.value)}
-              />
-              <input
-                placeholder="Issuing body"
-                value={certIssuingBody}
-                onChange={(e) => setCertIssuingBody(e.target.value)}
-              />
-              <input
-                type="datetime-local"
-                value={certIssuedAt}
-                onChange={(e) => setCertIssuedAt(e.target.value)}
-              />
-              <input
-                type="datetime-local"
-                value={certExpiresAt}
-                onChange={(e) => setCertExpiresAt(e.target.value)}
-              />
-            </div>
-            <button type="submit" style={{ marginTop: 8 }}>
-              POST /portfolio/certification
-            </button>
-          </form>
-        </section>
-      ) : null}
-
-      {cp ? (
-        <VerificationSection />
-      ) : null}
-
-      {cp ? (
-        <section style={sectionStyle}>
-          <h2>My Documents</h2>
-          <button type="button" onClick={loadDocuments} style={{ marginBottom: 12 }}>
-            Load Documents
-          </button>
-          {documents ? (
+        <TabsContent value="portfolio" className="space-y-6">
+          {cp && isWorker ? (
             <>
-              <pre style={{ background: '#f5f5f5', padding: 12, overflow: 'auto', marginBottom: 12 }}>
-                {JSON.stringify(documents, null, 2)}
-              </pre>
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                {documents.map((doc) => (
-                  <li
-                    key={String(doc.id)}
-                    style={{
-                      border: '1px solid #ccc',
-                      padding: 8,
-                      marginBottom: 8,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                      gap: 8,
-                    }}
-                  >
-                    <span>
-                      {doc.doc_type} — {doc.status} — {doc.file_url}
-                    </span>
-                    {doc.status === 'PENDING' ? (
-                      <button type="button" onClick={() => deleteDocument(doc.id)}>
-                        Delete
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Portfolio items</CardTitle>
+                      <CardDescription>Worker ID: {workerId}</CardDescription>
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={loadPortfolio}>
+                      Load portfolio
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {portfolio ? (
+                    portfolio.length > 0 ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {portfolio.map((item) => (
+                          <Card key={String(item.id)} className="bg-subtle">
+                            <CardContent className="p-4">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <Badge variant="outline" className="mb-2">
+                                    {item.item_type ?? 'item'}
+                                  </Badge>
+                                  <p className="text-sm font-semibold text-fg">{item.title}</p>
+                                  {item.description ? (
+                                    <p className="mt-1 line-clamp-3 text-xs text-fg-muted">
+                                      {item.description}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  aria-label="Delete item"
+                                  onClick={() => deletePortfolioItem(item.id)}
+                                >
+                                  <Trash2 />
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-fg-muted">No portfolio items yet.</p>
+                    )
+                  ) : (
+                    <p className="text-sm text-fg-muted">Click “Load portfolio” to fetch.</p>
+                  )}
+                </CardContent>
+              </Card>
 
-          <h3>Upload</h3>
-          <form onSubmit={uploadDocument}>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-              <input type="file" name="file" required />
-              <select
-                value={uploadDocType}
-                onChange={(e) => setUploadDocType(e.target.value)}
-              >
-                {DOC_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-              <button type="submit">POST /documents/upload</button>
-            </div>
-          </form>
-          {uploadResult != null ? (
-            <pre style={{ background: '#f5f5f5', padding: 12, overflow: 'auto', marginTop: 12 }}>
-              {JSON.stringify(uploadResult, null, 2)}
-            </pre>
-          ) : null}
-        </section>
-      ) : null}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Add portfolio item</CardTitle>
+                  <CardDescription>Choose a type to add a new entry.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Item type</Label>
+                    <Select
+                      value={portfolioType}
+                      onValueChange={(v) => setPortfolioType(v as PortfolioType)}
+                    >
+                      <SelectTrigger className="sm:max-w-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="experience">Experience</SelectItem>
+                        <SelectItem value="project">Project</SelectItem>
+                        <SelectItem value="certification">Certification</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {portfolioType === 'experience' ? (
+                    <form onSubmit={addExperience} className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="exp-title">Title *</Label>
+                        <Input
+                          id="exp-title"
+                          value={expTitle}
+                          onChange={(e) => setExpTitle(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="exp-desc">Description</Label>
+                        <Textarea
+                          id="exp-desc"
+                          rows={2}
+                          value={expDescription}
+                          onChange={(e) => setExpDescription(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="exp-company">Company name</Label>
+                        <Input
+                          id="exp-company"
+                          value={expCompany}
+                          onChange={(e) => setExpCompany(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="exp-role">Role</Label>
+                        <Input
+                          id="exp-role"
+                          value={expRole}
+                          onChange={(e) => setExpRole(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="exp-start">Start date</Label>
+                        <Input
+                          id="exp-start"
+                          type="datetime-local"
+                          value={expStart}
+                          onChange={(e) => setExpStart(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="exp-end">End date</Label>
+                        <Input
+                          id="exp-end"
+                          type="datetime-local"
+                          value={expEnd}
+                          onChange={(e) => setExpEnd(e.target.value)}
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Button type="submit">Add experience</Button>
+                      </div>
+                    </form>
+                  ) : null}
+
+                  {portfolioType === 'project' ? (
+                    <form onSubmit={addProject} className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="proj-title">Title *</Label>
+                        <Input
+                          id="proj-title"
+                          value={projTitle}
+                          onChange={(e) => setProjTitle(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="proj-desc">Description</Label>
+                        <Textarea
+                          id="proj-desc"
+                          rows={2}
+                          value={projDescription}
+                          onChange={(e) => setProjDescription(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="proj-type">Project type</Label>
+                        <Input
+                          id="proj-type"
+                          value={projType}
+                          onChange={(e) => setProjType(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="proj-postcode">Site postcode</Label>
+                        <Input
+                          id="proj-postcode"
+                          value={projPostcode}
+                          onChange={(e) => setProjPostcode(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="proj-value">Project value</Label>
+                        <Input
+                          id="proj-value"
+                          type="number"
+                          step="0.01"
+                          value={projValue}
+                          onChange={(e) => setProjValue(e.target.value)}
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Button type="submit">Add project</Button>
+                      </div>
+                    </form>
+                  ) : null}
+
+                  {portfolioType === 'certification' ? (
+                    <form onSubmit={addCertification} className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="cert-title">Title *</Label>
+                        <Input
+                          id="cert-title"
+                          value={certTitle}
+                          onChange={(e) => setCertTitle(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="cert-desc">Description</Label>
+                        <Textarea
+                          id="cert-desc"
+                          rows={2}
+                          value={certDescription}
+                          onChange={(e) => setCertDescription(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="cert-type">Cert type *</Label>
+                        <Input
+                          id="cert-type"
+                          value={certType}
+                          onChange={(e) => setCertType(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="cert-number">Cert number</Label>
+                        <Input
+                          id="cert-number"
+                          value={certNumber}
+                          onChange={(e) => setCertNumber(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="cert-body">Issuing body</Label>
+                        <Input
+                          id="cert-body"
+                          value={certIssuingBody}
+                          onChange={(e) => setCertIssuingBody(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="cert-issued">Issued at</Label>
+                        <Input
+                          id="cert-issued"
+                          type="datetime-local"
+                          value={certIssuedAt}
+                          onChange={(e) => setCertIssuedAt(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="cert-expires">Expires at</Label>
+                        <Input
+                          id="cert-expires"
+                          type="datetime-local"
+                          value={certExpiresAt}
+                          onChange={(e) => setCertExpiresAt(e.target.value)}
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Button type="submit">Add certification</Button>
+                      </div>
+                    </form>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <p className="text-sm text-fg-muted">
+              Portfolio is available for workers only.
+            </p>
+          )}
+        </TabsContent>
+
+        <TabsContent value="documents" className="space-y-6">
+          {cp ? (
+            <>
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>My documents</CardTitle>
+                      <CardDescription>
+                        Upload verification documents for review.
+                      </CardDescription>
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={loadDocuments}>
+                      Load documents
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {documents ? (
+                    documents.length > 0 ? (
+                      <ul className="divide-y divide-border-default">
+                        {documents.map((doc) => (
+                          <li
+                            key={String(doc.id)}
+                            className="flex flex-wrap items-center justify-between gap-2 py-3"
+                          >
+                            <div className="min-w-0 flex-1 text-sm">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium text-fg">{doc.doc_type}</span>
+                                <Badge variant={docStatusVariant(doc.status)}>{doc.status}</Badge>
+                              </div>
+                              {doc.file_url ? (
+                                <p className="truncate text-xs text-fg-muted">{doc.file_url}</p>
+                              ) : null}
+                            </div>
+                            {doc.status === 'PENDING' ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteDocument(doc.id)}
+                              >
+                                <Trash2 />
+                                Delete
+                              </Button>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-fg-muted">No documents uploaded.</p>
+                    )
+                  ) : (
+                    <p className="text-sm text-fg-muted">Click “Load documents” to fetch.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Upload document</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form
+                    onSubmit={uploadDocument}
+                    className="flex flex-col gap-3 sm:flex-row sm:items-end"
+                  >
+                    <div className="flex-1 space-y-2">
+                      <Label htmlFor="doc-file">File</Label>
+                      <Input id="doc-file" type="file" name="file" required />
+                    </div>
+                    <div className="space-y-2 sm:w-60">
+                      <Label>Doc type</Label>
+                      <Select value={uploadDocType} onValueChange={setUploadDocType}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DOC_TYPES.map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {t}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button type="submit">Upload</Button>
+                  </form>
+                  {uploadResult != null ? (
+                    <pre className="mt-4 rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+                      {JSON.stringify(uploadResult, null, 2)}
+                    </pre>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <p className="text-sm text-fg-muted">
+              You need a client profile to upload documents.
+            </p>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -771,33 +1040,49 @@ function VerificationSection() {
   const verified = status === 'IDENTITY_VERIFIED';
 
   return (
-    <section style={{ border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 20 }}>
-      <h2>Identity Verification</h2>
-      {justCompleted && (
-        <div style={{ color: '#0f766e', marginBottom: 8 }}>
-          Verification submitted — status will update shortly.
+    <Card>
+      <CardHeader>
+        <CardTitle>Identity verification</CardTitle>
+        <CardDescription>
+          Verify your identity to build trust with other users.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {justCompleted ? (
+          <div
+            role="status"
+            className="rounded-md border border-success/40 bg-success-subtle px-3 py-2 text-sm text-success"
+          >
+            Verification submitted — status will update shortly.
+          </div>
+        ) : null}
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-fg-muted">Status:</span>
+          <Badge variant={verified ? 'success' : 'warning'}>
+            {status ?? 'loading…'}
+          </Badge>
         </div>
-      )}
-      <p>
-        Status:{' '}
-        <strong style={{ color: verified ? '#16a34a' : '#d97706' }}>
-          {status ?? 'loading...'}
-        </strong>
-      </p>
-      {verified ? (
-        <p style={{ color: '#16a34a' }}>Your identity has been verified.</p>
-      ) : (
-        <>
-          <p className="muted small">
-            Verify your identity with a passport, driving licence, or national ID card.
-            This helps build trust with other users on TradeHub.
-          </p>
-          {error && <div style={{ color: 'red', marginBottom: 8 }}>{error}</div>}
-          <button type="button" onClick={startVerification} disabled={loading}>
-            {loading ? 'Starting...' : 'Verify my identity'}
-          </button>
-        </>
-      )}
-    </section>
+        {verified ? (
+          <p className="text-sm text-success">Your identity has been verified.</p>
+        ) : (
+          <>
+            <p className="text-sm text-fg-muted">
+              Verify your identity with a passport, driving licence, or national ID card.
+            </p>
+            {error ? (
+              <div
+                role="alert"
+                className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+              >
+                {error}
+              </div>
+            ) : null}
+            <Button type="button" onClick={startVerification} disabled={loading}>
+              {loading ? 'Starting…' : 'Verify my identity'}
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Light theme — semantic → primitive resolutions for light mode.",
+  "color": {
+    "bg": {
+      "page":   { "$value": "#FAFAF9", "$type": "color" },
+      "raised": { "$value": "#FFFFFF", "$type": "color" },
+      "sunken": { "$value": "#F5F5F4", "$type": "color" },
+      "subtle": { "$value": "#F8FAFC", "$type": "color" },
+      "muted":  { "$value": "#F1F5F9", "$type": "color" }
+    },
+    "fg": {
+      "default":   { "$value": "#0F172A", "$type": "color" },
+      "muted":     { "$value": "#475569", "$type": "color" },
+      "subtle":    { "$value": "#64748B", "$type": "color" },
+      "on-accent": { "$value": "#FFFFFF", "$type": "color" },
+      "inverse":   { "$value": "#F8FAFC", "$type": "color" }
+    },
+    "border": {
+      "default": { "$value": "#E2E8F0", "$type": "color" },
+      "strong":  { "$value": "#CBD5E1", "$type": "color" },
+      "subtle":  { "$value": "#F1F5F9", "$type": "color" }
+    },
+    "action": {
+      "primary":       { "$value": "#E07A3B", "$type": "color" },
+      "primary-hover": { "$value": "#C2652A", "$type": "color" },
+      "primary-fg":    { "$value": "#FFFFFF", "$type": "color" }
+    },
+    "focus": {
+      "ring": { "$value": "#E07A3B", "$type": "color" }
+    },
+    "state": {
+      "success": { "$value": "#16A34A", "$type": "color" },
+      "warning": { "$value": "#D97706", "$type": "color" },
+      "danger":  { "$value": "#DC2626", "$type": "color" },
+      "info":    { "$value": "#2563EB", "$type": "color" },
+      "success-subtle": { "$value": "#F0FDF4", "$type": "color" },
+      "warning-subtle": { "$value": "#FFFBEB", "$type": "color" },
+      "danger-subtle":  { "$value": "#FEF2F2", "$type": "color" },
+      "info-subtle":    { "$value": "#EFF6FF", "$type": "color" }
+    },
+    "overlay": { "$value": "rgb(2 6 23 / 0.6)", "$type": "color", "$description": "neutral.950 @ 60% — modal/sheet scrim" }
+  }
+}

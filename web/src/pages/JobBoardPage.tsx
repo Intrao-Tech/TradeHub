@@ -1,24 +1,49 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { Plus, RefreshCw, Search, Briefcase } from 'lucide-react';
 import { api, getToken } from '../api';
+import { JobCard, type JobCardData } from '@/components/JobCard';
+import { EmptyState } from '@/components/EmptyState';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 
-type JobPostRow = {
-  id: string | number;
-  title: string;
+type JobPostRow = JobCardData & {
   pay_type: string;
-  day_rate_min?: string | number | null;
-  day_rate_max?: string | number | null;
-  fixed_price?: string | number | null;
-  postcode_area?: string | null;
-  is_urgent?: boolean;
-  status?: string;
-  employer?: {
-    company_name?: string | null;
-    client_profile?: { display_name?: string | null } | null;
-  } | null;
-  specialisations?: Array<{ specialisation?: { name?: string; id?: number } }>;
-  tags?: Array<{ tag?: { name?: string; id?: number } }>;
-  _count?: { applications?: number };
+  description?: string | null;
 };
 
 type JobListResponse = {
@@ -27,32 +52,6 @@ type JobListResponse = {
   page: number;
   limit: number;
 };
-
-function jsonPre(data: unknown) {
-  return (
-    <pre style={{ background: '#f5f5f5', padding: 12, overflow: 'auto', fontSize: 12 }}>
-      {data == null ? '' : JSON.stringify(data, null, 2)}
-    </pre>
-  );
-}
-
-function employerName(j: JobPostRow): string {
-  const d = j.employer?.client_profile?.display_name;
-  const c = j.employer?.company_name;
-  return (d && String(d)) || (c && String(c)) || '—';
-}
-
-function payLine(j: JobPostRow): string {
-  if (j.pay_type === 'DAY_RATE') {
-    const a = j.day_rate_min != null ? String(j.day_rate_min) : '—';
-    const b = j.day_rate_max != null ? String(j.day_rate_max) : '—';
-    return `DAY_RATE ${a} – ${b} / day`;
-  }
-  if (j.pay_type === 'FIXED_PRICE') {
-    return `FIXED ${j.fixed_price != null ? String(j.fixed_price) : '—'}`;
-  }
-  return String(j.pay_type);
-}
 
 function parseIdList(s: string): number[] {
   return s
@@ -75,9 +74,11 @@ export default function JobBoardPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<JobPostRow | null>(null);
   const [detailError, setDetailError] = useState('');
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const [applyCoverByJob, setApplyCoverByJob] = useState<Record<string, string>>({});
 
+  const [createOpen, setCreateOpen] = useState(false);
   const [createTitle, setCreateTitle] = useState('');
   const [createDescription, setCreateDescription] = useState('');
   const [createPayType, setCreatePayType] = useState<'DAY_RATE' | 'FIXED_PRICE'>('DAY_RATE');
@@ -113,6 +114,7 @@ export default function JobBoardPage() {
 
   useEffect(() => {
     void loadJobs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [querySuffix]);
 
   async function openDetail(id: string | number) {
@@ -120,6 +122,7 @@ export default function JobBoardPage() {
     setSelectedId(sid);
     setDetail(null);
     setDetailError('');
+    setDetailOpen(true);
     try {
       const d = await api<JobPostRow>(`/job-posts/${sid}`);
       setDetail(d);
@@ -154,6 +157,7 @@ export default function JobBoardPage() {
     try {
       const out = await api('/job-posts', { method: 'POST', body: JSON.stringify(body) });
       setLastActionJson(out);
+      setCreateOpen(false);
       await loadJobs();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
@@ -179,176 +183,343 @@ export default function JobBoardPage() {
     }
   }
 
-  return (
-    <div>
-      <h1>Job Board</h1>
-      {!loggedIn && (
-        <div className="alert alert-info">
-          Browsing as guest. <Link to="/login">Sign in</Link> to apply or post jobs.
-        </div>
-      )}
-      {listError ? <div className="alert alert-error">{listError}</div> : null}
-      {actionError ? <div className="alert alert-error">{actionError}</div> : null}
+  const coverKey = selectedId ?? '';
 
-      <div style={{ marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <label>
-          Search title{' '}
-          <input value={searchTitle} onChange={(e) => setSearchTitle(e.target.value)} placeholder="search" />
-        </label>
-        <label>
-          Postcode area{' '}
-          <input value={postcodeArea} onChange={(e) => setPostcodeArea(e.target.value)} placeholder="e.g. SW1" />
-        </label>
-        <button type="button" onClick={() => void loadJobs()}>
-          Refresh
-        </button>
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Job board</h1>
+          <p className="text-sm text-fg-muted">
+            Browse open jobs from verified employers.
+          </p>
+        </div>
+        {loggedIn ? (
+          <Sheet open={createOpen} onOpenChange={setCreateOpen}>
+            <SheetTrigger asChild>
+              <Button>
+                <Plus />
+                Post a job
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
+              <SheetHeader>
+                <SheetTitle>Post a job</SheetTitle>
+                <SheetDescription>
+                  Employers only. Workers applying should return to the board.
+                </SheetDescription>
+              </SheetHeader>
+              <form onSubmit={handleCreate} className="mt-4 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="create-title">Title *</Label>
+                  <Input
+                    id="create-title"
+                    value={createTitle}
+                    onChange={(e) => setCreateTitle(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="create-description">Description</Label>
+                  <Textarea
+                    id="create-description"
+                    rows={3}
+                    value={createDescription}
+                    onChange={(e) => setCreateDescription(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Pay type</Label>
+                  <Select
+                    value={createPayType}
+                    onValueChange={(v) => setCreatePayType(v as 'DAY_RATE' | 'FIXED_PRICE')}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DAY_RATE">Day rate</SelectItem>
+                      <SelectItem value="FIXED_PRICE">Fixed price</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {createPayType === 'DAY_RATE' ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="create-day-min">Day rate min</Label>
+                      <Input
+                        id="create-day-min"
+                        type="number"
+                        step="any"
+                        value={createDayMin}
+                        onChange={(e) => setCreateDayMin(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-day-max">Day rate max</Label>
+                      <Input
+                        id="create-day-max"
+                        type="number"
+                        step="any"
+                        value={createDayMax}
+                        onChange={(e) => setCreateDayMax(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="create-fixed">Fixed price</Label>
+                    <Input
+                      id="create-fixed"
+                      type="number"
+                      step="any"
+                      value={createFixed}
+                      onChange={(e) => setCreateFixed(e.target.value)}
+                    />
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="create-postcode">Postcode area</Label>
+                    <Input
+                      id="create-postcode"
+                      value={createPostcode}
+                      onChange={(e) => setCreatePostcode(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="create-duration">Duration (days)</Label>
+                    <Input
+                      id="create-duration"
+                      type="number"
+                      value={createDuration}
+                      onChange={(e) => setCreateDuration(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-fg">
+                  <input
+                    type="checkbox"
+                    checked={createUrgent}
+                    onChange={(e) => setCreateUrgent(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Mark as urgent
+                </label>
+                <div className="space-y-2">
+                  <Label htmlFor="create-spec-ids">Specialisation IDs (comma-separated)</Label>
+                  <Input
+                    id="create-spec-ids"
+                    value={createSpecIds}
+                    onChange={(e) => setCreateSpecIds(e.target.value)}
+                    placeholder="1, 2"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="create-tag-ids">Tag IDs (comma-separated)</Label>
+                  <Input
+                    id="create-tag-ids"
+                    value={createTagIds}
+                    onChange={(e) => setCreateTagIds(e.target.value)}
+                    placeholder="1, 2"
+                  />
+                </div>
+                {actionError ? (
+                  <div
+                    role="alert"
+                    className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+                  >
+                    {actionError}
+                  </div>
+                ) : null}
+                <SheetFooter>
+                  <Button type="submit">Create job post</Button>
+                </SheetFooter>
+              </form>
+              {lastActionJson ? (
+                <div className="mt-4">
+                  <p className="text-xs font-medium text-fg-muted mb-1">Last response</p>
+                  <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+                    {JSON.stringify(lastActionJson, null, 2)}
+                  </pre>
+                </div>
+              ) : null}
+            </SheetContent>
+          </Sheet>
+        ) : null}
       </div>
 
-      {loggedIn ? (
-        <>
-          <h2>Create job post (employer only)</h2>
-          <form onSubmit={handleCreate} style={{ display: 'grid', gap: 8, maxWidth: 480, marginBottom: 24 }}>
-            <label>
-              title * <input value={createTitle} onChange={(e) => setCreateTitle(e.target.value)} required />
-            </label>
-            <label>
-              description <textarea value={createDescription} onChange={(e) => setCreateDescription(e.target.value)} rows={3} style={{ width: '100%' }} />
-            </label>
-            <label>
-              pay_type{' '}
-              <select value={createPayType} onChange={(e) => setCreatePayType(e.target.value as 'DAY_RATE' | 'FIXED_PRICE')}>
-                <option value="DAY_RATE">DAY_RATE</option>
-                <option value="FIXED_PRICE">FIXED_PRICE</option>
-              </select>
-            </label>
-            {createPayType === 'DAY_RATE' ? (
-              <>
-                <label>
-                  day_rate_min <input type="number" step="any" value={createDayMin} onChange={(e) => setCreateDayMin(e.target.value)} />
-                </label>
-                <label>
-                  day_rate_max <input type="number" step="any" value={createDayMax} onChange={(e) => setCreateDayMax(e.target.value)} />
-                </label>
-              </>
-            ) : (
-              <label>
-                fixed_price <input type="number" step="any" value={createFixed} onChange={(e) => setCreateFixed(e.target.value)} />
-              </label>
-            )}
-            <label>
-              postcode_area <input value={createPostcode} onChange={(e) => setCreatePostcode(e.target.value)} />
-            </label>
-            <label>
-              duration_days <input type="number" value={createDuration} onChange={(e) => setCreateDuration(e.target.value)} />
-            </label>
-            <label>
-              <input type="checkbox" checked={createUrgent} onChange={(e) => setCreateUrgent(e.target.checked)} /> is_urgent
-            </label>
-            <label>
-              specialisation_ids (comma-separated){' '}
-              <input value={createSpecIds} onChange={(e) => setCreateSpecIds(e.target.value)} placeholder="1, 2" />
-            </label>
-            <label>
-              tag_ids (comma-separated){' '}
-              <input value={createTagIds} onChange={(e) => setCreateTagIds(e.target.value)} placeholder="1, 2" />
-            </label>
-            <button type="submit">Create Job Post</button>
-          </form>
-          <h3>Last create response</h3>
-          {jsonPre(lastActionJson)}
-        </>
+      {!loggedIn ? (
+        <div
+          role="status"
+          className="rounded-md border border-info/40 bg-info-subtle px-3 py-2 text-sm text-info"
+        >
+          Browsing as guest.{' '}
+          <Link to="/login" className="font-medium underline-offset-4 hover:underline">
+            Sign in
+          </Link>{' '}
+          to apply or post jobs.
+        </div>
       ) : null}
 
-      <h2>Open job posts</h2>
-      {list?.items?.length ? (
-        <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
-          <thead>
-            <tr>
-              <th style={th}>title</th>
-              <th style={th}>employer</th>
-              <th style={th}>pay</th>
-              <th style={th}>postcode</th>
-              <th style={th}>specialisations</th>
-              <th style={th}>tags</th>
-              <th style={th}>urgent</th>
-              <th style={th}>actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.items.map((j) => {
-              const id = String(j.id);
-              const specs = (j.specialisations ?? []).map((s) => s.specialisation?.name ?? s.specialisation?.id).join(', ') || '—';
-              const tags = (j.tags ?? []).map((t) => t.tag?.name ?? t.tag?.id).join(', ') || '—';
-              return (
-                <tr key={id}>
-                  <td style={td}>
-                    <button type="button" style={{ background: 'none', border: 'none', color: '#06c', cursor: 'pointer', textAlign: 'left', padding: 0 }} onClick={() => void openDetail(j.id)}>
-                      {j.title}
-                    </button>
-                  </td>
-                  <td style={td}>{employerName(j)}</td>
-                  <td style={td}>{payLine(j)}</td>
-                  <td style={td}>{j.postcode_area ?? '—'}</td>
-                  <td style={td}>{specs}</td>
-                  <td style={td}>{tags}</td>
-                  <td style={td}>{j.is_urgent ? 'URGENT' : '—'}</td>
-                  <td style={{ ...td, verticalAlign: 'top' }}>
-                    {loggedIn ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <textarea
-                          placeholder="cover message (optional)"
-                          value={applyCoverByJob[id] ?? ''}
-                          onChange={(e) => setApplyCoverByJob((p) => ({ ...p, [id]: e.target.value }))}
-                          rows={2}
-                          style={{ width: '100%' }}
-                        />
-                        <button type="button" onClick={() => void applyToJob(j.id)}>
-                          Apply (worker only)
-                        </button>
-                      </div>
-                    ) : (
-                      <span style={{ color: '#888' }}>login to apply</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      ) : (
-        <p>{list ? 'No jobs.' : 'Loading…'}</p>
-      )}
+      {listError ? (
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {listError}
+        </div>
+      ) : null}
+      {actionError && !createOpen ? (
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {actionError}
+        </div>
+      ) : null}
 
-      <h2>Raw list JSON</h2>
-      {jsonPre(list)}
+      <Card>
+        <CardHeader>
+          <CardTitle>Filters</CardTitle>
+          <CardDescription>Search open job posts.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-[1fr_200px_auto]">
+          <div className="space-y-2">
+            <Label htmlFor="search-title">Search title</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
+              <Input
+                id="search-title"
+                value={searchTitle}
+                onChange={(e) => setSearchTitle(e.target.value)}
+                placeholder="e.g. electrician"
+                className="pl-9"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="postcode-area">Postcode area</Label>
+            <Input
+              id="postcode-area"
+              value={postcodeArea}
+              onChange={(e) => setPostcodeArea(e.target.value)}
+              placeholder="e.g. SW1"
+            />
+          </div>
+          <div className="flex items-end">
+            <Button type="button" variant="outline" onClick={() => void loadJobs()} className="w-full sm:w-auto">
+              <RefreshCw />
+              Refresh
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-      <h2>Selected job</h2>
-      {selectedId ? (
-        <>
-          <p>id: {selectedId}</p>
-          {detailError ? <div style={{ color: 'red' }}>{detailError}</div> : null}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold tracking-tight">Open jobs</h2>
+          {list ? (
+            <Badge variant="secondary">{list.total} total</Badge>
+          ) : null}
+        </div>
+        {list?.items?.length ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {list.items.map((j) => (
+              <JobCard
+                key={String(j.id)}
+                job={j}
+                onSelect={() => void openDetail(j.id)}
+                selected={selectedId === String(j.id)}
+              />
+            ))}
+          </div>
+        ) : list ? (
+          <EmptyState
+            icon={Briefcase}
+            title="No jobs found"
+            description="Try adjusting your filters or come back later."
+          />
+        ) : (
+          <p className="text-sm text-fg-muted">Loading…</p>
+        )}
+      </section>
+
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{detail?.title ?? 'Job details'}</DialogTitle>
+            <DialogDescription>
+              {selectedId ? `Job ID: ${selectedId}` : null}
+            </DialogDescription>
+          </DialogHeader>
+          {detailError ? (
+            <div
+              role="alert"
+              className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+            >
+              {detailError}
+            </div>
+          ) : null}
           {detail ? (
-            <>
-              <p>
-                Applications count: <strong>{detail._count?.applications ?? '—'}</strong>
-              </p>
-              {jsonPre(detail)}
-            </>
-          ) : (
-            !detailError && <p>Loading…</p>
-          )}
-        </>
-      ) : (
-        <p>Click a job title for details.</p>
-      )}
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {detail.is_urgent ? <Badge variant="danger">Urgent</Badge> : null}
+                {detail.status ? <Badge variant="outline">{detail.status}</Badge> : null}
+                {detail._count?.applications != null ? (
+                  <Badge variant="secondary">
+                    {detail._count.applications} applications
+                  </Badge>
+                ) : null}
+              </div>
+              {detail.description ? (
+                <p className="whitespace-pre-wrap text-sm text-fg">{detail.description}</p>
+              ) : null}
+              <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+                {JSON.stringify(detail, null, 2)}
+              </pre>
+
+              {loggedIn && selectedId ? (
+                <div className="space-y-2 border-t border-border-default pt-4">
+                  <Label htmlFor={`cover-${coverKey}`}>Cover message (optional)</Label>
+                  <Textarea
+                    id={`cover-${coverKey}`}
+                    rows={3}
+                    placeholder="Tell the employer why you're a fit."
+                    value={applyCoverByJob[coverKey] ?? ''}
+                    onChange={(e) =>
+                      setApplyCoverByJob((p) => ({ ...p, [coverKey]: e.target.value }))
+                    }
+                  />
+                  <DialogFooter>
+                    <Button type="button" onClick={() => void applyToJob(selectedId)}>
+                      Apply (worker only)
+                    </Button>
+                  </DialogFooter>
+                </div>
+              ) : !loggedIn ? (
+                <p className="text-sm text-fg-muted">
+                  <Link to="/login" className="font-medium text-primary underline-offset-4 hover:underline">
+                    Sign in
+                  </Link>{' '}
+                  to apply.
+                </p>
+              ) : null}
+            </div>
+          ) : !detailError ? (
+            <p className="text-sm text-fg-muted">Loading…</p>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {lastActionJson && !createOpen ? (
+        <section className="space-y-2">
+          <h3 className="text-sm font-medium text-fg-muted">Last action response</h3>
+          <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+            {JSON.stringify(lastActionJson, null, 2)}
+          </pre>
+        </section>
+      ) : null}
     </div>
   );
 }
-
-const th: React.CSSProperties = {
-  border: '1px solid #ccc',
-  padding: 6,
-  textAlign: 'left',
-  background: '#eee',
-};
-const td: React.CSSProperties = { border: '1px solid #ccc', padding: 6 };

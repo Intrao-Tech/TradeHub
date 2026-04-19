@@ -1,24 +1,25 @@
-import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
-import { useState, useEffect, useCallback } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { api, getToken, clearTokens } from './api';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import DashboardPage from './pages/DashboardPage';
-import WorkerSearchPage from './pages/WorkerSearchPage';
-import EmployerSearchPage from './pages/EmployerSearchPage';
-import ProfilePage from './pages/ProfilePage';
-import CollaborationsPage from './pages/CollaborationsPage';
-import ReferralsPage from './pages/ReferralsPage';
-import ReviewsPage from './pages/ReviewsPage';
-import AdminPage from './pages/AdminPage';
-import InternalLoginPage from './pages/InternalLoginPage';
-import NotificationsPage from './pages/NotificationsPage';
-import JobBoardPage from './pages/JobBoardPage';
-import MyApplicationsPage from './pages/MyApplicationsPage';
-import InboxPage from './pages/InboxPage';
-import OAuthCallbackPage from './pages/OAuthCallbackPage';
+import { AppShell, type NavItem } from './components/AppShell';
+import { Skeleton } from './components/ui/skeleton';
 
-type NavItem = { to: string; label: string };
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const WorkerSearchPage = lazy(() => import('./pages/WorkerSearchPage'));
+const EmployerSearchPage = lazy(() => import('./pages/EmployerSearchPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const CollaborationsPage = lazy(() => import('./pages/CollaborationsPage'));
+const ReferralsPage = lazy(() => import('./pages/ReferralsPage'));
+const ReviewsPage = lazy(() => import('./pages/ReviewsPage'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const InternalLoginPage = lazy(() => import('./pages/InternalLoginPage'));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+const JobBoardPage = lazy(() => import('./pages/JobBoardPage'));
+const MyApplicationsPage = lazy(() => import('./pages/MyApplicationsPage'));
+const InboxPage = lazy(() => import('./pages/InboxPage'));
+const OAuthCallbackPage = lazy(() => import('./pages/OAuthCallbackPage'));
 
 const PUBLIC_NAV: NavItem[] = [
   { to: '/jobs', label: 'Jobs' },
@@ -29,12 +30,12 @@ const PUBLIC_NAV: NavItem[] = [
 
 const PRIVATE_NAV: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard' },
-  { to: '/profile', label: 'My Profile' },
+  { to: '/profile', label: 'Profile' },
   { to: '/my-applications', label: 'Applications' },
-  { to: '/collaborations', label: 'Collaborations' },
+  { to: '/collaborations', label: 'Work' },
   { to: '/referrals', label: 'Referrals' },
   { to: '/inbox', label: 'Inbox' },
-  { to: '/notifications', label: 'Notifications' },
+  { to: '/notifications', label: 'Alerts' },
 ];
 
 function Protected({ loggedIn, children }: { loggedIn: boolean; children: React.ReactElement }) {
@@ -45,8 +46,27 @@ function Protected({ loggedIn, children }: { loggedIn: boolean; children: React.
   return children;
 }
 
-function App() {
+function PageFallback() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-8 w-1/3" />
+      <Skeleton className="h-32 w-full" />
+      <Skeleton className="h-32 w-full" />
+    </div>
+  );
+}
+
+function FullPageFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-page">
+      <Skeleton className="h-8 w-48" />
+    </div>
+  );
+}
+
+function ShellRoutes() {
   const [loggedIn, setLoggedIn] = useState(!!getToken());
+  const location = useLocation();
 
   const refreshAuth = useCallback(() => setLoggedIn(!!getToken()), []);
 
@@ -71,59 +91,58 @@ function App() {
     window.dispatchEvent(new Event('auth-changed'));
   };
 
+  // Auth pages render their own AuthShell (no top nav).
+  const isAuthRoute = ['/login', '/register', '/oauth/callback', '/internal'].some(
+    (p) => location.pathname === p,
+  );
+
+  if (isAuthRoute) {
+    return (
+      <Suspense fallback={<FullPageFallback />}>
+        <Routes>
+          <Route path="/login" element={<LoginPage onLogin={onAuthSuccess} />} />
+          <Route path="/register" element={<RegisterPage onRegister={onAuthSuccess} />} />
+          <Route path="/oauth/callback" element={<OAuthCallbackPage onLogin={onAuthSuccess} />} />
+          <Route path="/internal" element={<InternalLoginPage onLogin={onAuthSuccess} />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  return (
+    <AppShell
+      loggedIn={loggedIn}
+      publicNav={PUBLIC_NAV}
+      privateNav={PRIVATE_NAV}
+      onLogout={handleLogout}
+    >
+      <Suspense fallback={<PageFallback />}>
+        <Routes>
+          <Route path="/jobs" element={<JobBoardPage />} />
+          <Route path="/workers" element={<WorkerSearchPage />} />
+          <Route path="/employers" element={<EmployerSearchPage />} />
+          <Route path="/reviews" element={<ReviewsPage />} />
+
+          <Route path="/dashboard" element={<Protected loggedIn={loggedIn}><DashboardPage /></Protected>} />
+          <Route path="/profile" element={<Protected loggedIn={loggedIn}><ProfilePage /></Protected>} />
+          <Route path="/collaborations" element={<Protected loggedIn={loggedIn}><CollaborationsPage /></Protected>} />
+          <Route path="/referrals" element={<Protected loggedIn={loggedIn}><ReferralsPage /></Protected>} />
+          <Route path="/notifications" element={<Protected loggedIn={loggedIn}><NotificationsPage /></Protected>} />
+          <Route path="/internal/admin" element={<Protected loggedIn={loggedIn}><AdminPage /></Protected>} />
+          <Route path="/my-applications" element={<Protected loggedIn={loggedIn}><MyApplicationsPage /></Protected>} />
+          <Route path="/inbox" element={<Protected loggedIn={loggedIn}><InboxPage /></Protected>} />
+
+          <Route path="/" element={<Navigate to={loggedIn ? '/dashboard' : '/jobs'} replace />} />
+        </Routes>
+      </Suspense>
+    </AppShell>
+  );
+}
+
+function App() {
   return (
     <BrowserRouter>
-      <nav className="nav">
-        <div className="nav-inner">
-          <NavLink to={loggedIn ? '/dashboard' : '/jobs'} className="nav-brand">
-            Trade<span>Hub</span>
-          </NavLink>
-          {PUBLIC_NAV.map((n) => (
-            <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
-              {n.label}
-            </NavLink>
-          ))}
-          {loggedIn && PRIVATE_NAV.map((n) => (
-            <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
-              {n.label}
-            </NavLink>
-          ))}
-          <div className="nav-spacer" />
-          {loggedIn ? (
-            <div className="nav-user">
-              <button type="button" className="btn-ghost" onClick={handleLogout}>Logout</button>
-            </div>
-          ) : (
-            <>
-              <NavLink to="/login" className="nav-link">Login</NavLink>
-              <NavLink to="/register" className="btn btn-primary" style={{ marginLeft: 4 }}>Sign up</NavLink>
-            </>
-          )}
-        </div>
-      </nav>
-
-      <Routes>
-        <Route path="/login" element={<LoginPage onLogin={onAuthSuccess} />} />
-        <Route path="/register" element={<RegisterPage onRegister={onAuthSuccess} />} />
-        <Route path="/oauth/callback" element={<OAuthCallbackPage onLogin={onAuthSuccess} />} />
-
-        <Route path="/jobs" element={<div className="page"><JobBoardPage /></div>} />
-        <Route path="/workers" element={<div className="page"><WorkerSearchPage /></div>} />
-        <Route path="/employers" element={<div className="page"><EmployerSearchPage /></div>} />
-        <Route path="/reviews" element={<div className="page"><ReviewsPage /></div>} />
-
-        <Route path="/dashboard" element={<Protected loggedIn={loggedIn}><div className="page"><DashboardPage /></div></Protected>} />
-        <Route path="/profile" element={<Protected loggedIn={loggedIn}><div className="page"><ProfilePage /></div></Protected>} />
-        <Route path="/collaborations" element={<Protected loggedIn={loggedIn}><div className="page"><CollaborationsPage /></div></Protected>} />
-        <Route path="/referrals" element={<Protected loggedIn={loggedIn}><div className="page"><ReferralsPage /></div></Protected>} />
-        <Route path="/notifications" element={<Protected loggedIn={loggedIn}><div className="page"><NotificationsPage /></div></Protected>} />
-        <Route path="/internal" element={<InternalLoginPage onLogin={onAuthSuccess} />} />
-        <Route path="/internal/admin" element={<Protected loggedIn={loggedIn}><div className="page"><AdminPage /></div></Protected>} />
-        <Route path="/my-applications" element={<Protected loggedIn={loggedIn}><div className="page"><MyApplicationsPage /></div></Protected>} />
-        <Route path="/inbox" element={<Protected loggedIn={loggedIn}><div className="page"><InboxPage /></div></Protected>} />
-
-        <Route path="/" element={<Navigate to={loggedIn ? '/dashboard' : '/jobs'} replace />} />
-      </Routes>
+      <ShellRoutes />
     </BrowserRouter>
   );
 }

@@ -2,6 +2,11 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, setTokens } from '../api';
+import { AuthShell } from '@/components/AppShell';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 type LoginResponse = {
   access_token: string;
@@ -38,42 +43,53 @@ export default function InternalLoginPage({ onLogin }: Props) {
   }
 
   return (
-    <div className="auth-shell">
-      <div className="auth-card" style={{ borderTop: '4px solid #dc2626' }}>
-        <h1 style={{ fontSize: 20 }}>TradeHub Internal</h1>
-        <p className="muted">Staff & admin access only.</p>
+    <AuthShell>
+      <Card className="border-t-4 border-t-danger">
+        <CardHeader>
+          <CardTitle>Staff login</CardTitle>
+          <CardDescription>Staff &amp; admin access only.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {error ? (
+            <div
+              role="alert"
+              className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+            >
+              {error}
+            </div>
+          ) : null}
 
-        {error && <div className="alert alert-error">{error}</div>}
-
-        <form onSubmit={handleSubmit} className="auth-form stack">
-          <label>
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@tradehub.co.uk"
-              autoComplete="email"
-              required
-            />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              autoComplete="current-password"
-              required
-            />
-          </label>
-          <button type="submit" className="btn-block" disabled={loading}
-            style={{ background: '#dc2626' }}>
-            {loading ? 'Signing in…' : 'Staff sign in'}
-          </button>
-        </form>
-      </div>
-    </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="staff-email">Email</Label>
+              <Input
+                id="staff-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@tradehub.co.uk"
+                autoComplete="email"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="staff-password">Password</Label>
+              <Input
+                id="staff-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                required
+              />
+            </div>
+            <Button type="submit" size="lg" className="w-full" disabled={loading}>
+              {loading ? 'Signing in…' : 'Staff sign in'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </AuthShell>
   );
 }

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Dark theme — slightly desaturated action primary (brand.500 anchor shift), inverted neutrals.",
+  "color": {
+    "bg": {
+      "page":   { "$value": "#0A0F1A", "$type": "color" },
+      "raised": { "$value": "#141A2A", "$type": "color" },
+      "sunken": { "$value": "#060912", "$type": "color" },
+      "subtle": { "$value": "#1E293B", "$type": "color" },
+      "muted":  { "$value": "#334155", "$type": "color" }
+    },
+    "fg": {
+      "default":   { "$value": "#F8FAFC", "$type": "color" },
+      "muted":     { "$value": "#94A3B8", "$type": "color" },
+      "subtle":    { "$value": "#64748B", "$type": "color" },
+      "on-accent": { "$value": "#FFFFFF", "$type": "color" },
+      "inverse":   { "$value": "#0F172A", "$type": "color" }
+    },
+    "border": {
+      "default": { "$value": "#1E293B", "$type": "color" },
+      "strong":  { "$value": "#334155", "$type": "color" },
+      "subtle":  { "$value": "#141A2A", "$type": "color" }
+    },
+    "action": {
+      "primary":       { "$value": "#DB874A", "$type": "color" },
+      "primary-hover": { "$value": "#DF9A5E", "$type": "color" },
+      "primary-fg":    { "$value": "#FFFFFF", "$type": "color" }
+    },
+    "focus": {
+      "ring": { "$value": "#DF9A5E", "$type": "color" }
+    },
+    "state": {
+      "success": { "$value": "#22C55E", "$type": "color" },
+      "warning": { "$value": "#F59E0B", "$type": "color" },
+      "danger":  { "$value": "#EF4444", "$type": "color" },
+      "info":    { "$value": "#3B82F6", "$type": "color" },
+      "success-subtle": { "$value": "#052E16", "$type": "color" },
+      "warning-subtle": { "$value": "#451A03", "$type": "color" },
+      "danger-subtle":  { "$value": "#450A0A", "$type": "color" },
+      "info-subtle":    { "$value": "#172554", "$type": "color" }
+    },
+    "overlay": { "$value": "rgb(2 6 23 / 0.75)", "$type": "color", "$description": "neutral.950 @ 75% — modal/sheet scrim (dark mode)" }
+  }
+}

@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react';
+import { Briefcase, Inbox } from 'lucide-react';
 import { api } from '../api';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/EmptyState';
 
 type ApplicationRow = {
   id: string | number;
@@ -29,12 +37,14 @@ type JobListResponse = {
   limit: number;
 };
 
-function jsonPre(data: unknown) {
-  return (
-    <pre style={{ background: '#f5f5f5', padding: 12, overflow: 'auto', fontSize: 12 }}>
-      {data == null ? '' : JSON.stringify(data, null, 2)}
-    </pre>
-  );
+type BadgeVariant = 'default' | 'secondary' | 'outline' | 'success' | 'warning' | 'danger' | 'info';
+
+function statusBadgeVariant(status: string): BadgeVariant {
+  const s = status.toUpperCase();
+  if (s === 'ACCEPTED') return 'success';
+  if (s === 'PENDING' || s === 'INVITED' || s === 'REVIEWED' || s === 'SHORTLISTED') return 'warning';
+  if (s === 'REJECTED' || s === 'WITHDRAWN') return 'danger';
+  return 'outline';
 }
 
 export default function MyApplicationsPage() {
@@ -145,150 +155,307 @@ export default function MyApplicationsPage() {
   }
 
   return (
-    <div>
-      <h1>My Applications</h1>
-      {actionError ? <div style={{ color: 'red', marginBottom: 8 }}>{actionError}</div> : null}
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-fg">My applications</h1>
+        <p className="text-sm text-fg-muted">Track your applications and manage invitations.</p>
+      </div>
 
-      <h2>Worker: my applications</h2>
-      {workerError ? <div style={{ color: 'orange', marginBottom: 8 }}>{workerError}</div> : null}
-      <button type="button" onClick={() => void loadWorkerApps()} style={{ marginBottom: 8 }}>
-        Refresh worker list
-      </button>
-      {workerList?.items?.length ? (
-        <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 24, fontSize: 13 }}>
-          <thead>
-            <tr>
-              <th style={th}>job title</th>
-              <th style={th}>status</th>
-              <th style={th}>initiated_by</th>
-              <th style={th}>proposed_rate</th>
-              <th style={th}>actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {workerList.items.map((a) => {
-              const id = String(a.id);
-              return (
-                <tr key={id}>
-                  <td style={td}>{a.job_post?.title ?? String(a.job_post?.id ?? '—')}</td>
-                  <td style={td}>{a.status}</td>
-                  <td style={td}>{a.initiated_by}</td>
-                  <td style={td}>{a.proposed_rate != null ? String(a.proposed_rate) : '—'}</td>
-                  <td style={td}>
-                    <button type="button" onClick={() => void patchAppStatus(a.id, 'WITHDRAWN')}>
-                      Withdraw
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      ) : (
-        <p>{workerList ? 'No applications (or not a worker).' : '…'}</p>
-      )}
-      {jsonPre(workerList)}
-
-      <h2>Employer: my job posts</h2>
-      {employerError ? <div style={{ color: 'orange', marginBottom: 8 }}>{employerError}</div> : null}
-      <button type="button" onClick={() => void loadEmployerPosts()} style={{ marginBottom: 8 }}>
-        Refresh employer posts
-      </button>
-      {employerPosts?.items?.length ? (
-        <ul style={{ fontSize: 14 }}>
-          {employerPosts.items.map((p) => (
-            <li key={String(p.id)}>
-              <button type="button" onClick={() => void loadApplicationsForJob(p.id)} style={{ background: 'none', border: 'none', color: '#06c', cursor: 'pointer', padding: 0 }}>
-                {p.title}
-              </button>{' '}
-              <span style={{ color: '#666' }}>({p.status})</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>{employerPosts ? 'No job posts (or not an employer).' : '…'}</p>
-      )}
-      {jsonPre(employerPosts)}
-
-      <h2>Applications for selected job</h2>
-      {selectedJobId ? <p>job_post_id: {selectedJobId}</p> : <p>Select a job post above.</p>}
-      {jobAppsError ? <div style={{ color: 'red' }}>{jobAppsError}</div> : null}
-      {jobApps?.items?.length ? (
-        <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 16, fontSize: 13 }}>
-          <thead>
-            <tr>
-              <th style={th}>application id</th>
-              <th style={th}>status</th>
-              <th style={th}>initiated_by</th>
-              <th style={th}>proposed_rate</th>
-              <th style={th}>actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {jobApps.items.map((a) => {
-              const id = String(a.id);
-              return (
-                <tr key={id}>
-                  <td style={td}>{id}</td>
-                  <td style={td}>{a.status}</td>
-                  <td style={td}>{a.initiated_by}</td>
-                  <td style={td}>{a.proposed_rate != null ? String(a.proposed_rate) : '—'}</td>
-                  <td style={{ ...td, verticalAlign: 'top' }}>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      <button type="button" onClick={() => void patchAppStatus(a.id, 'REVIEWED')}>
-                        Review
-                      </button>
-                      <button type="button" onClick={() => void patchAppStatus(a.id, 'SHORTLISTED')}>
-                        Shortlist
-                      </button>
-                      <button type="button" onClick={() => void patchAppStatus(a.id, 'ACCEPTED')}>
-                        Accept
-                      </button>
-                      <button type="button" onClick={() => void patchAppStatus(a.id, 'REJECTED')}>
-                        Reject
-                      </button>
-                      <button type="button" onClick={() => void toCollaboration(a.id)}>
-                        Convert to Collaboration
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      ) : selectedJobId && !jobAppsError ? (
-        <p>{jobApps ? 'No applications.' : 'Loading…'}</p>
-      ) : null}
-      {jsonPre(jobApps)}
-
-      {selectedJobId ? (
-        <div style={{ marginTop: 16, maxWidth: 400 }}>
-          <h3>Invite worker to this job</h3>
-          <label>
-            worker_id{' '}
-            <input type="number" value={inviteWorkerId} onChange={(e) => setInviteWorkerId(e.target.value)} />
-          </label>
-          <label style={{ display: 'block', marginTop: 8 }}>
-            message (optional){' '}
-            <textarea value={inviteMessage} onChange={(e) => setInviteMessage(e.target.value)} rows={2} style={{ width: '100%' }} />
-          </label>
-          <button type="button" style={{ marginTop: 8 }} onClick={() => void inviteWorker(selectedJobId)}>
-            Invite Worker
-          </button>
+      {actionError ? (
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {actionError}
         </div>
       ) : null}
 
-      <h2>Last mutation response</h2>
-      {jsonPre(lastActionJson)}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Worker: my applications</CardTitle>
+              <CardDescription>Applications you've submitted or been invited to.</CardDescription>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => void loadWorkerApps()}>
+              Refresh worker list
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {workerError ? (
+            <div
+              role="alert"
+              className="rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-warning"
+            >
+              {workerError}
+            </div>
+          ) : null}
+
+          {workerList?.items?.length ? (
+            <ul className="space-y-2">
+              {workerList.items.map((a) => {
+                const id = String(a.id);
+                return (
+                  <li
+                    key={id}
+                    className="flex flex-col gap-3 rounded-md border border-border-default bg-raised p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-fg">
+                          {a.job_post?.title ?? String(a.job_post?.id ?? '—')}
+                        </span>
+                        <Badge variant={statusBadgeVariant(a.status)}>{a.status}</Badge>
+                        <Badge variant="outline">{a.initiated_by}</Badge>
+                      </div>
+                      <p className="text-xs text-fg-muted">
+                        Proposed rate:{' '}
+                        {a.proposed_rate != null ? String(a.proposed_rate) : '—'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void patchAppStatus(a.id, 'WITHDRAWN')}
+                      >
+                        Withdraw
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : workerList ? (
+            <EmptyState
+              icon={Inbox}
+              title="No applications"
+              description="No applications (or not a worker)."
+            />
+          ) : (
+            <p className="text-sm text-fg-muted">…</p>
+          )}
+
+          <details className="text-xs text-fg-muted">
+            <summary className="cursor-pointer">Raw JSON</summary>
+            <pre className="mt-2 rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+              {workerList == null ? '' : JSON.stringify(workerList, null, 2)}
+            </pre>
+          </details>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Employer: my job posts</CardTitle>
+              <CardDescription>Select a post to view applicants.</CardDescription>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => void loadEmployerPosts()}>
+              Refresh employer posts
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {employerError ? (
+            <div
+              role="alert"
+              className="rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-warning"
+            >
+              {employerError}
+            </div>
+          ) : null}
+
+          {employerPosts?.items?.length ? (
+            <ul className="space-y-2">
+              {employerPosts.items.map((p) => {
+                const isSelected = selectedJobId === String(p.id);
+                return (
+                  <li key={String(p.id)}>
+                    <button
+                      type="button"
+                      onClick={() => void loadApplicationsForJob(p.id)}
+                      className={
+                        'flex w-full flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
+                        (isSelected
+                          ? 'border-border-strong bg-subtle'
+                          : 'border-border-default bg-raised hover:bg-subtle')
+                      }
+                    >
+                      <span className="font-medium text-fg">{p.title}</span>
+                      {p.status ? <Badge variant="outline">{p.status}</Badge> : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : employerPosts ? (
+            <EmptyState
+              icon={Briefcase}
+              title="No job posts"
+              description="No job posts (or not an employer)."
+            />
+          ) : (
+            <p className="text-sm text-fg-muted">…</p>
+          )}
+
+          <details className="text-xs text-fg-muted">
+            <summary className="cursor-pointer">Raw JSON</summary>
+            <pre className="mt-2 rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+              {employerPosts == null ? '' : JSON.stringify(employerPosts, null, 2)}
+            </pre>
+          </details>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Applications for selected job</CardTitle>
+          <CardDescription>
+            {selectedJobId ? `job_post_id: ${selectedJobId}` : 'Select a job post above.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {jobAppsError ? (
+            <div
+              role="alert"
+              className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+            >
+              {jobAppsError}
+            </div>
+          ) : null}
+
+          {jobApps?.items?.length ? (
+            <ul className="space-y-2">
+              {jobApps.items.map((a) => {
+                const id = String(a.id);
+                return (
+                  <li
+                    key={id}
+                    className="space-y-3 rounded-md border border-border-default bg-raised p-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-fg">application id {id}</span>
+                      <Badge variant={statusBadgeVariant(a.status)}>{a.status}</Badge>
+                      <Badge variant="outline">{a.initiated_by}</Badge>
+                      {a.proposed_rate != null ? (
+                        <span className="text-xs text-fg-muted">
+                          rate: {String(a.proposed_rate)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void patchAppStatus(a.id, 'REVIEWED')}
+                      >
+                        Review
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void patchAppStatus(a.id, 'SHORTLISTED')}
+                      >
+                        Shortlist
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void patchAppStatus(a.id, 'ACCEPTED')}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void patchAppStatus(a.id, 'REJECTED')}
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void toCollaboration(a.id)}
+                      >
+                        Convert to Collaboration
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : selectedJobId && !jobAppsError ? (
+            jobApps ? (
+              <EmptyState
+                icon={Inbox}
+                title="No applications"
+                description="This job post has no applications yet."
+              />
+            ) : (
+              <p className="text-sm text-fg-muted">Loading…</p>
+            )
+          ) : null}
+
+          <details className="text-xs text-fg-muted">
+            <summary className="cursor-pointer">Raw JSON</summary>
+            <pre className="mt-2 rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+              {jobApps == null ? '' : JSON.stringify(jobApps, null, 2)}
+            </pre>
+          </details>
+        </CardContent>
+      </Card>
+
+      {selectedJobId ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Invite worker to this job</CardTitle>
+            <CardDescription>Send an invitation to a specific worker.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="invite-worker-id">worker_id</Label>
+              <Input
+                id="invite-worker-id"
+                type="number"
+                value={inviteWorkerId}
+                onChange={(e) => setInviteWorkerId(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-message">Message (optional)</Label>
+              <Textarea
+                id="invite-message"
+                value={inviteMessage}
+                onChange={(e) => setInviteMessage(e.target.value)}
+                rows={2}
+              />
+            </div>
+            <Button type="button" onClick={() => void inviteWorker(selectedJobId)}>
+              Invite Worker
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Last mutation response</CardTitle>
+          <CardDescription>Debug view of the most recent API response.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+            {lastActionJson == null ? '' : JSON.stringify(lastActionJson, null, 2)}
+          </pre>
+        </CardContent>
+      </Card>
     </div>
   );
 }
-
-const th: React.CSSProperties = {
-  border: '1px solid #ccc',
-  padding: 6,
-  textAlign: 'left',
-  background: '#eee',
-};
-const td: React.CSSProperties = { border: '1px solid #ccc', padding: 6 };

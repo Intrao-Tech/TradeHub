@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Bell } from 'lucide-react';
 import { api } from '../api';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/EmptyState';
 
 const LIMIT = 20;
 
@@ -91,95 +96,145 @@ export default function NotificationsPage() {
   const items = listRes?.data ?? [];
 
   return (
-    <div>
-      <h1>Notifications</h1>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-fg">Notifications</h1>
+          <p className="text-sm text-fg-muted">
+            Unread:{' '}
+            {unreadCount === null ? (
+              <span className="text-fg-subtle">…</span>
+            ) : (
+              <Badge variant={unreadCount > 0 ? 'warning' : 'outline'}>{unreadCount}</Badge>
+            )}
+          </p>
+        </div>
+        <Button type="button" onClick={() => void markAllRead()} variant="outline">
+          Mark all read
+        </Button>
+      </div>
 
       {listErr ? (
-        <div style={{ color: 'red', marginBottom: 8 }}>{listErr}</div>
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {listErr}
+        </div>
       ) : null}
       {countErr ? (
-        <div style={{ color: 'red', marginBottom: 8 }}>{countErr}</div>
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {countErr}
+        </div>
       ) : null}
       {actionErr ? (
-        <div style={{ color: 'red', marginBottom: 8 }}>{actionErr}</div>
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {actionErr}
+        </div>
       ) : null}
 
-      <p>
-        Unread count:{' '}
-        {unreadCount === null ? '…' : unreadCount}
-      </p>
-      <pre style={{ marginBottom: 16, overflow: 'auto' }}>
-        {JSON.stringify(unreadCount, null, 2)}
-      </pre>
+      <Card>
+        <CardHeader>
+          <CardTitle>Inbox</CardTitle>
+          <CardDescription>
+            Page {page} of {lastPage} · total {total}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {items.length === 0 ? (
+            <EmptyState
+              icon={Bell}
+              title="No notifications"
+              description="You're all caught up."
+            />
+          ) : (
+            <ul className="divide-y divide-border-default">
+              {items.map((n) => {
+                const isUnread = n.read_at == null;
+                return (
+                  <li
+                    key={String(n.id)}
+                    className={
+                      'flex flex-col gap-2 px-3 py-4 sm:flex-row sm:items-start sm:justify-between ' +
+                      (isUnread ? 'bg-subtle rounded-md' : '')
+                    }
+                  >
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-fg">{n.title}</span>
+                        {isUnread ? <Badge variant="warning">Unread</Badge> : null}
+                        <Badge variant="outline">{n.type}</Badge>
+                        <Badge variant="outline">{n.channel}</Badge>
+                      </div>
+                      {n.body ? (
+                        <p className="text-sm text-fg-muted">{n.body}</p>
+                      ) : null}
+                      <p className="text-xs text-fg-subtle">
+                        id {String(n.id)} · {n.read_at ?? 'unread'}
+                      </p>
+                      {rowErr[String(n.id)] ? (
+                        <p className="text-xs text-danger">{rowErr[String(n.id)]}</p>
+                      ) : null}
+                    </div>
+                    {isUnread ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void markRead(n.id)}
+                      >
+                        Mark read
+                      </Button>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
-      <div style={{ marginBottom: 16 }}>
-        <button type="button" onClick={() => void markAllRead()}>
-          Mark All Read
-        </button>
-      </div>
+          <div className="flex items-center justify-between gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </Button>
+            <span className="text-xs text-fg-muted">
+              Page {page} of {lastPage}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={page >= lastPage}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div style={{ marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button
-          type="button"
-          disabled={page <= 1}
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-        >
-          Previous
-        </button>
-        <span>
-          Page {page} of {lastPage} (total {total})
-        </span>
-        <button
-          type="button"
-          disabled={page >= lastPage}
-          onClick={() => setPage((p) => p + 1)}
-        >
-          Next
-        </button>
-      </div>
-
-      <ul style={{ listStyle: 'none', padding: 0 }}>
-        {items.map((n) => (
-          <li
-            key={String(n.id)}
-            style={{
-              border: '1px solid #ddd',
-              padding: 12,
-              marginBottom: 12,
-              borderRadius: 6,
-            }}
-          >
-            <div>
-              <strong>id</strong> {String(n.id)} · <strong>type</strong> {n.type}{' '}
-              · <strong>channel</strong> {n.channel} ·{' '}
-              <strong>read_at</strong> {n.read_at ?? 'null (unread)'}
-            </div>
-            <div style={{ marginTop: 4 }}>
-              <strong>{n.title}</strong>
-            </div>
-            {n.body ? <div style={{ marginTop: 4 }}>{n.body}</div> : null}
-            {n.read_at == null ? (
-              <button
-                type="button"
-                style={{ marginTop: 8 }}
-                onClick={() => void markRead(n.id)}
-              >
-                Mark Read
-              </button>
-            ) : null}
-            {rowErr[String(n.id)] ? (
-              <div style={{ color: 'red', marginTop: 8 }}>
-                {rowErr[String(n.id)]}
-              </div>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-
-      <h2 style={{ fontSize: 16 }}>Raw list response</h2>
-      <pre style={{ overflow: 'auto' }}>
-        {JSON.stringify(listRes, null, 2)}
-      </pre>
+      <Card>
+        <CardHeader>
+          <CardTitle>Raw list response</CardTitle>
+          <CardDescription>Debug view</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
+            {JSON.stringify(listRes, null, 2)}
+          </pre>
+        </CardContent>
+      </Card>
     </div>
   );
 }

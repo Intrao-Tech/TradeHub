@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/web\" 2>/dev/null && node scripts/lint-tokens.mjs 2>&1 | tail -40 || true"
+          }
+        ]
+      }
+    ]
+  }
+}
