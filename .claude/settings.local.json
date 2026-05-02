@@ -3,7 +3,8 @@
     "allow": [
       "mcp__surf__surf_web_search",
       "mcp__surf__surf_github_search",
-      "mcp__surf__surf_reddit_search"
+      "mcp__surf__surf_reddit_search",
+      "Bash(xargs ls *)"
     ]
   }
 }
