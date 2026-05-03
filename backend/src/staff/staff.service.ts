@@ -44,7 +44,11 @@ export class StaffService {
         where: { id: targetAccountId },
         include: { account: { select: { status: true } } },
       });
-      if (target && target.staff_role === 'ADMIN' && target.account.status === 'ACTIVE') {
+      if (
+        target &&
+        target.staff_role === 'ADMIN' &&
+        target.account.status === 'ACTIVE'
+      ) {
         throw new ForbiddenException({
           code: 'LAST_ADMIN',
           message: `Cannot ${action} the last active admin. Promote another staff member to admin first.`,
@@ -68,7 +72,9 @@ export class StaffService {
     return rows.map((r) => {
       const inviteExpiresAt = r.invite_expires_at;
       const inviteExpired =
-        !!inviteExpiresAt && r.account.last_login_at == null && inviteExpiresAt.getTime() < now;
+        !!inviteExpiresAt &&
+        r.account.last_login_at == null &&
+        inviteExpiresAt.getTime() < now;
       const inviteActive =
         !!inviteExpiresAt && r.account.last_login_at == null && !inviteExpired;
       return {
@@ -211,7 +217,10 @@ export class StaffService {
       include: { account: true },
     });
     if (!member) {
-      throw new NotFoundException({ code: 'STAFF_NOT_FOUND', message: 'Staff member not found.' });
+      throw new NotFoundException({
+        code: 'STAFF_NOT_FOUND',
+        message: 'Staff member not found.',
+      });
     }
     if (member.account.last_login_at != null) {
       throw new ConflictException({
@@ -278,7 +287,10 @@ export class StaffService {
       include: { account: { select: { email: true, status: true } } },
     });
     if (!member) {
-      throw new NotFoundException({ code: 'STAFF_NOT_FOUND', message: 'Staff member not found.' });
+      throw new NotFoundException({
+        code: 'STAFF_NOT_FOUND',
+        message: 'Staff member not found.',
+      });
     }
     if (member.staff_role === newRole) {
       throw new BadRequestException({
@@ -330,7 +342,10 @@ export class StaffService {
       include: { account: true },
     });
     if (!member) {
-      throw new NotFoundException({ code: 'STAFF_NOT_FOUND', message: 'Staff member not found.' });
+      throw new NotFoundException({
+        code: 'STAFF_NOT_FOUND',
+        message: 'Staff member not found.',
+      });
     }
     if (member.id === byAccountId) {
       throw new ForbiddenException({
@@ -379,7 +394,10 @@ export class StaffService {
       include: { account: true },
     });
     if (!member) {
-      throw new NotFoundException({ code: 'STAFF_NOT_FOUND', message: 'Staff member not found.' });
+      throw new NotFoundException({
+        code: 'STAFF_NOT_FOUND',
+        message: 'Staff member not found.',
+      });
     }
     if (member.account.status === 'DEACTIVATED') {
       throw new ConflictException({
@@ -425,7 +443,10 @@ export class StaffService {
       include: { account: true },
     });
     if (!member) {
-      throw new NotFoundException({ code: 'STAFF_NOT_FOUND', message: 'Staff member not found.' });
+      throw new NotFoundException({
+        code: 'STAFF_NOT_FOUND',
+        message: 'Staff member not found.',
+      });
     }
     if (member.account.status === 'ACTIVE') {
       throw new BadRequestException({

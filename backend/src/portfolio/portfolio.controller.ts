@@ -11,11 +11,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   CurrentUser,
@@ -92,7 +88,10 @@ export class PortfolioController {
     @CurrentUser() user: CurrentUserPayload,
     @Body() dto: CreateCertificationDto,
   ) {
-    return this.portfolioService.createCertification(workerIdOrThrow(user), dto);
+    return this.portfolioService.createCertification(
+      workerIdOrThrow(user),
+      dto,
+    );
   }
 
   @Patch(':id')

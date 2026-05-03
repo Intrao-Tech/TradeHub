@@ -126,11 +126,7 @@ export class DocumentController {
     @Body() dto: UpdateDocumentStatusDto,
     @CurrentUser() user: CurrentUserPayload,
   ) {
-    return this.documentService.updateStatus(
-      id,
-      dto.status,
-      user.accountId,
-    );
+    return this.documentService.updateStatus(id, dto.status, user.accountId);
   }
 
   @Delete(':id')

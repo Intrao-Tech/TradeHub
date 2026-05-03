@@ -19,8 +19,10 @@ export class StripeWebhookService {
     private readonly mail: MailService,
     private readonly verification: VerificationService,
   ) {
-    this.platformSecret = this.config.get<string>('STRIPE_WEBHOOK_SECRET') || '';
-    this.connectSecret = this.config.get<string>('STRIPE_CONNECT_WEBHOOK_SECRET') || '';
+    this.platformSecret =
+      this.config.get<string>('STRIPE_WEBHOOK_SECRET') || '';
+    this.connectSecret =
+      this.config.get<string>('STRIPE_CONNECT_WEBHOOK_SECRET') || '';
   }
 
   /**
@@ -45,7 +47,9 @@ export class StripeWebhookService {
         lastErr = err;
       }
     }
-    throw lastErr instanceof Error ? lastErr : new Error('Signature verification failed');
+    throw lastErr instanceof Error
+      ? lastErr
+      : new Error('Signature verification failed');
   }
 
   async handleEvent(event: Stripe.Event): Promise<void> {
@@ -53,48 +57,50 @@ export class StripeWebhookService {
 
     switch (event.type) {
       case 'payment_intent.succeeded':
-        await this.onPaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
+        await this.onPaymentIntentSucceeded(event.data.object);
         break;
 
       case 'payment_intent.payment_failed':
       case 'payment_intent.canceled':
-        await this.onPaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
+        await this.onPaymentIntentFailed(event.data.object);
         break;
 
       case 'charge.refunded':
-        await this.onChargeRefunded(event.data.object as Stripe.Charge);
+        await this.onChargeRefunded(event.data.object);
         break;
 
       case 'charge.dispute.created':
-        await this.onDisputeCreated(event.data.object as Stripe.Dispute);
+        await this.onDisputeCreated(event.data.object);
         break;
 
       case 'charge.dispute.closed':
-        await this.onDisputeClosed(event.data.object as Stripe.Dispute);
+        await this.onDisputeClosed(event.data.object);
         break;
 
       case 'transfer.created':
-        await this.onTransferCreated(event.data.object as Stripe.Transfer);
+        await this.onTransferCreated(event.data.object);
         break;
 
       case 'transfer.reversed':
-        this.logger.warn(`Transfer reversed: ${(event.data.object as Stripe.Transfer).id}`);
+        this.logger.warn(`Transfer reversed: ${event.data.object.id}`);
         break;
 
       case 'checkout.session.completed':
-        await this.onCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+        await this.onCheckoutCompleted(event.data.object);
         break;
 
       case 'payout.paid':
       case 'payout.failed':
-        this.logger.log(`Payout ${event.type} :: ${(event.data.object as Stripe.Payout).id}`);
+        this.logger.log(`Payout ${event.type} :: ${event.data.object.id}`);
         break;
 
       case 'account.updated':
       case 'account.application.authorized':
       case 'account.application.deauthorized':
       case 'capability.updated':
-        this.logger.log(`Connect lifecycle :: ${event.type} on account ${event.account ?? '—'}`);
+        this.logger.log(
+          `Connect lifecycle :: ${event.type} on account ${event.account ?? '—'}`,
+        );
         break;
 
       case 'identity.verification_session.verified':
@@ -109,13 +115,20 @@ export class StripeWebhookService {
 
   // ─── Escrow handlers ───────────────────────────────────────────
 
-  private async onPaymentIntentSucceeded(pi: Stripe.PaymentIntent): Promise<void> {
+  private async onPaymentIntentSucceeded(
+    pi: Stripe.PaymentIntent,
+  ): Promise<void> {
     const escrowId = this.extractEscrowId(pi.metadata);
-    const latestCharge = typeof pi.latest_charge === 'string' ? pi.latest_charge : pi.latest_charge?.id;
+    const latestCharge =
+      typeof pi.latest_charge === 'string'
+        ? pi.latest_charge
+        : pi.latest_charge?.id;
 
     const escrow = await this.findEscrow(escrowId, pi.id);
     if (!escrow) {
-      this.logger.warn(`payment_intent.succeeded :: no escrow matched for pi=${pi.id}`);
+      this.logger.warn(
+        `payment_intent.succeeded :: no escrow matched for pi=${pi.id}`,
+      );
       return;
     }
 
@@ -136,20 +149,38 @@ export class StripeWebhookService {
         include: {
           collaboration: {
             include: {
-              worker: { include: { client_profile: { include: { account: true } } } },
-              employer: { include: { client_profile: { include: { account: true } } } },
+              worker: {
+                include: { client_profile: { include: { account: true } } },
+              },
+              employer: {
+                include: { client_profile: { include: { account: true } } },
+              },
             },
           },
         },
       });
       if (full) {
         const amountGbp = full.job_amount.toString();
-        const workerEmail = full.collaboration.worker.client_profile.account.email;
-        const workerName = full.collaboration.worker.client_profile.display_name;
-        const employerEmail = full.collaboration.employer.client_profile.account.email;
-        const employerName = full.collaboration.employer.client_profile.display_name;
-        void this.mail.sendEscrowFunded(employerEmail, employerName, String(escrow.id), amountGbp);
-        void this.mail.sendEscrowFunded(workerEmail, workerName, String(escrow.id), amountGbp);
+        const workerEmail =
+          full.collaboration.worker.client_profile.account.email;
+        const workerName =
+          full.collaboration.worker.client_profile.display_name;
+        const employerEmail =
+          full.collaboration.employer.client_profile.account.email;
+        const employerName =
+          full.collaboration.employer.client_profile.display_name;
+        void this.mail.sendEscrowFunded(
+          employerEmail,
+          employerName,
+          String(escrow.id),
+          amountGbp,
+        );
+        void this.mail.sendEscrowFunded(
+          workerEmail,
+          workerName,
+          String(escrow.id),
+          amountGbp,
+        );
       }
     } catch (err) {
       this.logger.warn('Failed to send escrow funded email', err);
@@ -173,7 +204,9 @@ export class StripeWebhookService {
       where: { stripe_charge_id: charge.id },
     });
     if (!escrow) {
-      this.logger.warn(`charge.refunded :: no escrow matched for charge=${charge.id}`);
+      this.logger.warn(
+        `charge.refunded :: no escrow matched for charge=${charge.id}`,
+      );
       return;
     }
 
@@ -186,16 +219,21 @@ export class StripeWebhookService {
         stripe_refund_id: refundId,
       },
     });
-    this.logger.log(`Escrow ${escrow.id} marked REFUNDED (charge=${charge.id})`);
+    this.logger.log(
+      `Escrow ${escrow.id} marked REFUNDED (charge=${charge.id})`,
+    );
   }
 
   private async onDisputeCreated(dispute: Stripe.Dispute): Promise<void> {
-    const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
+    const chargeId =
+      typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
     const escrow = await this.prisma.escrowTransaction.findFirst({
       where: { stripe_charge_id: chargeId },
     });
     if (!escrow) {
-      this.logger.warn(`dispute.created :: no escrow matched for charge=${chargeId}`);
+      this.logger.warn(
+        `dispute.created :: no escrow matched for charge=${chargeId}`,
+      );
       return;
     }
 
@@ -206,18 +244,24 @@ export class StripeWebhookService {
         disputed_at: new Date(),
       },
     });
-    this.logger.warn(`Escrow ${escrow.id} marked DISPUTED (dispute=${dispute.id})`);
+    this.logger.warn(
+      `Escrow ${escrow.id} marked DISPUTED (dispute=${dispute.id})`,
+    );
   }
 
   private async onDisputeClosed(dispute: Stripe.Dispute): Promise<void> {
     // status: won | lost | warning_closed etc — log only, human decides next step
-    this.logger.log(`Dispute ${dispute.id} closed with status: ${dispute.status}`);
+    this.logger.log(
+      `Dispute ${dispute.id} closed with status: ${dispute.status}`,
+    );
   }
 
   private async onTransferCreated(transfer: Stripe.Transfer): Promise<void> {
     const escrowId = this.extractEscrowId(transfer.metadata);
     if (!escrowId) {
-      this.logger.warn(`transfer.created :: no escrow_id in metadata for transfer=${transfer.id}`);
+      this.logger.warn(
+        `transfer.created :: no escrow_id in metadata for transfer=${transfer.id}`,
+      );
       return;
     }
 
@@ -234,19 +278,30 @@ export class StripeWebhookService {
         stripe_transfer_id: transfer.id,
       },
     });
-    this.logger.log(`Escrow ${escrow.id} marked RELEASED (transfer=${transfer.id})`);
+    this.logger.log(
+      `Escrow ${escrow.id} marked RELEASED (transfer=${transfer.id})`,
+    );
   }
 
-  private async onCheckoutCompleted(session: Stripe.Checkout.Session): Promise<void> {
-    const pi = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
+  private async onCheckoutCompleted(
+    session: Stripe.Checkout.Session,
+  ): Promise<void> {
+    const pi =
+      typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id;
     if (!pi) return;
-    this.logger.log(`Checkout session completed :: pi=${pi}, session=${session.id}`);
+    this.logger.log(
+      `Checkout session completed :: pi=${pi}, session=${session.id}`,
+    );
     // payment_intent.succeeded will fire separately and do the actual work
   }
 
   // ─── Helpers ───────────────────────────────────────────────────
 
-  private extractEscrowId(metadata: Stripe.Metadata | null | undefined): bigint | null {
+  private extractEscrowId(
+    metadata: Stripe.Metadata | null | undefined,
+  ): bigint | null {
     const raw = metadata?.escrow_id;
     if (!raw) return null;
     try {
@@ -258,7 +313,9 @@ export class StripeWebhookService {
 
   private async findEscrow(escrowId: bigint | null, paymentIntentId: string) {
     if (escrowId) {
-      const byId = await this.prisma.escrowTransaction.findUnique({ where: { id: escrowId } });
+      const byId = await this.prisma.escrowTransaction.findUnique({
+        where: { id: escrowId },
+      });
       if (byId) return byId;
     }
     return this.prisma.escrowTransaction.findFirst({

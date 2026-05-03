@@ -28,7 +28,9 @@ export class StaffHostMiddleware implements NestMiddleware {
   private readonly expectedOrigin: string;
 
   constructor(config: ConfigService) {
-    this.expectedHost = (config.get<string>('STAFF_LOGIN_HOST') || '').toLowerCase();
+    this.expectedHost = (
+      config.get<string>('STAFF_LOGIN_HOST') || ''
+    ).toLowerCase();
     const staffFrontend = config.get<string>('STAFF_FRONTEND_URL') || '';
     this.expectedOrigin = (() => {
       if (!staffFrontend) return '';

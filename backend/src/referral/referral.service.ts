@@ -34,9 +34,7 @@ export class ReferralService {
           dto.commission_pct != null
             ? new Prisma.Decimal(dto.commission_pct)
             : null,
-        platform_fee_pct: new Prisma.Decimal(
-          dto.platform_fee_pct ?? 2,
-        ),
+        platform_fee_pct: new Prisma.Decimal(dto.platform_fee_pct ?? 2),
         client_name: dto.client_name ?? null,
         client_phone: dto.client_phone ?? null,
         client_email: dto.client_email ?? null,

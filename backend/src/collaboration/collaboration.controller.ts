@@ -9,11 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   CurrentUser,
@@ -52,10 +48,7 @@ export class CollaborationController {
       throw new BadRequestException('No client profile for this account');
     }
 
-    if (
-      dto.worker_id != null &&
-      dto.employer_id != null
-    ) {
+    if (dto.worker_id != null && dto.employer_id != null) {
       throw new BadRequestException(
         'Pass only worker_id (employer initiates) or only employer_id (worker initiates)',
       );

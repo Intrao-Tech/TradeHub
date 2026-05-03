@@ -26,7 +26,8 @@ export class AccountService {
   async updateAccount(accountId: bigint, dto: UpdateAccountDto) {
     const data: { phone?: string; phone_verified?: boolean } = {};
     if (dto.phone !== undefined) data.phone = dto.phone;
-    if (dto.phone_verified !== undefined) data.phone_verified = dto.phone_verified;
+    if (dto.phone_verified !== undefined)
+      data.phone_verified = dto.phone_verified;
 
     try {
       return await this.prisma.account.update({

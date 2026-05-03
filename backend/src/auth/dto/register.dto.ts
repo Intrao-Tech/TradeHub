@@ -25,14 +25,22 @@ export class RegisterDto {
   role: 'WORKER' | 'EMPLOYER';
 
   // ── WORKER fields ─────────────────────────────────────────
-  @ApiProperty({ example: 'John', required: false, description: 'Required when role=WORKER' })
+  @ApiProperty({
+    example: 'John',
+    required: false,
+    description: 'Required when role=WORKER',
+  })
   @ValidateIf((o) => o.role === 'WORKER')
   @IsString()
   @MinLength(1)
   @MaxLength(75)
   first_name?: string;
 
-  @ApiProperty({ example: 'Smith', required: false, description: 'Required when role=WORKER' })
+  @ApiProperty({
+    example: 'Smith',
+    required: false,
+    description: 'Required when role=WORKER',
+  })
   @ValidateIf((o) => o.role === 'WORKER')
   @IsString()
   @MinLength(1)
@@ -43,7 +51,8 @@ export class RegisterDto {
   @ApiProperty({
     example: 'Acme Build Ltd',
     required: false,
-    description: 'Required when role=EMPLOYER. Used for both client_profile.display_name and employer_profile.company_name.',
+    description:
+      'Required when role=EMPLOYER. Used for both client_profile.display_name and employer_profile.company_name.',
   })
   @ValidateIf((o) => o.role === 'EMPLOYER')
   @IsString()

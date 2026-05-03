@@ -325,10 +325,7 @@ export class PortfolioService {
     return item;
   }
 
-  private getByIdWithClient(
-    tx: Prisma.TransactionClient,
-    id: bigint,
-  ) {
+  private getByIdWithClient(tx: Prisma.TransactionClient, id: bigint) {
     return tx.portfolioItem.findUniqueOrThrow({
       where: { id },
       include: portfolioItemInclude,

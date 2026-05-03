@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateModerationActionDto } from './dto/create-moderation-action.dto';
@@ -100,9 +97,7 @@ export class ModerationService {
     });
   }
 
-  private statusFromActionType(
-    actionType: string,
-  ): string | undefined {
+  private statusFromActionType(actionType: string): string | undefined {
     switch (actionType) {
       case 'RESOLVED':
         return 'COMPLETED';

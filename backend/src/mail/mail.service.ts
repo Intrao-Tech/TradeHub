@@ -13,11 +13,15 @@ export class MailService implements OnModuleInit {
   constructor(private readonly config: ConfigService) {}
 
   onModuleInit() {
-    this.frontendUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    this.frontendUrl =
+      this.config.get<string>('FRONTEND_URL') || 'http://localhost:3001';
     const host = this.config.get<string>('SMTP_HOST') || 'smtp.gmail.com';
     const port = Number(this.config.get<string>('SMTP_PORT') || 587);
     const user = this.config.get<string>('SMTP_USER') || '';
-    const pass = (this.config.get<string>('SMTP_PASS') || '').replace(/\s+/g, '');
+    const pass = (this.config.get<string>('SMTP_PASS') || '').replace(
+      /\s+/g,
+      '',
+    );
     this.fromAddress = this.config.get<string>('SMTP_FROM') || user;
 
     if (!user || !pass) {
@@ -34,9 +38,16 @@ export class MailService implements OnModuleInit {
     this.logger.log(`Mail enabled via ${host}:${port} as ${user}`);
   }
 
-  async send(to: string, subject: string, html: string, text?: string): Promise<void> {
+  async send(
+    to: string,
+    subject: string,
+    html: string,
+    text?: string,
+  ): Promise<void> {
     if (!this.transporter) {
-      this.logger.warn(`Mail skipped (disabled): to=${to} subject="${subject}"`);
+      this.logger.warn(
+        `Mail skipped (disabled): to=${to} subject="${subject}"`,
+      );
       return;
     }
     try {
@@ -49,7 +60,10 @@ export class MailService implements OnModuleInit {
       });
       this.logger.log(`Mail sent :: to=${to} subject="${subject}"`);
     } catch (err) {
-      this.logger.error(`Mail failed :: to=${to} subject="${subject}"`, err as Error);
+      this.logger.error(
+        `Mail failed :: to=${to} subject="${subject}"`,
+        err as Error,
+      );
     }
   }
 
@@ -106,7 +120,10 @@ export class MailService implements OnModuleInit {
     await this.send(to, subject, html);
   }
 
-  async sendGoogleSignInReminder(to: string, displayName: string): Promise<void> {
+  async sendGoogleSignInReminder(
+    to: string,
+    displayName: string,
+  ): Promise<void> {
     const subject = 'Sign in to TradeHub with Google';
     const html = `
       <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
@@ -128,7 +145,9 @@ export class MailService implements OnModuleInit {
     inviteExpiresAt: Date,
   ): Promise<void> {
     const subject = 'Your TradeHub staff account';
-    const staffUrl = (this.config.get<string>('STAFF_FRONTEND_URL') || this.frontendUrl).replace(/\/$/, '');
+    const staffUrl = (
+      this.config.get<string>('STAFF_FRONTEND_URL') || this.frontendUrl
+    ).replace(/\/$/, '');
     const expiryHuman = inviteExpiresAt.toUTCString();
     const html = `
       <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
@@ -152,7 +171,9 @@ export class MailService implements OnModuleInit {
     newPassword: string,
   ): Promise<void> {
     const subject = 'Your TradeHub staff password has been reset';
-    const staffUrl = (this.config.get<string>('STAFF_FRONTEND_URL') || this.frontendUrl).replace(/\/$/, '');
+    const staffUrl = (
+      this.config.get<string>('STAFF_FRONTEND_URL') || this.frontendUrl
+    ).replace(/\/$/, '');
     const html = `
       <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
         <h2 style="color: #0f766e;">Password reset</h2>
@@ -175,7 +196,9 @@ export class MailService implements OnModuleInit {
     staffRole: 'ADMIN' | 'MODERATOR',
   ): Promise<void> {
     const subject = `You're now a TradeHub ${staffRole.toLowerCase()}`;
-    const staffUrl = (this.config.get<string>('STAFF_FRONTEND_URL') || this.frontendUrl).replace(/\/$/, '');
+    const staffUrl = (
+      this.config.get<string>('STAFF_FRONTEND_URL') || this.frontendUrl
+    ).replace(/\/$/, '');
     const html = `
       <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
         <h2 style="color: #0f766e;">You've been promoted to ${escapeHtml(staffRole.toLowerCase())}</h2>

@@ -41,10 +41,7 @@ export class TagController {
   @Roles('STAFF')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update tag (staff)' })
-  update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateTagDto,
-  ) {
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateTagDto) {
     return this.tagService.update(id, dto);
   }
 

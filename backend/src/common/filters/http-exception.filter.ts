@@ -43,7 +43,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       // Object body — class-validator returns `{ statusCode, message: string[], error }`
       // Our typed throws return `{ code, message, email?, ... }`. Both shapes are kept.
       const obj = body as Record<string, unknown>;
-      const merged: Record<string, unknown> = { ...obj, statusCode: status, timestamp };
+      const merged: Record<string, unknown> = {
+        ...obj,
+        statusCode: status,
+        timestamp,
+      };
       // Flatten array messages from class-validator for SPA convenience
       if (Array.isArray(merged.message)) {
         merged.message = (merged.message as string[]).join(', ');

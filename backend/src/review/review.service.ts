@@ -72,15 +72,17 @@ export class ReviewService {
     });
   }
 
-  async getBySubject(subjectId: bigint, query: ReviewQueryDto, role: 'WORKER' | 'EMPLOYER') {
+  async getBySubject(
+    subjectId: bigint,
+    query: ReviewQueryDto,
+    role: 'WORKER' | 'EMPLOYER',
+  ) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
     const collaborationWhere =
-      role === 'WORKER'
-        ? { worker_id: subjectId }
-        : { employer_id: subjectId };
+      role === 'WORKER' ? { worker_id: subjectId } : { employer_id: subjectId };
     const reviewer_role = role === 'WORKER' ? 'EMPLOYER' : 'WORKER';
 
     const where = {
@@ -157,8 +159,7 @@ export class ReviewService {
     const { collaboration } = review;
     const isReviewer =
       (review.reviewer_role === 'WORKER' && collaboration.worker_id === cp) ||
-      (review.reviewer_role === 'EMPLOYER' &&
-        collaboration.employer_id === cp);
+      (review.reviewer_role === 'EMPLOYER' && collaboration.employer_id === cp);
 
     if (!isReviewer) {
       throw new ForbiddenException('This review is not published');

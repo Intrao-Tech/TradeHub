@@ -25,7 +25,10 @@ export class UpdateClientProfileDto {
   @MaxLength(10)
   postcode_area?: string;
 
-  @ApiPropertyOptional({ example: 'https://cdn.example.com/avatar.jpg', maxLength: 500 })
+  @ApiPropertyOptional({
+    example: 'https://cdn.example.com/avatar.jpg',
+    maxLength: 500,
+  })
   @IsOptional()
   @IsString()
   @MaxLength(500)

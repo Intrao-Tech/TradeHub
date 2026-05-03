@@ -54,11 +54,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
       this.accountToSockets.get(accountId)!.add(client.id);
 
-      const conversations =
-        await this.prisma.conversationParticipant.findMany({
-          where: { account_id: BigInt(accountId) },
-          select: { conversation_id: true },
-        });
+      const conversations = await this.prisma.conversationParticipant.findMany({
+        where: { account_id: BigInt(accountId) },
+        select: { conversation_id: true },
+      });
 
       for (const c of conversations) {
         client.join(`conv:${c.conversation_id}`);
@@ -91,20 +90,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.join(`conv:${data.conversation_id}`);
   }
 
-  emitNewMessage(
-    conversationId: bigint,
-    message: Record<string, unknown>,
-  ) {
+  emitNewMessage(conversationId: bigint, message: Record<string, unknown>) {
     this.server
       .to(`conv:${conversationId}`)
       .emit('new_message', { conversation_id: conversationId, ...message });
   }
 
-  emitMessageRead(
-    conversationId: bigint,
-    accountId: bigint,
-    lastReadAt: Date,
-  ) {
+  emitMessageRead(conversationId: bigint, accountId: bigint, lastReadAt: Date) {
     this.server.to(`conv:${conversationId}`).emit('message_read', {
       conversation_id: conversationId,
       account_id: accountId,

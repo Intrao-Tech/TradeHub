@@ -79,7 +79,7 @@ export class StaffController {
   @Roles('ADMIN')
   @ApiOperation({
     summary:
-      'Force-reset a staff member\'s password (generates a new one, emails it, signs them out everywhere).',
+      "Force-reset a staff member's password (generates a new one, emails it, signs them out everywhere).",
   })
   resetPassword(
     @Param('id', ParseBigIntPipe) id: bigint,
@@ -91,7 +91,9 @@ export class StaffController {
 
   @Patch(':id/role')
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Promote / demote staff between ADMIN and MODERATOR' })
+  @ApiOperation({
+    summary: 'Promote / demote staff between ADMIN and MODERATOR',
+  })
   changeRole(
     @Param('id', ParseBigIntPipe) id: bigint,
     @Body() dto: ChangeStaffRoleDto,
@@ -103,7 +105,9 @@ export class StaffController {
 
   @Post(':id/reactivate')
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Reactivate a previously deactivated staff account' })
+  @ApiOperation({
+    summary: 'Reactivate a previously deactivated staff account',
+  })
   reactivate(
     @Param('id', ParseBigIntPipe) id: bigint,
     @CurrentUser() user: CurrentUserPayload,
