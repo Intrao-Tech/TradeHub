@@ -130,6 +130,21 @@ When the work is finished:
 - move the whole feature folder to `tasks/done/`
 - update `status.md` with result and shipped date
 
+## Working Principles
+
+- **Specs are living documents.** When a decision is made on an active
+  feature (Open Question answered, scope changed, requirement clarified),
+  update the relevant `spec.md` in the same step — move the resolved item
+  out of `Open Questions` into a numbered requirement, and append the
+  decision + date to a `Decisions Log` section at the bottom. The repo
+  state must always match the spec; out-of-date specs are bugs.
+- **Every shipped feature folder in `tasks/done/` should have a test
+  counterpart in `tasks/done/`** (named `tests-<feature>/`). If you ship a
+  feature without tests, open a `tests-<feature>` spec the same week and
+  move it to `in-progress` immediately. The pattern is established by
+  `tasks/done/tests-auth-flow/` (covers the sealed `tasks/done/auth-flow/`
+  contract).
+
 ## Consistency Rules For AI Work
 
 To get similar output from different models, keep these rules strict:

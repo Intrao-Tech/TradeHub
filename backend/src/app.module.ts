@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+import { ExecutionContext, Injectable, Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { CommonModule } from './common/common.module';
 import { AuthModule } from './auth/auth.module';
@@ -28,38 +29,62 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 import { StripeModule } from './stripe/stripe.module';
 import { MailModule } from './mail/mail.module';
 import { StaffModule } from './staff/staff.module';
+// Conditionally appended when NODE_ENV === 'test' to expose the test-only
+// mailbox HTTP route used by the Playwright suite (Decisions Log 2026-05-03).
+// The TestOnlyModule throws on mount in any other environment, so production
+// exposure risk is zero.
+import { TestOnlyModule } from './test-only/test-only.module';
+
+const baseImports = [
+  ConfigModule.forRoot({ isGlobal: true }),
+  ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
+  PrismaModule,
+  CommonModule,
+  StripeModule,
+  MailModule,
+  AuthModule,
+  AccountModule,
+  ClientProfileModule,
+  WorkerProfileModule,
+  EmployerProfileModule,
+  SpecialisationModule,
+  TagModule,
+  DocumentModule,
+  ReviewModule,
+  ReferralModule,
+  EscrowModule,
+  CollaborationModule,
+  PortfolioModule,
+  ModerationModule,
+  NotificationModule,
+  SubscriptionModule,
+  AuditModule,
+  JobPostModule,
+  JobApplicationModule,
+  ConversationModule,
+  VerificationModule,
+  WebhooksModule,
+  StaffModule,
+];
+
+// `overrideGuard()` from @nestjs/testing does not replace APP_GUARD-bound
+// classes (it only intercepts `@UseGuards()` decorators), so the test harness
+// disables the throttler via this env var. The env var is read at request
+// time (not module load time) so different test files can flip it freely.
+// Production never sets this var.
+@Injectable()
+class EnvGatedThrottlerGuard extends ThrottlerGuard {
+  async canActivate(ctx: ExecutionContext): Promise<boolean> {
+    if (process.env.DISABLE_APP_THROTTLER === 'true') return true;
+    return super.canActivate(ctx);
+  }
+}
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
-    PrismaModule,
-    CommonModule,
-    StripeModule,
-    MailModule,
-    AuthModule,
-    AccountModule,
-    ClientProfileModule,
-    WorkerProfileModule,
-    EmployerProfileModule,
-    SpecialisationModule,
-    TagModule,
-    DocumentModule,
-    ReviewModule,
-    ReferralModule,
-    EscrowModule,
-    CollaborationModule,
-    PortfolioModule,
-    ModerationModule,
-    NotificationModule,
-    SubscriptionModule,
-    AuditModule,
-    JobPostModule,
-    JobApplicationModule,
-    ConversationModule,
-    VerificationModule,
-    WebhooksModule,
-    StaffModule,
-  ],
+  imports:
+    process.env.NODE_ENV === 'test'
+      ? [...baseImports, TestOnlyModule]
+      : baseImports,
+  providers: [{ provide: APP_GUARD, useClass: EnvGatedThrottlerGuard }],
 })
 export class AppModule {}

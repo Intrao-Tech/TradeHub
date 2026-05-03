@@ -6,10 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import * as crypto from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { AuditService } from '../audit/audit.service';
+import { generateInitialPassword } from '../common/validators/generate-initial-password';
 import { CreateStaffDto } from './dto/create-staff.dto';
 
 const INVITE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
@@ -22,9 +22,9 @@ export class StaffService {
     private readonly audit: AuditService,
   ) {}
 
-  /** 16-char password (mixed case + digits) — used as initial password for fresh staff accounts. */
+  /** 16-char password meeting checkPasswordPolicy — used as initial password for fresh staff accounts. */
   private generateInitialPassword(): string {
-    return crypto.randomBytes(12).toString('base64url').slice(0, 16);
+    return generateInitialPassword();
   }
 
   /**

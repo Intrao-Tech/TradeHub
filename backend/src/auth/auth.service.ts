@@ -503,7 +503,7 @@ export class AuthService {
     return this.issueTokens(account);
   }
 
-  async refreshTokens(refreshToken: string) {
+  async refreshTokens(refreshToken: string | undefined) {
     const payload = await this.verifyRefreshToken(refreshToken);
 
     const stored = await this.prisma.refreshToken.findFirst({
@@ -981,10 +981,17 @@ export class AuthService {
     };
 
     const accessToken = this.jwt.sign(payload as any);
-    const refreshToken = this.jwt.sign(payload as any, {
-      secret: this.config.get<string>('JWT_REFRESH_SECRET'),
-      expiresIn: this.config.get('JWT_REFRESH_TTL', '7d'),
-    });
+    // jti makes each refresh JWT bytewise unique even when two issuances
+    // land in the same wall-clock second (JWT iat is second-precision,
+    // so without jti two same-second sign() calls produce identical
+    // tokens and collide on the unique constraint of refresh_token.token).
+    const refreshToken = this.jwt.sign(
+      { ...payload, jti: crypto.randomBytes(16).toString('hex') } as any,
+      {
+        secret: this.config.get<string>('JWT_REFRESH_SECRET'),
+        expiresIn: this.config.get('JWT_REFRESH_TTL', '7d'),
+      },
+    );
 
     await this.prisma.refreshToken.create({
       data: {
@@ -1008,7 +1015,13 @@ export class AuthService {
     };
   }
 
-  private async verifyRefreshToken(token: string) {
+  private async verifyRefreshToken(token: string | undefined) {
+    if (!token) {
+      throw new UnauthorizedException({
+        code: 'REFRESH_INVALID',
+        message: 'Session expired. Please sign in again.',
+      });
+    }
     try {
       return this.jwt.verify<{
         sub: string;
