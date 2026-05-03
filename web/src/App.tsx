@@ -27,7 +27,9 @@ const SettingsSecurityPage = lazy(() => import('./pages/SettingsSecurityPage'));
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const WorkerSearchPage = lazy(() => import('./pages/WorkerSearchPage'));
+const WorkerDetailPage = lazy(() => import('./pages/WorkerDetailPage'));
 const EmployerSearchPage = lazy(() => import('./pages/EmployerSearchPage'));
+const EmployerDetailPage = lazy(() => import('./pages/EmployerDetailPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const CollaborationsPage = lazy(() => import('./pages/CollaborationsPage'));
 const ReferralsPage = lazy(() => import('./pages/ReferralsPage'));
@@ -193,7 +195,9 @@ function MarketplaceRouter() {
           {/* Public */}
           <Route path="/jobs" element={<JobBoardPage />} />
           <Route path="/workers" element={<WorkerSearchPage />} />
+          <Route path="/workers/:id" element={<WorkerDetailPage />} />
           <Route path="/employers" element={<EmployerSearchPage />} />
+          <Route path="/employers/:id" element={<EmployerDetailPage />} />
           <Route path="/reviews" element={<ReviewsPage />} />
 
           {/* Private */}

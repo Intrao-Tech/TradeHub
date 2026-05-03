@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { SlidersHorizontal, Search, Building2 } from 'lucide-react';
 import { api } from '../api';
 import { EmployerCard, type EmployerCardData } from '@/components/EmployerCard';
@@ -28,6 +29,7 @@ type EmployerSearchResponse = {
 };
 
 export default function EmployerSearchPage() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -152,7 +154,13 @@ export default function EmployerSearchPage() {
               {results.data.length > 0 ? (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {results.data.map((emp) => (
-                    <EmployerCard key={String(emp.id)} employer={emp} />
+                    <EmployerCard
+                      key={String(emp.id)}
+                      employer={emp}
+                      onSelect={(picked) =>
+                        navigate(`/employers/${String(picked.id)}`)
+                      }
+                    />
                   ))}
                 </div>
               ) : (

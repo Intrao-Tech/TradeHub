@@ -449,11 +449,26 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">My profile</h1>
-        <p className="text-sm text-fg-muted">
-          Manage your account, portfolio, and verification documents.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">My profile</h1>
+          <p className="text-sm text-fg-muted">
+            Manage your account, portfolio, and verification documents.
+          </p>
+        </div>
+        {cp && (isWorker || isEmployer) ? (
+          <Button asChild variant="outline" size="sm">
+            <Link
+              to={
+                isWorker
+                  ? `/workers/${String(cp.id)}`
+                  : `/employers/${String(cp.id)}`
+              }
+            >
+              View public profile
+            </Link>
+          </Button>
+        ) : null}
       </div>
 
       {verificationState === 'PENDING_EMAIL_VERIFICATION' && account ? (

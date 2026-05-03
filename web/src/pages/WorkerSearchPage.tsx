@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { SlidersHorizontal, Search, Users } from 'lucide-react';
 import { api } from '../api';
 import { WorkerCard, type WorkerCardData } from '@/components/WorkerCard';
@@ -52,6 +53,7 @@ function appendQuery(
 }
 
 export default function WorkerSearchPage() {
+  const navigate = useNavigate();
   const [postcodeArea, setPostcodeArea] = useState('');
   const [specialisationId, setSpecialisationId] = useState('');
   const [isAvailable, setIsAvailable] = useState(false);
@@ -279,7 +281,13 @@ export default function WorkerSearchPage() {
               {results.data.length > 0 ? (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {results.data.map((w) => (
-                    <WorkerCard key={String(w.id)} worker={w} />
+                    <WorkerCard
+                      key={String(w.id)}
+                      worker={w}
+                      onSelect={(picked) =>
+                        navigate(`/workers/${String(picked.id)}`)
+                      }
+                    />
                   ))}
                 </div>
               ) : (
