@@ -11,6 +11,7 @@ import {
   type CompletenessAction,
 } from '../components/profile/CompletenessPanel';
 import { SpecialisationPicker } from '../components/profile/SpecialisationPicker';
+import { LanguagesEditor } from '../components/profile/LanguagesEditor';
 import {
   LONDON_BOROUGH_NAMES,
   POSTCODE_OUTWARD_REGEX,
@@ -84,6 +85,7 @@ export default function ProfilePage() {
   const [dayRateMax, setDayRateMax] = useState('');
   const [availableFrom, setAvailableFrom] = useState('');
   const [workerAvailable, setWorkerAvailable] = useState(true);
+  const [languages, setLanguages] = useState<string[]>([]);
 
   const [companyName, setCompanyName] = useState('');
   const [companyNumber, setCompanyNumber] = useState('');
@@ -159,6 +161,7 @@ export default function ProfilePage() {
           : '',
       );
       setWorkerAvailable(Boolean(wp.is_available));
+      setLanguages(Array.isArray(wp.languages) ? wp.languages : []);
     }
     const ep = cp.employer_profile;
     if (ep) {
@@ -220,6 +223,7 @@ export default function ProfilePage() {
       if (availableFrom.trim() !== '') {
         bodyObj.available_from = new Date(availableFrom).toISOString();
       }
+      bodyObj.languages = languages;
       await api('/worker-profiles/me', {
         method: 'PATCH',
         body: JSON.stringify(bodyObj),
@@ -546,6 +550,9 @@ export default function ProfilePage() {
                     links={cp.worker_profile?.worker_specialisations}
                     onChanged={refetch}
                   />
+                </div>
+                <div className="mt-6 border-t border-border-default pt-4">
+                  <LanguagesEditor value={languages} onChange={setLanguages} />
                 </div>
               </CardContent>
             </Card>

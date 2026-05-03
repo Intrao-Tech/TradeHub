@@ -10,6 +10,7 @@ import {
 import { api, getToken, parseApiError } from '../api';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
 import { EmptyState } from '../components/EmptyState';
+import { languageName } from '../lib/iso-639-1';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -56,6 +57,7 @@ type WorkerDetail = {
   is_available?: boolean;
   rating_avg?: string | number | null;
   rating_count?: number | null;
+  languages?: string[];
   client_profile?: ClientProfile | null;
   worker_specialisations?: Specialisation[];
   portfolio_items?: PortfolioItem[];
@@ -206,6 +208,20 @@ export default function WorkerDetailPage() {
                     {specs.map((s) => (
                       <Badge key={s} variant="secondary">
                         {s}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {worker.languages && worker.languages.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-wide text-fg-muted">
+                    Languages
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {worker.languages.map((code) => (
+                      <Badge key={code} variant="outline">
+                        {languageName(code)}
                       </Badge>
                     ))}
                   </div>

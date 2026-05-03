@@ -1,10 +1,15 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
   IsBoolean,
   IsInt,
   IsNumber,
   IsOptional,
+  IsString,
+  Matches,
   Max,
   Min,
 } from 'class-validator';
@@ -41,4 +46,16 @@ export class UpdateWorkerProfileDto {
   @IsOptional()
   @IsBoolean()
   is_available?: boolean;
+
+  @ApiPropertyOptional({
+    example: ['en', 'pl'],
+    description: 'ISO 639-1 codes (PROF-055)',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @Matches(/^[a-z]{2}$/, { each: true })
+  languages?: string[];
 }

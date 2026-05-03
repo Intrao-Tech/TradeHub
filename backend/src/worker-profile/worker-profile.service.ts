@@ -62,6 +62,7 @@ export class WorkerProfileService {
     if (dto.available_from !== undefined)
       data.available_from = dto.available_from;
     if (dto.is_available !== undefined) data.is_available = dto.is_available;
+    if (dto.languages !== undefined) data.languages = { set: dto.languages };
 
     try {
       return await this.prisma.workerProfile.update({
