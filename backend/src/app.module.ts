@@ -28,38 +28,48 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 import { StripeModule } from './stripe/stripe.module';
 import { MailModule } from './mail/mail.module';
 import { StaffModule } from './staff/staff.module';
+// Conditionally appended when NODE_ENV === 'test' to expose the test-only
+// mailbox HTTP route used by the Playwright suite (Decisions Log 2026-05-03).
+// The TestOnlyModule throws on mount in any other environment, so production
+// exposure risk is zero.
+import { TestOnlyModule } from './test-only/test-only.module';
+
+const baseImports = [
+  ConfigModule.forRoot({ isGlobal: true }),
+  ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
+  PrismaModule,
+  CommonModule,
+  StripeModule,
+  MailModule,
+  AuthModule,
+  AccountModule,
+  ClientProfileModule,
+  WorkerProfileModule,
+  EmployerProfileModule,
+  SpecialisationModule,
+  TagModule,
+  DocumentModule,
+  ReviewModule,
+  ReferralModule,
+  EscrowModule,
+  CollaborationModule,
+  PortfolioModule,
+  ModerationModule,
+  NotificationModule,
+  SubscriptionModule,
+  AuditModule,
+  JobPostModule,
+  JobApplicationModule,
+  ConversationModule,
+  VerificationModule,
+  WebhooksModule,
+  StaffModule,
+];
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
-    PrismaModule,
-    CommonModule,
-    StripeModule,
-    MailModule,
-    AuthModule,
-    AccountModule,
-    ClientProfileModule,
-    WorkerProfileModule,
-    EmployerProfileModule,
-    SpecialisationModule,
-    TagModule,
-    DocumentModule,
-    ReviewModule,
-    ReferralModule,
-    EscrowModule,
-    CollaborationModule,
-    PortfolioModule,
-    ModerationModule,
-    NotificationModule,
-    SubscriptionModule,
-    AuditModule,
-    JobPostModule,
-    JobApplicationModule,
-    ConversationModule,
-    VerificationModule,
-    WebhooksModule,
-    StaffModule,
-  ],
+  imports:
+    process.env.NODE_ENV === 'test'
+      ? [...baseImports, TestOnlyModule]
+      : baseImports,
 })
 export class AppModule {}
