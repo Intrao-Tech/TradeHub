@@ -33,7 +33,7 @@ Define one production-ready Profiles feature that gives every TradeHub role a re
 
 ## Expected Outcome
 
-A new user can sign up, fill out their profile to a "credible enough to refer" state in one sitting, share a public URL, and have a recognisable, verifiable presence on the platform. A staff moderator can review document submissions and move profiles up the verification ladder without touching the database. Two referring tradespeople can look at each other's profiles before a handshake and see the same trust signals. The spec must be implementable by a separate frontend track without colliding with the in-flight Auth feature (`tasks/product/auth-flow/`).
+A new user can sign up, fill out their profile to a "credible enough to refer" state in one sitting, share a public URL, and have a recognisable, verifiable presence on the platform. A staff moderator can review document submissions and move profiles up the verification ladder without touching the database. Two referring tradespeople can look at each other's profiles before a handshake and see the same trust signals. The spec must be implementable by a separate frontend track without colliding with the in-flight Auth feature (`tasks/done/auth-flow/`).
 
 ## Constraints
 
