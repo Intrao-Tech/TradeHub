@@ -38,15 +38,11 @@ export class JobPostService {
             ? new Prisma.Decimal(dto.day_rate_max)
             : null,
         fixed_price:
-          dto.fixed_price != null
-            ? new Prisma.Decimal(dto.fixed_price)
-            : null,
+          dto.fixed_price != null ? new Prisma.Decimal(dto.fixed_price) : null,
         duration_days: dto.duration_days ?? null,
-        start_date:
-          dto.start_date != null ? new Date(dto.start_date) : null,
+        start_date: dto.start_date != null ? new Date(dto.start_date) : null,
         is_urgent: dto.is_urgent ?? false,
-        expires_at:
-          dto.expires_at != null ? new Date(dto.expires_at) : null,
+        expires_at: dto.expires_at != null ? new Date(dto.expires_at) : null,
         specialisations: {
           create:
             dto.specialisation_ids?.map((id) => ({
@@ -213,9 +209,7 @@ export class JobPostService {
     };
   }
 
-  private buildUpdateData(
-    dto: UpdateJobPostDto,
-  ): Prisma.JobPostUpdateInput {
+  private buildUpdateData(dto: UpdateJobPostDto): Prisma.JobPostUpdateInput {
     const data: Prisma.JobPostUpdateInput = {};
 
     if (dto.title !== undefined) data.title = dto.title;
@@ -231,21 +225,15 @@ export class JobPostService {
     if (dto.pay_type !== undefined) data.pay_type = dto.pay_type;
     if (dto.day_rate_min !== undefined) {
       data.day_rate_min =
-        dto.day_rate_min != null
-          ? new Prisma.Decimal(dto.day_rate_min)
-          : null;
+        dto.day_rate_min != null ? new Prisma.Decimal(dto.day_rate_min) : null;
     }
     if (dto.day_rate_max !== undefined) {
       data.day_rate_max =
-        dto.day_rate_max != null
-          ? new Prisma.Decimal(dto.day_rate_max)
-          : null;
+        dto.day_rate_max != null ? new Prisma.Decimal(dto.day_rate_max) : null;
     }
     if (dto.fixed_price !== undefined) {
       data.fixed_price =
-        dto.fixed_price != null
-          ? new Prisma.Decimal(dto.fixed_price)
-          : null;
+        dto.fixed_price != null ? new Prisma.Decimal(dto.fixed_price) : null;
     }
     if (dto.duration_days !== undefined) {
       data.duration_days = dto.duration_days;

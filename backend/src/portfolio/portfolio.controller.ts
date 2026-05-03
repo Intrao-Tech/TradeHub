@@ -1,4 +1,6 @@
+import { randomUUID } from 'crypto';
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -9,13 +11,21 @@ import {
   Param,
   Patch,
   Post,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Express } from 'express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   CurrentUser,
@@ -32,8 +42,16 @@ import {
   UpdateExperienceDetailDto,
   UpdatePortfolioItemDto,
   UpdateProjectDetailDto,
+  UploadPortfolioMediaDto,
 } from './dto/portfolio.dto';
 import { PortfolioService } from './portfolio.service';
+
+const PORTFOLIO_MEDIA_MAX_BYTES = 10 * 1024 * 1024;
+const PORTFOLIO_MEDIA_ALLOWED_MIMES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+];
 
 function workerIdOrThrow(user: CurrentUserPayload): bigint {
   if (user.clientProfileId == null) {
@@ -92,7 +110,10 @@ export class PortfolioController {
     @CurrentUser() user: CurrentUserPayload,
     @Body() dto: CreateCertificationDto,
   ) {
-    return this.portfolioService.createCertification(workerIdOrThrow(user), dto);
+    return this.portfolioService.createCertification(
+      workerIdOrThrow(user),
+      dto,
+    );
   }
 
   @Patch(':id')
@@ -176,13 +197,71 @@ export class PortfolioController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('WORKER')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Add media to portfolio item' })
+  @ApiOperation({ summary: 'Add media to portfolio item (URL only)' })
   addMedia(
     @Param('id', ParseBigIntPipe) id: bigint,
     @CurrentUser() user: CurrentUserPayload,
     @Body() dto: AddPortfolioMediaDto,
   ) {
     return this.portfolioService.addMedia(id, workerIdOrThrow(user), dto);
+  }
+
+  @Post(':id/media/upload')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('WORKER')
+  @ApiBearerAuth()
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        caption: { type: 'string' },
+        sort_order: { type: 'integer' },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Upload a media file to a portfolio item (PROF-024)' })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: join(process.cwd(), 'uploads'),
+        filename: (_req, file, cb) => {
+          cb(null, `${randomUUID()}${extname(file.originalname)}`);
+        },
+      }),
+      limits: { fileSize: PORTFOLIO_MEDIA_MAX_BYTES },
+      fileFilter: (_req, file, cb) => {
+        if (!PORTFOLIO_MEDIA_ALLOWED_MIMES.includes(file.mimetype)) {
+          cb(
+            new BadRequestException({
+              code: 'INVALID_MIME',
+              message: 'Use a JPEG, PNG, or WebP image.',
+            }),
+            false,
+          );
+          return;
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  uploadMedia(
+    @Param('id', ParseBigIntPipe) id: bigint,
+    @CurrentUser() user: CurrentUserPayload,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body() dto: UploadPortfolioMediaDto,
+  ) {
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+    return this.portfolioService.uploadMedia(
+      id,
+      workerIdOrThrow(user),
+      file,
+      dto,
+    );
   }
 
   @Delete(':id')

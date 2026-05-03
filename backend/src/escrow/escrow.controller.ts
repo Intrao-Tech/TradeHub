@@ -7,13 +7,13 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../common/guards/roles.guard';
+import {
+  AccountStateGuard,
+  RequiresVerifiedEmail,
+} from '../common/guards/account-state.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ParseBigIntPipe } from '../common/pipes/parse-bigint.pipe';
@@ -26,8 +26,9 @@ export class EscrowController {
   constructor(private readonly escrowService: EscrowService) {}
 
   @Post('collaboration/:collaborationId')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, AccountStateGuard)
   @Roles('EMPLOYER')
+  @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create escrow for a collaboration (employer)' })
   create(
@@ -48,7 +49,9 @@ export class EscrowController {
   @Get('collaboration/:collaborationId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get escrow for a collaboration (participant or staff)' })
+  @ApiOperation({
+    summary: 'Get escrow for a collaboration (participant or staff)',
+  })
   getByCollaboration(
     @Param('collaborationId', ParseBigIntPipe) collaborationId: bigint,
     @CurrentUser() user: CurrentUserPayload,

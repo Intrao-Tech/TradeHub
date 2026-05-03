@@ -238,3 +238,17 @@ export class AddPortfolioMediaDto {
   @IsInt()
   sort_order?: number;
 }
+
+export class UploadPortfolioMediaDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  caption?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  sort_order?: number;
+}

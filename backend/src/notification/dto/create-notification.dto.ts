@@ -1,10 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsObject,
-  IsOptional,
-  IsString,
-  MaxLength,
-} from 'class-validator';
+import { IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 
 /** Internal payload for creating a notification (not exposed via HTTP). */
 export class CreateNotificationDto {

@@ -37,7 +37,9 @@ export class ClientProfileQueryDto {
   @MaxLength(30)
   verification_level?: string;
 
-  @ApiPropertyOptional({ description: 'Case-insensitive contains on display_name' })
+  @ApiPropertyOptional({
+    description: 'Case-insensitive contains on display_name',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(150)

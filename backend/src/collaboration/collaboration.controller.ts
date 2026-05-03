@@ -9,16 +9,16 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   CurrentUser,
   type CurrentUserPayload,
 } from '../common/decorators/current-user.decorator';
+import {
+  AccountStateGuard,
+  RequiresVerifiedEmail,
+} from '../common/guards/account-state.guard';
 import { ParseBigIntPipe } from '../common/pipes/parse-bigint.pipe';
 import { Roles, RolesGuard } from '../common/guards/roles.guard';
 import { CollaborationService } from './collaboration.service';
@@ -35,8 +35,9 @@ export class CollaborationController {
   constructor(private readonly collaborationService: CollaborationService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, AccountStateGuard)
   @Roles('WORKER', 'EMPLOYER')
+  @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a collaboration' })
   create(
@@ -47,10 +48,7 @@ export class CollaborationController {
       throw new BadRequestException('No client profile for this account');
     }
 
-    if (
-      dto.worker_id != null &&
-      dto.employer_id != null
-    ) {
+    if (dto.worker_id != null && dto.employer_id != null) {
       throw new BadRequestException(
         'Pass only worker_id (employer initiates) or only employer_id (worker initiates)',
       );

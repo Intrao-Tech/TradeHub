@@ -187,6 +187,77 @@ The product is *not* Checkatrade / MyBuilder / Bark (those are B2C). Comparators
 - Checkatrade vs MyBuilder vs Bark vs Rated People — https://localsearchnorth.uk/blog/checkatrade-vs-bark-vs-mybuilder
 - 2026 platform comparison — https://nearbytraders.co.uk/blog/checkatrade-vs-mybuilder-vs-nearbytraders
 
+## Surf-validated product alignment (2026-05-03)
+
+After the auth-contract reconciliation, I re-ran surf research against the **actual** product analogue stack to make sure the spec shapes the product the way the product doc describes it, not the way the (different) UK B2C marketplaces shape themselves. Headline findings and how they landed in the spec:
+
+### LinkedIn-for-trades is the right shape, not Upwork
+
+`docs/TradeHub_UK_Technical_Specification_v2.docx` §1.1 names LinkedIn as the analogue and §1.3 explicitly excludes B2C / bidding / job-board patterns. Surf surfaced two confirming voices:
+
+- TRS Resourcing on tradies on LinkedIn — endorsements from peers, photos/videos showcasing work, certifications first-class, mobile-optimised because tradespeople rarely use desktops.
+- UTRADIE ("digital passport for tradespeople") — qualifications, licences, job experience, mentors, shareable link. This is a tighter analogue for what TradeHub Phase 1 needs to be.
+
+→ Spec retains LinkedIn shape: profile is a credentials portfolio with marketplace add-ons (rates, availability) layered on top, not a transactional storefront. Endorsements are out of scope for MVP (deferred until Reviews ships).
+
+### UK B2B comparators (SubbieUK / Subcontractee) confirm role model
+
+SubbieUK ("verified contractors can create and register their company profile" → "only verified contractors can post jobs") and Subcontractee ("Verify Your Account & Upload Documents" → distinct Skilled Worker / Labourer / Multi Trade Engineer roles) match the product spec's three-role model (Company / Self-Employed Tradesperson / Labourer). Both are mobile-first apps; we are web-first MVP, but `web/CLAUDE.md` already mandates 375 px baseline + ≥ 48 px tap targets.
+
+→ Spec acceptance scenarios E2E-1 through E2E-7 require manual smoke at 375 px in addition to desktop.
+
+### UK Right to Work is a load-bearing legal field I had missed
+
+Product spec §3.1 lists "Right to work" as required and admin-verified. UK gov.uk defines two paths:
+
+- **Non-British/Irish citizens**: 9-character share code starting with `W`, validated by employer at `https://www.gov.uk/view-right-to-work` with the candidate's date of birth.
+- **British / Irish citizens**: original document check (passport / passport card / passport-plus-NI-letter), or via an Identity Service Provider (IDSP) using IDVT.
+- The check is now legally required for self-employed contractors too (recent regulatory change), which is exactly TradeHub's worker population.
+
+→ Added `PROF-052` (UI for both paths), `PROF-053` (backend `doc_type` extension + `Document.metadata` for share-code/dob), `PROF-054` (staff verification flow links out to gov.uk). RTW added to `PROF-036` worker-required completeness checklist.
+
+CIS verification (HMRC subcontractor verify by UTR + NI) is a separate financial check — relevant later when the referral commission flow goes on-platform, not part of MVP profiles.
+
+### Verification ladder UX patterns: Stripe / Onfido / Persona
+
+Stripe Identity uses a session lifecycle (`requires_input → processing → verified | requires_input` failure path). Onfido emphasises "explain both why and how at the right moments", "real-time feedback in the moment", and explicit "unhappy path" design. Persona advises tiered KYC and UX-first compliance.
+
+→ Tightened `PROF-033` to require: state per requirement (`Done` / `Pending review` / `Not started`), single primary CTA per card, time-to-complete microcopy ("Usually takes 90 seconds"), and an explicit document-rejection state with the staff-provided reason + "Re-upload" CTA. `PROF-034` quotes the product-spec ladder verbatim with no invented levels, capping visible state at Certified until Reviews ships.
+
+### CSCS Smart Check / Gas Safe Register / NICEIC
+
+The CSCS Smart Check API exists (registration number + surname → verified), Gas Safe Register has its own card lookup, NICEIC has an online certification system. None are in MVP scope, but the data model needs to accommodate future integration:
+
+- `CertificationDetail.cert_number` already exists.
+- Document `doc_type` enum needs the missing UK certification types (FIRAS, SMSTS, SSSTS, IPAF, PASMA, UKATA, First Aid, DBS) per product spec Appendix B — added to `BE-PROF-4`.
+- Specialisation taxonomy (Appendix A — 30 specialisations) needs a seed audit — `BE-PROF-5`.
+
+### Net effect on the spec
+
+Five new requirements (`PROF-052` … `PROF-055` plus the consolidated `BE-PROF-1` … `BE-PROF-8` backend prerequisites section), eight rewritten / tightened acceptance scenarios (E2E-1 … E2E-8), `PROF-033` rewritten to mirror Stripe / Onfido patterns, `PROF-034` quoting the product spec verbatim. Total spec growth ~15%. No redundant scope.
+
+## Auth contract handoff (2026-05-03)
+
+The Auth track (Artem) sealed `tasks/done/auth-flow/contract.md` on 2026-04-26 and has now landed it on `develop` (`71c88e9 Auth BE + FE. Spec updated`). Key facts that this Profiles spec consumes verbatim:
+
+- **Account state:** `Account.status` defaults to `PENDING_EMAIL_VERIFICATION`; new column `email_verified_at`. New tables `email_verification_token` and `password_reset_token`. Backfill: existing rows promoted to `ACTIVE` with `email_verified_at = created_at`.
+- **JWT payload extension:** `vs` (verification_state) added; `JwtStrategy` exposes `req.user.verification_state`. Frontend `account` summary shape: `{ id, email, is_worker, is_employer, is_staff, verification_state }`.
+- **Account-state guard exemptions:** `AccountController.getMe`, `ClientProfileController.updateMe`, `WorkerProfileController.updateMe`, `EmployerProfileController.updateMe`, `PortfolioController.*`, `DocumentController.upload`. → Profile editing is **not** gated on email verification, by design.
+- **Registration creates profile rows:** `/auth/register` atomically creates `account + client_profile + worker_profile|employer_profile`; backend builds `client_profile.display_name` from `first_name + surname` (worker) or `company_name` (employer). Single-role only.
+- **App routing split:** `web/src/App.tsx` is now `MarketplaceRouter` + `StaffRouter` based on `IS_STAFF_HOST` (`web/src/lib/host.ts`). New profile routes register on the marketplace side.
+- **Reusable components/helpers shipped by Auth (consume, don't duplicate):**
+  - `web/src/lib/auth-routing.ts` — `postAuthRedirect`, `isSafeNext`
+  - `web/src/lib/host.ts` — `IS_STAFF_HOST`, `STAFF_BASE_URL`
+  - `web/src/lib/password-policy.ts` — not consumed by Profiles
+  - `web/src/components/AuthBanner.tsx` — `EMAIL_NOT_VERIFIED`, `ACCOUNT_DEACTIVATED`, etc.
+  - `web/src/components/PasswordRules.tsx` / `PhoneInput.tsx` / `StaffManagementCard.tsx` — not consumed
+  - Updated `web/src/api.ts` — `ApiError` class + `parseApiError(err)` for structured error handling
+- **Pages owned by Auth (do not modify in this feature):** `LoginPage`, `RegisterPage`, `OAuthCallbackPage`, `InternalLoginPage`, `VerifyEmailPage`, `VerifyEmailConfirmPage`, `ForgotPasswordPage`, `ResetPasswordPage`, `SettingsSecurityPage`. Members tab in `AdminPage` is also Auth-owned.
+- **Pages co-touched (be careful):** `App.tsx` (router structure), `api.ts` (error helpers), `AdminPage.tsx` (Members tab is Auth's, Documents queue stays Profiles).
+- **Profile-side delta from contract:** `/profile` is the active-user post-login landing target (`postAuthRedirect` returns `/profile` for ACTIVE worker/employer). Profiles owns what renders there.
+
+The dependency direction is Profiles → Auth. Profiles does not block on additional Auth work; everything in the contract has shipped.
+
 ## Step-back fact-check (2026-05-02)
 
 After drafting the spec end-to-end, every load-bearing claim about the backend was re-verified against the code. Findings:
@@ -206,5 +277,5 @@ After drafting the spec end-to-end, every load-bearing claim about the backend w
 - Product spec — `docs/TradeHub_UK_Technical_Specification_v2.docx`
 - Frontend design rules — `web/CLAUDE.md`
 - Backend data model — `backend/prisma/schema.prisma`
-- Adjacent feature (parallel track) — `tasks/product/auth-flow/`
+- Adjacent feature (parallel track) — `tasks/done/auth-flow/`
 - Inventory of in-progress / non-prod-ready surfaces — `tasks/in-progress/research.md` §2 (Profiles)

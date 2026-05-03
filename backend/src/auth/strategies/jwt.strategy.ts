@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { AccountStatus } from '../../common/decorators/current-user.decorator';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
@@ -16,7 +17,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
   }
 
-  async validate(payload: { sub: string; email: string }) {
+  async validate(payload: { sub: string; email: string; vs?: AccountStatus }) {
     const account = await this.prisma.account.findUnique({
       where: { id: BigInt(payload.sub) },
       include: {
@@ -30,9 +31,16 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       },
     });
 
-    if (!account || account.status !== 'ACTIVE')
-      throw new UnauthorizedException();
+    if (!account) throw new UnauthorizedException();
 
+    // DEACTIVATED accounts cannot use any token, even a valid one.
+    if (account.status === 'DEACTIVATED') {
+      throw new UnauthorizedException('Account deactivated');
+    }
+
+    // PENDING_EMAIL_VERIFICATION accounts CAN authenticate (so they can hit
+    // /auth/verify-email/send and resume the flow), but trust-sensitive routes
+    // are blocked downstream by AccountStateGuard.
     return {
       accountId: account.id,
       email: account.email,
@@ -41,6 +49,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       isEmployer: !!account.client_profile?.employer_profile,
       isStaff: !!account.staff_member,
       staffRole: account.staff_member?.staff_role ?? null,
+      verificationState: account.status as AccountStatus,
     };
   }
 }

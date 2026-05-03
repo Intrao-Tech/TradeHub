@@ -9,16 +9,16 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   CurrentUser,
   type CurrentUserPayload,
 } from '../common/decorators/current-user.decorator';
+import {
+  AccountStateGuard,
+  RequiresVerifiedEmail,
+} from '../common/guards/account-state.guard';
 import { ParseBigIntPipe } from '../common/pipes/parse-bigint.pipe';
 import { Roles, RolesGuard } from '../common/guards/roles.guard';
 import { ApplicationQueryDto } from './dto/application-query.dto';
@@ -30,13 +30,12 @@ import { JobApplicationService } from './job-application.service';
 @ApiTags('Job Applications')
 @Controller('job-applications')
 export class JobApplicationController {
-  constructor(
-    private readonly jobApplicationService: JobApplicationService,
-  ) {}
+  constructor(private readonly jobApplicationService: JobApplicationService) {}
 
   @Post('jobs/:jobPostId/apply')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, AccountStateGuard)
   @Roles('WORKER')
+  @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Apply to a job post as a worker' })
   apply(
@@ -55,8 +54,9 @@ export class JobApplicationController {
   }
 
   @Post('jobs/:jobPostId/invite')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, AccountStateGuard)
   @Roles('EMPLOYER')
+  @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Invite a worker to a job post' })
   invite(
@@ -132,8 +132,9 @@ export class JobApplicationController {
   }
 
   @Post(':id/to-collaboration')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, AccountStateGuard)
   @Roles('EMPLOYER')
+  @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Convert an accepted application into a collaboration',
@@ -145,9 +146,6 @@ export class JobApplicationController {
     if (user.clientProfileId == null) {
       throw new BadRequestException('No client profile for this account');
     }
-    return this.jobApplicationService.toCollaboration(
-      id,
-      user.clientProfileId,
-    );
+    return this.jobApplicationService.toCollaboration(id, user.clientProfileId);
   }
 }

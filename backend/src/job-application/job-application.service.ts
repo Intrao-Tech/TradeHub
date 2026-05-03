@@ -32,7 +32,9 @@ export class JobApplicationService {
     });
     if (!jobPost) throw new NotFoundException('Job post not found');
     if (jobPost.status !== 'OPEN') {
-      throw new BadRequestException('This job post is not open for applications');
+      throw new BadRequestException(
+        'This job post is not open for applications',
+      );
     }
 
     const existing = await this.prisma.jobApplication.findUnique({
@@ -245,7 +247,9 @@ export class JobApplicationService {
     if (!application) throw new NotFoundException('Application not found');
 
     if (application.job_post.employer_id !== userId) {
-      throw new ForbiddenException('Only the employer can create a collaboration');
+      throw new ForbiddenException(
+        'Only the employer can create a collaboration',
+      );
     }
     if (application.status !== 'ACCEPTED') {
       throw new BadRequestException(

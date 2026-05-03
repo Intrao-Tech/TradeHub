@@ -24,8 +24,9 @@ const conversationWithParticipantsAndLastMessage =
     },
   });
 
-type ConversationWithParticipantsAndLastMessage =
-  Prisma.ConversationGetPayload<typeof conversationWithParticipantsAndLastMessage>;
+type ConversationWithParticipantsAndLastMessage = Prisma.ConversationGetPayload<
+  typeof conversationWithParticipantsAndLastMessage
+>;
 
 @Injectable()
 export class ConversationService {
@@ -59,10 +60,7 @@ export class ConversationService {
     return row?.id ?? null;
   }
 
-  private async assertParticipant(
-    conversationId: bigint,
-    accountId: bigint,
-  ) {
+  private async assertParticipant(conversationId: bigint, accountId: bigint) {
     const p = await this.prisma.conversationParticipant.findUnique({
       where: {
         conversation_id_account_id: {
@@ -97,7 +95,9 @@ export class ConversationService {
   async startConversation(senderId: bigint, dto: StartConversationDto) {
     const recipientId = BigInt(dto.recipient_id);
     if (recipientId === senderId) {
-      throw new BadRequestException('Cannot start a conversation with yourself');
+      throw new BadRequestException(
+        'Cannot start a conversation with yourself',
+      );
     }
 
     const recipient = await this.prisma.account.findUnique({
@@ -137,30 +137,32 @@ export class ConversationService {
       return this.loadConversationPayload(existingId);
     }
 
-    const { conv: created, msg } = await this.prisma.$transaction(async (tx) => {
-      const conv = await tx.conversation.create({ data: {} });
-      await tx.conversationParticipant.createMany({
-        data: [
-          { conversation_id: conv.id, account_id: senderId },
-          { conversation_id: conv.id, account_id: recipientId },
-        ],
-      });
-      const m = await tx.message.create({
-        data: {
-          conversation_id: conv.id,
-          sender_id: senderId,
-          content: dto.message,
-          message_type: messageType,
-          metadata,
-        },
-      });
-      const updated = await tx.conversation.update({
-        where: { id: conv.id },
-        data: { last_message_at: now },
-        ...conversationWithParticipantsAndLastMessage,
-      });
-      return { conv: updated, msg: m };
-    });
+    const { conv: created, msg } = await this.prisma.$transaction(
+      async (tx) => {
+        const conv = await tx.conversation.create({ data: {} });
+        await tx.conversationParticipant.createMany({
+          data: [
+            { conversation_id: conv.id, account_id: senderId },
+            { conversation_id: conv.id, account_id: recipientId },
+          ],
+        });
+        const m = await tx.message.create({
+          data: {
+            conversation_id: conv.id,
+            sender_id: senderId,
+            content: dto.message,
+            message_type: messageType,
+            metadata,
+          },
+        });
+        const updated = await tx.conversation.update({
+          where: { id: conv.id },
+          data: { last_message_at: now },
+          ...conversationWithParticipantsAndLastMessage,
+        });
+        return { conv: updated, msg: m };
+      },
+    );
 
     this.chatGateway.joinConversationRoom(senderId, created.id);
     this.chatGateway.joinConversationRoom(recipientId, created.id);
@@ -176,9 +178,7 @@ export class ConversationService {
     return this.prisma.message.count({
       where: {
         conversation_id: conversationId,
-        ...(lastReadAt != null
-          ? { created_at: { gt: lastReadAt } }
-          : {}),
+        ...(lastReadAt != null ? { created_at: { gt: lastReadAt } } : {}),
       },
     });
   }
@@ -219,10 +219,7 @@ export class ConversationService {
 
     const unreadCounts = await Promise.all(
       rows.map((row) =>
-        this.unreadCountForParticipant(
-          row.conversation_id,
-          row.last_read_at,
-        ),
+        this.unreadCountForParticipant(row.conversation_id, row.last_read_at),
       ),
     );
 

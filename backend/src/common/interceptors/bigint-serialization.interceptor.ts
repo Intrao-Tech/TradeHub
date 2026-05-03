@@ -23,7 +23,10 @@ function convertBigInts(obj: unknown): unknown {
 
 @Injectable()
 export class BigIntSerializationInterceptor implements NestInterceptor {
-  intercept(_context: ExecutionContext, next: CallHandler): Observable<unknown> {
+  intercept(
+    _context: ExecutionContext,
+    next: CallHandler,
+  ): Observable<unknown> {
     return next.handle().pipe(map(convertBigInts));
   }
 }

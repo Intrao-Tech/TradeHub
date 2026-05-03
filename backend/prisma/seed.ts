@@ -68,6 +68,7 @@ async function main() {
       phone: '+447000000001',
       phone_verified: true,
       status: 'ACTIVE',
+      email_verified_at: new Date(),
       staff_member: {
         create: { display_name: 'Platform Admin', staff_role: 'ADMIN' },
       },
@@ -75,23 +76,7 @@ async function main() {
   });
   console.log(`  Admin: admin@tradehub.co.uk (id=${adminAccount.id})`);
 
-  // ── Moderator Account ────────────────────────────────────────
-  const modAccount = await prisma.account.upsert({
-    where: { email: 'moderator@tradehub.co.uk' },
-    update: {},
-    create: {
-      email: 'moderator@tradehub.co.uk',
-      password_hash: hash,
-      phone: '+447000000002',
-      phone_verified: true,
-      status: 'ACTIVE',
-      staff_member: {
-        create: { display_name: 'Jane Moderator', staff_role: 'MODERATOR' },
-      },
-    },
-  });
-  console.log(`  Moderator: moderator@tradehub.co.uk (id=${modAccount.id})`);
-
+  // ── Moderator/staff: admin will create via UI (POST /staff). Seed leaves only the admin.
   // ── Worker Accounts ──────────────────────────────────────────
   const workers = [
     { email: 'mike.builder@example.com', name: 'Mike Thompson', city: 'London', postcode: 'SW1', specIdx: [0, 7], yearsExp: 12, rateMin: 200, rateMax: 350 },
@@ -112,6 +97,7 @@ async function main() {
         email: w.email,
         password_hash: hash,
         status: 'ACTIVE',
+        email_verified_at: new Date(),
         client_profile: {
           create: {
             display_name: w.name,
@@ -170,6 +156,7 @@ async function main() {
         email: e.email,
         password_hash: hash,
         status: 'ACTIVE',
+        email_verified_at: new Date(),
         client_profile: {
           create: {
             display_name: e.name,
@@ -778,53 +765,13 @@ async function main() {
     data: { last_read_at: c2t2 },
   });
 
-  const conv3 = await prisma.conversation.create({ data: {} });
-  await prisma.conversationParticipant.createMany({
-    data: [
-      { conversation_id: conv3.id, account_id: workerAccounts[0].id },
-      { conversation_id: conv3.id, account_id: modAccount.id },
-    ],
-  });
-  const c3t1 = new Date('2026-04-10T09:00:00.000Z');
-  const c3t2 = new Date('2026-04-10T09:02:00.000Z');
-  await prisma.message.create({
-    data: {
-      conversation_id: conv3.id,
-      sender_id: workerAccounts[0].id,
-      content: 'Hi, I have a question about the verification process',
-      message_type: 'TEXT',
-      created_at: c3t1,
-    },
-  });
-  await prisma.message.create({
-    data: {
-      conversation_id: conv3.id,
-      sender_id: modAccount.id,
-      content: 'Of course! What would you like to know?',
-      message_type: 'TEXT',
-      created_at: c3t2,
-    },
-  });
-  await prisma.conversation.update({
-    where: { id: conv3.id },
-    data: { last_message_at: c3t2 },
-  });
-  await prisma.conversationParticipant.update({
-    where: {
-      conversation_id_account_id: {
-        conversation_id: conv3.id,
-        account_id: modAccount.id,
-      },
-    },
-    data: { last_read_at: c3t2 },
-  });
-  console.log('  3 conversations with messages');
+  // (Removed seeded conversation with moderator — admin will create staff via UI)
+  console.log('  2 conversations with messages');
 
   console.log('\nSeed completed successfully!');
   console.log('──────────────────────────────────────────');
   console.log('Test credentials (all accounts): Password123!');
-  console.log('Admin:     admin@tradehub.co.uk');
-  console.log('Moderator: moderator@tradehub.co.uk');
+  console.log('Admin:     admin@tradehub.co.uk  (only admin; create staff via UI)');
   console.log('Workers:   mike.builder@example.com, sarah.sparks@example.com,');
   console.log('           dave.pipes@example.com, tom.wood@example.com, emma.tiles@example.com');
   console.log('Employers: james@acmebuild.co.uk, lisa@homeworks.co.uk, rob@quickfix.co.uk');

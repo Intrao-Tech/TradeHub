@@ -35,19 +35,27 @@ export class CollaborationService {
 
     if (initiatorRole === 'WORKER') {
       if (dto.employer_id == null) {
-        throw new BadRequestException('employer_id is required when worker initiates');
+        throw new BadRequestException(
+          'employer_id is required when worker initiates',
+        );
       }
       if (dto.worker_id != null) {
-        throw new BadRequestException('Do not pass worker_id when worker initiates');
+        throw new BadRequestException(
+          'Do not pass worker_id when worker initiates',
+        );
       }
       worker_id = initiatorId;
       employer_id = BigInt(dto.employer_id);
     } else {
       if (dto.worker_id == null) {
-        throw new BadRequestException('worker_id is required when employer initiates');
+        throw new BadRequestException(
+          'worker_id is required when employer initiates',
+        );
       }
       if (dto.employer_id != null) {
-        throw new BadRequestException('Do not pass employer_id when employer initiates');
+        throw new BadRequestException(
+          'Do not pass employer_id when employer initiates',
+        );
       }
       employer_id = initiatorId;
       worker_id = BigInt(dto.worker_id);
@@ -62,8 +70,7 @@ export class CollaborationService {
         worker_id,
         employer_id,
         initiated_by,
-        referral_id:
-          dto.referral_id != null ? BigInt(dto.referral_id) : null,
+        referral_id: dto.referral_id != null ? BigInt(dto.referral_id) : null,
         project_type: dto.project_type ?? null,
         site_postcode: dto.site_postcode ?? null,
         agreed_amount:
@@ -114,11 +121,7 @@ export class CollaborationService {
     return { items, total, page, limit };
   }
 
-  async updateStatus(
-    id: bigint,
-    nextStatus: string,
-    userId: bigint,
-  ) {
+  async updateStatus(id: bigint, nextStatus: string, userId: bigint) {
     const collab = await this.prisma.collaboration.findUnique({
       where: { id },
     });
@@ -174,11 +177,7 @@ export class CollaborationService {
     return this.getById(id);
   }
 
-  async flag(
-    id: bigint,
-    reason: string,
-    user: CurrentUserPayload,
-  ) {
+  async flag(id: bigint, reason: string, user: CurrentUserPayload) {
     const collab = await this.prisma.collaboration.findUnique({
       where: { id },
     });
@@ -186,8 +185,7 @@ export class CollaborationService {
 
     const cp = user.clientProfileId;
     const isParty =
-      cp != null &&
-      (cp === collab.worker_id || cp === collab.employer_id);
+      cp != null && (cp === collab.worker_id || cp === collab.employer_id);
     const isStaff = user.isStaff;
 
     if (!isParty && !isStaff) {

@@ -8,11 +8,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../common/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -25,7 +21,9 @@ import { UpdateEmployerProfileDto } from './dto/update-employer-profile.dto';
 @ApiTags('Employer profiles')
 @Controller('employer-profiles')
 export class EmployerProfileController {
-  constructor(private readonly employerProfileService: EmployerProfileService) {}
+  constructor(
+    private readonly employerProfileService: EmployerProfileService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Search employer profiles' })
