@@ -23,7 +23,11 @@ export class EscrowService {
     @Inject(STRIPE_CLIENT) private readonly stripe: Stripe | null,
   ) {}
 
-  async create(collaborationId: bigint, employerClientProfileId: bigint, dto: CreateEscrowDto) {
+  async create(
+    collaborationId: bigint,
+    employerClientProfileId: bigint,
+    dto: CreateEscrowDto,
+  ) {
     const collaboration = await this.prisma.collaboration.findUnique({
       where: { id: collaborationId },
     });
@@ -44,7 +48,9 @@ export class EscrowService {
       where: { collaboration_id: collaborationId },
     });
     if (existing) {
-      throw new ConflictException('Escrow already exists for this collaboration');
+      throw new ConflictException(
+        'Escrow already exists for this collaboration',
+      );
     }
 
     const job = new Prisma.Decimal(dto.job_amount);
@@ -67,10 +73,7 @@ export class EscrowService {
     });
   }
 
-  async getByCollaboration(
-    collaborationId: bigint,
-    user: CurrentUserPayload,
-  ) {
+  async getByCollaboration(collaborationId: bigint, user: CurrentUserPayload) {
     const collaboration = await this.prisma.collaboration.findUnique({
       where: { id: collaborationId },
     });
@@ -111,12 +114,15 @@ export class EscrowService {
       throw new ForbiddenException('Only the employer can initiate deposit');
     }
     if (escrow.status === 'HELD' || escrow.status === 'RELEASED') {
-      throw new ConflictException(`Escrow already ${escrow.status.toLowerCase()}`);
+      throw new ConflictException(
+        `Escrow already ${escrow.status.toLowerCase()}`,
+      );
     }
 
     const amount = new Prisma.Decimal(escrow.job_amount).toNumber();
     const amountPence = Math.round(amount * 100);
-    const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
 
     const session = await this.stripe.checkout.sessions.create({
       mode: 'payment',
@@ -155,7 +161,7 @@ export class EscrowService {
         stripe_payment_intent_id:
           typeof session.payment_intent === 'string'
             ? session.payment_intent
-            : session.payment_intent?.id ?? null,
+            : (session.payment_intent?.id ?? null),
       },
     });
 

@@ -24,10 +24,7 @@ import {
   ConfirmVerifyEmailDto,
   SendVerifyEmailDto,
 } from './dto/verify-email.dto';
-import {
-  ForgotPasswordDto,
-  ResetPasswordDto,
-} from './dto/password-reset.dto';
+import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
@@ -46,7 +43,10 @@ export class AuthController {
 
   @Post('register')
   @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } }) // 5/hour per IP
-  @ApiOperation({ summary: 'Register with email/password (returns pending_verification, no tokens)' })
+  @ApiOperation({
+    summary:
+      'Register with email/password (returns pending_verification, no tokens)',
+  })
   register(@Body() dto: RegisterDto, @Ip() ip: string) {
     return this.authService.register(dto, ip);
   }
@@ -84,7 +84,9 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Logout — invalidates ALL refresh tokens for this account' })
+  @ApiOperation({
+    summary: 'Logout — invalidates ALL refresh tokens for this account',
+  })
   logoutAll(@CurrentUser() user: CurrentUserPayload, @Ip() ip: string) {
     return this.authService.logoutAll(user.accountId, ip);
   }
@@ -94,7 +96,10 @@ export class AuthController {
   @Post('verify-email/send')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } }) // 5/hour per IP
-  @ApiOperation({ summary: 'Resend the email verification link (always 200, anti-enumeration)' })
+  @ApiOperation({
+    summary:
+      'Resend the email verification link (always 200, anti-enumeration)',
+  })
   sendVerifyEmail(@Body() dto: SendVerifyEmailDto, @Ip() ip: string) {
     return this.authService.sendVerificationEmail(dto.email, ip);
   }
@@ -102,7 +107,9 @@ export class AuthController {
   @Post('verify-email/confirm')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 30, ttl: 60 * 60 * 1000 } })
-  @ApiOperation({ summary: 'Confirm email with the token from the verification link' })
+  @ApiOperation({
+    summary: 'Confirm email with the token from the verification link',
+  })
   confirmVerifyEmail(@Body() dto: ConfirmVerifyEmailDto, @Ip() ip: string) {
     return this.authService.confirmVerificationEmail(dto.token, ip);
   }
@@ -112,7 +119,9 @@ export class AuthController {
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } }) // 5/hour per IP
-  @ApiOperation({ summary: 'Send password reset email (always 200, anti-enumeration)' })
+  @ApiOperation({
+    summary: 'Send password reset email (always 200, anti-enumeration)',
+  })
   forgotPassword(@Body() dto: ForgotPasswordDto, @Ip() ip: string) {
     return this.authService.forgotPassword(dto.email, ip);
   }
@@ -130,7 +139,9 @@ export class AuthController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
-  @ApiOperation({ summary: 'Change password while signed in (requires current password)' })
+  @ApiOperation({
+    summary: 'Change password while signed in (requires current password)',
+  })
   changePassword(
     @CurrentUser() user: CurrentUserPayload,
     @Body() dto: ChangePasswordDto,
@@ -149,7 +160,9 @@ export class AuthController {
   // ── Providers ────────────────────────────────────────────────
 
   @Get('providers')
-  @ApiOperation({ summary: 'Which auth providers are configured (e.g. Google)' })
+  @ApiOperation({
+    summary: 'Which auth providers are configured (e.g. Google)',
+  })
   getProviders() {
     return this.authService.getProviders();
   }
@@ -175,15 +188,20 @@ export class AuthController {
    * The SPA cannot sign state itself (it would need JWT_SECRET).
    */
   @Get('google/start')
-  @ApiOperation({ summary: 'Build the Google OAuth URL with a signed state (intent + role + return_to)' })
+  @ApiOperation({
+    summary:
+      'Build the Google OAuth URL with a signed state (intent + role + return_to)',
+  })
   buildGoogleStart(
     @Query('role') role?: string,
     @Query('return_to') returnTo?: string,
     @Query('intent') intent?: string,
   ): { redirect_url: string } {
-    const safeRole: 'WORKER' | 'EMPLOYER' = role === 'EMPLOYER' ? 'EMPLOYER' : 'WORKER';
+    const safeRole: 'WORKER' | 'EMPLOYER' =
+      role === 'EMPLOYER' ? 'EMPLOYER' : 'WORKER';
     const safeReturnTo = this.isSafeNext(returnTo) ? returnTo : '/profile';
-    const safeIntent: 'login' | 'register' = intent === 'register' ? 'register' : 'login';
+    const safeIntent: 'login' | 'register' =
+      intent === 'register' ? 'register' : 'login';
     const state = this.buildSignedState({
       role: safeRole,
       return_to: safeReturnTo,
@@ -212,9 +230,13 @@ export class AuthController {
 
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
-  @ApiOperation({ summary: 'Google OAuth callback — redirects to frontend with tokens or error' })
+  @ApiOperation({
+    summary:
+      'Google OAuth callback — redirects to frontend with tokens or error',
+  })
   async googleCallback(
-    @Req() req: {
+    @Req()
+    req: {
       user: {
         googleId: string;
         email: string;
@@ -226,7 +248,8 @@ export class AuthController {
     @Res() res: Response,
     @Ip() ip: string,
   ) {
-    const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
     try {
       let role: 'WORKER' | 'EMPLOYER' = 'WORKER';
       let returnTo = '/profile';
@@ -245,14 +268,17 @@ export class AuthController {
         // Bad signature → fallthrough to defaults; security: don't honour state
       }
 
-      const tokens = await this.authService.handleGoogleLogin({
-        googleId: req.user.googleId,
-        email: req.user.email,
-        displayName: req.user.displayName,
-        emailVerified: req.user.emailVerified === true,
-        role,
-        intent,
-      }, ip);
+      const tokens = await this.authService.handleGoogleLogin(
+        {
+          googleId: req.user.googleId,
+          email: req.user.email,
+          displayName: req.user.displayName,
+          emailVerified: req.user.emailVerified === true,
+          role,
+          intent,
+        },
+        ip,
+      );
 
       const params = new URLSearchParams({
         access_token: tokens.access_token,
@@ -267,7 +293,7 @@ export class AuthController {
     } catch (err) {
       // Surface explicit error codes so the SPA can render the right screen
       if (err && typeof err === 'object' && 'response' in err) {
-        const r = (err as any).response;
+        const r = err.response;
         const intent = (() => {
           try {
             const raw = req.query?.state;
@@ -285,14 +311,18 @@ export class AuthController {
             email: r.email,
             intent,
           });
-          return res.redirect(`${frontendUrl}/oauth/callback?${params.toString()}`);
+          return res.redirect(
+            `${frontendUrl}/oauth/callback?${params.toString()}`,
+          );
         }
         if (r?.code === 'NO_GOOGLE_ACCOUNT') {
           const params = new URLSearchParams({
             error: 'NO_GOOGLE_ACCOUNT',
             intent,
           });
-          return res.redirect(`${frontendUrl}/oauth/callback?${params.toString()}`);
+          return res.redirect(
+            `${frontendUrl}/oauth/callback?${params.toString()}`,
+          );
         }
         if (r?.code === 'ACCOUNT_DEACTIVATED') {
           return res.redirect(`${frontendUrl}/login?reason=deactivated`);
@@ -310,7 +340,9 @@ export class AuthController {
     return_to: string;
     intent: 'login' | 'register';
   }): string {
-    const body = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+    const body = Buffer.from(JSON.stringify(payload), 'utf8').toString(
+      'base64url',
+    );
     const secret = this.config.get<string>('JWT_SECRET') || '';
     const sig = crypto.createHmac('sha256', secret).update(body).digest('hex');
     return `${body}.${sig}`;
@@ -338,6 +370,8 @@ export class AuthController {
   }
 
   private isSafeNext(path: string | undefined): path is string {
-    return typeof path === 'string' && path.startsWith('/') && !path.startsWith('//');
+    return (
+      typeof path === 'string' && path.startsWith('/') && !path.startsWith('//')
+    );
   }
 }

@@ -18,11 +18,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     });
   }
 
-  validate(
-    _accessToken: string,
-    _refreshToken: string,
-    profile: Profile,
-  ) {
+  validate(_accessToken: string, _refreshToken: string, profile: Profile) {
     const email = profile.emails?.[0];
     return {
       googleId: profile.id,

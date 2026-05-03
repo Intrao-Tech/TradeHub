@@ -30,9 +30,7 @@ export class SpecialisationService {
     const baseSlug = slugify(dto.name);
     let slug = baseSlug;
     let n = 0;
-    while (
-      await this.prisma.specialisation.findUnique({ where: { slug } })
-    ) {
+    while (await this.prisma.specialisation.findUnique({ where: { slug } })) {
       n += 1;
       slug = `${baseSlug}-${n}`;
     }

@@ -19,7 +19,8 @@ export class MessageQueryDto {
   limit?: number;
 
   @ApiPropertyOptional({
-    description: 'Return only messages strictly older than this ISO 8601 timestamp (cursor)',
+    description:
+      'Return only messages strictly older than this ISO 8601 timestamp (cursor)',
   })
   @IsOptional()
   @IsISO8601()

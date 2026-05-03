@@ -9,11 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   CurrentUser,
@@ -34,9 +30,7 @@ import { JobApplicationService } from './job-application.service';
 @ApiTags('Job Applications')
 @Controller('job-applications')
 export class JobApplicationController {
-  constructor(
-    private readonly jobApplicationService: JobApplicationService,
-  ) {}
+  constructor(private readonly jobApplicationService: JobApplicationService) {}
 
   @Post('jobs/:jobPostId/apply')
   @UseGuards(JwtAuthGuard, RolesGuard, AccountStateGuard)
@@ -152,9 +146,6 @@ export class JobApplicationController {
     if (user.clientProfileId == null) {
       throw new BadRequestException('No client profile for this account');
     }
-    return this.jobApplicationService.toCollaboration(
-      id,
-      user.clientProfileId,
-    );
+    return this.jobApplicationService.toCollaboration(id, user.clientProfileId);
   }
 }

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { SlidersHorizontal, Search, Users } from 'lucide-react';
 import { api } from '../api';
 import { WorkerCard, type WorkerCardData } from '@/components/WorkerCard';
@@ -52,6 +53,7 @@ function appendQuery(
 }
 
 export default function WorkerSearchPage() {
+  const navigate = useNavigate();
   const [postcodeArea, setPostcodeArea] = useState('');
   const [specialisationId, setSpecialisationId] = useState('');
   const [isAvailable, setIsAvailable] = useState(false);
@@ -256,15 +258,22 @@ export default function WorkerSearchPage() {
         </aside>
 
         <section className="space-y-4">
-          {specialisations ? (
+          {specialisations && specialisations.length > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>Specialisations (raw)</CardTitle>
+                <CardTitle>Specialisations</CardTitle>
               </CardHeader>
               <CardContent>
-                <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
-                  {JSON.stringify(specialisations, null, 2)}
-                </pre>
+                <ul className="flex flex-wrap gap-1 text-xs text-fg-muted">
+                  {specialisations.map((s) => (
+                    <li
+                      key={String(s.id)}
+                      className="rounded-md border border-border-default bg-raised px-2 py-1"
+                    >
+                      {s.name ?? s.slug ?? `#${String(s.id)}`}
+                    </li>
+                  ))}
+                </ul>
               </CardContent>
             </Card>
           ) : null}
@@ -279,7 +288,13 @@ export default function WorkerSearchPage() {
               {results.data.length > 0 ? (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {results.data.map((w) => (
-                    <WorkerCard key={String(w.id)} worker={w} />
+                    <WorkerCard
+                      key={String(w.id)}
+                      worker={w}
+                      onSelect={(picked) =>
+                        navigate(`/workers/${String(picked.id)}`)
+                      }
+                    />
                   ))}
                 </div>
               ) : (
@@ -289,14 +304,6 @@ export default function WorkerSearchPage() {
                   description="Try broadening your filters."
                 />
               )}
-              <details className="rounded-md border border-border-default bg-raised">
-                <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-fg-muted">
-                  Raw response
-                </summary>
-                <pre className="rounded-b-md bg-subtle text-fg p-3 text-xs overflow-auto">
-                  {JSON.stringify(results, null, 2)}
-                </pre>
-              </details>
             </>
           ) : (
             <EmptyState

@@ -238,7 +238,7 @@ Five new requirements (`PROF-052` … `PROF-055` plus the consolidated `BE-PROF-
 
 ## Auth contract handoff (2026-05-03)
 
-The Auth track (Artem) sealed `tasks/in-progress/auth-flow/contract.md` on 2026-04-26 and has now landed it on `develop` (`71c88e9 Auth BE + FE. Spec updated`). Key facts that this Profiles spec consumes verbatim:
+The Auth track (Artem) sealed `tasks/done/auth-flow/contract.md` on 2026-04-26 and has now landed it on `develop` (`71c88e9 Auth BE + FE. Spec updated`). Key facts that this Profiles spec consumes verbatim:
 
 - **Account state:** `Account.status` defaults to `PENDING_EMAIL_VERIFICATION`; new column `email_verified_at`. New tables `email_verification_token` and `password_reset_token`. Backfill: existing rows promoted to `ACTIVE` with `email_verified_at = created_at`.
 - **JWT payload extension:** `vs` (verification_state) added; `JwtStrategy` exposes `req.user.verification_state`. Frontend `account` summary shape: `{ id, email, is_worker, is_employer, is_staff, verification_state }`.
@@ -277,5 +277,5 @@ After drafting the spec end-to-end, every load-bearing claim about the backend w
 - Product spec — `docs/TradeHub_UK_Technical_Specification_v2.docx`
 - Frontend design rules — `web/CLAUDE.md`
 - Backend data model — `backend/prisma/schema.prisma`
-- Adjacent feature (parallel track) — `tasks/product/auth-flow/`
+- Adjacent feature (parallel track) — `tasks/done/auth-flow/`
 - Inventory of in-progress / non-prod-ready surfaces — `tasks/in-progress/research.md` §2 (Profiles)

@@ -27,7 +27,11 @@ const SettingsSecurityPage = lazy(() => import('./pages/SettingsSecurityPage'));
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const WorkerSearchPage = lazy(() => import('./pages/WorkerSearchPage'));
+const WorkerDetailPage = lazy(() => import('./pages/WorkerDetailPage'));
 const EmployerSearchPage = lazy(() => import('./pages/EmployerSearchPage'));
+const EmployerDetailPage = lazy(() => import('./pages/EmployerDetailPage'));
+const ClientDirectoryPage = lazy(() => import('./pages/ClientDirectoryPage'));
+const ClientPublicProfilePage = lazy(() => import('./pages/ClientPublicProfilePage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const CollaborationsPage = lazy(() => import('./pages/CollaborationsPage'));
 const ReferralsPage = lazy(() => import('./pages/ReferralsPage'));
@@ -193,7 +197,11 @@ function MarketplaceRouter() {
           {/* Public */}
           <Route path="/jobs" element={<JobBoardPage />} />
           <Route path="/workers" element={<WorkerSearchPage />} />
+          <Route path="/workers/:id" element={<WorkerDetailPage />} />
           <Route path="/employers" element={<EmployerSearchPage />} />
+          <Route path="/employers/:id" element={<EmployerDetailPage />} />
+          <Route path="/clients" element={<ClientDirectoryPage />} />
+          <Route path="/clients/:slug" element={<ClientPublicProfilePage />} />
           <Route path="/reviews" element={<ReviewsPage />} />
 
           {/* Private */}

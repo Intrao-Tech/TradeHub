@@ -16,31 +16,6 @@ NestJS + Prisma 7 + PostgreSQL 16 (backend), React 19 + Vite 8 + Tailwind v4 + s
 | WS | ws://localhost:8081/chat |
 | Postgres | localhost:5433 · Redis localhost:6379 · Prisma Studio :5555 |
 
-## Data model (shared-PK inheritance)
-
-```
-Account ──▶ ClientProfile ──▶ WorkerProfile | EmployerProfile
-        └─▶ StaffMember
-```
-
-- `BIGSERIAL` IDs on main entities, `SERIAL` on small refs (specialisation/tag/plan), `TIMESTAMPTZ` everywhere.
-- Shared PK = IS-A · Unique FK = HAS-A 1:1 · ModerationItem is polymorphic (`entity_type` + `entity_id`).
-- `client_profile.verification_level` and `portfolio_item.verified` are denormalised for read perf.
-- Escrow sits on Collaboration, not Referral.
-
-## Roles
-
-Derived from relations, not a column:
-- WORKER: `account.client_profile.worker_profile`
-- EMPLOYER: `account.client_profile.employer_profile`
-- ADMIN / MODERATOR: `account.staff_member.staff_role`
-
-JWT = `{ sub: accountId, email }`. `JwtStrategy` loads the profile tree and attaches `{ accountId, email, clientProfileId, isWorker, isEmployer, isStaff, staffRole }`. Guards: `JwtAuthGuard` + `RolesGuard` + `@Roles(...)`.
-
-## Messaging
-
-One conversation per pair of accounts. Context in `message.metadata` + `message_type` (TEXT | JOB_INVITATION | SYSTEM). `ConversationParticipant` tracks `last_read_at`. Sender must be a participant (composite FK). Employer-invites-worker auto-creates the conversation. Real-time over Socket.IO + Redis Pub/Sub.
-
 ## Seed data
 
 Password for every account: `Password123!`
@@ -66,10 +41,6 @@ Reset DB: `cd backend && npx prisma migrate reset`. Deploy: Railway / Render / F
 ## Frontend
 
 Design-system rules live in `web/CLAUDE.md`. Semantic tokens only, shadcn primitives, light + dark, mobile-first, enforced by `web/scripts/lint-tokens.mjs`. 14 pages wrapped in `AppShell` (or `AuthShell` for auth).
-
-## Known gaps
-
-Google OAuth needs real creds. Stripe escrow + Tags CRUD + Subscription subscribe/cancel + Account update-delete + Job post edit-delete are backend-only (use Swagger). Frontend logout doesn't send `refresh_token` in body. No unit tests in MVP phase.
 
 ## Working principles
 

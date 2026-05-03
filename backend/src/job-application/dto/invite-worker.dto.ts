@@ -8,7 +8,9 @@ export class InviteWorkerDto {
   @IsInt()
   worker_id: number;
 
-  @ApiPropertyOptional({ description: 'Optional cover message for the invitation' })
+  @ApiPropertyOptional({
+    description: 'Optional cover message for the invitation',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(5000)

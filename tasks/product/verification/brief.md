@@ -46,10 +46,10 @@ A staff moderator can clear the verification queue without SQL: open the AdminPa
 - Must consume the existing `Document` and `VerificationMilestone` schema (extend, don't redesign).
 - Must not require a third-party identity provider to be configured to function — the manual path stands alone (Stripe Identity stays in place but is parallel, not a dependency).
 - Must coexist with the existing `backend/src/verification/` Stripe Identity flow without breaking it (decide whether to keep, replace, or run both — see Open Questions in the spec).
-- Must publish a clear contract that `tasks/product/profiles/` (Igor) can consume — Profiles already declares what it expects to read; pin the field names and timing in `contract.md` early.
+- Must publish a clear contract that `tasks/done/profiles/` (Igor) can consume — Profiles already declares what it expects to read; pin the field names and timing in `contract.md` early.
 - Greater London soft launch only — do not over-engineer for HMRC or Companies House API integration in MVP (Phase 2 per product spec §7).
 
-## Boundary with Profiles (`tasks/product/profiles/`)
+## Boundary with Profiles (`tasks/done/profiles/`)
 
 | Verification owns | Profiles owns |
 |---|---|
@@ -78,9 +78,9 @@ The teammate's AI should read, in order:
 2. `backend/src/document/document.controller.ts` and `document.service.ts` — the existing Document surface.
 3. `backend/src/verification/verification.service.ts` — the existing Stripe Identity flow, the only thing that currently writes `verification_level`.
 4. `backend/prisma/schema.prisma` lines 50–80 (ClientProfile + verification fields) and 395–411 (VerificationMilestone).
-5. `tasks/product/profiles/spec.md` — specifically the "Sealed Verification dependencies" subsection at the top of Requirements, plus `PROF-030` / `PROF-032` / `PROF-033` / `PROF-052` for the Profiles surface that consumes this feature.
-6. `tasks/product/profiles/contract.md` for the slice-order Profiles assumes.
-7. `tasks/in-progress/auth-flow/spec.md` and `contract.md` for the SDD discipline pattern (stable IDs `VER-NNN`, sealed contract, decisions log).
+5. `tasks/done/profiles/spec.md` — specifically the "Sealed Verification dependencies" subsection at the top of Requirements, plus `PROF-030` / `PROF-032` / `PROF-033` / `PROF-052` for the Profiles surface that consumes this feature.
+6. `tasks/done/profiles/contract.md` for the slice-order Profiles assumes.
+7. `tasks/done/auth-flow/spec.md` and `contract.md` for the SDD discipline pattern (stable IDs `VER-NNN`, sealed contract, decisions log).
 
 ## Open Questions for the implementing AI to resolve in `spec.md`
 

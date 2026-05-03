@@ -1,8 +1,19 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import type { Express } from 'express';
+import { promises as fs } from 'fs';
+import { join } from 'path';
+import sharp from 'sharp';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClientProfileQueryDto } from './dto/client-profile-query.dto';
 import { UpdateClientProfileDto } from './dto/update-client-profile.dto';
+
+const UPLOAD_SUBDIR = 'uploads';
+const AVATAR_MIN_PX = 256;
 
 @Injectable()
 export class ClientProfileService {
@@ -22,6 +33,50 @@ export class ClientProfileService {
     });
     if (!profile) throw new NotFoundException('Client profile not found');
     return profile;
+  }
+
+  async updateAvatar(id: bigint, file: Express.Multer.File) {
+    let metadata: sharp.Metadata;
+    try {
+      metadata = await sharp(file.path).metadata();
+    } catch {
+      await fs.unlink(file.path).catch(() => {});
+      throw new BadRequestException({
+        code: 'INVALID_IMAGE',
+        message: 'Could not read image — file may be corrupted.',
+      });
+    }
+    const width = metadata.width ?? 0;
+    const height = metadata.height ?? 0;
+    if (width < AVATAR_MIN_PX || height < AVATAR_MIN_PX) {
+      await fs.unlink(file.path).catch(() => {});
+      throw new BadRequestException({
+        code: 'IMAGE_TOO_SMALL',
+        message: `Avatar must be at least ${AVATAR_MIN_PX}×${AVATAR_MIN_PX} px.`,
+      });
+    }
+
+    const profile = await this.prisma.clientProfile.findUnique({
+      where: { id },
+    });
+    if (!profile) {
+      await fs.unlink(file.path).catch(() => {});
+      throw new NotFoundException('Client profile not found');
+    }
+
+    const newUrl = `/${UPLOAD_SUBDIR}/${file.filename}`;
+    await this.prisma.clientProfile.update({
+      where: { id },
+      data: { avatar_url: newUrl },
+    });
+
+    // Best-effort delete of the prior local avatar.
+    if (profile.avatar_url?.startsWith(`/${UPLOAD_SUBDIR}/`)) {
+      const priorPath = join(process.cwd(), profile.avatar_url.slice(1));
+      await fs.unlink(priorPath).catch(() => {});
+    }
+
+    return { avatar_url: newUrl };
   }
 
   async update(id: bigint, dto: UpdateClientProfileDto) {

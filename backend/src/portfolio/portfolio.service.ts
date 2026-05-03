@@ -4,6 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import type { Express } from 'express';
+import { promises as fs } from 'fs';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AddPortfolioMediaDto,
@@ -14,7 +16,10 @@ import {
   UpdateExperienceDetailDto,
   UpdatePortfolioItemDto,
   UpdateProjectDetailDto,
+  UploadPortfolioMediaDto,
 } from './dto/portfolio.dto';
+
+const UPLOAD_SUBDIR = 'uploads';
 
 const portfolioItemInclude = {
   experience_detail: true,
@@ -247,6 +252,29 @@ export class PortfolioService {
     return this.getById(portfolioItemId);
   }
 
+  async uploadMedia(
+    portfolioItemId: bigint,
+    workerId: bigint,
+    file: Express.Multer.File,
+    dto: UploadPortfolioMediaDto,
+  ) {
+    try {
+      await this.assertWorkerOwns(portfolioItemId, workerId);
+    } catch (err) {
+      await fs.unlink(file.path).catch(() => {});
+      throw err;
+    }
+    const media_url = `/${UPLOAD_SUBDIR}/${file.filename}`;
+    return this.prisma.portfolioMedia.create({
+      data: {
+        portfolio_item_id: portfolioItemId,
+        media_url,
+        caption: dto.caption ?? null,
+        sort_order: dto.sort_order ?? 0,
+      },
+    });
+  }
+
   async removeMedia(mediaId: bigint, workerId: bigint) {
     const media = await this.prisma.portfolioMedia.findUnique({
       where: { id: mediaId },
@@ -325,10 +353,7 @@ export class PortfolioService {
     return item;
   }
 
-  private getByIdWithClient(
-    tx: Prisma.TransactionClient,
-    id: bigint,
-  ) {
+  private getByIdWithClient(tx: Prisma.TransactionClient, id: bigint) {
     return tx.portfolioItem.findUniqueOrThrow({
       where: { id },
       include: portfolioItemInclude,

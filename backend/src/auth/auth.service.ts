@@ -48,7 +48,14 @@ export class AuthService {
   // ─── Registration ──────────────────────────────────────────────
 
   async register(dto: RegisterDto, ip?: string) {
-    await this.audit.log(null, 'auth.signup.started', undefined, undefined, { email: dto.email }, ip);
+    await this.audit.log(
+      null,
+      'auth.signup.started',
+      undefined,
+      undefined,
+      { email: dto.email },
+      ip,
+    );
 
     const policy = checkPasswordPolicy(dto.password);
     if (!policy.ok) {
@@ -70,13 +77,16 @@ export class AuthService {
       // shape, no user-visible error. The user's original choice of role /
       // password is preserved (we don't update them).
       if (existing.status === 'PENDING_EMAIL_VERIFICATION') {
-        this.logger.log(`Register re-attempt for unverified ${dto.email} — resending verify email`);
+        this.logger.log(
+          `Register re-attempt for unverified ${dto.email} — resending verify email`,
+        );
         await this.issueVerificationEmail(
           existing.id,
           existing.email,
           existing.client_profile?.display_name ??
             (dto.role === 'WORKER'
-              ? `${(dto.first_name ?? '').trim()} ${(dto.surname ?? '').trim()}`.trim() || dto.email
+              ? `${(dto.first_name ?? '').trim()} ${(dto.surname ?? '').trim()}`.trim() ||
+                dto.email
               : (dto.company_name ?? '').trim() || dto.email),
           ip,
         );
@@ -84,7 +94,9 @@ export class AuthService {
       }
 
       // Active or deactivated → surface the collision; UI offers Sign in / Reset.
-      this.logger.warn(`Register collision for ${dto.email} (status=${existing.status})`);
+      this.logger.warn(
+        `Register collision for ${dto.email} (status=${existing.status})`,
+      );
       throw new ConflictException({
         code: 'EMAIL_TAKEN',
         message: 'An account already exists for this email.',
@@ -134,10 +146,22 @@ export class AuthService {
       },
     });
 
-    await this.audit.log(account.id, 'auth.signup.completed', 'account', account.id, { role: dto.role }, ip);
+    await this.audit.log(
+      account.id,
+      'auth.signup.completed',
+      'account',
+      account.id,
+      { role: dto.role },
+      ip,
+    );
 
     // Issue verification token + send email; do NOT issue access tokens; do NOT send welcome.
-    await this.issueVerificationEmail(account.id, account.email, displayName, ip);
+    await this.issueVerificationEmail(
+      account.id,
+      account.email,
+      displayName,
+      ip,
+    );
 
     return {
       pending_verification: true,
@@ -169,15 +193,13 @@ export class AuthService {
     const tokenRow = await this.prisma.emailVerificationToken.findUnique({
       where: { token_hash: tokenHash },
       include: {
-        account: { include: { client_profile: { select: { display_name: true } } } },
+        account: {
+          include: { client_profile: { select: { display_name: true } } },
+        },
       },
     });
 
-    if (
-      !tokenRow ||
-      tokenRow.consumed_at ||
-      tokenRow.expires_at < new Date()
-    ) {
+    if (!tokenRow || tokenRow.consumed_at || tokenRow.expires_at < new Date()) {
       throw new BadRequestException({
         code: 'TOKEN_INVALID',
         message: 'This verification link is invalid or has expired.',
@@ -205,18 +227,30 @@ export class AuthService {
       data: { consumed_at: now },
     });
 
-    await this.audit.log(account.id, 'auth.verify_email.completed', 'account', account.id, {}, ip);
+    await this.audit.log(
+      account.id,
+      'auth.verify_email.completed',
+      'account',
+      account.id,
+      {},
+      ip,
+    );
 
     // Welcome email AFTER verification (only the first time)
     if (account.email_verified_at == null) {
-      void this.mail.sendWelcome(account.email, account.client_profile?.display_name ?? account.email);
+      void this.mail.sendWelcome(
+        account.email,
+        account.client_profile?.display_name ?? account.email,
+      );
     }
 
     // Refetch with full include for the SPA payload (worker_profile / employer_profile / staff_member)
     const fresh = await this.prisma.account.findUniqueOrThrow({
       where: { id: account.id },
       include: {
-        client_profile: { include: { worker_profile: true, employer_profile: true } },
+        client_profile: {
+          include: { worker_profile: true, employer_profile: true },
+        },
         staff_member: true,
       },
     });
@@ -244,7 +278,14 @@ export class AuthService {
     const frontendUrl = this.frontendBase();
     const link = `${frontendUrl}/verify-email/confirm?token=${encodeURIComponent(rawToken)}`;
     void this.mail.sendVerificationEmail(email, displayName, link);
-    await this.audit.log(accountId, 'auth.verify_email.sent', 'account', accountId, {}, ip);
+    await this.audit.log(
+      accountId,
+      'auth.verify_email.sent',
+      'account',
+      accountId,
+      {},
+      ip,
+    );
   }
 
   // ─── Password reset ────────────────────────────────────────────
@@ -273,8 +314,7 @@ export class AuthService {
       // Same 200 response either way to preserve anti-enumeration.
       !account.staff_member
     ) {
-      const displayName =
-        account.client_profile?.display_name ?? account.email;
+      const displayName = account.client_profile?.display_name ?? account.email;
 
       if (account.password_hash) {
         // Standard path — issue reset token (marketplace clients only).
@@ -318,11 +358,7 @@ export class AuthService {
       where: { token_hash: tokenHash },
     });
 
-    if (
-      !tokenRow ||
-      tokenRow.consumed_at ||
-      tokenRow.expires_at < new Date()
-    ) {
+    if (!tokenRow || tokenRow.consumed_at || tokenRow.expires_at < new Date()) {
       throw new BadRequestException({
         code: 'TOKEN_INVALID',
         message: 'This reset link is invalid or has expired.',
@@ -373,10 +409,17 @@ export class AuthService {
     });
 
     if (!account || !account.password_hash) {
-      void this.audit.log(account?.id ?? null, 'auth.login.failed', 'account', account?.id, {
-        reason: 'INVALID_CREDENTIALS',
-        email: dto.email,
-      }, ip);
+      void this.audit.log(
+        account?.id ?? null,
+        'auth.login.failed',
+        'account',
+        account?.id,
+        {
+          reason: 'INVALID_CREDENTIALS',
+          email: dto.email,
+        },
+        ip,
+      );
       throw new UnauthorizedException({
         code: 'INVALID_CREDENTIALS',
         message: 'Email or password is incorrect.',
@@ -384,10 +427,17 @@ export class AuthService {
     }
     const valid = await bcrypt.compare(dto.password, account.password_hash);
     if (!valid) {
-      void this.audit.log(account.id, 'auth.login.failed', 'account', account.id, {
-        reason: 'INVALID_CREDENTIALS',
-        email: dto.email,
-      }, ip);
+      void this.audit.log(
+        account.id,
+        'auth.login.failed',
+        'account',
+        account.id,
+        {
+          reason: 'INVALID_CREDENTIALS',
+          email: dto.email,
+        },
+        ip,
+      );
       throw new UnauthorizedException({
         code: 'INVALID_CREDENTIALS',
         message: 'Email or password is incorrect.',
@@ -395,9 +445,16 @@ export class AuthService {
     }
 
     if (account.status === 'DEACTIVATED') {
-      await this.audit.log(account.id, 'auth.login.failed', 'account', account.id, {
-        reason: 'ACCOUNT_DEACTIVATED',
-      }, ip);
+      await this.audit.log(
+        account.id,
+        'auth.login.failed',
+        'account',
+        account.id,
+        {
+          reason: 'ACCOUNT_DEACTIVATED',
+        },
+        ip,
+      );
       throw new ForbiddenException({
         code: 'ACCOUNT_DEACTIVATED',
         message: 'This account has been deactivated.',
@@ -412,9 +469,16 @@ export class AuthService {
     });
 
     if (account.status === 'PENDING_EMAIL_VERIFICATION') {
-      await this.audit.log(account.id, 'auth.login.failed', 'account', account.id, {
-        reason: 'EMAIL_NOT_VERIFIED',
-      }, ip);
+      await this.audit.log(
+        account.id,
+        'auth.login.failed',
+        'account',
+        account.id,
+        {
+          reason: 'EMAIL_NOT_VERIFIED',
+        },
+        ip,
+      );
       // Still return tokens but flag the state so the SPA routes to /verify-email
       const tokens = await this.issueTokens(account);
       throw new HttpException(
@@ -428,7 +492,14 @@ export class AuthService {
       );
     }
 
-    await this.audit.log(account.id, 'auth.login.succeeded', 'account', account.id, {}, ip);
+    await this.audit.log(
+      account.id,
+      'auth.login.succeeded',
+      'account',
+      account.id,
+      {},
+      ip,
+    );
     return this.issueTokens(account);
   }
 
@@ -442,17 +513,20 @@ export class AuthService {
         expires_at: { gt: new Date() },
       },
     });
-    if (!stored) throw new UnauthorizedException({
-      code: 'REFRESH_INVALID',
-      message: 'Session expired. Please sign in again.',
-    });
+    if (!stored)
+      throw new UnauthorizedException({
+        code: 'REFRESH_INVALID',
+        message: 'Session expired. Please sign in again.',
+      });
 
     await this.prisma.refreshToken.delete({ where: { id: stored.id } });
 
     const account = await this.prisma.account.findUniqueOrThrow({
       where: { id: BigInt(payload.sub) },
       include: {
-        client_profile: { include: { worker_profile: true, employer_profile: true } },
+        client_profile: {
+          include: { worker_profile: true, employer_profile: true },
+        },
         staff_member: true,
       },
     });
@@ -469,16 +543,21 @@ export class AuthService {
 
   // ─── Google OAuth ──────────────────────────────────────────────
 
-  async handleGoogleLogin(profile: {
-    email: string;
-    googleId: string;
-    displayName: string;
-    role?: 'WORKER' | 'EMPLOYER';
-    emailVerified?: boolean;
-    intent?: 'login' | 'register';
-  }, ip?: string) {
+  async handleGoogleLogin(
+    profile: {
+      email: string;
+      googleId: string;
+      displayName: string;
+      role?: 'WORKER' | 'EMPLOYER';
+      emailVerified?: boolean;
+      intent?: 'login' | 'register';
+    },
+    ip?: string,
+  ) {
     const include = {
-      client_profile: { include: { worker_profile: true, employer_profile: true } },
+      client_profile: {
+        include: { worker_profile: true, employer_profile: true },
+      },
       staff_member: true,
     } as const;
 
@@ -511,9 +590,16 @@ export class AuthService {
         where: { id: existingByGoogle.id },
         data: { last_login_at: new Date() },
       });
-      await this.audit.log(existingByGoogle.id, 'auth.login.succeeded', 'account', existingByGoogle.id, {
-        provider: 'google',
-      }, ip);
+      await this.audit.log(
+        existingByGoogle.id,
+        'auth.login.succeeded',
+        'account',
+        existingByGoogle.id,
+        {
+          provider: 'google',
+        },
+        ip,
+      );
       return this.issueTokens(existingByGoogle);
     }
 
@@ -547,12 +633,26 @@ export class AuthService {
           },
           include,
         });
-        await this.audit.log(linked.id, 'auth.google.linked', 'account', linked.id, {
-          via: 'auto_link_verified_email',
-        }, ip);
-        await this.audit.log(linked.id, 'auth.login.succeeded', 'account', linked.id, {
-          provider: 'google',
-        }, ip);
+        await this.audit.log(
+          linked.id,
+          'auth.google.linked',
+          'account',
+          linked.id,
+          {
+            via: 'auto_link_verified_email',
+          },
+          ip,
+        );
+        await this.audit.log(
+          linked.id,
+          'auth.login.succeeded',
+          'account',
+          linked.id,
+          {
+            provider: 'google',
+          },
+          ip,
+        );
         return this.issueTokens(linked);
       }
 
@@ -596,13 +696,25 @@ export class AuthService {
       },
       include,
     });
-    await this.audit.log(created.id, 'auth.signup.completed', 'account', created.id, {
-      provider: 'google',
-      trusted_verified: trustedVerified,
-    }, ip);
+    await this.audit.log(
+      created.id,
+      'auth.signup.completed',
+      'account',
+      created.id,
+      {
+        provider: 'google',
+        trusted_verified: trustedVerified,
+      },
+      ip,
+    );
 
     if (!trustedVerified) {
-      await this.issueVerificationEmail(created.id, created.email, profile.displayName, ip);
+      await this.issueVerificationEmail(
+        created.id,
+        created.email,
+        profile.displayName,
+        ip,
+      );
     } else {
       void this.mail.sendWelcome(created.email, profile.displayName);
     }
@@ -611,7 +723,14 @@ export class AuthService {
       where: { id: created.id },
       data: { last_login_at: new Date() },
     });
-    await this.audit.log(created.id, 'auth.login.succeeded', 'account', created.id, { provider: 'google' }, ip);
+    await this.audit.log(
+      created.id,
+      'auth.login.succeeded',
+      'account',
+      created.id,
+      { provider: 'google' },
+      ip,
+    );
 
     return this.issueTokens(created);
   }
@@ -622,11 +741,18 @@ export class AuthService {
       include: { staff_member: true },
     });
     if (!account || !account.password_hash || !account.staff_member) {
-      await this.audit.log(account?.id ?? null, 'auth.login.failed', 'account', account?.id, {
-        reason: 'INVALID_CREDENTIALS',
-        surface: 'staff',
-        email: dto.email,
-      }, ip);
+      await this.audit.log(
+        account?.id ?? null,
+        'auth.login.failed',
+        'account',
+        account?.id,
+        {
+          reason: 'INVALID_CREDENTIALS',
+          surface: 'staff',
+          email: dto.email,
+        },
+        ip,
+      );
       throw new UnauthorizedException({
         code: 'INVALID_CREDENTIALS',
         message: 'Email or password is incorrect.',
@@ -635,10 +761,17 @@ export class AuthService {
 
     const valid = await bcrypt.compare(dto.password, account.password_hash);
     if (!valid) {
-      await this.audit.log(account.id, 'auth.login.failed', 'account', account.id, {
-        reason: 'INVALID_CREDENTIALS',
-        surface: 'staff',
-      }, ip);
+      await this.audit.log(
+        account.id,
+        'auth.login.failed',
+        'account',
+        account.id,
+        {
+          reason: 'INVALID_CREDENTIALS',
+          surface: 'staff',
+        },
+        ip,
+      );
       throw new UnauthorizedException({
         code: 'INVALID_CREDENTIALS',
         message: 'Email or password is incorrect.',
@@ -658,10 +791,17 @@ export class AuthService {
       account.last_login_at == null &&
       account.staff_member.invite_expires_at < new Date()
     ) {
-      await this.audit.log(account.id, 'auth.login.failed', 'account', account.id, {
-        reason: 'INVITE_EXPIRED',
-        surface: 'staff',
-      }, ip);
+      await this.audit.log(
+        account.id,
+        'auth.login.failed',
+        'account',
+        account.id,
+        {
+          reason: 'INVITE_EXPIRED',
+          surface: 'staff',
+        },
+        ip,
+      );
       throw new UnauthorizedException({
         code: 'INVITE_EXPIRED',
         message:
@@ -673,7 +813,14 @@ export class AuthService {
       where: { id: account.id },
       data: { last_login_at: new Date() },
     });
-    await this.audit.log(account.id, 'auth.login.succeeded', 'account', account.id, { surface: 'staff' }, ip);
+    await this.audit.log(
+      account.id,
+      'auth.login.succeeded',
+      'account',
+      account.id,
+      { surface: 'staff' },
+      ip,
+    );
 
     // staff = always ACTIVE (we don't block staff on email verification for MVP)
     return this.issueTokens({
@@ -764,13 +911,24 @@ export class AuthService {
     return { ok: true };
   }
 
-  async logout(accountId: bigint, refreshToken: string | undefined, ip?: string) {
+  async logout(
+    accountId: bigint,
+    refreshToken: string | undefined,
+    ip?: string,
+  ) {
     if (refreshToken) {
       await this.prisma.refreshToken.deleteMany({
         where: { account_id: accountId, token: refreshToken },
       });
     }
-    await this.audit.log(accountId, 'auth.logout', 'account', accountId, {}, ip);
+    await this.audit.log(
+      accountId,
+      'auth.logout',
+      'account',
+      accountId,
+      {},
+      ip,
+    );
     return { ok: true };
   }
 
@@ -778,9 +936,16 @@ export class AuthService {
     const result = await this.prisma.refreshToken.deleteMany({
       where: { account_id: accountId },
     });
-    await this.audit.log(accountId, 'auth.logout_all', 'account', accountId, {
-      revoked: result.count,
-    }, ip);
+    await this.audit.log(
+      accountId,
+      'auth.logout_all',
+      'account',
+      accountId,
+      {
+        revoked: result.count,
+      },
+      ip,
+    );
     return { revoked: result.count };
   }
 
@@ -803,7 +968,11 @@ export class AuthService {
       employer_profile?: unknown;
     } | null;
     staff_member?: unknown;
-  }): Promise<{ access_token: string; refresh_token: string; account: AccountSummary }> {
+  }): Promise<{
+    access_token: string;
+    refresh_token: string;
+    account: AccountSummary;
+  }> {
     const verificationState = (account.status as AccountStatus) ?? 'ACTIVE';
     const payload = {
       sub: account.id.toString(),
@@ -814,7 +983,7 @@ export class AuthService {
     const accessToken = this.jwt.sign(payload as any);
     const refreshToken = this.jwt.sign(payload as any, {
       secret: this.config.get<string>('JWT_REFRESH_SECRET'),
-      expiresIn: this.config.get('JWT_REFRESH_TTL', '7d') as any,
+      expiresIn: this.config.get('JWT_REFRESH_TTL', '7d'),
     });
 
     await this.prisma.refreshToken.create({
@@ -841,7 +1010,11 @@ export class AuthService {
 
   private async verifyRefreshToken(token: string) {
     try {
-      return this.jwt.verify<{ sub: string; email: string; vs?: AccountStatus }>(token, {
+      return this.jwt.verify<{
+        sub: string;
+        email: string;
+        vs?: AccountStatus;
+      }>(token, {
         secret: this.config.get<string>('JWT_REFRESH_SECRET'),
       });
     } catch {

@@ -23,7 +23,7 @@ The current frontend cannot deliver that promise:
 - The staff document-review surface is a numeric input + status select (`AdminPage.tsx:624`) with no queue view.
 - The verification ladder shown by `VerificationBadge` (`KYC / REVIEWED / HMRC / UNVERIFIED`) does not match the names in the product spec (`Unverified / Basic / Certified / Premium`).
 
-The Profiles work runs in parallel with Auth (`tasks/product/auth-flow/`); the spec must respect that boundary.
+The Profiles work runs in parallel with Auth (`tasks/done/auth-flow/`); the spec must respect that boundary.
 
 ## Goals
 
@@ -109,7 +109,7 @@ Until Verification's contract is sealed, Profiles uses the existing `Document` s
 
 ### Sealed Auth dependencies (consumed, not duplicated)
 
-`tasks/in-progress/auth-flow/contract.md` (sealed 2026-04-26) is the authoritative source for everything auth-shaped. This spec consumes — it does not redefine. The contractual surface this feature relies on:
+`tasks/done/auth-flow/contract.md` (sealed 2026-04-26) is the authoritative source for everything auth-shaped. This spec consumes — it does not redefine. The contractual surface this feature relies on:
 
 - `Account.status ∈ { PENDING_EMAIL_VERIFICATION, ACTIVE, DEACTIVATED }`; new accounts default to `PENDING_EMAIL_VERIFICATION`. New `Account.email_verified_at` column.
 - JWT payload includes `vs` (verification_state); `JwtStrategy` exposes it as `req.user.verification_state`.
@@ -304,7 +304,7 @@ A new account can be brought from "just signed up" to "credible-enough-to-be-ref
 
 - **2026-05-03 — Verification carved out as a sibling feature.** Teammate is taking ownership of the *manual staff document approval flow* (queue UI, approve/reject, ladder promotion logic, vocabulary reconciliation). Profiles' scope reduced accordingly: `BE-PROF-4` removed (Document model extensions become Verification's); `PROF-053` / `PROF-054` demoted to dependencies; `E2E-5` removed from Profiles acceptance and recast as a Verification deliverable; `PROF-032` rewritten as consumption-only; "Sealed Verification dependencies" subsection added at top of Requirements. Right-to-Work backend deferred to Verification's discretion (teammate undecided); Profiles' RTW frontend (`PROF-052`) stays but falls back to a generic upload if Verification scopes RTW backend out.
 - **2026-05-03 — Surf-validated product alignment (final shape).** Re-ran surf research against the actual product analogue stack (LinkedIn-for-trades + UK B2B trade platforms — SubbieUK, Subcontractee — + UK Right-to-Work + KYC ladder UX from Stripe / Onfido / Persona + CSCS Smart Check / Gas Safe Register / NICEIC). Findings folded in: profile is a credentials portfolio with marketplace add-ons (rates, availability) layered on top, NOT a transactional storefront; verification ladder UX uses Stripe-style microcopy ("Usually takes 90 seconds"), document rejection cards must show staff reason + re-upload CTA, mobile-first is non-negotiable for trades audience; UK Right-to-Work is the missing legal field — added `PROF-052` / `PROF-053` / `PROF-054` covering both share-code and document paths; languages-spoken added as `PROF-055` (search-filter parity with product spec §6.3); backend prerequisites bundled into `BE-PROF-1`…`BE-PROF-8` for hand-off.
-- **2026-05-03 — Sealed Auth contract consumed.** `tasks/in-progress/auth-flow/contract.md` (sealed 2026-04-26 by the Auth track) has been read end-to-end. Profiles spec aligned: account-state vocabulary uses `verification_state` (`PENDING_EMAIL_VERIFICATION` / `ACTIVE` / `DEACTIVATED`); ProfilePage hosts no security actions (Auth shipped `/settings/security`); `<AuthBanner>` reused for unverified state; `MarketplaceRouter` is the registration target for new public routes; `ApiError` / `parseApiError()` are the canonical error helpers; `useAccountMe()` is the only client-side `/account/me` consumer (added as `PROF-051`).
+- **2026-05-03 — Sealed Auth contract consumed.** `tasks/done/auth-flow/contract.md` (sealed 2026-04-26 by the Auth track) has been read end-to-end. Profiles spec aligned: account-state vocabulary uses `verification_state` (`PENDING_EMAIL_VERIFICATION` / `ACTIVE` / `DEACTIVATED`); ProfilePage hosts no security actions (Auth shipped `/settings/security`); `<AuthBanner>` reused for unverified state; `MarketplaceRouter` is the registration target for new public routes; `ApiError` / `parseApiError()` are the canonical error helpers; `useAccountMe()` is the only client-side `/account/me` consumer (added as `PROF-051`).
 - **2026-05-03 — `PROF-040` deferred.** Auth contract locks role at `/auth/register`; no backend endpoint to add a second sub-profile post-hoc. Re-introduces only when that endpoint exists.
 - **2026-05-03 — Open Question "Boundary with Auth on Account section" resolved.** Auth shipped `SettingsSecurityPage.tsx`; ProfilePage owns identity / portfolio / documents only.
 - **2026-05-03 — Open Question "Role activation endpoints" resolved as a backend prerequisite.** Action: log a backend request rather than build a UI for missing endpoints.

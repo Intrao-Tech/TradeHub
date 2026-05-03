@@ -37,7 +37,8 @@ export class VerificationService {
       throw new BadRequestException('Already verified');
     }
 
-    const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
 
     const session = await this.stripe.identity.verificationSessions.create({
       type: 'document',
@@ -62,15 +63,19 @@ export class VerificationService {
   }
 
   async handleWebhookEvent(event: Stripe.Event): Promise<void> {
-    if (event.type !== 'identity.verification_session.verified' &&
-        event.type !== 'identity.verification_session.requires_input') {
+    if (
+      event.type !== 'identity.verification_session.verified' &&
+      event.type !== 'identity.verification_session.requires_input'
+    ) {
       return;
     }
 
-    const session = event.data.object as Stripe.Identity.VerificationSession;
+    const session = event.data.object;
     const accountIdStr = session.metadata?.account_id;
     if (!accountIdStr) {
-      this.logger.warn(`Verification event without account_id in metadata: ${session.id}`);
+      this.logger.warn(
+        `Verification event without account_id in metadata: ${session.id}`,
+      );
       return;
     }
 
@@ -81,7 +86,9 @@ export class VerificationService {
         where: { id: accountId },
         data: { verification_level: 'IDENTITY_VERIFIED' },
       });
-      this.logger.log(`Account ${accountId} verified via Stripe Identity session ${session.id}`);
+      this.logger.log(
+        `Account ${accountId} verified via Stripe Identity session ${session.id}`,
+      );
     } else {
       this.logger.warn(
         `Verification requires input for account ${accountId}, session ${session.id}: ${session.last_error?.code ?? 'unknown'}`,

@@ -7,11 +7,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../common/guards/roles.guard';
 import {
@@ -53,7 +49,9 @@ export class EscrowController {
   @Get('collaboration/:collaborationId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get escrow for a collaboration (participant or staff)' })
+  @ApiOperation({
+    summary: 'Get escrow for a collaboration (participant or staff)',
+  })
   getByCollaboration(
     @Param('collaborationId', ParseBigIntPipe) collaborationId: bigint,
     @CurrentUser() user: CurrentUserPayload,

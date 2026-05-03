@@ -62,7 +62,8 @@ export class DocumentService implements OnModuleInit {
     isStaff: boolean,
   ) {
     const doc = await this.getById(id);
-    const isOwner = clientProfileId !== null && doc.client_profile_id === clientProfileId;
+    const isOwner =
+      clientProfileId !== null && doc.client_profile_id === clientProfileId;
     if (!isOwner && !isStaff) {
       throw new ForbiddenException('Cannot access this document');
     }
@@ -85,18 +86,12 @@ export class DocumentService implements OnModuleInit {
     });
   }
 
-  async updateStatus(
-    id: bigint,
-    status: string,
-    _staffMemberId: bigint,
-  ) {
+  async updateStatus(id: bigint, status: string, _staffMemberId: bigint) {
     const doc = await this.prisma.document.findUnique({ where: { id } });
     if (!doc) throw new NotFoundException('Document not found');
 
     if (status === 'IN_REVIEW' && doc.status !== 'PENDING') {
-      throw new BadRequestException(
-        'Can only move to IN_REVIEW from PENDING',
-      );
+      throw new BadRequestException('Can only move to IN_REVIEW from PENDING');
     }
     if (
       (status === 'APPROVED' || status === 'REJECTED') &&

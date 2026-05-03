@@ -10,11 +10,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../common/guards/roles.guard';
 import {
@@ -83,10 +79,7 @@ export class ReferralController {
     if (user.clientProfileId == null) {
       throw new BadRequestException('No client profile for this account');
     }
-    return this.referralService.getOffersForWorker(
-      user.clientProfileId,
-      query,
-    );
+    return this.referralService.getOffersForWorker(user.clientProfileId, query);
   }
 
   @Get(':id')

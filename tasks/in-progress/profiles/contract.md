@@ -4,7 +4,7 @@ Concrete technical decisions for implementation. Drafted **2026-05-03**, ready t
 
 This document is **the single source of API shapes, env vars, DB columns, file-upload limits, and routing rules for Profiles**. Any deviation in code is a bug. Any change to this document must come with a matching update in `spec.md` (Decisions Log) per the working principle in repo `CLAUDE.md`.
 
-Reads `tasks/in-progress/auth-flow/contract.md` (sealed 2026-04-26) as an authoritative upstream — never duplicate the auth-shaped surface here.
+Reads `tasks/done/auth-flow/contract.md` (sealed 2026-04-26) as an authoritative upstream — never duplicate the auth-shaped surface here.
 
 ---
 
@@ -173,7 +173,7 @@ Before marking PROF-* complete:
 3. `cd web && ./node_modules/.bin/vite build` clean (no TS errors).
 4. Manual smoke: E2E-1 through E2E-8 (`spec.md` Acceptance Criteria), light + dark, 375 px + desktop.
 5. Swagger `/api/docs` visually checked for the new endpoints in `BE-PROF-1` … `BE-PROF-7`.
-6. `tasks/product/profiles/` moved to `tasks/in-progress/profiles/` at the start; status moved to `shipped` at the end with the merge SHA.
+6. `tasks/done/profiles/` moved to `tasks/done/profiles/` at the start; status moved to `shipped` at the end with the merge SHA.
 
 ---
 

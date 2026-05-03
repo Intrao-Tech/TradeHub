@@ -133,6 +133,7 @@ model WorkerProfile {
   is_available     Boolean   @default(true)
   rating_avg       Decimal   @default(0) @db.Decimal(3, 2)
   rating_count     Int       @default(0)
+  languages        String[]  @default([]) // ISO 639-1 codes, PROF-055
   created_at       DateTime  @default(now()) @db.Timestamptz()
   updated_at       DateTime  @updatedAt @db.Timestamptz()
 

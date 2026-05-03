@@ -284,7 +284,7 @@ All initial Open Questions have been resolved on 2026-04-26 — see Decisions Lo
   2. Else if `is_staff` → `/admin` (on the staff subdomain).
   3. Else if `verification_state === 'PENDING_EMAIL_VERIFICATION'` → `/verify-email`.
   4. Else if `account.status === 'DEACTIVATED'` → block at login (do not issue tokens; show "account deactivated" copy).
-  5. Else (worker or employer, ACTIVE) → `/profile` (per `tasks/product/profiles/spec.md` user flow `:56` and `:71`).
+  5. Else (worker or employer, ACTIVE) → `/profile` (per `tasks/done/profiles/spec.md` user flow `:56` and `:71`).
 - **AUTH-014-003 (Must).** `next` redirect must be sanitised — only same-origin relative paths are allowed. External URLs and protocol-relative URLs (`//evil.com`) are rejected, and the user falls through to the default route for their role.
 - **AUTH-014-004 (Must).** Post-Google-login flow uses the same routing table as AUTH-014-002. The `OAuthCallbackPage` reads `next` from the redirect URL produced by the backend callback and applies the same priority list.
 

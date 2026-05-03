@@ -45,9 +45,7 @@ export class SubscriptionService {
     }
     if (dto.price_yearly !== undefined) {
       data.price_yearly =
-        dto.price_yearly != null
-          ? new Prisma.Decimal(dto.price_yearly)
-          : null;
+        dto.price_yearly != null ? new Prisma.Decimal(dto.price_yearly) : null;
     }
     if (dto.max_referrals !== undefined) {
       data.max_referrals = dto.max_referrals;
