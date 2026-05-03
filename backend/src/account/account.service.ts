@@ -36,7 +36,11 @@ export class AccountService {
         include: {
           client_profile: {
             include: {
-              worker_profile: true,
+              worker_profile: {
+                include: {
+                  worker_specialisations: { include: { specialisation: true } },
+                },
+              },
               employer_profile: true,
             },
           },
@@ -56,7 +60,11 @@ export class AccountService {
         include: {
           client_profile: {
             include: {
-              worker_profile: true,
+              worker_profile: {
+                include: {
+                  worker_specialisations: { include: { specialisation: true } },
+                },
+              },
               employer_profile: true,
             },
           },

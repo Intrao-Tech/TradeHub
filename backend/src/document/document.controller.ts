@@ -36,6 +36,14 @@ import { DocumentService } from './document.service';
 import { UpdateDocumentStatusDto } from './dto/update-document-status.dto';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 
+const DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
+const DOCUMENT_ALLOWED_MIMES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+];
+
 @ApiTags('Documents')
 @Controller('documents')
 export class DocumentController {
@@ -77,6 +85,20 @@ export class DocumentController {
           cb(null, `${randomUUID()}${extname(file.originalname)}`);
         },
       }),
+      limits: { fileSize: DOCUMENT_MAX_BYTES },
+      fileFilter: (_req, file, cb) => {
+        if (!DOCUMENT_ALLOWED_MIMES.includes(file.mimetype)) {
+          cb(
+            new BadRequestException({
+              code: 'INVALID_MIME',
+              message: 'Use a PDF, JPEG, PNG, or WebP file.',
+            }),
+            false,
+          );
+          return;
+        }
+        cb(null, true);
+      },
     }),
   )
   async upload(

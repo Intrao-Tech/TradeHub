@@ -17,6 +17,17 @@ import { api, parseApiError } from '../api';
 
 export type AccountStatus = 'PENDING_EMAIL_VERIFICATION' | 'ACTIVE' | 'DEACTIVATED';
 
+export type SpecialisationLink = {
+  worker_id?: string | number;
+  specialisation_id?: number;
+  is_primary?: boolean;
+  specialisation?: {
+    id?: number;
+    name?: string;
+    slug?: string;
+  };
+};
+
 export type WorkerProfile = {
   id: string | number;
   years_experience?: number | null;
@@ -26,6 +37,7 @@ export type WorkerProfile = {
   is_available?: boolean;
   rating_avg?: string | number | null;
   rating_count?: number | null;
+  worker_specialisations?: SpecialisationLink[];
   [key: string]: unknown;
 };
 

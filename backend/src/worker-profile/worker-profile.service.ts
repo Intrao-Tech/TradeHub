@@ -21,6 +21,36 @@ export class WorkerProfileService {
     return profile;
   }
 
+  async linkSpecialisation(
+    workerId: bigint,
+    specialisationId: number,
+    isPrimary: boolean,
+  ) {
+    return this.prisma.workerSpecialisation.upsert({
+      where: {
+        worker_id_specialisation_id: {
+          worker_id: workerId,
+          specialisation_id: specialisationId,
+        },
+      },
+      create: {
+        worker_id: workerId,
+        specialisation_id: specialisationId,
+        is_primary: isPrimary,
+      },
+      update: { is_primary: isPrimary },
+    });
+  }
+
+  async unlinkSpecialisation(workerId: bigint, specialisationId: number) {
+    await this.prisma.workerSpecialisation.deleteMany({
+      where: {
+        worker_id: workerId,
+        specialisation_id: specialisationId,
+      },
+    });
+  }
+
   async update(id: bigint, dto: UpdateWorkerProfileDto) {
     const data: Prisma.WorkerProfileUpdateInput = {};
     if (dto.years_experience !== undefined)

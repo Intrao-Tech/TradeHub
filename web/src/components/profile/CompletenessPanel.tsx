@@ -194,6 +194,12 @@ function buildRequirements({
       cta: { label: 'Set rate', scrollTo: 'section-worker' },
     });
     reqs.push({
+      id: 'specialisation',
+      title: '≥ 1 specialisation',
+      done: (wp?.worker_specialisations?.length ?? 0) > 0,
+      cta: { label: 'Pick one', scrollTo: 'section-worker' },
+    });
+    reqs.push({
       id: 'portfolio',
       title: '≥ 1 portfolio item',
       done: hasPortfolioItem,

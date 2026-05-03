@@ -10,6 +10,7 @@ import {
   CompletenessPanel,
   type CompletenessAction,
 } from '../components/profile/CompletenessPanel';
+import { SpecialisationPicker } from '../components/profile/SpecialisationPicker';
 import {
   LONDON_BOROUGH_NAMES,
   POSTCODE_OUTWARD_REGEX,
@@ -535,6 +536,17 @@ export default function ProfilePage() {
                     <Button type="submit">Save worker profile</Button>
                   </div>
                 </form>
+                <div className="mt-6 space-y-2 border-t border-border-default pt-4">
+                  <Label>Specialisations</Label>
+                  <p className="text-xs text-fg-muted">
+                    Pick one or more trades you cover. These power filters in
+                    Worker search.
+                  </p>
+                  <SpecialisationPicker
+                    links={cp.worker_profile?.worker_specialisations}
+                    onChanged={refetch}
+                  />
+                </div>
               </CardContent>
             </Card>
           ) : null}
