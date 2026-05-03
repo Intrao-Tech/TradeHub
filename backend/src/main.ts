@@ -1,15 +1,25 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { join } from 'path';
 import { AppModule } from './app.module';
 import { BigIntSerializationInterceptor } from './common/interceptors/bigint-serialization.interceptor';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { RedisIoAdapter } from './conversation/redis-io.adapter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
 
   app.setGlobalPrefix('api');
+
+  // Serve uploaded files at /uploads/* (avatars, document files, portfolio media).
+  // The api prefix above only applies to controllers, not static assets.
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+  });
 
   // CORS allowlist: marketplace + staff origins. Empty values are dropped.
   // Per AUTH-016-005: wildcard origin is rejected when NODE_ENV=production.

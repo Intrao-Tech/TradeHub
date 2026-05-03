@@ -1,9 +1,15 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '../hooks/useAccountMe';
 import { AuthBanner } from '../components/AuthBanner';
+import { AvatarUploader } from '../components/profile/AvatarUploader';
+import {
+  LONDON_BOROUGH_NAMES,
+  POSTCODE_OUTWARD_REGEX,
+  postcodeAreasFor,
+} from '../lib/london-boroughs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -82,6 +88,16 @@ function formatDate(value?: string | null): string | null {
   });
 }
 
+function initialsFor(name: string): string {
+  if (!name) return 'TH';
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() ?? '')
+    .join('') || 'TH';
+}
+
 export default function ProfilePage() {
   const {
     account,
@@ -106,6 +122,7 @@ export default function ProfilePage() {
   const [yearsExperience, setYearsExperience] = useState('');
   const [dayRateMin, setDayRateMin] = useState('');
   const [dayRateMax, setDayRateMax] = useState('');
+  const [availableFrom, setAvailableFrom] = useState('');
   const [workerAvailable, setWorkerAvailable] = useState(true);
 
   const [companyName, setCompanyName] = useState('');
@@ -141,6 +158,7 @@ export default function ProfilePage() {
 
   const cp = clientProfile;
   const workerId = cp?.id != null ? String(cp.id) : '';
+  const postcodeOptions = useMemo(() => postcodeAreasFor(city), [city]);
 
   // Hydrate editor inputs from the cache. Re-runs when the cache snapshot
   // replaces (initial load, post-save refetch, auth-change invalidation).
@@ -156,6 +174,11 @@ export default function ProfilePage() {
       setYearsExperience(wp.years_experience != null ? String(wp.years_experience) : '');
       setDayRateMin(wp.day_rate_min != null ? String(wp.day_rate_min) : '');
       setDayRateMax(wp.day_rate_max != null ? String(wp.day_rate_max) : '');
+      setAvailableFrom(
+        wp.available_from != null
+          ? String(wp.available_from).slice(0, 10)
+          : '',
+      );
       setWorkerAvailable(Boolean(wp.is_available));
     }
     const ep = cp.employer_profile;
@@ -200,6 +223,12 @@ export default function ProfilePage() {
   async function submitWorker(e: FormEvent) {
     e.preventDefault();
     setActionError('');
+    const min = dayRateMin.trim() !== '' ? Number(dayRateMin) : null;
+    const max = dayRateMax.trim() !== '' ? Number(dayRateMax) : null;
+    if (min != null && max != null && max < min) {
+      setActionError('Day rate max must be greater than or equal to min.');
+      return;
+    }
     try {
       const bodyObj: Record<string, unknown> = {
         is_available: workerAvailable,
@@ -207,11 +236,10 @@ export default function ProfilePage() {
       if (yearsExperience.trim() !== '') {
         bodyObj.years_experience = Number(yearsExperience);
       }
-      if (dayRateMin.trim() !== '') {
-        bodyObj.day_rate_min = Number(dayRateMin);
-      }
-      if (dayRateMax.trim() !== '') {
-        bodyObj.day_rate_max = Number(dayRateMax);
+      if (min != null) bodyObj.day_rate_min = min;
+      if (max != null) bodyObj.day_rate_max = max;
+      if (availableFrom.trim() !== '') {
+        bodyObj.available_from = new Date(availableFrom).toISOString();
       }
       await api('/worker-profiles/me', {
         method: 'PATCH',
@@ -470,6 +498,24 @@ export default function ProfilePage() {
           {cp ? (
             <Card>
               <CardHeader>
+                <CardTitle>Avatar</CardTitle>
+                <CardDescription>
+                  Square photo, ≥ 256×256 px. JPEG, PNG, or WebP up to 5 MB.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AvatarUploader
+                  avatarUrl={avatarUrl}
+                  fallback={initialsFor(displayName)}
+                  onChanged={refetch}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {cp ? (
+            <Card>
+              <CardHeader>
                 <CardTitle>Client profile</CardTitle>
                 <CardDescription>Public details shown to other users.</CardDescription>
               </CardHeader>
@@ -481,6 +527,7 @@ export default function ProfilePage() {
                       id="p-display-name"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
+                      maxLength={150}
                     />
                   </div>
                   <div className="space-y-2 sm:col-span-2">
@@ -490,32 +537,69 @@ export default function ProfilePage() {
                       rows={3}
                       value={bio}
                       onChange={(e) => setBio(e.target.value)}
+                      maxLength={2000}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="p-city">City</Label>
-                    <Input
-                      id="p-city"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                    />
+                    <Label htmlFor="p-city">City (London borough)</Label>
+                    <Select
+                      value={city || '__none__'}
+                      onValueChange={(v) => {
+                        const next = v === '__none__' ? '' : v;
+                        setCity(next);
+                        if (
+                          next &&
+                          postcodeAreaClient &&
+                          !postcodeAreasFor(next).includes(postcodeAreaClient)
+                        ) {
+                          setPostcodeAreaClient('');
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="p-city">
+                        <SelectValue placeholder="Select borough" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Not set</SelectItem>
+                        {LONDON_BOROUGH_NAMES.map((b) => (
+                          <SelectItem key={b} value={b}>
+                            {b}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="p-postcode">Postcode area</Label>
-                    <Input
-                      id="p-postcode"
-                      value={postcodeAreaClient}
-                      onChange={(e) => setPostcodeAreaClient(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="p-avatar">Avatar URL</Label>
-                    <Input
-                      id="p-avatar"
-                      value={avatarUrl}
-                      onChange={(e) => setAvatarUrl(e.target.value)}
-                    />
-                    <p className="text-xs text-fg-muted">Image upload coming soon.</p>
+                    <Select
+                      value={postcodeAreaClient || '__none__'}
+                      onValueChange={(v) =>
+                        setPostcodeAreaClient(v === '__none__' ? '' : v)
+                      }
+                      disabled={postcodeOptions.length === 0}
+                    >
+                      <SelectTrigger id="p-postcode">
+                        <SelectValue
+                          placeholder={
+                            city ? 'Select outward code' : 'Pick a borough first'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Not set</SelectItem>
+                        {postcodeOptions.map((p) => (
+                          <SelectItem key={p} value={p}>
+                            {p}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {postcodeAreaClient &&
+                    !POSTCODE_OUTWARD_REGEX.test(postcodeAreaClient) ? (
+                      <p className="text-xs text-danger">
+                        Outward code looks invalid (e.g. SW1, EC2A, NW10).
+                      </p>
+                    ) : null}
                   </div>
                   <div className="sm:col-span-2">
                     <Button type="submit">Save client profile</Button>
@@ -563,6 +647,22 @@ export default function ProfilePage() {
                       step="0.01"
                       value={dayRateMax}
                       onChange={(e) => setDayRateMax(e.target.value)}
+                    />
+                    {dayRateMin &&
+                    dayRateMax &&
+                    Number(dayRateMax) < Number(dayRateMin) ? (
+                      <p className="text-xs text-danger">
+                        Max must be ≥ min.
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="w-available-from">Available from</Label>
+                    <Input
+                      id="w-available-from"
+                      type="date"
+                      value={availableFrom}
+                      onChange={(e) => setAvailableFrom(e.target.value)}
                     />
                   </div>
                   <label className="flex items-center gap-2 text-sm text-fg sm:col-span-2">
