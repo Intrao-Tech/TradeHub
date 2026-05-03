@@ -19,6 +19,10 @@ import {
   CurrentUser,
   type CurrentUserPayload,
 } from '../common/decorators/current-user.decorator';
+import {
+  AccountStateGuard,
+  RequiresVerifiedEmail,
+} from '../common/guards/account-state.guard';
 import { ParseBigIntPipe } from '../common/pipes/parse-bigint.pipe';
 import { Roles, RolesGuard } from '../common/guards/roles.guard';
 import { ApplicationQueryDto } from './dto/application-query.dto';
@@ -35,8 +39,9 @@ export class JobApplicationController {
   ) {}
 
   @Post('jobs/:jobPostId/apply')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, AccountStateGuard)
   @Roles('WORKER')
+  @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Apply to a job post as a worker' })
   apply(
@@ -55,8 +60,9 @@ export class JobApplicationController {
   }
 
   @Post('jobs/:jobPostId/invite')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, AccountStateGuard)
   @Roles('EMPLOYER')
+  @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Invite a worker to a job post' })
   invite(
@@ -132,8 +138,9 @@ export class JobApplicationController {
   }
 
   @Post(':id/to-collaboration')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, AccountStateGuard)
   @Roles('EMPLOYER')
+  @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Convert an accepted application into a collaboration',

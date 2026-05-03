@@ -70,3 +70,7 @@ Design-system rules live in `web/CLAUDE.md`. Semantic tokens only, shadcn primit
 ## Known gaps
 
 Google OAuth needs real creds. Stripe escrow + Tags CRUD + Subscription subscribe/cancel + Account update-delete + Job post edit-delete are backend-only (use Swagger). Frontend logout doesn't send `refresh_token` in body. No unit tests in MVP phase.
+
+## Working principles
+
+**Specs are living documents.** When a decision is made on an active feature (Open Question answered, scope changed, requirement clarified), update the relevant `spec.md` in the same step — move the resolved item out of `Open Questions` into a numbered requirement, and append the decision + date to a `Decisions Log` section at the bottom. The repo state must always match the spec; out-of-date specs are bugs.

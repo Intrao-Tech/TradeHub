@@ -20,6 +20,10 @@ import {
   CurrentUser,
   type CurrentUserPayload,
 } from '../common/decorators/current-user.decorator';
+import {
+  AccountStateGuard,
+  RequiresVerifiedEmail,
+} from '../common/guards/account-state.guard';
 import { Roles, RolesGuard } from '../common/guards/roles.guard';
 import { ParseBigIntPipe } from '../common/pipes/parse-bigint.pipe';
 import { CreateJobPostDto } from './dto/create-job-post.dto';
@@ -33,8 +37,9 @@ export class JobPostController {
   constructor(private readonly jobPostService: JobPostService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, AccountStateGuard)
   @Roles('EMPLOYER')
+  @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a job post' })
   create(

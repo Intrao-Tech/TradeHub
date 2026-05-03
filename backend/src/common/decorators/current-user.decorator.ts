@@ -1,5 +1,10 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
+export type AccountStatus =
+  | 'PENDING_EMAIL_VERIFICATION'
+  | 'ACTIVE'
+  | 'DEACTIVATED';
+
 export interface CurrentUserPayload {
   accountId: bigint;
   email: string;
@@ -8,6 +13,7 @@ export interface CurrentUserPayload {
   isEmployer: boolean;
   isStaff: boolean;
   staffRole: string | null;
+  verificationState: AccountStatus;
 }
 
 export const CurrentUser = createParamDecorator(

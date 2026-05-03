@@ -14,6 +14,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       clientSecret: clientSecret || 'not-configured',
       callbackURL: config.get<string>('GOOGLE_CALLBACK_URL'),
       scope: ['email', 'profile'],
+      passReqToCallback: false,
     });
   }
 
@@ -22,9 +23,12 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     _refreshToken: string,
     profile: Profile,
   ) {
+    const email = profile.emails?.[0];
     return {
       googleId: profile.id,
-      email: profile.emails?.[0]?.value ?? '',
+      email: email?.value ?? '',
+      // `email_verified` from the Google profile/IDToken — the trust signal we need
+      emailVerified: (email as { verified?: boolean })?.verified === true,
       displayName: profile.displayName,
     };
   }

@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { StaffManagementCard } from '@/components/StaffManagementCard';
 import {
   Select,
   SelectContent,
@@ -416,6 +417,7 @@ export default function AdminPage() {
       <Tabs defaultValue="moderation" className="space-y-4">
         <TabsList className="flex flex-wrap gap-1 h-auto">
           <TabsTrigger value="moderation">Moderation</TabsTrigger>
+          <TabsTrigger value="staff">Members</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="reviews">Reviews</TabsTrigger>
           <TabsTrigger value="plans">Plans</TabsTrigger>
@@ -619,6 +621,10 @@ export default function AdminPage() {
               <JsonBlock data={actionData} />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="staff" className="space-y-4">
+          <StaffManagementCard />
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-4">

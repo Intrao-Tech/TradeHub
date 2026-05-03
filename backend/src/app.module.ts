@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
+import { CommonModule } from './common/common.module';
 import { AuthModule } from './auth/auth.module';
 import { AccountModule } from './account/account.module';
 import { ClientProfileModule } from './client-profile/client-profile.module';
@@ -26,12 +27,14 @@ import { VerificationModule } from './verification/verification.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { StripeModule } from './stripe/stripe.module';
 import { MailModule } from './mail/mail.module';
+import { StaffModule } from './staff/staff.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     PrismaModule,
+    CommonModule,
     StripeModule,
     MailModule,
     AuthModule,
@@ -56,6 +59,7 @@ import { MailModule } from './mail/mail.module';
     ConversationModule,
     VerificationModule,
     WebhooksModule,
+    StaffModule,
   ],
 })
 export class AppModule {}

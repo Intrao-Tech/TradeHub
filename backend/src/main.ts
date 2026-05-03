@@ -10,7 +10,19 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.setGlobalPrefix('api');
-  app.enableCors();
+
+  // CORS allowlist: marketplace + staff origins. Empty values are dropped.
+  // Per AUTH-016-005: wildcard origin is rejected when NODE_ENV=production.
+  const marketplaceOrigin = process.env.FRONTEND_URL;
+  const staffOrigin = process.env.STAFF_FRONTEND_URL;
+  const allowedOrigins = [marketplaceOrigin, staffOrigin].filter(Boolean) as string[];
+  if (process.env.NODE_ENV === 'production' && allowedOrigins.length === 0) {
+    throw new Error('CORS misconfigured: FRONTEND_URL and/or STAFF_FRONTEND_URL must be set in production');
+  }
+  app.enableCors({
+    origin: allowedOrigins.length > 0 ? allowedOrigins : true, // dev fallback: reflect origin
+    credentials: true,
+  });
 
   const redisUrl = process.env.REDIS_URL;
   const redisAdapter = new RedisIoAdapter(app);

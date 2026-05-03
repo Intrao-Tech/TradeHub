@@ -18,6 +18,10 @@ import {
   CurrentUser,
   type CurrentUserPayload,
 } from '../common/decorators/current-user.decorator';
+import {
+  AccountStateGuard,
+  RequiresVerifiedEmail,
+} from '../common/guards/account-state.guard';
 import { ParseBigIntPipe } from '../common/pipes/parse-bigint.pipe';
 import { ConversationService } from './conversation.service';
 import { ConversationQueryDto } from './dto/conversation-query.dto';
@@ -27,11 +31,12 @@ import { StartConversationDto } from './dto/start-conversation.dto';
 
 @ApiTags('Conversations')
 @Controller('conversations')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, AccountStateGuard)
 export class ConversationController {
   constructor(private readonly conversationService: ConversationService) {}
 
   @Post()
+  @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Start or continue a direct conversation' })
   start(
@@ -70,6 +75,7 @@ export class ConversationController {
   }
 
   @Post(':id/messages')
+  @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Send a message' })
   sendMessage(
