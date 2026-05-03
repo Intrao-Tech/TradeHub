@@ -4,7 +4,13 @@
       "mcp__surf__surf_web_search",
       "mcp__surf__surf_github_search",
       "mcp__surf__surf_reddit_search",
-      "Bash(xargs ls *)"
+      "Bash(xargs ls *)",
+      "Bash(/usr/bin/git status *)",
+      "Bash(/usr/bin/git log *)",
+      "Bash(/usr/bin/git diff *)",
+      "Bash(/usr/bin/git show *)",
+      "Bash(/usr/bin/diff -u /Users/macbook/Projects/intrao/TradeHub/tasks/product/auth-flow/spec.md /Users/macbook/Projects/intrao/TradeHub/tasks/in-progress/auth-flow/spec.md)",
+      "Bash(/usr/bin/sed *)"
     ]
   }
 }
