@@ -5,6 +5,23 @@
 - Created: 2026-05-02
 - Last Updated: 2026-05-03
 - Shipped:
+  - Slice A (PROF-010, 011, 013, 051) — `f22a54a`
+  - BE-PROF-1 — `f60e326`
+  - Slice B (PROF-012, 014–019) — `1be020b`
+  - Slice C (PROF-001, 002, 005–009) — `f1ecad9`
+  - BE-PROF-2 — `fc414e6`
+  - Slice D (PROF-020–027) — `3917d45`
+  - Slice E partial (PROF-028, 029, 030, 031) — `a819237`
+  - Slice F (PROF-035, 036, 037, 038, 039, 044–050) — `e3f0965`
+  - Slice H (PROF-003, 004) — `acbf8de`
+  - BE-PROF-3 + BE-PROF-8 + specialisations UI — `41396ca`
+  - BE-PROF-6 + slice G partial (PROF-055) — `8d3ffbf`
+- Gated (not yet shipped):
+  - PROF-032 / 033 / 034 — trust ladder; depends on Verification track
+  - PROF-052 / 053 / 054 — Right-to-Work submission; depends on Verification track
+  - PROF-041 / 042 — Stripe Connect onboarding state; gated on BE-PROF-7
+  - BE-PROF-5 — specialisation seed audit against product-spec Appendix A
+  - PROF-040 — multi-role role-extension (backend endpoint missing)
 
 ## Notes
 
