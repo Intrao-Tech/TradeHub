@@ -115,7 +115,7 @@ Response `200`: `{ "ok": true }` — always, even if email does not exist (anti-
 
 ### `POST /auth/verify-email/confirm`
 
-Body: `{ "token": "string" }`
+Body: `{ "token": "string" }` — DTO enforces only `@IsString()` + `@MaxLength(256)` (no minimum length); short/garbage tokens fall through to the service-level `TOKEN_INVALID` branch so the SPA always sees a structured `code` (FU-3).
 
 Response `200`:
 ```json
@@ -171,7 +171,7 @@ Response `200`: `{ access_token, refresh_token }`. Errors: `401 REFRESH_INVALID`
 
 ### `POST /auth/logout`
 
-Body: `{ "refresh_token": "string" }` (frontend must include; current bug at `App.tsx:83` is fixed by this).
+Body: `{ "refresh_token": "string?" }` — `refresh_token` is optional in the DTO so an empty/missing body still returns 200 (FU-4: idempotent on missing body, matches Contract §2 promise).
 
 Response `200`: `{ ok: true }`. Idempotent — unknown token returns `200`.
 
@@ -218,7 +218,7 @@ Errors: `400 TOKEN_INVALID`, `400 WEAK_PASSWORD`.
 
 ### `POST /auth/change-password`
 
-Auth: bearer. Body: `{ "current_password": "string", "new_password": "string", "refresh_token": "string?" }`. Verifies current password, applies the new one, **revokes refresh tokens on OTHER devices** (current device stays signed in if the SPA passes its current `refresh_token`).
+Auth: bearer. Body: `{ "current_password": "string", "new_password": "string", "refresh_token": "string?" }`. Verifies current password, applies the new one, **revokes refresh tokens on OTHER devices** (current device stays signed in if the SPA passes its current `refresh_token`). DTO declares `refresh_token` as `@IsOptional() @IsString()` so the field passes class-validator's `forbidNonWhitelisted` (FU-5).
 
 Errors: `401 INVALID_CURRENT_PASSWORD`, `400 WEAK_PASSWORD { reasons }`, `400 SAME_PASSWORD`, `400 NO_PASSWORD_SET` (Google-only account).
 

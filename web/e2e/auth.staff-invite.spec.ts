@@ -1,48 +1,74 @@
-// TEST-AUTH-104 — admin creates staff via /staff API; the new staff member
-// signs in and lands on /admin with last_login_at set.
+// TEST-AUTH-104 — admin creates staff via the /admin Members tab; the new
+// staff member signs in on the staff host and lands on /admin.
 //
-// The marketplace SPA does not render /admin — that lives behind
-// IS_STAFF_HOST. We exercise the full sign-in via the SPA on the spoofed
-// staff host instead.
+// Bootstraps the first admin via POST /test/seed/admin (gated by NODE_ENV=test).
+// The invite password is captured from the in-process MailService sink and
+// surfaced through GET /test/mailbox/<email>.latest_staff_invite_password.
 
 import { test, expect } from '@playwright/test';
-import {
-  TEST_PASSWORD,
-  confirmEmailViaApi,
-  registerWorker,
-} from './util';
+import { fetchMailbox, seedAdminViaApi } from './util';
 
-const API = 'http://localhost:8082/api';
+const WEB_PORT = Number(process.env.PW_WEB_PORT ?? 4173);
+const STAFF_BASE = `http://internal.localhost:${WEB_PORT}`;
 
 test.describe('TEST-AUTH-104 staff invite', () => {
-  test('AUTH-018-001 + AUTH-014-002 — admin creates fresh staff; staff signs in via the staff host and lands on /admin', async ({
-    page,
+  test('AUTH-018-001 + AUTH-014-002 — admin creates fresh staff via Members tab; staff signs in on the staff host and lands on /admin', async ({
+    browser,
     request,
   }) => {
-    // Bootstrap an admin account by registering, verifying, then promoting
-    // the existing client account to staff via the /staff endpoint. The
-    // first call to /staff requires a bearer token from an existing admin —
-    // here we fall back to creating the first admin directly via the
-    // factory used by the unit/e2e suite. For Playwright, expose an
-    // emergency seed by hitting the admin-only API after promoting our
-    // user with raw SQL is non-trivial — instead we register two users:
-    // user A becomes admin (manually via SQL through the test mailbox
-    // endpoint? No — the spec calls for a direct admin seed).
-    //
-    // Pragmatic shortcut: create the admin via the same /auth/register
-    // endpoint, verify, then mark as staff via SQL using the test-only
-    // mailbox endpoint's prisma access path… that doesn't exist. We use a
-    // separate test-only seed endpoint, which we DON'T have. Therefore
-    // this spec is `test.fixme` and tracked in followups.md FU-7.
-    test.fixme(
-      true,
-      'Requires a test-only admin-seed endpoint; tracked in followups.md FU-7.',
-    );
+    // ── 1. Seed an admin ──────────────────────────────────────
+    const admin = await seedAdminViaApi(request);
 
-    const adminEmail = `pw-admin-${Date.now()}@example.com`;
-    await registerWorker(page, { email: adminEmail });
-    await confirmEmailViaApi(request, adminEmail);
-    // After this point the workflow needs an admin promotion path.
-    expect(API).toBeTruthy();
+    // ── 2. Admin signs in on the staff host ───────────────────
+    const adminCtx = await browser.newContext({ baseURL: STAFF_BASE });
+    const adminPage = await adminCtx.newPage();
+    await adminPage.goto('/login');
+    await adminPage.getByLabel(/Email/i).fill(admin.email);
+    await adminPage.getByLabel(/Password/i).fill(admin.password);
+    await adminPage.getByRole('button', { name: /^Staff sign in$/i }).click();
+    await adminPage.waitForURL(/\/admin/);
+    // AdminPage h1 confirms the staff router actually rendered the page
+    // (rather than a marketplace 404 fallback).
+    await expect(
+      adminPage.getByRole('heading', { name: /Staff \/ Admin/i }),
+    ).toBeVisible();
+
+    // ── 3. Members tab → Add staff ────────────────────────────
+    const inviteeEmail = `pw-invitee-${Date.now()}@example.com`;
+    await adminPage.getByRole('tab', { name: /Members/i }).click();
+    await adminPage.getByRole('button', { name: /^Add staff$/i }).click();
+    await adminPage.getByLabel(/Email/i).fill(inviteeEmail);
+    await adminPage.getByLabel(/Display name/i).fill('Invitee Mod');
+    // Role defaults to MODERATOR — leave as-is.
+    await adminPage
+      .getByRole('button', { name: /Create \+ send invite/i })
+      .click();
+
+    await expect(
+      adminPage.getByText(/Staff account created/i),
+    ).toBeVisible();
+
+    // ── 4. Capture the initial password from the test mailbox ─
+    const mailbox = await fetchMailbox(request, inviteeEmail);
+    expect(mailbox.latest_staff_invite_password).toBeTruthy();
+    const initialPassword = mailbox.latest_staff_invite_password!;
+    expect(initialPassword.length).toBe(16);
+
+    // ── 5. Invitee signs in on the staff host (separate context)
+    const inviteeCtx = await browser.newContext({ baseURL: STAFF_BASE });
+    const inviteePage = await inviteeCtx.newPage();
+    await inviteePage.goto('/login');
+    await inviteePage.getByLabel(/Email/i).fill(inviteeEmail);
+    await inviteePage.getByLabel(/Password/i).fill(initialPassword);
+    await inviteePage.getByRole('button', { name: /^Staff sign in$/i }).click();
+
+    // ── 6. Lands on /admin ────────────────────────────────────
+    await inviteePage.waitForURL(/\/admin/);
+    await expect(
+      inviteePage.getByRole('heading', { name: /Staff \/ Admin/i }),
+    ).toBeVisible();
+
+    await adminCtx.close();
+    await inviteeCtx.close();
   });
 });

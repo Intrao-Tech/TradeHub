@@ -14,6 +14,7 @@ export async function fetchMailbox(
   status: string;
   latest_verification: string | null;
   latest_reset: string | null;
+  latest_staff_invite_password: string | null;
 }> {
   const res = await request.get(
     `${API}/test/mailbox/${encodeURIComponent(email)}`,
@@ -70,6 +71,24 @@ export async function loginViaForm(
   await page.getByRole('button', { name: /^Sign in$/i }).click();
 }
 
+/** Bootstrap a fresh ADMIN staff account directly via the test-only seed
+ *  endpoint (gated by NODE_ENV === 'test'). Sidesteps the chicken-and-egg
+ *  problem that every /staff mutation requires an existing admin. */
+export async function seedAdminViaApi(
+  request: APIRequestContext,
+  opts: { email?: string; password?: string } = {},
+): Promise<{ id: string; email: string; password: string }> {
+  const res = await request.post(`${API}/test/seed/admin`, {
+    data: { email: opts.email, password: opts.password },
+  });
+  if (!res.ok()) {
+    throw new Error(
+      `seed-admin failed: ${res.status()} ${await res.text()}`,
+    );
+  }
+  return res.json();
+}
+
 /**
  * Wipes localStorage on the active page. Use before re-attempting a login
  * after the previous session was invalidated server-side — otherwise api.ts
@@ -83,9 +102,3 @@ export async function clearTokens(page: Page): Promise<void> {
   });
 }
 
-/** Step past the next whole second so two refresh-token JWTs differ — see
- *  followups.md FU-2. Needed any time two logins happen for the same
- *  account within ~1 second. */
-export async function jwtIatGap(): Promise<void> {
-  await new Promise((r) => setTimeout(r, 1100));
-}

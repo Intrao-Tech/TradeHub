@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+import { ExecutionContext, Injectable, Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { CommonModule } from './common/common.module';
 import { AuthModule } from './auth/auth.module';
@@ -66,10 +67,24 @@ const baseImports = [
   StaffModule,
 ];
 
+// `overrideGuard()` from @nestjs/testing does not replace APP_GUARD-bound
+// classes (it only intercepts `@UseGuards()` decorators), so the test harness
+// disables the throttler via this env var. The env var is read at request
+// time (not module load time) so different test files can flip it freely.
+// Production never sets this var.
+@Injectable()
+class EnvGatedThrottlerGuard extends ThrottlerGuard {
+  async canActivate(ctx: ExecutionContext): Promise<boolean> {
+    if (process.env.DISABLE_APP_THROTTLER === 'true') return true;
+    return super.canActivate(ctx);
+  }
+}
+
 @Module({
   imports:
     process.env.NODE_ENV === 'test'
       ? [...baseImports, TestOnlyModule]
       : baseImports,
+  providers: [{ provide: APP_GUARD, useClass: EnvGatedThrottlerGuard }],
 })
 export class AppModule {}

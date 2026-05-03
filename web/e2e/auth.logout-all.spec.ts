@@ -4,7 +4,6 @@ import { test, expect } from '@playwright/test';
 import {
   TEST_PASSWORD,
   confirmEmailViaApi,
-  jwtIatGap,
   loginViaForm,
   registerWorker,
 } from './util';
@@ -21,8 +20,6 @@ test.describe('TEST-AUTH-103 logout-all', () => {
     await loginViaForm(page, email, TEST_PASSWORD);
     await page.waitForURL(/\/profile/);
 
-    // FU-2: pause so the second refresh-token JWT differs from the first.
-    await jwtIatGap();
     const otherCtx = await browser.newContext();
     const otherPage = await otherCtx.newPage();
     await loginViaForm(otherPage, email, TEST_PASSWORD);

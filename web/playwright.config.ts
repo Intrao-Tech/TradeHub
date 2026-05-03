@@ -42,12 +42,17 @@ export default defineConfig({
   globalTeardown: resolve(__dirname, 'e2e/global-teardown.ts'),
   webServer: [
     {
-      command: `npx vite --host 127.0.0.1 --port ${WEB_PORT} --strictPort`,
+      // Bind to all interfaces so the staff-host spec can drive the SPA on
+      // `internal.localhost:<port>` (RFC 6761 — *.localhost resolves to
+      // 127.0.0.1) and `IS_STAFF_HOST` evaluates true natively without a
+      // window.location spoof.
+      command: `npx vite --host --port ${WEB_PORT} --strictPort`,
       url: WEB_URL,
       reuseExistingServer: false,
       cwd: __dirname,
       env: {
         VITE_API_URL: `http://localhost:${API_PORT}/api`,
+        VITE_STAFF_BASE_URL: `http://internal.localhost:${WEB_PORT}`,
       },
       stdout: 'pipe',
       stderr: 'pipe',

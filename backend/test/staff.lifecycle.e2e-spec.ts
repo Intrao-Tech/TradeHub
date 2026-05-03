@@ -15,7 +15,6 @@ import {
   seedPendingWorker,
 } from './util/factories';
 import { signAccessTokenFor } from './util/auth-helpers';
-import { jwtIatGap } from './util/wait';
 
 describe('TEST-AUTH-048 staff lifecycle (AUTH-018-*)', () => {
   let h: TestHarness;
@@ -175,7 +174,6 @@ describe('TEST-AUTH-048 staff lifecycle (AUTH-018-*)', () => {
     const target = await seedAdmin(h.prisma, { email: 'target@example.com' });
 
     // Give the target an active refresh token to be revoked.
-    await jwtIatGap(); // FU-2 — admin seed login already happened
     await h
       .request()
       .post('/api/auth/login')

@@ -93,14 +93,10 @@ describe('TEST-AUTH-042 verify-email/send + verify-email/confirm', () => {
     // distinguish "expired token" from "double-fired effect". This regression
     // guard asserts the structured code is present on the error body so the
     // SPA's useRef-guarded effect can branch correctly.
-    //
-    // Note: the DTO enforces MinLength(16) on `token` (see followups.md FU-3),
-    // so we send a 32-char garbage string to bypass class-validator and reach
-    // the service-level TOKEN_INVALID branch.
     const res = await h
       .request()
       .post('/api/auth/verify-email/confirm')
-      .send({ token: 'bogus-token-padding-padding-1234' })
+      .send({ token: 'bogus' })
       .expect(400);
     expect(res.body.code).toBe('TOKEN_INVALID');
     expect(typeof res.body.message).toBe('string');

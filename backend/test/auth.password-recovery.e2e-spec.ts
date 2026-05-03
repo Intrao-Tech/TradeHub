@@ -11,7 +11,6 @@ import {
   seedAdmin,
   seedGoogleOnlyAccount,
 } from './util/factories';
-import { jwtIatGap } from './util/wait';
 
 describe('TEST-AUTH-045 password recovery + change', () => {
   let h: TestHarness;
@@ -105,7 +104,6 @@ describe('TEST-AUTH-045 password recovery + change', () => {
       .post('/api/auth/login')
       .send({ email: seed.email, password: seed.password })
       .expect(200);
-    await jwtIatGap(); // FU-2 — refresh-token JWTs collide within 1s
     await h
       .request()
       .post('/api/auth/login')
@@ -141,7 +139,6 @@ describe('TEST-AUTH-045 password recovery + change', () => {
     ).toBe(0);
 
     // New password works, old does not.
-    await jwtIatGap(); // FU-2
     await h
       .request()
       .post('/api/auth/login')
@@ -194,11 +191,7 @@ describe('TEST-AUTH-045 password recovery + change', () => {
     expect(TEST_BCRYPT_ROUNDS).toBeGreaterThan(0); // sanity: factory constant unchanged
   });
 
-  // The Decisions Log 2026-04-26 promise is "OTHER-device sessions revoked,
-  // current device kept alive". The DTO does not declare `refresh_token` and
-  // `forbidNonWhitelisted` rejects the field — so the test below is red and
-  // tracked in followups.md FU-5. Flip to `test()` once the DTO is fixed.
-  test.failing('Decisions Log 2026-04-26 — change-password keeps current device alive when refresh_token is passed (FU-5: DTO rejects field)', async () => {
+  test('Decisions Log 2026-04-26 — change-password keeps current device alive when refresh_token is passed', async () => {
     const seed = await seedActiveWorker(h.prisma);
     const session = (
       await h

@@ -94,6 +94,14 @@ export async function createTestApp(
     process.env.GOOGLE_CALLBACK_URL ??
     'http://localhost:8081/api/auth/google/callback';
 
+  // AppModule reads this at import time to decide whether to register
+  // ThrottlerGuard as APP_GUARD. Must be set BEFORE the dynamic import.
+  if (options.enableThrottler) {
+    delete process.env.DISABLE_APP_THROTTLER;
+  } else {
+    process.env.DISABLE_APP_THROTTLER = 'true';
+  }
+
   let builder: TestingModuleBuilder = Test.createTestingModule({
     imports: [AppModule],
   })
@@ -103,6 +111,9 @@ export async function createTestApp(
     .useClass(StubGoogleAuthGuard);
 
   if (!options.enableThrottler) {
+    // Belt-and-braces: also override the @UseGuards-style references so any
+    // route that pulls ThrottlerGuard via decorator (none today, but defensive)
+    // also short-circuits.
     builder = builder.overrideGuard(ThrottlerGuard).useClass(NoopThrottlerGuard);
   }
 

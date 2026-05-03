@@ -62,6 +62,7 @@ export class TestMailboxController implements OnModuleInit {
       status: account.status,
       latest_verification: getLatestRaw('verify', account.email),
       latest_reset: getLatestRaw('reset', account.email),
+      latest_staff_invite_password: getLatestRaw('staff_invite', account.email),
       verification_tokens: account.email_verification_tokens.map(
         (t) => ({
           token_hash: t.token_hash,
@@ -88,7 +89,8 @@ export class TestMailboxController implements OnModuleInit {
 // Living here keeps the surface in one file. Cleared per address on read
 // so a re-issue test sees the freshest token.
 
-type RawSink = Map<string, { kind: 'verify' | 'reset'; token: string }[]>;
+type RawKind = 'verify' | 'reset' | 'staff_invite';
+type RawSink = Map<string, { kind: RawKind; token: string }[]>;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -103,7 +105,7 @@ function sink(): RawSink {
 }
 
 export function recordRawToken(
-  kind: 'verify' | 'reset',
+  kind: RawKind,
   email: string,
   token: string,
 ): void {
@@ -112,7 +114,7 @@ export function recordRawToken(
   sink().set(email, list);
 }
 
-function getLatestRaw(kind: 'verify' | 'reset', email: string): string | null {
+function getLatestRaw(kind: RawKind, email: string): string | null {
   const list = sink().get(email) ?? [];
   for (let i = list.length - 1; i >= 0; i -= 1) {
     if (list[i].kind === kind) return list[i].token;

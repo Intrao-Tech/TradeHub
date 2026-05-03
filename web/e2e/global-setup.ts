@@ -56,7 +56,9 @@ export default async function globalSetup() {
         DATABASE_URL: uri,
         PORT: String(API_PORT),
         FRONTEND_URL: WEB_URL,
-        STAFF_FRONTEND_URL: WEB_URL,
+        // Accept staff requests from the spec's staff origin so /auth/staff/login
+        // and /staff mutations are reachable from internal.localhost:<port>.
+        STAFF_FRONTEND_URL: `http://internal.localhost:${WEB_PORT}`,
         STAFF_LOGIN_HOST: 'localhost',
         JWT_SECRET: 'pw-secret',
         JWT_REFRESH_SECRET: 'pw-refresh-secret',

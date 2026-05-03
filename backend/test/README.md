@@ -59,18 +59,15 @@ console.log(mail?.data.token, mail?.data.confirmUrl);
 
 ## Rate-limit spec (TEST-AUTH-050)
 
-`auth.rate-limit.e2e-spec.ts` is currently `describe.skip` because the
-`ThrottlerGuard` is not wired in `AppModule` (followups.md FU-6).
-Re-enable both once FU-6 lands.
+`auth.rate-limit.e2e-spec.ts` boots a separate app instance with the real
+`ThrottlerGuard` (`enableThrottler: true`) so the per-route throttle table
+in `AuthController` actually fires. All other suites use the harness'
+`NoopThrottlerGuard` so they don't trip per-IP limits incidentally.
 
 ## Troubleshooting
 
 - **`Could not find a working Docker socket`** — start Docker / OrbStack
   before running the suite. Testcontainers exits 1 with a clear hint.
-- **`unique constraint violation on refresh_token.token`** — see
-  followups.md FU-2. Use `await jwtIatGap()` from `test/util/wait.ts`
-  between two `/auth/login` calls for the same account in the same
-  second.
 - **`route /api/test/mailbox/:address not found`** — the
   `TestOnlyModule` is gated by `NODE_ENV === 'test'`. The harness sets
   this in `createTestApp`; production never mounts it.

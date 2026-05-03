@@ -7,7 +7,6 @@ import {
   clearTokens,
   confirmEmailViaApi,
   fetchMailbox,
-  jwtIatGap,
   loginViaForm,
   registerWorker,
 } from './util';
@@ -25,12 +24,10 @@ test.describe('TEST-AUTH-102 password recovery e2e', () => {
     await confirmEmailViaApi(request, email);
 
     // Sign in twice — second context is the "other device" we want to verify
-    // gets revoked when the password is reset. FU-2: pause between logins so
-    // the second refresh-token JWT differs from the first.
+    // gets revoked when the password is reset.
     await loginViaForm(page, email, TEST_PASSWORD);
     await page.waitForURL(/\/profile/);
 
-    await jwtIatGap();
     const otherCtx = await browser.newContext();
     const otherPage = await otherCtx.newPage();
     await loginViaForm(otherPage, email, TEST_PASSWORD);

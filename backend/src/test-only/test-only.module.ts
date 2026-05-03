@@ -6,9 +6,10 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
 import { MailService } from '../mail/mail.service';
 import { TestMailboxController, recordRawToken } from './test-mailbox.controller';
+import { TestSeedController } from './test-seed.controller';
 
 @Module({
-  controllers: [TestMailboxController],
+  controllers: [TestMailboxController, TestSeedController],
 })
 export class TestOnlyModule implements OnModuleInit {
   constructor(private readonly mail: MailService) {}
@@ -42,5 +43,16 @@ function patchMail(mail: MailService): void {
     const m = resetUrl.match(/[?&]token=([^&]+)/);
     if (m) recordRawToken('reset', to, decodeURIComponent(m[1]));
     return origReset(to, displayName, resetUrl);
+  };
+
+  const origStaffInvite = mail.sendStaffInvite.bind(mail);
+  mail.sendStaffInvite = async (
+    to: string,
+    displayName: string,
+    initialPassword: string,
+    inviteExpiresAt: Date,
+  ) => {
+    recordRawToken('staff_invite', to, initialPassword);
+    return origStaffInvite(to, displayName, initialPassword, inviteExpiresAt);
   };
 }

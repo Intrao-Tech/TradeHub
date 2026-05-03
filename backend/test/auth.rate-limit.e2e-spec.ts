@@ -1,18 +1,14 @@
-// TEST-AUTH-050 (Should) — auth rate-limit e2e.
+// TEST-AUTH-050 — auth rate-limit e2e.
 // Contract: AUTH-010 + Contract §6 throttle table.
 //
 // Boots a SEPARATE app instance with the real ThrottlerGuard enabled (the
 // default test harness installs a NoopThrottlerGuard so other suites don't
-// trip per-IP limits). Marked describe.skip by default — opt in with
-// `--testNamePattern=rate-limit`.
+// trip per-IP limits).
 
 import { createTestApp, type TestHarness } from './util/test-app';
 import { TEST_PASSWORD } from './util/factories';
 
-// Currently describe.skip — `ThrottlerGuard` is not registered as APP_GUARD
-// in AppModule, so the @Throttle decorators are inert. See followups.md FU-6.
-// Flip back to `describe()` when FU-6 is fixed.
-describe.skip('TEST-AUTH-050 rate-limit (FU-6: throttler guard unregistered)', () => {
+describe('TEST-AUTH-050 rate-limit', () => {
   let h: TestHarness;
   beforeAll(async () => {
     h = await createTestApp({ enableThrottler: true });

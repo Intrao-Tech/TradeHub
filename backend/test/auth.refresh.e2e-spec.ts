@@ -3,7 +3,6 @@
 
 import { createTestApp, type TestHarness } from './util/test-app';
 import { seedActiveWorker } from './util/factories';
-import { jwtIatGap } from './util/wait';
 
 describe('TEST-AUTH-044 refresh / logout / logout-all', () => {
   let h: TestHarness;
@@ -33,9 +32,6 @@ describe('TEST-AUTH-044 refresh / logout / logout-all', () => {
 
   test('AUTH-008 — refresh rotates: first refresh succeeds, second use of the SAME token fails 401', async () => {
     const session = await loginFresh();
-    // FU-2: refresh tokens carry only second-precision iat — pause so the
-    // rotated token's signature differs by content, not by clock luck.
-    await jwtIatGap();
 
     const first = await h
       .request()
@@ -74,9 +70,7 @@ describe('TEST-AUTH-044 refresh / logout / logout-all', () => {
 
   });
 
-  // Marked `.failing` because the production DTO rejects an empty body — see
-  // followups.md FU-4. Flip back to `test()` once the DTO is fixed.
-  test.failing('TEST-AUTH-017 spec — logout idempotent on missing body (FU-4: currently 400, contract says 200)', async () => {
+  test('TEST-AUTH-017 spec — logout idempotent on missing body', async () => {
     const session2 = await loginFresh();
     await h
       .request()
@@ -95,7 +89,6 @@ describe('TEST-AUTH-044 refresh / logout / logout-all', () => {
       .post('/api/auth/login')
       .send({ email: seed.email, password: seed.password })
       .expect(200);
-    await jwtIatGap(); // FU-2
     const s2 = await h
       .request()
       .post('/api/auth/login')
