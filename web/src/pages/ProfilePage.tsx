@@ -1,7 +1,9 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
-import { api } from '../api';
+import { api, parseApiError } from '../api';
+import { useAccountMe } from '../hooks/useAccountMe';
+import { AuthBanner } from '../components/AuthBanner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -52,19 +54,6 @@ type DocumentRow = {
   created_at?: string;
 };
 
-type AccountMe = {
-  client_profile?: {
-    id: string | number;
-    display_name?: string;
-    bio?: string | null;
-    city?: string | null;
-    postcode_area?: string | null;
-    avatar_url?: string | null;
-    worker_profile?: Record<string, unknown> | null;
-    employer_profile?: Record<string, unknown> | null;
-  } | null;
-};
-
 function docStatusVariant(
   status?: string,
 ): 'default' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' | 'outline' {
@@ -82,9 +71,29 @@ function docStatusVariant(
   }
 }
 
+function formatDate(value?: string | null): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 export default function ProfilePage() {
-  const [account, setAccount] = useState<AccountMe | null>(null);
-  const [loadError, setLoadError] = useState('');
+  const {
+    account,
+    clientProfile,
+    isWorker,
+    isEmployer,
+    verificationState,
+    loading,
+    error: loadError,
+    refetch,
+  } = useAccountMe();
+
   const [actionError, setActionError] = useState('');
   const [actionOk, setActionOk] = useState('');
 
@@ -130,59 +139,42 @@ export default function ProfilePage() {
   const [certIssuedAt, setCertIssuedAt] = useState('');
   const [certExpiresAt, setCertExpiresAt] = useState('');
 
-  const cp = account?.client_profile;
+  const cp = clientProfile;
   const workerId = cp?.id != null ? String(cp.id) : '';
-  const isWorker = Boolean(cp?.worker_profile);
-  const isEmployer = Boolean(cp?.employer_profile);
 
-  async function refreshAccount() {
-    setLoadError('');
-    try {
-      const me = await api<AccountMe>('/account/me');
-      setAccount(me);
-      const c = me.client_profile;
-      if (c) {
-        setDisplayName(c.display_name ?? '');
-        setBio(c.bio ?? '');
-        setCity(c.city ?? '');
-        setPostcodeAreaClient(c.postcode_area ?? '');
-        setAvatarUrl(c.avatar_url ?? '');
-        const wp = c.worker_profile as {
-          years_experience?: number | null;
-          day_rate_min?: string | number | null;
-          day_rate_max?: string | number | null;
-          is_available?: boolean;
-        } | null;
-        if (wp) {
-          setYearsExperience(wp.years_experience != null ? String(wp.years_experience) : '');
-          setDayRateMin(wp.day_rate_min != null ? String(wp.day_rate_min) : '');
-          setDayRateMax(wp.day_rate_max != null ? String(wp.day_rate_max) : '');
-          setWorkerAvailable(Boolean(wp.is_available));
-        }
-        const ep = c.employer_profile as {
-          company_name?: string | null;
-          company_number?: string | null;
-          team_size?: number | null;
-        } | null;
-        if (ep) {
-          setCompanyName(ep.company_name ?? '');
-          setCompanyNumber(ep.company_number ?? '');
-          setTeamSize(ep.team_size != null ? String(ep.team_size) : '');
-        }
-      }
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
+  // Hydrate editor inputs from the cache. Re-runs when the cache snapshot
+  // replaces (initial load, post-save refetch, auth-change invalidation).
   useEffect(() => {
-    refreshAccount();
-  }, []);
+    if (!cp) return;
+    setDisplayName(cp.display_name ?? '');
+    setBio(cp.bio ?? '');
+    setCity(cp.city ?? '');
+    setPostcodeAreaClient(cp.postcode_area ?? '');
+    setAvatarUrl(cp.avatar_url ?? '');
+    const wp = cp.worker_profile;
+    if (wp) {
+      setYearsExperience(wp.years_experience != null ? String(wp.years_experience) : '');
+      setDayRateMin(wp.day_rate_min != null ? String(wp.day_rate_min) : '');
+      setDayRateMax(wp.day_rate_max != null ? String(wp.day_rate_max) : '');
+      setWorkerAvailable(Boolean(wp.is_available));
+    }
+    const ep = cp.employer_profile;
+    if (ep) {
+      setCompanyName(ep.company_name ?? '');
+      setCompanyNumber(ep.company_number ?? '');
+      setTeamSize(ep.team_size != null ? String(ep.team_size) : '');
+    }
+  }, [cp]);
 
   function flash(msg: string, err?: string) {
     setActionOk(msg);
     setActionError(err ?? '');
     if (msg) setTimeout(() => setActionOk(''), 4000);
+  }
+
+  function reportError(err: unknown) {
+    const parsed = parseApiError(err);
+    setActionError(parsed?.message ?? (err instanceof Error ? err.message : String(err)));
   }
 
   async function submitClient(e: FormEvent) {
@@ -199,9 +191,9 @@ export default function ProfilePage() {
         body: JSON.stringify(patch),
       });
       flash('Client profile updated');
-      await refreshAccount();
+      await refetch();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      reportError(err);
     }
   }
 
@@ -226,9 +218,9 @@ export default function ProfilePage() {
         body: JSON.stringify(bodyObj),
       });
       flash('Worker profile updated');
-      await refreshAccount();
+      await refetch();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      reportError(err);
     }
   }
 
@@ -245,9 +237,9 @@ export default function ProfilePage() {
         body: JSON.stringify(bodyObj),
       });
       flash('Employer profile updated');
-      await refreshAccount();
+      await refetch();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      reportError(err);
     }
   }
 
@@ -258,7 +250,7 @@ export default function ProfilePage() {
       const items = await api<PortfolioItem[]>(`/portfolio/worker/${workerId}`);
       setPortfolio(items);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      reportError(err);
     }
   }
 
@@ -269,7 +261,7 @@ export default function ProfilePage() {
       flash('Portfolio item deleted');
       await loadPortfolio();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      reportError(err);
     }
   }
 
@@ -296,7 +288,7 @@ export default function ProfilePage() {
       setExpEnd('');
       await loadPortfolio();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      reportError(err);
     }
   }
 
@@ -321,7 +313,7 @@ export default function ProfilePage() {
       setProjValue('');
       await loadPortfolio();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      reportError(err);
     }
   }
 
@@ -352,7 +344,7 @@ export default function ProfilePage() {
       setCertExpiresAt('');
       await loadPortfolio();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      reportError(err);
     }
   }
 
@@ -362,7 +354,7 @@ export default function ProfilePage() {
       const list = await api<DocumentRow[]>('/documents/me');
       setDocuments(list);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      reportError(err);
     }
   }
 
@@ -389,7 +381,7 @@ export default function ProfilePage() {
       input.value = '';
       await loadDocuments();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      reportError(err);
     }
   }
 
@@ -400,7 +392,7 @@ export default function ProfilePage() {
       flash('Document deleted');
       await loadDocuments();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      reportError(err);
     }
   }
 
@@ -418,6 +410,15 @@ export default function ProfilePage() {
     );
   }
 
+  if (loading && !account) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-semibold tracking-tight">My profile</h1>
+        <p className="text-sm text-fg-muted">Loading…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -426,6 +427,10 @@ export default function ProfilePage() {
           Manage your account, portfolio, and verification documents.
         </p>
       </div>
+
+      {verificationState === 'PENDING_EMAIL_VERIFICATION' && account ? (
+        <EmailNotVerifiedBanner email={account.email} />
+      ) : null}
 
       {actionError ? (
         <div
@@ -452,24 +457,15 @@ export default function ProfilePage() {
         </TabsList>
 
         <TabsContent value="profile" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Account</CardTitle>
-                  <CardDescription>Raw account data for debugging.</CardDescription>
-                </div>
-                <Button type="button" variant="outline" size="sm" onClick={refreshAccount}>
-                  Reload
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
-                {JSON.stringify(account, null, 2)}
-              </pre>
-            </CardContent>
-          </Card>
+          {account ? (
+            <AccountSection
+              email={account.email}
+              emailVerifiedAt={account.email_verified_at}
+              phone={account.phone}
+              phoneVerified={account.phone_verified}
+              verificationState={verificationState}
+            />
+          ) : null}
 
           {cp ? (
             <Card>
@@ -519,6 +515,7 @@ export default function ProfilePage() {
                       value={avatarUrl}
                       onChange={(e) => setAvatarUrl(e.target.value)}
                     />
+                    <p className="text-xs text-fg-muted">Image upload coming soon.</p>
                   </div>
                   <div className="sm:col-span-2">
                     <Button type="submit">Save client profile</Button>
@@ -1004,6 +1001,150 @@ export default function ProfilePage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+type AccountSectionProps = {
+  email: string;
+  emailVerifiedAt: string | null;
+  phone: string | null;
+  phoneVerified: boolean;
+  verificationState: 'PENDING_EMAIL_VERIFICATION' | 'ACTIVE' | 'DEACTIVATED' | null;
+};
+
+function AccountSection({
+  email,
+  emailVerifiedAt,
+  phone,
+  phoneVerified,
+  verificationState,
+}: AccountSectionProps) {
+  const verifiedDate = formatDate(emailVerifiedAt);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Account</CardTitle>
+        <CardDescription>Email, phone, and verification state.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wide text-fg-muted">Email</p>
+            <p className="text-sm text-fg">{email}</p>
+            {verifiedDate ? (
+              <p className="text-xs text-fg-muted">Verified on {verifiedDate}</p>
+            ) : null}
+          </div>
+          {emailVerifiedAt ? (
+            <Badge variant="success" title={emailVerifiedAt}>
+              Verified
+            </Badge>
+          ) : (
+            <Badge variant="warning">Pending</Badge>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wide text-fg-muted">Phone</p>
+            <p className="text-sm text-fg">{phone ?? 'Not set'}</p>
+          </div>
+          {phone ? (
+            phoneVerified ? (
+              <Badge variant="success">Verified</Badge>
+            ) : (
+              <Badge variant="outline">Unverified</Badge>
+            )
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wide text-fg-muted">Account state</p>
+            <p className="text-sm text-fg">
+              {verificationState
+                ? VERIFICATION_STATE_LABEL[verificationState]
+                : 'Unknown'}
+            </p>
+          </div>
+          {verificationState ? (
+            <Badge variant={VERIFICATION_STATE_VARIANT[verificationState]}>
+              {VERIFICATION_STATE_LABEL[verificationState]}
+            </Badge>
+          ) : null}
+        </div>
+
+        <div className="border-t border-border-default pt-4">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/settings/security">Manage security</Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const VERIFICATION_STATE_LABEL: Record<
+  'PENDING_EMAIL_VERIFICATION' | 'ACTIVE' | 'DEACTIVATED',
+  string
+> = {
+  PENDING_EMAIL_VERIFICATION: 'Pending email verification',
+  ACTIVE: 'Active',
+  DEACTIVATED: 'Deactivated',
+};
+
+const VERIFICATION_STATE_VARIANT: Record<
+  'PENDING_EMAIL_VERIFICATION' | 'ACTIVE' | 'DEACTIVATED',
+  'success' | 'warning' | 'danger'
+> = {
+  PENDING_EMAIL_VERIFICATION: 'warning',
+  ACTIVE: 'success',
+  DEACTIVATED: 'danger',
+};
+
+function EmailNotVerifiedBanner({ email }: { email: string }) {
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+
+  async function resend() {
+    setSending(true);
+    setError('');
+    try {
+      await api('/auth/verify-email/send', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      });
+      setSent(true);
+    } catch (err) {
+      const parsed = parseApiError(err);
+      setError(parsed?.message ?? 'Failed to resend verification email.');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <AuthBanner
+      variant="warning"
+      title="Verify your email"
+      action={
+        sent ? (
+          <p className="text-xs">Check your inbox for the link.</p>
+        ) : (
+          <Button type="button" size="sm" onClick={resend} disabled={sending}>
+            {sending ? 'Sending…' : 'Resend verification email'}
+          </Button>
+        )
+      }
+    >
+      <p>
+        We sent a confirmation link to <strong>{email}</strong>. You can keep
+        editing your profile in the meantime.
+      </p>
+      {error ? <p className="mt-1 text-xs">{error}</p> : null}
+    </AuthBanner>
   );
 }
 
