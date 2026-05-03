@@ -7,6 +7,10 @@ import { AvatarUploader } from '../components/profile/AvatarUploader';
 import { PortfolioTab } from '../components/profile/PortfolioTab';
 import { DocumentsTab } from '../components/profile/DocumentsTab';
 import {
+  CompletenessPanel,
+  type CompletenessAction,
+} from '../components/profile/CompletenessPanel';
+import {
   LONDON_BOROUGH_NAMES,
   POSTCODE_OUTWARD_REGEX,
   postcodeAreasFor,
@@ -88,6 +92,51 @@ export default function ProfilePage() {
   const cp = clientProfile;
   const workerId = cp?.id != null ? String(cp.id) : '';
   const postcodeOptions = useMemo(() => postcodeAreasFor(city), [city]);
+
+  const [activeTab, setActiveTab] = useState<'profile' | 'portfolio' | 'documents'>('profile');
+  const [hasPortfolioItem, setHasPortfolioItem] = useState(false);
+  const [hasUploadedDocument, setHasUploadedDocument] = useState(false);
+
+  // Lightweight summary fetch for the completeness panel only — sub-components
+  // own their own (richer) loads. We refetch when the account cache replaces
+  // (post-save) so flipping a section to "Done" lands without a full reload.
+  useEffect(() => {
+    if (!cp) return;
+    const cancel = { current: false };
+    if (workerId) {
+      api<unknown[]>(`/portfolio/worker/${workerId}`)
+        .then((items) => {
+          if (!cancel.current) setHasPortfolioItem(items.length > 0);
+        })
+        .catch(() => {
+          /* non-fatal — completeness card just stays "not done" */
+        });
+    }
+    api<unknown[]>('/documents/me')
+      .then((docs) => {
+        if (!cancel.current) setHasUploadedDocument(docs.length > 0);
+      })
+      .catch(() => {
+        /* non-fatal */
+      });
+    return () => {
+      cancel.current = true;
+    };
+  }, [cp, workerId]);
+
+  function handleCompletenessAction(action: CompletenessAction) {
+    if (action.switchTab) {
+      setActiveTab(action.switchTab);
+      return;
+    }
+    if (action.scrollTo) {
+      requestAnimationFrame(() => {
+        document
+          .getElementById(action.scrollTo!)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  }
 
   // Hydrate editor inputs from the cache. Re-runs when the cache snapshot
   // replaces (initial load, post-save refetch, auth-change invalidation).
@@ -268,7 +317,11 @@ export default function ProfilePage() {
         </div>
       ) : null}
 
-      <Tabs defaultValue="profile" className="space-y-4">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as 'profile' | 'portfolio' | 'documents')}
+        className="space-y-4"
+      >
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
@@ -287,7 +340,20 @@ export default function ProfilePage() {
           ) : null}
 
           {cp ? (
-            <Card>
+            <CompletenessPanel
+              isWorker={isWorker}
+              isEmployer={isEmployer}
+              clientProfile={cp}
+              workerProfile={cp.worker_profile}
+              employerProfile={cp.employer_profile}
+              hasPortfolioItem={hasPortfolioItem}
+              hasUploadedDocument={hasUploadedDocument}
+              onAction={handleCompletenessAction}
+            />
+          ) : null}
+
+          {cp ? (
+            <Card id="section-avatar">
               <CardHeader>
                 <CardTitle>Avatar</CardTitle>
                 <CardDescription>
@@ -305,7 +371,7 @@ export default function ProfilePage() {
           ) : null}
 
           {cp ? (
-            <Card>
+            <Card id="section-client">
               <CardHeader>
                 <CardTitle>Client profile</CardTitle>
                 <CardDescription>Public details shown to other users.</CardDescription>
@@ -403,7 +469,7 @@ export default function ProfilePage() {
           )}
 
           {cp && isWorker ? (
-            <Card>
+            <Card id="section-worker">
               <CardHeader>
                 <CardTitle>Worker profile</CardTitle>
                 <CardDescription>Rates, availability, and experience.</CardDescription>
@@ -474,7 +540,7 @@ export default function ProfilePage() {
           ) : null}
 
           {cp && isEmployer ? (
-            <Card>
+            <Card id="section-employer">
               <CardHeader>
                 <CardTitle>Employer profile</CardTitle>
                 <CardDescription>Company details.</CardDescription>

@@ -170,14 +170,6 @@ export default function EmployerSearchPage() {
                   description="Try another search."
                 />
               )}
-              <details className="rounded-md border border-border-default bg-raised">
-                <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-fg-muted">
-                  Raw response
-                </summary>
-                <pre className="rounded-b-md bg-subtle text-fg p-3 text-xs overflow-auto">
-                  {JSON.stringify(results, null, 2)}
-                </pre>
-              </details>
             </>
           ) : (
             <EmptyState
