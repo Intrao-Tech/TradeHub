@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Trash2 } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '../hooks/useAccountMe';
 import { AuthBanner } from '../components/AuthBanner';
 import { AvatarUploader } from '../components/profile/AvatarUploader';
 import { PortfolioTab } from '../components/profile/PortfolioTab';
+import { DocumentsTab } from '../components/profile/DocumentsTab';
 import {
   LONDON_BOROUGH_NAMES,
   POSTCODE_OUTWARD_REGEX,
@@ -31,43 +31,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-
-const DOC_TYPES = [
-  'ID_PHOTO',
-  'SELFIE',
-  'INSURANCE',
-  'CSCS_CARD',
-  'GAS_SAFE_CERT',
-  'NICEIC_CERT',
-  'COMPANY_LETTERHEAD',
-  'PROJECT_PHOTO',
-  'OTHER',
-] as const;
-
-type DocumentRow = {
-  id: string | number;
-  doc_type?: string;
-  status?: string;
-  file_url?: string;
-  created_at?: string;
-};
-
-function docStatusVariant(
-  status?: string,
-): 'default' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' | 'outline' {
-  switch (status) {
-    case 'APPROVED':
-      return 'success';
-    case 'REJECTED':
-      return 'danger';
-    case 'IN_REVIEW':
-      return 'info';
-    case 'PENDING':
-      return 'warning';
-    default:
-      return 'outline';
-  }
-}
 
 function formatDate(value?: string | null): string | null {
   if (!value) return null;
@@ -121,9 +84,6 @@ export default function ProfilePage() {
   const [companyNumber, setCompanyNumber] = useState('');
   const [teamSize, setTeamSize] = useState('');
 
-  const [documents, setDocuments] = useState<DocumentRow[] | null>(null);
-  const [uploadDocType, setUploadDocType] = useState<string>(DOC_TYPES[0]);
-  const [uploadResult, setUploadResult] = useState<unknown>(null);
 
   const cp = clientProfile;
   const workerId = cp?.id != null ? String(cp.id) : '';
@@ -235,54 +195,6 @@ export default function ProfilePage() {
       });
       flash('Employer profile updated');
       await refetch();
-    } catch (err) {
-      reportError(err);
-    }
-  }
-
-  async function loadDocuments() {
-    setActionError('');
-    try {
-      const list = await api<DocumentRow[]>('/documents/me');
-      setDocuments(list);
-    } catch (err) {
-      reportError(err);
-    }
-  }
-
-  async function uploadDocument(e: FormEvent) {
-    e.preventDefault();
-    setActionError('');
-    const form = e.target as HTMLFormElement;
-    const input = form.elements.namedItem('file') as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) {
-      setActionError('Choose a file');
-      return;
-    }
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('doc_type', uploadDocType);
-      const result = await api<unknown>('/documents/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      setUploadResult(result);
-      flash('Document uploaded');
-      input.value = '';
-      await loadDocuments();
-    } catch (err) {
-      reportError(err);
-    }
-  }
-
-  async function deleteDocument(id: string | number) {
-    setActionError('');
-    try {
-      await api(`/documents/${id}`, { method: 'DELETE' });
-      flash('Document deleted');
-      await loadDocuments();
     } catch (err) {
       reportError(err);
     }
@@ -618,100 +530,11 @@ export default function ProfilePage() {
 
         <TabsContent value="documents" className="space-y-6">
           {cp ? (
-            <>
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>My documents</CardTitle>
-                      <CardDescription>
-                        Upload verification documents for review.
-                      </CardDescription>
-                    </div>
-                    <Button type="button" variant="outline" size="sm" onClick={loadDocuments}>
-                      Load documents
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {documents ? (
-                    documents.length > 0 ? (
-                      <ul className="divide-y divide-border-default">
-                        {documents.map((doc) => (
-                          <li
-                            key={String(doc.id)}
-                            className="flex flex-wrap items-center justify-between gap-2 py-3"
-                          >
-                            <div className="min-w-0 flex-1 text-sm">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-medium text-fg">{doc.doc_type}</span>
-                                <Badge variant={docStatusVariant(doc.status)}>{doc.status}</Badge>
-                              </div>
-                              {doc.file_url ? (
-                                <p className="truncate text-xs text-fg-muted">{doc.file_url}</p>
-                              ) : null}
-                            </div>
-                            {doc.status === 'PENDING' ? (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => deleteDocument(doc.id)}
-                              >
-                                <Trash2 />
-                                Delete
-                              </Button>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-fg-muted">No documents uploaded.</p>
-                    )
-                  ) : (
-                    <p className="text-sm text-fg-muted">Click “Load documents” to fetch.</p>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Upload document</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <form
-                    onSubmit={uploadDocument}
-                    className="flex flex-col gap-3 sm:flex-row sm:items-end"
-                  >
-                    <div className="flex-1 space-y-2">
-                      <Label htmlFor="doc-file">File</Label>
-                      <Input id="doc-file" type="file" name="file" required />
-                    </div>
-                    <div className="space-y-2 sm:w-60">
-                      <Label>Doc type</Label>
-                      <Select value={uploadDocType} onValueChange={setUploadDocType}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {DOC_TYPES.map((t) => (
-                            <SelectItem key={t} value={t}>
-                              {t}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button type="submit">Upload</Button>
-                  </form>
-                  {uploadResult != null ? (
-                    <pre className="mt-4 rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
-                      {JSON.stringify(uploadResult, null, 2)}
-                    </pre>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </>
+            <DocumentsTab
+              isWorker={isWorker}
+              isEmployer={isEmployer}
+              flash={flash}
+            />
           ) : (
             <p className="text-sm text-fg-muted">
               You need a client profile to upload documents.
