@@ -105,6 +105,36 @@
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      "stripe/",
+      "\\.module\\.ts$",
+      "\\.controller\\.ts$",
+      "\\.dto\\.ts$",
+      "/dto/"
+    ],
+    "coverageThreshold": {
+      "src/client-profile/client-profile.service.ts": {
+        "statements": 60,
+        "branches": 40
+      },
+      "src/worker-profile/worker-profile.service.ts": {
+        "statements": 60,
+        "branches": 35
+      },
+      "src/employer-profile/employer-profile.service.ts": {
+        "statements": 60,
+        "branches": 35
+      },
+      "src/portfolio/portfolio.service.ts": {
+        "statements": 50,
+        "branches": 20
+      },
+      "src/document/document.service.ts": {
+        "statements": 40,
+        "branches": 30
+      }
+    },
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
   }

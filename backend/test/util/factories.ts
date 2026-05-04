@@ -405,6 +405,111 @@ export async function seedFreshStaffInvite(
   };
 }
 
+// ── TEST-PROF-160: Profiles factory extensions ───────────────────
+//
+// Each helper commits the rows the e2e specs need and returns the IDs the
+// tests will assert against.  Names follow the spec:
+//   - seedWorkerWithPortfolio
+//   - seedWorkerWithApprovedDocuments
+//   - seedEmployer
+//   - seedDeactivatedAccount
+// plus a Prisma-direct `approveDocument()` helper required by the
+// Decisions Log 2026-05-03 row (Open Question (b)) — until Verification
+// ships its admin endpoint, the Profiles e2e tests flip a doc to APPROVED
+// directly.
+
+export type SeededWorkerWithPortfolio = SeededAccount & {
+  workerId: bigint;
+  portfolioItemId: bigint;
+};
+
+export async function seedWorkerWithPortfolio(
+  prisma: PrismaService,
+  overrides: { itemType?: 'EXPERIENCE' | 'PROJECT' | 'CERTIFICATION' } = {},
+): Promise<SeededWorkerWithPortfolio> {
+  const account = await seedActiveWorker(prisma);
+  const item = await prisma.portfolioItem.create({
+    data: {
+      worker_id: account.id,
+      item_type: overrides.itemType ?? 'PROJECT',
+      title: 'Loft conversion',
+      description: 'Two-bed loft, full electrics + plumbing.',
+    },
+  });
+  if (item.item_type === 'PROJECT') {
+    await prisma.projectDetail.create({
+      data: { id: item.id, project_type: 'Conversion' },
+    });
+  } else if (item.item_type === 'EXPERIENCE') {
+    await prisma.experienceDetail.create({
+      data: { id: item.id, role: 'Lead carpenter' },
+    });
+  } else if (item.item_type === 'CERTIFICATION') {
+    await prisma.certificationDetail.create({
+      data: { id: item.id, cert_type: 'CSCS' },
+    });
+  }
+  return { ...account, workerId: account.id, portfolioItemId: item.id };
+}
+
+export type SeededWorkerWithDocs = SeededAccount & {
+  documentIds: bigint[];
+};
+
+export async function seedWorkerWithApprovedDocuments(
+  prisma: PrismaService,
+  count = 1,
+): Promise<SeededWorkerWithDocs> {
+  const account = await seedActiveWorker(prisma);
+  const ids: bigint[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const doc = await prisma.document.create({
+      data: {
+        client_profile_id: account.id,
+        doc_type: 'CSCS_CARD',
+        file_url: `/uploads/seed-${account.id}-${i}.pdf`,
+        status: 'APPROVED',
+        reviewed_at: new Date(),
+      },
+    });
+    ids.push(doc.id);
+  }
+  return { ...account, documentIds: ids };
+}
+
+export async function seedEmployer(
+  prisma: PrismaService,
+  overrides: { companyName?: string } = {},
+): Promise<SeededAccount> {
+  return seedActiveEmployer(prisma, overrides);
+}
+
+export async function seedDeactivatedAccount(
+  prisma: PrismaService,
+): Promise<SeededAccount> {
+  return seedDeactivatedWorker(prisma);
+}
+
+/**
+ * Prisma-direct admin helper: flip a document straight to APPROVED.  Used by
+ * the Profiles e2e suite for E2E-1 / E2E-2 where the user needs to see the
+ * downstream verification effect of an approval but Verification's staff
+ * admin endpoint isn't sealed yet (Decisions Log 2026-05-03 row 2).
+ *
+ * IMPORTANT: this bypasses Verification's promotion engine.  Tests must
+ * assert only the *Profiles-side surface* — they must not assume ladder
+ * promotion has fired as a side effect.
+ */
+export async function approveDocumentDirect(
+  prisma: PrismaService,
+  documentId: bigint,
+): Promise<void> {
+  await prisma.document.update({
+    where: { id: documentId },
+    data: { status: 'APPROVED', reviewed_at: new Date() },
+  });
+}
+
 /** For unit tests of the Google flow — Google-only account, no password set. */
 export async function seedGoogleOnlyAccount(
   prisma: PrismaService,
