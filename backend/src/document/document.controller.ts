@@ -34,7 +34,10 @@ import { Roles, RolesGuard } from '../common/guards/roles.guard';
 import { ParseBigIntPipe } from '../common/pipes/parse-bigint.pipe';
 import { DocumentService } from './document.service';
 import { UpdateDocumentStatusDto } from './dto/update-document-status.dto';
-import { UploadDocumentDto } from './dto/upload-document.dto';
+import {
+  DOCUMENT_DOC_TYPES,
+  UploadDocumentDto,
+} from './dto/upload-document.dto';
 
 const DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 const DOCUMENT_ALLOWED_MIMES = [
@@ -61,17 +64,7 @@ export class DocumentController {
         file: { type: 'string', format: 'binary' },
         doc_type: {
           type: 'string',
-          enum: [
-            'ID_PHOTO',
-            'SELFIE',
-            'INSURANCE',
-            'CSCS_CARD',
-            'GAS_SAFE_CERT',
-            'NICEIC_CERT',
-            'COMPANY_LETTERHEAD',
-            'PROJECT_PHOTO',
-            'OTHER',
-          ],
+          enum: [...DOCUMENT_DOC_TYPES],
         },
       },
     },

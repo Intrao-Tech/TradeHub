@@ -22,17 +22,25 @@ export class ClientProfileService {
   async getBySlug(slug: string) {
     const profile = await this.prisma.clientProfile.findUnique({
       where: { slug },
+      include: { account: { select: { status: true } } },
     });
-    if (!profile) throw new NotFoundException('Client profile not found');
-    return profile;
+    if (!profile || profile.account.status !== 'ACTIVE') {
+      throw new NotFoundException('Client profile not found');
+    }
+    const { account: _account, ...rest } = profile;
+    return rest;
   }
 
   async getById(id: bigint) {
     const profile = await this.prisma.clientProfile.findUnique({
       where: { id },
+      include: { account: { select: { status: true } } },
     });
-    if (!profile) throw new NotFoundException('Client profile not found');
-    return profile;
+    if (!profile || profile.account.status !== 'ACTIVE') {
+      throw new NotFoundException('Client profile not found');
+    }
+    const { account: _account, ...rest } = profile;
+    return rest;
   }
 
   async updateAvatar(id: bigint, file: Express.Multer.File) {
@@ -84,7 +92,8 @@ export class ClientProfileService {
     if (dto.display_name !== undefined) data.display_name = dto.display_name;
     if (dto.bio !== undefined) data.bio = dto.bio;
     if (dto.city !== undefined) data.city = dto.city;
-    if (dto.postcode_area !== undefined) data.postcode_area = dto.postcode_area;
+    if (dto.postcode_area !== undefined)
+      data.postcode_area = dto.postcode_area.toUpperCase();
     if (dto.avatar_url !== undefined) data.avatar_url = dto.avatar_url;
 
     try {

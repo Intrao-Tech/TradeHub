@@ -12,6 +12,10 @@ function convertBigInts(obj: unknown): unknown {
   if (Array.isArray(obj)) return obj.map(convertBigInts);
   if (obj instanceof Date) return obj;
   if (typeof obj === 'object') {
+    // Objects that own a toJSON (Prisma.Decimal, Buffer, …) must be left
+    // intact so JSON.stringify can call their serialiser; cloning their
+    // enumerable fields drops the method and corrupts the wire format.
+    if (typeof (obj as { toJSON?: unknown }).toJSON === 'function') return obj;
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj)) {
       result[key] = convertBigInts(value);

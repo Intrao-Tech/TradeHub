@@ -158,6 +158,16 @@ Independent of the above, before opening the Profiles PR:
 
 ---
 
+## Surfaced by tests-profiles (TEST-PROF-NNN)
+
+The original six items in this section (PROF-011, PROF-022, PROF-023,
+PROF-026, PROF-029, PROF-258) were closed on `feat/profile-tests`
+(2026-05-04) by wiring the missing server-side checks and flipping
+each `test.skip(...)` to a live assertion. Production now matches the
+TEST-PROF-NNN expectations; no items remain in this section.
+
+---
+
 ## Status of each spec requirement after this session
 
 Of the 55 numbered `PROF-NNN` requirements in `spec.md`, 47 are

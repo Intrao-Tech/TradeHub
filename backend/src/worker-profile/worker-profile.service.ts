@@ -12,13 +12,16 @@ export class WorkerProfileService {
     const profile = await this.prisma.workerProfile.findUnique({
       where: { id },
       include: {
-        client_profile: true,
+        client_profile: { include: { account: { select: { status: true } } } },
         worker_specialisations: { include: { specialisation: true } },
         portfolio_items: true,
       },
     });
-    if (!profile) throw new NotFoundException('Worker profile not found');
-    return profile;
+    if (!profile || profile.client_profile.account.status !== 'ACTIVE') {
+      throw new NotFoundException('Worker profile not found');
+    }
+    const { account: _account, ...client_profile } = profile.client_profile;
+    return { ...profile, client_profile };
   }
 
   async linkSpecialisation(
