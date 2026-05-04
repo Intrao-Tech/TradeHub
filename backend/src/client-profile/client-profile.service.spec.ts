@@ -82,14 +82,15 @@ describe('TEST-PROF-010 ClientProfileService.update (PROF-011)', () => {
     );
   });
 
-  test.skip(
-    'PROF-011 — TODO: postcode_area casing normalisation. Spec wants `nw1` → `NW1`; production currently persists raw input. ' +
-      'See tasks/in-progress/profiles/followups.md "PROF-011 postcode normalisation".',
-    async () => {
-      // Intentionally left as a skipped contract test — the day production
-      // adds normalisation, flip this to live.
-    },
-  );
+  test('PROF-011 — postcode_area casing is normalised to upper case before persistence', async () => {
+    const { service, prisma } = build();
+    prisma.clientProfile.update.mockResolvedValue({ id: 1n } as never);
+    await service.update(1n, { postcode_area: 'nw1' });
+    const call = prisma.clientProfile.update.mock.calls[0][0] as {
+      data: Record<string, unknown>;
+    };
+    expect(call.data.postcode_area).toBe('NW1');
+  });
 });
 
 describe('TEST-PROF-011 ClientProfileService.updateAvatar (PROF-017 / PROF-018, BE-PROF-1)', () => {

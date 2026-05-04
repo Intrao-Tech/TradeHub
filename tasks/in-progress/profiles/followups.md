@@ -160,69 +160,11 @@ Independent of the above, before opening the Profiles PR:
 
 ## Surfaced by tests-profiles (TEST-PROF-NNN)
 
-These items are **bugs / gaps revealed by writing tests**. The tests-
-profiles feature does not fix them (per its TEST-PROF-200 constraint:
-test code must not silently fix Profiles bugs). Each item is left as a
-`test.skip(...)` or `test.todo(...)` with a TODO citing the PROF-NNN
-clause.
-
-### PROF-011 — `postcode_area` is not normalised on update
-
-`tests-profiles/spec.md` TEST-PROF-010 expects
-`ClientProfileService.update()` to normalise `postcode_area` casing
-(`nw1` → `NW1`) before persistence. Current production
-`backend/src/client-profile/client-profile.service.ts` persists the
-raw DTO value, and the DTO does no transformation. Profiles spec
-PROF-011 requires "persists … `postcode_area`" but the casing point
-sits in the test spec only.
-
-**Decision:** demote to a one-line normalisation in
-`ClientProfileService.update()` (`data.postcode_area =
-dto.postcode_area.toUpperCase()`) when the spec line is sealed.
-Until then `TEST-PROF-010` carries a `test.skip(...)` with this
-follow-up reference.
-
-### PROF-022 — `sort_order` collision: re-sequence vs reject
-
-`tests-profiles/spec.md` TEST-PROF-021 expects the service to
-re-sequence other items when an edit collides with an existing
-`sort_order`; the current `PortfolioService.update()` writes the
-caller's `sort_order` straight through. PROF-022 states the
-behaviour ("re-sequence server-side rather than reject") so the
-test will go live the moment production gains the re-sequencer;
-until then the test is `test.skip(...)`.
-
-### PROF-023 — `>20 media items` cap not enforced server-side
-
-`tests-profiles/spec.md` TEST-PROF-022 expects rejection when the
-21st media item is added to a portfolio item; the current
-`PortfolioService.addMedia()` / `uploadMedia()` does not count.
-`test.skip(...)` until the cap is wired (cheap follow-up:
-`prisma.portfolioMedia.count` + a `BadRequestException` when
-≥ 20).
-
-### PROF-026 — Portfolio document linkage status check
-
-`tests-profiles/spec.md` TEST-PROF-023 expects
-`PortfolioService.linkDocument()` to reject documents whose
-`status !== 'APPROVED'`. The current implementation only enforces
-ownership. `test.skip(...)` until the check is added.
-
-### PROF-258 — Deactivated profile privacy
-
-`tests-profiles/spec.md` TEST-PROF-080 expects
-`GET /worker-profiles/:id` to return 404 when the underlying Account
-is `DEACTIVATED` (privacy — never disclose status). Current production
-returns 200 with the profile body. `test.skip(...)` until the route
-adds an `account: { status: 'ACTIVE' }` filter to its `findUnique`.
-
-### PROF-029 — `doc_type` enum coverage
-
-The Multer `fileFilter` enforces MIME and size, but the
-`UploadDocumentDto.doc_type` enum is not enforced beyond
-class-validator + the controller's `ApiBody` enum. `test.skip(...)`
-contract test sits in `document.service.spec.ts` until the
-service-side enum check lands.
+The original six items in this section (PROF-011, PROF-022, PROF-023,
+PROF-026, PROF-029, PROF-258) were closed on `feat/profile-tests`
+(2026-05-04) by wiring the missing server-side checks and flipping
+each `test.skip(...)` to a live assertion. Production now matches the
+TEST-PROF-NNN expectations; no items remain in this section.
 
 ---
 

@@ -5,6 +5,7 @@
 
 import { mockDeep, type DeepMockProxy } from 'jest-mock-extended';
 import {
+  BadRequestException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -112,14 +113,64 @@ describe('TEST-PROF-020 PortfolioService discriminated edits (PROF-021)', () => 
 });
 
 describe('TEST-PROF-021 PortfolioService sort_order behaviour (PROF-022)', () => {
-  test.skip(
-    'PROF-022 — TODO: re-sequence siblings on collision instead of overwriting. ' +
-      'Today the service writes the caller value through. ' +
-      'See tasks/in-progress/profiles/followups.md "PROF-022".',
-    async () => {
-      // intentionally empty
-    },
-  );
+  test('PROF-022 — editing item B to item A\'s sort_order shifts A by one', async () => {
+    const { service, prisma } = build();
+    // Sequence of findUnique reads: assertWorkerOwns (B) → getById final read.
+    prisma.portfolioItem.findUnique.mockResolvedValueOnce({
+      id: 2n,
+      worker_id: 7n,
+      item_type: 'PROJECT',
+      sort_order: 5,
+    } as never);
+    prisma.portfolioItem.findUnique.mockResolvedValueOnce({
+      id: 2n,
+      worker_id: 7n,
+      item_type: 'PROJECT',
+      sort_order: 3,
+    } as never);
+    prisma.portfolioItem.findFirst.mockResolvedValueOnce({
+      id: 1n,
+      worker_id: 7n,
+      sort_order: 3,
+    } as never);
+    prisma.portfolioItem.update.mockResolvedValue({} as never);
+
+    await service.update(2n, 7n, { sort_order: 3 });
+
+    const updateCalls = prisma.portfolioItem.update.mock.calls.map(
+      (c) => c[0],
+    ) as Array<{ where: { id: bigint }; data: Record<string, unknown> }>;
+    // First write: shift the colliding sibling A from 3 → 4.
+    expect(updateCalls[0]).toEqual({
+      where: { id: 1n },
+      data: { sort_order: 4 },
+    });
+    // Second write: assign B to sort_order 3 (alongside title/description carry-through).
+    expect(updateCalls[1].where).toEqual({ id: 2n });
+    expect(updateCalls[1].data).toMatchObject({ sort_order: 3 });
+  });
+
+  test('PROF-022 — no collision: only the edited item is updated', async () => {
+    const { service, prisma } = build();
+    prisma.portfolioItem.findUnique.mockResolvedValue({
+      id: 2n,
+      worker_id: 7n,
+      item_type: 'PROJECT',
+      sort_order: 5,
+    } as never);
+    prisma.portfolioItem.findFirst.mockResolvedValue(null);
+    prisma.portfolioItem.update.mockResolvedValue({} as never);
+
+    await service.update(2n, 7n, { sort_order: 9 });
+
+    expect(prisma.portfolioItem.update).toHaveBeenCalledTimes(1);
+    const call = prisma.portfolioItem.update.mock.calls[0][0] as {
+      where: { id: bigint };
+      data: Record<string, unknown>;
+    };
+    expect(call.where).toEqual({ id: 2n });
+    expect(call.data).toMatchObject({ sort_order: 9 });
+  });
 });
 
 describe('TEST-PROF-022 PortfolioService.uploadMedia (PROF-024, BE-PROF-2)', () => {
@@ -181,14 +232,33 @@ describe('TEST-PROF-022 PortfolioService.uploadMedia (PROF-024, BE-PROF-2)', () 
     expect(prisma.portfolioMedia.create).not.toHaveBeenCalled();
   });
 
-  test.skip(
-    'PROF-024 — TODO: server-side cap at 20 media items per portfolio item. ' +
-      'Today the service does not count siblings. ' +
-      'See tasks/in-progress/profiles/followups.md "PROF-023".',
-    async () => {
-      // intentionally empty
-    },
-  );
+  test('PROF-023 — 21st media item is rejected with BadRequestException("MEDIA_LIMIT")', async () => {
+    const { service, prisma } = build();
+    prisma.portfolioItem.findUnique.mockResolvedValue({
+      id: 1n,
+      worker_id: 7n,
+      item_type: 'PROJECT',
+    } as never);
+    prisma.portfolioMedia.count.mockResolvedValue(20 as never);
+    await expect(
+      service.uploadMedia(1n, 7n, fakeFile(), {}),
+    ).rejects.toMatchObject({ response: { code: 'MEDIA_LIMIT' } });
+    expect(prisma.portfolioMedia.create).not.toHaveBeenCalled();
+  });
+
+  test('PROF-023 — addMedia also enforces the 20-item cap', async () => {
+    const { service, prisma } = build();
+    prisma.portfolioItem.findUnique.mockResolvedValue({
+      id: 1n,
+      worker_id: 7n,
+      item_type: 'PROJECT',
+    } as never);
+    prisma.portfolioMedia.count.mockResolvedValue(20 as never);
+    await expect(
+      service.addMedia(1n, 7n, { media_url: '/uploads/x.png' }),
+    ).rejects.toMatchObject({ response: { code: 'MEDIA_LIMIT' } });
+    expect(prisma.portfolioMedia.create).not.toHaveBeenCalled();
+  });
 
   // MIME / size enforcement is done by the Multer fileFilter on the
   // controller, not the service.  See TEST-PROF-050 for the Multer
@@ -290,12 +360,39 @@ describe('TEST-PROF-023 PortfolioService document linkage (PROF-026)', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  test.skip(
-    'PROF-026 — TODO: link rejects PENDING / REJECTED docs. ' +
-      'Today the service only checks ownership; status check is missing. ' +
-      'See tasks/in-progress/profiles/followups.md "PROF-026".',
-    async () => {
-      // intentionally empty
-    },
-  );
+  test('PROF-026 — link rejects PENDING document with BadRequestException("DOCUMENT_NOT_APPROVED")', async () => {
+    const { service, prisma } = build();
+    prisma.portfolioItem.findUnique.mockResolvedValue({
+      id: 1n,
+      worker_id: 7n,
+      item_type: 'CERTIFICATION',
+    } as never);
+    prisma.document.findUnique.mockResolvedValue({
+      id: 50n,
+      client_profile_id: 7n,
+      status: 'PENDING',
+    } as never);
+    await expect(service.linkDocument(1n, 50n, 7n)).rejects.toMatchObject({
+      response: { code: 'DOCUMENT_NOT_APPROVED' },
+    });
+    expect(prisma.portfolioItemDocument.upsert).not.toHaveBeenCalled();
+  });
+
+  test('PROF-026 — link rejects REJECTED document with BadRequestException("DOCUMENT_NOT_APPROVED")', async () => {
+    const { service, prisma } = build();
+    prisma.portfolioItem.findUnique.mockResolvedValue({
+      id: 1n,
+      worker_id: 7n,
+      item_type: 'CERTIFICATION',
+    } as never);
+    prisma.document.findUnique.mockResolvedValue({
+      id: 50n,
+      client_profile_id: 7n,
+      status: 'REJECTED',
+    } as never);
+    await expect(service.linkDocument(1n, 50n, 7n)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(prisma.portfolioItemDocument.upsert).not.toHaveBeenCalled();
+  });
 });

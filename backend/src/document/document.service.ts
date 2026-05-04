@@ -9,7 +9,10 @@ import type { Express } from 'express';
 import { mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
-import { UploadDocumentDto } from './dto/upload-document.dto';
+import {
+  DOCUMENT_DOC_TYPES,
+  UploadDocumentDto,
+} from './dto/upload-document.dto';
 
 const UPLOAD_SUBDIR = 'uploads';
 
@@ -29,6 +32,13 @@ export class DocumentService implements OnModuleInit {
   ) {
     if (!file?.filename) {
       throw new BadRequestException('File is required');
+    }
+
+    if (!(DOCUMENT_DOC_TYPES as readonly string[]).includes(dto.doc_type)) {
+      throw new BadRequestException({
+        code: 'INVALID_DOC_TYPE',
+        message: `Unknown doc_type: ${dto.doc_type}`,
+      });
     }
 
     const file_url = `/${UPLOAD_SUBDIR}/${file.filename}`;

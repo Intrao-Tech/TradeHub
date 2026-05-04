@@ -63,14 +63,9 @@ describe('TEST-PROF-080 public profile reads (PROF-001..PROF-008)', () => {
     expect(res.body.length).toBeGreaterThanOrEqual(1);
   });
 
-  test.skip(
-    'PROF-258 — TODO: deactivated worker profile fetched by id should return 404 (privacy). ' +
-      'Today /worker-profiles/:id does not filter by Account.status; ' +
-      'see tasks/in-progress/profiles/followups.md "PROF-258".',
-    async () => {
-      const seed = await seedDeactivatedAccount(h.prisma);
-      const res = await h.request().get(`/api/worker-profiles/${seed.id}`);
-      expect(res.status).toBe(404);
-    },
-  );
+  test('PROF-258 — deactivated worker profile fetched by id returns 404 (privacy)', async () => {
+    const seed = await seedDeactivatedAccount(h.prisma);
+    const res = await h.request().get(`/api/worker-profiles/${seed.id}`);
+    expect(res.status).toBe(404);
+  });
 });

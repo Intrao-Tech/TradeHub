@@ -61,6 +61,16 @@ describe('TEST-PROF-030 DocumentService.upload (PROF-029)', () => {
       service.upload(7n, { doc_type: 'CSCS_CARD' }, undefined),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  test('PROF-029 — unknown doc_type → BadRequestException("INVALID_DOC_TYPE"); no DB write', async () => {
+    const { service, prisma } = build();
+    await expect(
+      service.upload(7n, { doc_type: 'PASSPORT_SCAN' }, fakeFile()),
+    ).rejects.toMatchObject({
+      response: { code: 'INVALID_DOC_TYPE' },
+    });
+    expect(prisma.document.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('TEST-PROF-031 DocumentService.deleteDocument (PROF-030)', () => {

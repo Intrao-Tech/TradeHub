@@ -130,12 +130,27 @@ describe('TEST-PROF-075 portfolio media (PROF-023..PROF-025, BE-PROF-8)', () => 
     expect(res.status).toBeLessThan(500);
   }, 30_000);
 
-  test.skip(
-    'PROF-023 — TODO: 21st media item rejected by server-side cap (PROF-023). ' +
-      'Today the service has no count enforcement; ' +
-      'see tasks/in-progress/profiles/followups.md "PROF-023".',
-    async () => {
-      // intentionally empty
-    },
-  );
+  test('PROF-023 — 21st media item rejected by server-side cap with MEDIA_LIMIT', async () => {
+    const seed = await seedWorkerWithPortfolio(h.prisma);
+    const token = signAccessTokenFor(h, {
+      accountId: seed.id,
+      email: seed.email,
+    });
+    for (let i = 0; i < 20; i++) {
+      await h.prisma.portfolioMedia.create({
+        data: {
+          portfolio_item_id: seed.portfolioItemId,
+          media_url: `/uploads/seed-${i}.png`,
+          sort_order: i,
+        },
+      });
+    }
+    const res = await h
+      .request()
+      .post(`/api/portfolio/${seed.portfolioItemId}/media`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ media_url: 'https://example.com/21.jpg' });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('MEDIA_LIMIT');
+  });
 });

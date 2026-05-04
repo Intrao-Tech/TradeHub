@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -20,6 +21,7 @@ import {
 } from './dto/portfolio.dto';
 
 const UPLOAD_SUBDIR = 'uploads';
+const PORTFOLIO_MEDIA_MAX = 20;
 
 const portfolioItemInclude = {
   experience_detail: true,
@@ -124,7 +126,25 @@ export class PortfolioService {
   }
 
   async update(id: bigint, workerId: bigint, dto: UpdatePortfolioItemDto) {
-    await this.assertWorkerOwns(id, workerId);
+    const owned = await this.assertWorkerOwns(id, workerId);
+    if (
+      dto.sort_order !== undefined &&
+      dto.sort_order !== owned.sort_order
+    ) {
+      const colliding = await this.prisma.portfolioItem.findFirst({
+        where: {
+          worker_id: workerId,
+          sort_order: dto.sort_order,
+          id: { not: id },
+        },
+      });
+      if (colliding) {
+        await this.prisma.portfolioItem.update({
+          where: { id: colliding.id },
+          data: { sort_order: colliding.sort_order + 1 },
+        });
+      }
+    }
     await this.prisma.portfolioItem.update({
       where: { id },
       data: {
@@ -241,6 +261,7 @@ export class PortfolioService {
     dto: AddPortfolioMediaDto,
   ) {
     await this.assertWorkerOwns(portfolioItemId, workerId);
+    await this.assertMediaCapacity(portfolioItemId);
     await this.prisma.portfolioMedia.create({
       data: {
         portfolio_item_id: portfolioItemId,
@@ -260,6 +281,7 @@ export class PortfolioService {
   ) {
     try {
       await this.assertWorkerOwns(portfolioItemId, workerId);
+      await this.assertMediaCapacity(portfolioItemId);
     } catch (err) {
       await fs.unlink(file.path).catch(() => {});
       throw err;
@@ -273,6 +295,18 @@ export class PortfolioService {
         sort_order: dto.sort_order ?? 0,
       },
     });
+  }
+
+  private async assertMediaCapacity(portfolioItemId: bigint) {
+    const count = await this.prisma.portfolioMedia.count({
+      where: { portfolio_item_id: portfolioItemId },
+    });
+    if (count >= PORTFOLIO_MEDIA_MAX) {
+      throw new BadRequestException({
+        code: 'MEDIA_LIMIT',
+        message: `Maximum ${PORTFOLIO_MEDIA_MAX} media items per portfolio item.`,
+      });
+    }
   }
 
   async removeMedia(mediaId: bigint, workerId: bigint) {
@@ -299,6 +333,12 @@ export class PortfolioService {
     if (!doc) throw new NotFoundException('Document not found');
     if (doc.client_profile_id !== workerId) {
       throw new ForbiddenException('Document does not belong to this worker');
+    }
+    if (doc.status !== 'APPROVED') {
+      throw new BadRequestException({
+        code: 'DOCUMENT_NOT_APPROVED',
+        message: 'Only approved documents can be linked to a portfolio item.',
+      });
     }
     await this.prisma.portfolioItemDocument.upsert({
       where: {
