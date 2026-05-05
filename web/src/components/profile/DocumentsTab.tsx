@@ -42,55 +42,48 @@ type DocumentRow = {
   file_url?: string;
   rejection_reason?: string | null;
   created_at?: string;
+  metadata?: { title?: string } | null;
 };
 
 const DOC_TYPES = [
-  'ID_PHOTO',
-  'SELFIE',
   'INSURANCE',
   'CSCS_CARD',
   'GAS_SAFE_CERT',
   'NICEIC_CERT',
+  'FIRAS_CERT',
   'COMPANY_LETTERHEAD',
-  'PROJECT_PHOTO',
   'OTHER',
 ] as const;
 
 type DocType = (typeof DOC_TYPES)[number];
 
 const DOC_LABELS: Record<DocType, string> = {
-  ID_PHOTO: 'ID photo (passport / driving licence)',
-  SELFIE: 'Selfie',
   INSURANCE: 'Insurance certificate',
   CSCS_CARD: 'CSCS card',
   GAS_SAFE_CERT: 'Gas Safe certificate',
   NICEIC_CERT: 'NICEIC certificate',
+  FIRAS_CERT: 'FIRAS certificate',
   COMPANY_LETTERHEAD: 'Company letterhead',
-  PROJECT_PHOTO: 'Project photo',
   OTHER: 'Other',
 };
 
 const DOC_FORMAT_HINT: Record<DocType, string> = {
-  ID_PHOTO: 'Clear photo or scan · JPEG, PNG, WebP, or PDF · max 10 MB.',
-  SELFIE: 'Recent selfie · JPEG, PNG, or WebP · max 10 MB.',
   INSURANCE: 'PDF preferred · max 10 MB.',
   CSCS_CARD: 'Photo of both sides · JPEG, PNG, or WebP · max 10 MB.',
   GAS_SAFE_CERT: 'PDF or image · max 10 MB.',
   NICEIC_CERT: 'PDF or image · max 10 MB.',
+  FIRAS_CERT: 'PDF or image · max 10 MB.',
   COMPANY_LETTERHEAD: 'Company letterhead PDF or image · max 10 MB.',
-  PROJECT_PHOTO: 'JPEG, PNG, or WebP · max 10 MB.',
   OTHER: 'PDF or image · max 10 MB.',
 };
 
 const ACCEPT_BY_TYPE: Record<DocType, string> = {
-  ID_PHOTO: 'image/jpeg,image/png,image/webp,application/pdf',
-  SELFIE: 'image/jpeg,image/png,image/webp',
   INSURANCE: 'application/pdf,image/jpeg,image/png,image/webp',
   CSCS_CARD: 'image/jpeg,image/png,image/webp',
   GAS_SAFE_CERT: 'application/pdf,image/jpeg,image/png,image/webp',
   NICEIC_CERT: 'application/pdf,image/jpeg,image/png,image/webp',
+  FIRAS_CERT: 'application/pdf,image/jpeg,image/png,image/webp',
   COMPANY_LETTERHEAD: 'application/pdf,image/jpeg,image/png,image/webp',
-  PROJECT_PHOTO: 'image/jpeg,image/png,image/webp',
   OTHER: 'application/pdf,image/jpeg,image/png,image/webp',
 };
 
@@ -113,13 +106,33 @@ const STATUS_LABEL: Record<string, string> = {
   PENDING: 'Pending',
 };
 
-type WorkerRequiredType = Exclude<DocType, 'COMPANY_LETTERHEAD'>;
-const WORKER_REQUIRED: WorkerRequiredType[] = [
-  'ID_PHOTO',
+// Doc types relevant per role — drives BOTH the upload dropdown and the
+// Verification checklist. Workers handle their own credentials + portfolio;
+// employers handle company-level docs. INSURANCE is the only overlap (workers
+// need public liability, employers need employer's liability). OTHER is the
+// only free-form catch-all and is always available.
+const WORKER_DOC_TYPES: DocType[] = [
   'CSCS_CARD',
+  'GAS_SAFE_CERT',
+  'NICEIC_CERT',
+  'FIRAS_CERT',
   'INSURANCE',
+  'OTHER',
 ];
-const EMPLOYER_REQUIRED: DocType[] = ['INSURANCE', 'COMPANY_LETTERHEAD'];
+const EMPLOYER_DOC_TYPES: DocType[] = [
+  'INSURANCE',
+  'COMPANY_LETTERHEAD',
+  'OTHER',
+];
+
+// Checklist excludes OTHER (user-defined, can have multiple) — only the
+// predefined types belong on the static checklist.
+const WORKER_CHECKLIST: DocType[] = WORKER_DOC_TYPES.filter(
+  (t) => t !== 'OTHER',
+);
+const EMPLOYER_CHECKLIST: DocType[] = EMPLOYER_DOC_TYPES.filter(
+  (t) => t !== 'OTHER',
+);
 
 type DocumentsTabProps = {
   isWorker: boolean;
@@ -128,9 +141,26 @@ type DocumentsTabProps = {
 };
 
 export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps) {
+  // Role drives BOTH the upload dropdown and the static checklist. Workers
+  // get worker-relevant types, employers get employer-relevant types.
+  // Users with neither role (rare — staff-only accounts) get an empty list.
+  const allowedTypes = useMemo<DocType[]>(() => {
+    if (isWorker) return WORKER_DOC_TYPES;
+    if (isEmployer) return EMPLOYER_DOC_TYPES;
+    return [];
+  }, [isWorker, isEmployer]);
+  const checklistTypes = useMemo<DocType[]>(() => {
+    if (isWorker) return WORKER_CHECKLIST;
+    if (isEmployer) return EMPLOYER_CHECKLIST;
+    return [];
+  }, [isWorker, isEmployer]);
+
   const [docs, setDocs] = useState<DocumentRow[] | null>(null);
   const [error, setError] = useState('');
-  const [docType, setDocType] = useState<DocType>('ID_PHOTO');
+  const [docType, setDocType] = useState<DocType>(
+    () => allowedTypes[0] ?? 'OTHER',
+  );
+  const [otherTitle, setOtherTitle] = useState('');
   const [progress, setProgress] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -150,11 +180,13 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
     void reload();
   }, [reload]);
 
-  const requirements = useMemo<DocType[]>(() => {
-    if (isWorker) return WORKER_REQUIRED as DocType[];
-    if (isEmployer) return EMPLOYER_REQUIRED;
-    return [];
-  }, [isWorker, isEmployer]);
+  // If the user's role flips (rare) and the currently-selected docType is
+  // no longer valid for their role, snap back to the first allowed type.
+  useEffect(() => {
+    if (allowedTypes.length > 0 && !allowedTypes.includes(docType)) {
+      setDocType(allowedTypes[0]);
+    }
+  }, [allowedTypes, docType]);
 
   function pickFile(file: File | null | undefined) {
     if (!file) return;
@@ -172,9 +204,17 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
     pickFile(e.dataTransfer.files?.[0]);
   }
 
+  const requiresTitle = docType === 'OTHER';
+  const titleTrimmed = otherTitle.trim();
+  const titleValid = !requiresTitle || (titleTrimmed.length >= 3 && titleTrimmed.length <= 100);
+
   async function upload() {
     if (!pendingFile) {
       setError('Choose a file to upload.');
+      return;
+    }
+    if (requiresTitle && !titleValid) {
+      setError('Enter a title (3–100 characters) so staff can identify the document.');
       return;
     }
     setError('');
@@ -183,9 +223,9 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
       const formData = new FormData();
       formData.append('file', pendingFile);
       formData.append('doc_type', docType);
-      // We use the api() helper which doesn't expose progress, so fall back
-      // to a simulated indicator. Real progress is a fetch limitation; the
-      // upload still happens in a single round trip.
+      if (requiresTitle) {
+        formData.append('metadata', JSON.stringify({ title: titleTrimmed }));
+      }
       setProgress(20);
       await api('/documents/upload', {
         method: 'POST',
@@ -194,6 +234,7 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
       setProgress(100);
       flash('Document uploaded');
       setPendingFile(null);
+      setOtherTitle('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       await reload();
     } catch (err) {
@@ -234,19 +275,19 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
         </div>
       ) : null}
 
-      {requirements.length > 0 ? (
+      {checklistTypes.length > 0 ? (
         <Card>
           <CardHeader>
             <CardTitle>Verification checklist</CardTitle>
             <CardDescription>
               {isWorker
-                ? 'These document types are part of the Basic and Certified verification rungs.'
-                : 'Recommended documents that strengthen your employer profile.'}
+                ? 'Documents that workers can submit for verification. Each type contributes to the Basic and Certified rungs of your trust ladder.'
+                : 'Documents that employers can submit. Combined with the Companies House check, they strengthen your employer profile.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="grid gap-2 sm:grid-cols-2">
-              {requirements.map((t) => {
+              {checklistTypes.map((t) => {
                 const state = stateFor(docs, t);
                 return (
                   <li
@@ -312,13 +353,32 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {DOC_TYPES.map((t) => (
+                  {allowedTypes.map((t) => (
                     <SelectItem key={t} value={t}>
                       {DOC_LABELS[t]}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {requiresTitle ? (
+                <div className="space-y-1 pt-2">
+                  <Label htmlFor="doc-other-title">
+                    Title <span className="text-danger">*</span>
+                  </Label>
+                  <input
+                    id="doc-other-title"
+                    type="text"
+                    value={otherTitle}
+                    onChange={(e) => setOtherTitle(e.target.value)}
+                    maxLength={100}
+                    placeholder="e.g. Public liability proof, Trade reference letter"
+                    className="flex h-9 w-full rounded-md border border-border-default bg-raised px-3 py-1 text-sm text-fg shadow-sm transition-colors placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                  <p className="text-xs text-fg-muted">
+                    3–100 chars. Shown to staff and on your profile checklist.
+                  </p>
+                </div>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="doc-file">File</Label>
@@ -388,7 +448,7 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
             <Button
               type="button"
               onClick={upload}
-              disabled={progress != null || !pendingFile}
+              disabled={progress != null || !pendingFile || !titleValid}
             >
               {progress != null ? 'Uploading…' : 'Upload'}
             </Button>
@@ -409,6 +469,15 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
       </Card>
     </div>
   );
+}
+
+function documentDisplayName(doc: DocumentRow): string {
+  // OTHER carries a user-supplied title in metadata.title — surface it so the
+  // row reads "Public liability proof" instead of a generic "Other".
+  if (doc.doc_type === 'OTHER' && doc.metadata?.title) {
+    return doc.metadata.title;
+  }
+  return DOC_LABELS[doc.doc_type as DocType] ?? doc.doc_type;
 }
 
 type RequirementState = 'approved' | 'pending' | 'rejected' | 'missing';
@@ -474,7 +543,7 @@ function DocumentRowItem({
         <div className="min-w-0 flex-1 text-sm">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-fg">
-              {DOC_LABELS[doc.doc_type as DocType] ?? doc.doc_type}
+              {documentDisplayName(doc)}
             </span>
             <Badge variant={variant}>{label}</Badge>
             {isPdf ? <Badge variant="outline">{ext}</Badge> : null}

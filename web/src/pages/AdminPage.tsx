@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StaffManagementCard } from '@/components/StaffManagementCard';
+import { VerificationQueueTab } from '@/components/admin/VerificationQueueTab';
 import {
   Select,
   SelectContent,
@@ -50,8 +51,6 @@ const ACTION_TYPES = [
   'ESCALATED',
   'COMMENTED',
 ] as const;
-const DOC_STATUSES = ['IN_REVIEW', 'APPROVED', 'REJECTED'] as const;
-
 function errMsg(e: unknown) {
   return e instanceof Error ? e.message : String(e);
 }
@@ -121,10 +120,6 @@ export default function AdminPage() {
   const [actionErr, setActionErr] = useState('');
 
   /* Document */
-  const [docId, setDocId] = useState('');
-  const [docStatus, setDocStatus] = useState<string>(DOC_STATUSES[0]);
-  const [docRes, setDocRes] = useState<unknown>(null);
-  const [docErr, setDocErr] = useState('');
 
   /* Review publish */
   const [reviewId, setReviewId] = useState('');
@@ -215,29 +210,6 @@ export default function AdminPage() {
       setActionData(data);
     } catch (e) {
       setActionErr(errMsg(e));
-    }
-  }
-
-  async function patchDocumentStatus(e: FormEvent) {
-    e.preventDefault();
-    setDocErr('');
-    setDocRes(null);
-    const id = docId.trim();
-    if (!id) {
-      setDocErr('document_id required');
-      return;
-    }
-    try {
-      const data = await api<unknown>(
-        `/documents/${encodeURIComponent(id)}/status`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify({ status: docStatus }),
-        },
-      );
-      setDocRes(data);
-    } catch (e) {
-      setDocErr(errMsg(e));
     }
   }
 
@@ -418,7 +390,7 @@ export default function AdminPage() {
         <TabsList className="flex flex-wrap gap-1 h-auto">
           <TabsTrigger value="moderation">Moderation</TabsTrigger>
           <TabsTrigger value="staff">Members</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="documents">Verification</TabsTrigger>
           <TabsTrigger value="reviews">Reviews</TabsTrigger>
           <TabsTrigger value="plans">Plans</TabsTrigger>
           <TabsTrigger value="specialisations">Specialisations</TabsTrigger>
@@ -628,43 +600,7 @@ export default function AdminPage() {
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Document review</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <ErrorBox message={docErr} />
-              <form onSubmit={patchDocumentStatus} className="grid gap-4 sm:grid-cols-[1fr_200px_auto] sm:items-end">
-                <div className="space-y-2">
-                  <Label htmlFor="doc-id">Document ID</Label>
-                  <Input
-                    id="doc-id"
-                    type="number"
-                    value={docId}
-                    onChange={(e) => setDocId(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={docStatus} onValueChange={setDocStatus}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DOC_STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button type="submit">Update status</Button>
-              </form>
-              <JsonBlock data={docRes} />
-            </CardContent>
-          </Card>
+          <VerificationQueueTab />
         </TabsContent>
 
         <TabsContent value="reviews" className="space-y-4">

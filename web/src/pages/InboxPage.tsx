@@ -27,7 +27,12 @@ type LastMessage = {
 
 type InboxItem = {
   conversation: { id: string | number; last_message_at?: string | null; created_at?: string };
-  other_participant: { account_id?: string | number; display_name?: string | null } | null;
+  other_participant: {
+    account_id?: string | number;
+    client_profile_id?: string | number | null;
+    display_name?: string | null;
+    verification_level?: string | null;
+  } | null;
   last_message: LastMessage;
   unread_count: number;
 };
@@ -63,6 +68,7 @@ function toConversationData(row: InboxItem): ConversationListItemData {
   return {
     id: row.conversation.id,
     other_party_name: name,
+    other_party_verification_level: row.other_participant?.verification_level ?? null,
     last_message_preview: row.last_message?.content ?? null,
     last_message_at: row.conversation.last_message_at ?? row.last_message?.created_at ?? null,
     unread_count: row.unread_count,

@@ -241,8 +241,11 @@ export class ConversationService {
         other_participant: other
           ? {
               account_id: other.account_id,
+              client_profile_id: other.account.client_profile?.id ?? null,
               display_name: other.account.client_profile?.display_name ?? null,
               avatar_url: other.account.client_profile?.avatar_url ?? null,
+              verification_level:
+                other.account.client_profile?.verification_level ?? null,
             }
           : null,
         last_message: conv.messages[0] ?? null,

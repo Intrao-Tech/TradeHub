@@ -145,6 +145,7 @@ export default function WorkerDetailPage() {
         city={cp?.city}
         postcodeArea={cp?.postcode_area}
         verificationLevel={cp?.verification_level}
+        clientProfileId={cp?.id}
         rating={worker.rating_avg}
         ratingCount={worker.rating_count}
         isAvailable={worker.is_available}

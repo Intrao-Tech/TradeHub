@@ -212,6 +212,45 @@ export class MailService implements OnModuleInit {
     await this.send(to, subject, html);
   }
 
+  async sendVerificationVerified(
+    to: string,
+    displayName: string,
+  ): Promise<void> {
+    const subject = "You're verified on TradeHub";
+    const html = `
+      <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2 style="color: #0f766e;">Identity verified ✅</h2>
+        <p>Hi ${escapeHtml(displayName)},</p>
+        <p>Your identity check passed. Your TradeHub trust badge has been upgraded to <strong>Basic</strong> — employers and workers can now see that you're a verified user.</p>
+        <p>Want to climb higher? Add a trade certificate (CSCS / Gas Safe / NICEIC / FIRAS) to reach <strong>Certified</strong>.</p>
+        <p><a href="${this.frontendUrl}/profile" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">Open your profile</a></p>
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
+
+  async sendVerificationFailed(
+    to: string,
+    displayName: string,
+    reason: string | null,
+  ): Promise<void> {
+    const subject = 'Identity verification needs another try';
+    const reasonLine = reason
+      ? `<p style="color:#64748b;font-size:13px;">Reason from Stripe: <code>${escapeHtml(reason)}</code></p>`
+      : '';
+    const html = `
+      <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2 style="color: #b45309;">Verification didn't go through</h2>
+        <p>Hi ${escapeHtml(displayName)},</p>
+        <p>Stripe couldn't verify the documents you submitted. This usually happens when the photo is blurry, the ID is expired, or the selfie doesn't match the document.</p>
+        <p>Start a fresh attempt and double-check that your ID is in date and the photo is well-lit.</p>
+        <p><a href="${this.frontendUrl}/profile?verification=retry" style="display:inline-block;padding:10px 18px;background:#E07A3B;color:#fff;border-radius:6px;text-decoration:none;">Try again</a></p>
+        ${reasonLine}
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
+
   async sendEscrowFunded(
     to: string,
     displayName: string,

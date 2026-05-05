@@ -91,6 +91,7 @@ export default function EmployerDetailPage() {
         city={cp?.city}
         postcodeArea={cp?.postcode_area}
         verificationLevel={cp?.verification_level}
+        clientProfileId={cp?.id}
         rating={employer.rating_avg}
         ratingCount={employer.rating_count}
       />

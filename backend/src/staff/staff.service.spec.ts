@@ -21,11 +21,13 @@ import { StaffService } from './staff.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { AuditService } from '../audit/audit.service';
+import { DocumentAssignmentService } from '../verification/document-assignment.service';
 
 type Mocks = {
   prisma: DeepMockProxy<PrismaService>;
   mail: jest.Mocked<MailService>;
   audit: jest.Mocked<AuditService>;
+  assignment: jest.Mocked<DocumentAssignmentService>;
 };
 
 function build(): { service: StaffService; mocks: Mocks } {
@@ -38,18 +40,21 @@ function build(): { service: StaffService; mocks: Mocks } {
   const audit = {
     log: jest.fn().mockResolvedValue({}),
   } as unknown as jest.Mocked<AuditService>;
+  const assignment = {
+    reassignFromStaff: jest.fn().mockResolvedValue(0),
+  } as unknown as jest.Mocked<DocumentAssignmentService>;
 
-  prisma.$transaction.mockImplementation(async (input: unknown) => {
+  prisma.$transaction.mockImplementation(((input: unknown) => {
     if (Array.isArray(input)) return Promise.all(input);
     if (typeof input === 'function') {
-      return (input as (p: unknown) => unknown)(prisma);
+      return Promise.resolve((input as (p: unknown) => unknown)(prisma));
     }
-    return undefined;
-  });
+    return Promise.resolve(undefined);
+  }) as never);
 
   return {
-    service: new StaffService(prisma, mail, audit),
-    mocks: { prisma, mail, audit },
+    service: new StaffService(prisma, mail, audit, assignment),
+    mocks: { prisma, mail, audit, assignment },
   };
 }
 
@@ -59,16 +64,12 @@ describe('TEST-AUTH-024 StaffService.create — AUTH-018-001', () => {
   test('AUTH-018-001 — fresh email creates Account + StaffMember with 16-char password and 24h invite expiry', async () => {
     const { service, mocks } = build();
     mocks.prisma.account.findUnique.mockResolvedValue(null);
-    mocks.prisma.account.create.mockImplementation(async (args: unknown) => {
-      // Capture the data Nest would have written so we can assert on it.
-      return {
-        id: 100n,
-        email: (args as { data: { email: string } }).data.email,
-        password_hash: (args as { data: { password_hash: string } }).data
-          .password_hash,
-        staff_member: { id: 100n },
-      } as never;
-    });
+    mocks.prisma.account.create.mockResolvedValue({
+      id: 100n,
+      email: 'fresh@x.io',
+      password_hash: 'irrelevant',
+      staff_member: { id: 100n },
+    } as never);
 
     await service.create(
       { email: 'fresh@x.io', display_name: 'Fresh', staff_role: 'MODERATOR' },

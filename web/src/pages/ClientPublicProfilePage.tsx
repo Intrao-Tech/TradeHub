@@ -71,6 +71,7 @@ export default function ClientPublicProfilePage() {
         city={profile.city}
         postcodeArea={profile.postcode_area}
         verificationLevel={profile.verification_level}
+        clientProfileId={profile.id}
       />
 
       <Card>

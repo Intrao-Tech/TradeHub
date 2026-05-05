@@ -46,9 +46,9 @@ describe('TEST-PROF-106 DocumentsTab (PROF-028, PROF-030)', () => {
           },
           {
             id: '3',
-            doc_type: 'ID_PHOTO',
+            doc_type: 'GAS_SAFE_CERT',
             status: 'APPROVED',
-            file_url: '/uploads/id.png',
+            file_url: '/uploads/gs.png',
           },
           {
             id: '4',

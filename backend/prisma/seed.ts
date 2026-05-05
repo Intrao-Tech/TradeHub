@@ -70,7 +70,11 @@ async function main() {
       status: 'ACTIVE',
       email_verified_at: new Date(),
       staff_member: {
-        create: { display_name: 'Platform Admin', staff_role: 'ADMIN' },
+        create: {
+          display_name: 'Platform Admin',
+          staff_role: 'ADMIN',
+          is_on_duty: true,
+        },
       },
     },
   });
@@ -104,7 +108,7 @@ async function main() {
             slug,
             city: w.city,
             postcode_area: w.postcode,
-            verification_level: 'IDENTITY_VERIFIED',
+            verification_level: 'BASIC',
             worker_profile: {
               create: {
                 years_experience: w.yearsExp,
@@ -163,7 +167,7 @@ async function main() {
             slug,
             city: e.city,
             postcode_area: e.postcode,
-            verification_level: 'COMPANY_VERIFIED',
+            verification_level: 'BASIC',
             employer_profile: {
               create: {
                 company_name: e.company,
@@ -432,7 +436,7 @@ async function main() {
     await prisma.verificationMilestone.create({
       data: {
         client_profile_id: e.id,
-        milestone_type: 'COMPANY_VERIFIED',
+        milestone_type: 'COMPANY_HOUSE_VERIFIED',
         evidence_ref: 'Companies House check',
         notes: 'Company registration verified',
       },

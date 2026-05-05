@@ -1,19 +1,35 @@
-import { BadgeCheck, Circle, ShieldCheck, Star } from 'lucide-react';
+import { BadgeCheck, Circle, ShieldCheck, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
-export type VerificationState = 'unverified' | 'kyc' | 'reviewed' | 'hmrc';
+/**
+ * Trust ladder rungs (per Verification spec §3.2).
+ * One badge per profile — surfaces overall trust level.
+ *
+ * State machine: UNVERIFIED → BASIC → CERTIFIED → PREMIUM (monotonic).
+ *
+ * Backend persists the level as the uppercase enum on `client_profile.verification_level`;
+ * this component accepts either case and is forgiving on unknowns (renders Unverified).
+ */
+export type VerificationState = 'unverified' | 'basic' | 'certified' | 'premium';
 
 type VerificationBadgeProps = {
   state: VerificationState;
   className?: string;
 };
 
-const CONFIG: Record<VerificationState, { label: string; variant: 'outline' | 'info' | 'warning' | 'success'; icon: typeof BadgeCheck }> = {
+const CONFIG: Record<
+  VerificationState,
+  {
+    label: string;
+    variant: 'outline' | 'info' | 'warning' | 'success';
+    icon: typeof BadgeCheck;
+  }
+> = {
   unverified: { label: 'Unverified', variant: 'outline', icon: Circle },
-  kyc: { label: 'KYC verified', variant: 'info', icon: ShieldCheck },
-  reviewed: { label: 'Reviewed', variant: 'warning', icon: Star },
-  hmrc: { label: 'HMRC confirmed', variant: 'success', icon: BadgeCheck },
+  basic: { label: 'Basic — ID verified', variant: 'info', icon: ShieldCheck },
+  certified: { label: 'Certified', variant: 'success', icon: BadgeCheck },
+  premium: { label: 'Premium', variant: 'warning', icon: Sparkles },
 };
 
 export function VerificationBadge({ state, className }: VerificationBadgeProps) {
@@ -28,11 +44,17 @@ export function VerificationBadge({ state, className }: VerificationBadgeProps) 
 }
 VerificationBadge.displayName = 'VerificationBadge';
 
-export function verificationFromLevel(level?: string | number | null): VerificationState {
+/**
+ * Maps a backend `verification_level` string to the badge state. Forgiving:
+ * unknown / null inputs render as `unverified`.
+ */
+export function verificationFromLevel(
+  level?: string | number | null,
+): VerificationState {
   if (level == null) return 'unverified';
   const s = String(level).toUpperCase();
-  if (s === 'HMRC' || s === '3') return 'hmrc';
-  if (s === 'REVIEWED' || s === '2') return 'reviewed';
-  if (s === 'KYC' || s === '1') return 'kyc';
+  if (s === 'PREMIUM') return 'premium';
+  if (s === 'CERTIFIED') return 'certified';
+  if (s === 'BASIC') return 'basic';
   return 'unverified';
 }

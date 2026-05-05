@@ -9,6 +9,7 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { AuditService } from '../audit/audit.service';
+import { DocumentAssignmentService } from '../verification/document-assignment.service';
 import { generateInitialPassword } from '../common/validators/generate-initial-password';
 import { CreateStaffDto } from './dto/create-staff.dto';
 
@@ -20,6 +21,7 @@ export class StaffService {
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly audit: AuditService,
+    private readonly assignment: DocumentAssignmentService,
   ) {}
 
   /** 16-char password meeting checkPasswordPolicy — used as initial password for fresh staff accounts. */
@@ -57,6 +59,52 @@ export class StaffService {
     }
   }
 
+  // ─── Duty toggle (self) ────────────────────────────────────────
+
+  /**
+   * Toggle the caller's `is_on_duty` flag. When turning OFF, all of their
+   * open (PENDING / IN_REVIEW) document assignments are redistributed to
+   * the next available on-duty staff via DocumentAssignmentService.
+   */
+  async setDuty(staffMemberId: bigint, onDuty: boolean, ip?: string) {
+    const member = await this.prisma.staffMember.findUnique({
+      where: { id: staffMemberId },
+      select: { id: true, is_on_duty: true },
+    });
+    if (!member) {
+      throw new NotFoundException({ code: 'STAFF_NOT_FOUND' });
+    }
+    if (member.is_on_duty === onDuty) {
+      return { is_on_duty: member.is_on_duty, reassigned: 0 };
+    }
+
+    await this.prisma.staffMember.update({
+      where: { id: staffMemberId },
+      data: { is_on_duty: onDuty },
+    });
+
+    let reassigned = 0;
+    if (!onDuty) {
+      reassigned = await this.assignment.reassignFromStaff(
+        staffMemberId,
+        'duty_off',
+        staffMemberId,
+        ip,
+      );
+    }
+
+    await this.audit.log(
+      staffMemberId,
+      onDuty ? 'staff.duty_on' : 'staff.duty_off',
+      'staff_member',
+      staffMemberId,
+      { reassigned_count: reassigned },
+      ip,
+    );
+
+    return { is_on_duty: onDuty, reassigned };
+  }
+
   // ─── Listing ───────────────────────────────────────────────────
 
   async list() {
@@ -83,6 +131,7 @@ export class StaffService {
         display_name: r.display_name,
         staff_role: r.staff_role,
         status: r.account.status,
+        is_on_duty: r.is_on_duty,
         last_login_at: r.account.last_login_at,
         created_at: r.created_at,
         invite_expires_at: inviteExpiresAt,
@@ -368,19 +417,37 @@ export class StaffService {
         where: { id: member.id },
         data: { status: 'DEACTIVATED' },
       }),
+      this.prisma.staffMember.update({
+        where: { id: member.id },
+        data: { is_on_duty: false },
+      }),
       this.prisma.refreshToken.deleteMany({
         where: { account_id: member.id },
       }),
     ]);
+
+    // Redistribute their open verification queue to the next available
+    // on-duty staff (admin reassignment, audit-logged per doc).
+    const reassigned = await this.assignment.reassignFromStaff(
+      member.id,
+      'admin_reassign',
+      byAccountId,
+      ip,
+    );
+
     await this.audit.log(
       byAccountId,
       'staff.deactivated',
       'account',
       member.id,
-      { staff_role: member.staff_role, target_email: member.account.email },
+      {
+        staff_role: member.staff_role,
+        target_email: member.account.email,
+        reassigned_count: reassigned,
+      },
       ip,
     );
-    return { ok: true };
+    return { ok: true, reassigned };
   }
 
   /**

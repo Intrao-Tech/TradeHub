@@ -17,6 +17,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ParseBigIntPipe } from '../common/pipes/parse-bigint.pipe';
 import { CreateStaffDto } from './dto/create-staff.dto';
+import { SetDutyDto } from './dto/set-duty.dto';
 import { StaffService } from './staff.service';
 
 class ChangeStaffRoleDto {
@@ -45,6 +46,20 @@ export class StaffController {
   @ApiOperation({ summary: 'List all staff (visible to any staff member)' })
   list() {
     return this.staffService.list();
+  }
+
+  @Post('me/duty')
+  @Roles('STAFF')
+  @ApiOperation({
+    summary:
+      "Toggle the caller's on-duty flag. Off-duty redistributes open document assignments to the next available staff.",
+  })
+  setDuty(
+    @Body() dto: SetDutyDto,
+    @CurrentUser() user: CurrentUserPayload,
+    @Ip() ip: string,
+  ) {
+    return this.staffService.setDuty(user.accountId, dto.on_duty, ip);
   }
 
   @Post()
