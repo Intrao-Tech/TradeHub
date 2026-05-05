@@ -63,6 +63,9 @@ export default async function globalSetup() {
         JWT_SECRET: 'pw-secret',
         JWT_REFRESH_SECRET: 'pw-refresh-secret',
         REDIS_URL: '',
+        // Every spec hits /auth/* from localhost; the production 5-per-hour
+        // throttle would trip after the 5th registerWorker() and cascade.
+        DISABLE_APP_THROTTLER: 'true',
       },
       stdio: ['ignore', stdoutFd, stderrFd],
       detached: true,

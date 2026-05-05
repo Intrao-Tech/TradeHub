@@ -18,6 +18,8 @@ import {
   TEST_PASSWORD,
 } from './util';
 
+const API_BASE = process.env.PW_API_URL ?? 'http://localhost:8082/api';
+
 test.describe('TEST-JOBS-208 Jobs guardrails (E2E-9)', () => {
   test('JOBS-048 — public Jobs routes have zero <pre> JSON-dump blocks', async ({
     page,
@@ -47,19 +49,19 @@ test.describe('TEST-JOBS-208 Jobs guardrails (E2E-9)', () => {
   test('JOBS-055 — /api/docs surfaces the documented Jobs endpoints', async ({
     request,
   }) => {
-    const res = await request.get('/api/docs-json');
+    // Hit the API host directly — Playwright's `baseURL` points at Vite,
+    // which serves the SPA fallback for unknown paths.
+    const res = await request.get(`${API_BASE}/docs-json`);
     let spec: { paths?: Record<string, unknown> } | null = null;
     if (res.ok()) {
       try {
         spec = (await res.json()) as { paths?: Record<string, unknown> };
       } catch {
-        // Some Nest builds serve Swagger UI HTML at this path instead of
-        // the JSON spec — fall through to the HTML-reachability fallback.
         spec = null;
       }
     }
     if (!spec) {
-      const html = await request.get('/api/docs');
+      const html = await request.get(`${API_BASE}/docs`);
       expect(html.ok()).toBe(true);
       return;
     }
