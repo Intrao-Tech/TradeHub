@@ -98,15 +98,17 @@ describe('TEST-JOBS-172 MyApplicationsPage status tabs (JOBS-042)', () => {
       route: '/my-applications',
       account,
     });
+    // Counts derive from the /job-applications/me fetch, which only fires
+    // once useAccountMe settles — wait on the data-dependent assertion, not
+    // just the always-rendered heading.
     await waitFor(() =>
-      expect(screen.getByText(/my applications/i)).toBeInTheDocument(),
+      expect(screen.getByRole('tab', { name: /pending/i })).toHaveTextContent(
+        /2/,
+      ),
     );
     expect(screen.getByRole('tab', { name: /all/i })).toHaveAttribute(
       'aria-selected',
       'true',
-    );
-    expect(screen.getByRole('tab', { name: /pending/i })).toHaveTextContent(
-      /2/,
     );
     expect(screen.getByRole('tab', { name: /accepted/i })).toHaveTextContent(
       /1/,

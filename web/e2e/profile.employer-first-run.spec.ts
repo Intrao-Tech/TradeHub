@@ -11,6 +11,8 @@ import {
   loginViaForm,
 } from './util';
 
+const API_BASE = process.env.PW_API_URL ?? 'http://localhost:8082/api';
+
 async function registerEmployer(
   page: import('@playwright/test').Page,
   email: string,
@@ -47,8 +49,10 @@ test.describe('TEST-PROF-142 employer first-run (E2E-3)', () => {
     await registerEmployer(page, email);
     await confirmEmailViaApi(request, email);
 
-    // Look up the new employer id via the public listing.
-    const list = await request.get('/api/employer-profiles?limit=50');
+    // Look up the new employer id via the public listing. Hit the API host
+    // directly — Playwright's `baseURL` points at Vite, which serves the
+    // SPA fallback for unknown paths.
+    const list = await request.get(`${API_BASE}/employer-profiles?limit=50`);
     expect(list.ok()).toBe(true);
     const body = (await list.json()) as { data: Array<{ id: string }> };
     const id = body.data[body.data.length - 1].id;

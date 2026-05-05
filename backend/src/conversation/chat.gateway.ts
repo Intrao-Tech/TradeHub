@@ -33,21 +33,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleConnection(client: Socket) {
     try {
+      const auth = client.handshake.auth as { token?: string } | undefined;
       const token =
-        client.handshake.auth?.token ??
+        auth?.token ??
         client.handshake.headers.authorization?.replace('Bearer ', '');
 
       if (!token) {
-        client.disconnect();
+        void client.disconnect();
         return;
       }
 
-      const payload = this.jwt.verify(token, {
+      const payload = this.jwt.verify<{ sub: string | number }>(token, {
         secret: this.config.get<string>('JWT_SECRET'),
       });
 
       const accountId = String(payload.sub);
-      client.data.accountId = accountId;
+      (client.data as { accountId?: string }).accountId = accountId;
 
       if (!this.accountToSockets.has(accountId)) {
         this.accountToSockets.set(accountId, new Set());
@@ -60,19 +61,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
 
       for (const c of conversations) {
-        client.join(`conv:${c.conversation_id}`);
+        void client.join(`conv:${c.conversation_id}`);
       }
 
       this.logger.log(
         `Connected: account=${accountId} socket=${client.id} rooms=${conversations.length}`,
       );
     } catch {
-      client.disconnect();
+      void client.disconnect();
     }
   }
 
   handleDisconnect(client: Socket) {
-    const accountId = client.data.accountId as string | undefined;
+    const accountId = (client.data as { accountId?: string }).accountId;
     if (accountId) {
       const sockets = this.accountToSockets.get(accountId);
       if (sockets) {
@@ -87,7 +88,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversation_id: string },
   ) {
-    client.join(`conv:${data.conversation_id}`);
+    void client.join(`conv:${data.conversation_id}`);
   }
 
   emitNewMessage(conversationId: bigint, message: Record<string, unknown>) {

@@ -74,4 +74,4 @@ async function bootstrap() {
   console.log(`WebSocket chat: ws://localhost:${port}/chat`);
 }
 
-bootstrap();
+void bootstrap();

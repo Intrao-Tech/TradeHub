@@ -30,7 +30,7 @@ export class RegisterDto {
     required: false,
     description: 'Required when role=WORKER',
   })
-  @ValidateIf((o) => o.role === 'WORKER')
+  @ValidateIf((o: { role?: string }) => o.role === 'WORKER')
   @IsString()
   @MinLength(1)
   @MaxLength(75)
@@ -41,7 +41,7 @@ export class RegisterDto {
     required: false,
     description: 'Required when role=WORKER',
   })
-  @ValidateIf((o) => o.role === 'WORKER')
+  @ValidateIf((o: { role?: string }) => o.role === 'WORKER')
   @IsString()
   @MinLength(1)
   @MaxLength(75)
@@ -54,7 +54,7 @@ export class RegisterDto {
     description:
       'Required when role=EMPLOYER. Used for both client_profile.display_name and employer_profile.company_name.',
   })
-  @ValidateIf((o) => o.role === 'EMPLOYER')
+  @ValidateIf((o: { role?: string }) => o.role === 'EMPLOYER')
   @IsString()
   @MinLength(2)
   @MaxLength(150)

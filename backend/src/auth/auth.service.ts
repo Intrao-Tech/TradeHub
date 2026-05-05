@@ -504,7 +504,7 @@ export class AuthService {
   }
 
   async refreshTokens(refreshToken: string | undefined) {
-    const payload = await this.verifyRefreshToken(refreshToken);
+    const payload = this.verifyRefreshToken(refreshToken);
 
     const stored = await this.prisma.refreshToken.findFirst({
       where: {
@@ -1015,7 +1015,7 @@ export class AuthService {
     };
   }
 
-  private async verifyRefreshToken(token: string | undefined) {
+  private verifyRefreshToken(token: string | undefined) {
     if (!token) {
       throw new UnauthorizedException({
         code: 'REFRESH_INVALID',

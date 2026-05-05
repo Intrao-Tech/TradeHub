@@ -5,6 +5,8 @@
 import { test, expect } from '@playwright/test';
 import { confirmEmailViaApi, loginViaForm, registerWorker, TEST_PASSWORD } from './util';
 
+const API_BASE = process.env.PW_API_URL ?? 'http://localhost:8082/api';
+
 test.describe('TEST-PROF-146 guardrails (E2E-8)', () => {
   test('PROF-010 / PROF-044 — zero `<pre>` JSON-dump blocks on ProfilePage / WorkerSearchPage / EmployerSearchPage', async ({
     page,
@@ -32,11 +34,12 @@ test.describe('TEST-PROF-146 guardrails (E2E-8)', () => {
   test('PROF-049 — OpenAPI /api/docs is reachable and includes a Profiles route', async ({
     request,
   }) => {
-    const res = await request.get('/api/docs-json');
+    // Hit the API host directly — Playwright's `baseURL` points at Vite,
+    // which falls back to the SPA's index.html for unknown paths and would
+    // turn a missing /api/docs-json into a misleading 200 OK HTML response.
+    const res = await request.get(`${API_BASE}/docs-json`);
     if (!res.ok()) {
-      // Some Nest builds expose Swagger only as HTML; fall back to /api/docs
-      // and assert the page renders rather than the JSON spec.
-      const html = await request.get('/api/docs');
+      const html = await request.get(`${API_BASE}/docs`);
       expect(html.ok()).toBe(true);
       return;
     }

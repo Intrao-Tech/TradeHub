@@ -596,8 +596,9 @@ export async function seedJobPost(
   const payType = opts.payType ?? 'DAY_RATE';
   // Lazy require to avoid a hard import on `@prisma/client` at module load,
   // matching the pattern used elsewhere in this file.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { Prisma } = require('@prisma/client') as typeof import('@prisma/client');
+
+  const { Prisma } =
+    require('@prisma/client') as typeof import('@prisma/client');
   return prisma.jobPost.create({
     data: {
       employer_id: opts.employerId,
@@ -649,8 +650,8 @@ export async function seedJobApplication(
   prisma: PrismaService,
   opts: SeedJobApplicationOpts,
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { Prisma } = require('@prisma/client') as typeof import('@prisma/client');
+  const { Prisma } =
+    require('@prisma/client') as typeof import('@prisma/client');
   // Upsert on the unique pair so callers can use this idempotently in
   // re-apply tests without dealing with the constraint at this layer.
   return prisma.jobApplication.upsert({

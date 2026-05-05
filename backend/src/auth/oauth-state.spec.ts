@@ -45,7 +45,7 @@ describe('TEST-AUTH-020 Google OAuth state signing', () => {
     expect(state).toMatch(/^[A-Za-z0-9_-]+\.[a-f0-9]{64}$/);
     const [body, sig] = state!.split('.');
     // Recompute the HMAC with the same secret and assert it matches.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+
     const crypto = require('node:crypto') as typeof import('node:crypto');
     const expected = crypto
       .createHmac('sha256', 'secret-A')

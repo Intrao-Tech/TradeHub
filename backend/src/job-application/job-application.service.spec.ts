@@ -264,7 +264,7 @@ describe('TEST-JOBS-022 JobApplicationService.updateStatus() authorisation — J
     expect(args.data.responded_at).toBeUndefined();
   });
 
-  test('JOBS-044 — worker tries to WITHDRAW someone else\'s application → ForbiddenException', async () => {
+  test("JOBS-044 — worker tries to WITHDRAW someone else's application → ForbiddenException", async () => {
     const { service, prisma } = build();
     prisma.jobApplication.findUnique.mockResolvedValueOnce(
       appRow('PENDING', { worker_id: 999n }),

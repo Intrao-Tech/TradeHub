@@ -5,6 +5,7 @@ import {
   SetMetadata,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import type { CurrentUserPayload } from '../decorators/current-user.decorator';
 
 export const ROLES_KEY = 'roles';
 export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
@@ -20,7 +21,9 @@ export class RolesGuard implements CanActivate {
     );
     if (!requiredRoles?.length) return true;
 
-    const { user } = context.switchToHttp().getRequest();
+    const { user } = context
+      .switchToHttp()
+      .getRequest<{ user?: CurrentUserPayload }>();
     if (!user) return false;
 
     return requiredRoles.some((role) => {
