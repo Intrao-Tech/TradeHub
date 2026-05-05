@@ -97,7 +97,7 @@ export default function MyApplicationsPage() {
     setError('');
     try {
       const res = await api<ApplicationsResponse>(
-        '/job-applications/me?page=1&limit=200',
+        '/job-applications/me?page=1&limit=100',
       );
       setData(res.items ?? []);
     } catch (err) {
