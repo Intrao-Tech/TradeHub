@@ -185,13 +185,16 @@ Conventions: stable IDs `VER-NNN`. **Must** = MVP-blocking. **Should** = strongl
 ### 11. Audit and analytics
 
 - **VER-100 (Must).** Audit-log events written via existing `AuditService`:
-  - `verification.identity.started` — Stripe session created
-  - `verification.identity.verified` — webhook completion
-  - `verification.identity.failed` — webhook `requires_input`
-  - `verification.document.reviewed { decision, document_id, reason?, admin_override? }` — staff decision
+  - `verification.identity.started { session_id }` — Stripe session created
+  - `verification.identity.verified { session_id }` — webhook completion
+  - `verification.identity.failed { session_id, reason }` — webhook `requires_input`
+  - `verification.document.uploaded { doc_type }` — user uploads any verification document (no PII; `doc_type` only)
+  - `verification.document.reviewed { decision, document_id, doc_type, reason?, admin_override? }` — staff decision
   - `verification.document.assigned { from: staff_id|null, to: staff_id|null, reason: 'auto'|'duty_off'|'manual'|'claim'|'admin_reassign' }` — assignment change
   - `verification.level_changed { from, to, evidence_milestones }` — promotion engine fired
-  - `staff.duty_changed { on_duty: boolean, reassigned_count?: int }` — staff duty toggle
+  - `verification.companies_house.checked { company_number, outcome }` — employer Companies House check (success / mismatch / not found / upstream)
+  - `staff.duty_on { reassigned_count: 0 }` — staff toggled on duty (always 0 — turning ON doesn't reassign)
+  - `staff.duty_off { reassigned_count: int }` — staff toggled off duty; redistributes their open queue
 - **VER-101 (Must).** All audit events include `account_id` (subject), `staff_member_id` where applicable, and `ip_address`. Reuse the existing `audit_log` table — no new audit table.
 
 ### 12. Document assignment & staff duty

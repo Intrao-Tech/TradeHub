@@ -30,8 +30,8 @@ export type MilestoneType = (typeof MILESTONE_TYPES)[number];
 
 /**
  * Doc-type → milestone-type mapping for the manual review flow.
- * Returns `null` when approval of this doc type does not write a milestone
- * (e.g. legacy ID_PHOTO / SELFIE which staff should reject).
+ * Returns `null` when approval of this doc type does not contribute to a
+ * milestone (e.g. `OTHER` — free-form, user-titled, no ladder effect).
  */
 export function milestoneForDocType(docType: string): MilestoneType | null {
   switch (docType) {
