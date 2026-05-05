@@ -133,6 +133,14 @@
       "src/document/document.service.ts": {
         "statements": 40,
         "branches": 30
+      },
+      "src/job-post/job-post.service.ts": {
+        "statements": 60,
+        "branches": 35
+      },
+      "src/job-application/job-application.service.ts": {
+        "statements": 60,
+        "branches": 35
       }
     },
     "coverageDirectory": "../coverage",

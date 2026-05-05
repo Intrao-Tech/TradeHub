@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ChipMultiSelect } from './ChipMultiSelect';
+import { ChipMultiSelect } from '@/components/ui/chip-multi-select';
 import { useSpecialisations } from '@/hooks/useSpecialisations';
 import { useTags } from '@/hooks/useTags';
 import {

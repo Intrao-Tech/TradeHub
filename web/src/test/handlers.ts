@@ -4,10 +4,12 @@
 
 import { http, HttpResponse } from 'msw';
 import { makeAccountSummary, makeLoginResponse } from './factories';
+import { jobsHandlers } from './handlers/jobs';
 
 const API = 'http://localhost:8081/api';
 
 export const handlers = [
+  ...jobsHandlers,
   // ── Discovery ───────────────────────────────────────────────
   http.get(`${API}/auth/providers`, () => HttpResponse.json({ google: true })),
 

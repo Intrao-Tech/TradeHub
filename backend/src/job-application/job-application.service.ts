@@ -207,7 +207,10 @@ export class JobApplicationService {
     if (!application) throw new NotFoundException('Application not found');
 
     if (application.status === status) {
-      throw new BadRequestException('Status is already ' + status);
+      throw new BadRequestException({
+        code: 'STATUS_UNCHANGED',
+        message: `Application is already ${status.toLowerCase()}.`,
+      });
     }
 
     const isWorker = userId === application.worker_id;
