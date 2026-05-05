@@ -43,7 +43,9 @@ describe('TEST-PROF-076 portfolio ↔ document linkage (PROF-026)', () => {
     const docs = link.body.portfolio_item_documents as Array<{
       document_id: string;
     }>;
-    expect(docs.some((d) => d.document_id.toString() === documentId)).toBe(true);
+    expect(docs.some((d) => d.document_id.toString() === documentId)).toBe(
+      true,
+    );
 
     const unlink = await h
       .request()
@@ -54,7 +56,7 @@ describe('TEST-PROF-076 portfolio ↔ document linkage (PROF-026)', () => {
     expect(docsAfter.length).toBe(0);
   });
 
-  test('PROF-026 — cross-user link is rejected with 403 (someone else\'s document)', async () => {
+  test("PROF-026 — cross-user link is rejected with 403 (someone else's document)", async () => {
     const owner = await seedWorkerWithApprovedDocuments(h.prisma, 1);
     const otherWorker = await seedActiveWorker(h.prisma);
     const otherToken = signAccessTokenFor(h, {

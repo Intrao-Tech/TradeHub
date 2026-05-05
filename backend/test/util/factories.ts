@@ -33,16 +33,18 @@ function uniqueEmail(prefix: string): string {
 
 // ── Object-shape factories (no DB writes) ────────────────────────
 
-export function makeAccount(overrides: {
-  id?: bigint;
-  email?: string;
-  status?: AccountStatus;
-  password_hash?: string | null;
-  google_id?: string | null;
-  email_verified_at?: Date | null;
-  last_login_at?: Date | null;
-  phone?: string | null;
-} = {}) {
+export function makeAccount(
+  overrides: {
+    id?: bigint;
+    email?: string;
+    status?: AccountStatus;
+    password_hash?: string | null;
+    google_id?: string | null;
+    email_verified_at?: Date | null;
+    last_login_at?: Date | null;
+    phone?: string | null;
+  } = {},
+) {
   const id = overrides.id ?? nextId();
   return {
     id,
@@ -61,12 +63,14 @@ export function makeAccount(overrides: {
   };
 }
 
-export function makeStaff(overrides: {
-  id?: bigint;
-  display_name?: string;
-  staff_role?: 'ADMIN' | 'MODERATOR';
-  invite_expires_at?: Date | null;
-} = {}) {
+export function makeStaff(
+  overrides: {
+    id?: bigint;
+    display_name?: string;
+    staff_role?: 'ADMIN' | 'MODERATOR';
+    invite_expires_at?: Date | null;
+  } = {},
+) {
   return {
     id: overrides.id ?? nextId(),
     display_name: overrides.display_name ?? 'Test Staff',
@@ -85,7 +89,8 @@ export function makeRefreshToken(overrides: {
   return {
     id: overrides.id ?? nextId(),
     account_id: overrides.account_id,
-    token: overrides.token ?? `refresh_${crypto.randomBytes(8).toString('hex')}`,
+    token:
+      overrides.token ?? `refresh_${crypto.randomBytes(8).toString('hex')}`,
     expires_at:
       overrides.expires_at ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     created_at: new Date(),
@@ -163,7 +168,8 @@ export async function seedActiveEmployer(
 ): Promise<SeededAccount> {
   const email = overrides.email ?? uniqueEmail('employer');
   const password = overrides.password ?? TEST_PASSWORD;
-  const displayName = overrides.displayName ?? overrides.companyName ?? 'Test Co';
+  const displayName =
+    overrides.displayName ?? overrides.companyName ?? 'Test Co';
   const account = await prisma.account.create({
     data: {
       email,
@@ -516,7 +522,8 @@ export async function seedGoogleOnlyAccount(
   overrides: { email?: string; googleId?: string } = {},
 ): Promise<{ id: bigint; email: string; googleId: string }> {
   const email = overrides.email ?? uniqueEmail('google');
-  const googleId = overrides.googleId ?? `gid_${crypto.randomBytes(6).toString('hex')}`;
+  const googleId =
+    overrides.googleId ?? `gid_${crypto.randomBytes(6).toString('hex')}`;
   const displayName = 'Google User';
   const account = await prisma.account.create({
     data: {

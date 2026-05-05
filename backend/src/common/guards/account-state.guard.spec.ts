@@ -28,9 +28,7 @@ function ctx(user: Partial<CurrentUserPayload> | undefined): ExecutionContext {
 
 function withReflector(decorated: boolean): AccountStateGuard {
   const reflector = new Reflector();
-  jest
-    .spyOn(reflector, 'getAllAndOverride')
-    .mockReturnValue(decorated);
+  jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(decorated);
   return new AccountStateGuard(reflector);
 }
 

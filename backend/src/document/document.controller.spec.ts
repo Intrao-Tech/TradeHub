@@ -28,7 +28,10 @@ describe('TEST-PROF-050 DocumentController Multer config (BE-PROF-8)', () => {
         {
           provide: DocumentService,
           useValue: {
-            upload: uploadStub.mockResolvedValue({ id: '1', status: 'PENDING' }),
+            upload: uploadStub.mockResolvedValue({
+              id: '1',
+              status: 'PENDING',
+            }),
             getByClientProfile: jest.fn().mockResolvedValue([]),
             getByIdForRequester: jest.fn(),
             updateStatus: jest.fn(),
@@ -39,7 +42,9 @@ describe('TEST-PROF-050 DocumentController Multer config (BE-PROF-8)', () => {
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({
-        canActivate: (ctx: { switchToHttp: () => { getRequest: () => { user: unknown } } }) => {
+        canActivate: (ctx: {
+          switchToHttp: () => { getRequest: () => { user: unknown } };
+        }) => {
           const req = ctx.switchToHttp().getRequest();
           (req as { user: unknown }).user = {
             accountId: 1n,
@@ -58,7 +63,9 @@ describe('TEST-PROF-050 DocumentController Multer config (BE-PROF-8)', () => {
 
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, transform: true }),
+    );
     app.useGlobalFilters(new GlobalExceptionFilter());
     await app.init();
   });

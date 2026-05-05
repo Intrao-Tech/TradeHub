@@ -15,10 +15,7 @@ describe('TEST-PROF-079 Stripe Connect onboarding link e2e (PROF-041, BE-PROF-7)
     },
   );
 
-  test.skip(
-    'BE-PROF-7 — TODO: idempotent on re-call (same url returned for the same incomplete account).',
-    () => {
-      // empty
-    },
-  );
+  test.skip('BE-PROF-7 — TODO: idempotent on re-call (same url returned for the same incomplete account).', () => {
+    // empty
+  });
 });

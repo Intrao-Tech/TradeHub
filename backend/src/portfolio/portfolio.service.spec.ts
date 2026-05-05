@@ -113,7 +113,7 @@ describe('TEST-PROF-020 PortfolioService discriminated edits (PROF-021)', () => 
 });
 
 describe('TEST-PROF-021 PortfolioService sort_order behaviour (PROF-022)', () => {
-  test('PROF-022 — editing item B to item A\'s sort_order shifts A by one', async () => {
+  test("PROF-022 — editing item B to item A's sort_order shifts A by one", async () => {
     const { service, prisma } = build();
     // Sequence of findUnique reads: assertWorkerOwns (B) → getById final read.
     prisma.portfolioItem.findUnique.mockResolvedValueOnce({
@@ -288,12 +288,14 @@ describe('TEST-PROF-022 PortfolioService.removeMedia (PROF-025)', () => {
     } as never);
     prisma.portfolioMedia.delete.mockResolvedValue({} as never);
     await service.removeMedia(30n, 7n);
-    expect(prisma.portfolioMedia.delete).toHaveBeenCalledWith({ where: { id: 30n } });
+    expect(prisma.portfolioMedia.delete).toHaveBeenCalledWith({
+      where: { id: 30n },
+    });
   });
 });
 
 describe('TEST-PROF-023 PortfolioService document linkage (PROF-026)', () => {
-  test('PROF-026 — link rejects another worker\'s document with ForbiddenException', async () => {
+  test("PROF-026 — link rejects another worker's document with ForbiddenException", async () => {
     const { service, prisma } = build();
     prisma.portfolioItem.findUnique.mockResolvedValue({
       id: 1n,
@@ -305,9 +307,9 @@ describe('TEST-PROF-023 PortfolioService document linkage (PROF-026)', () => {
       client_profile_id: 999n, // someone else's doc
       status: 'APPROVED',
     } as never);
-    await expect(
-      service.linkDocument(1n, 50n, 7n),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.linkDocument(1n, 50n, 7n)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
     expect(prisma.portfolioItemDocument.upsert).not.toHaveBeenCalled();
   });
 
@@ -319,9 +321,9 @@ describe('TEST-PROF-023 PortfolioService document linkage (PROF-026)', () => {
       item_type: 'CERTIFICATION',
     } as never);
     prisma.document.findUnique.mockResolvedValue(null);
-    await expect(
-      service.linkDocument(1n, 50n, 7n),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.linkDocument(1n, 50n, 7n)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   test('PROF-026 — link upserts when owner + ownership checks pass', async () => {
@@ -355,9 +357,9 @@ describe('TEST-PROF-023 PortfolioService document linkage (PROF-026)', () => {
       item_type: 'CERTIFICATION',
     } as never);
     prisma.portfolioItemDocument.findUnique.mockResolvedValue(null);
-    await expect(
-      service.unlinkDocument(1n, 50n, 7n),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.unlinkDocument(1n, 50n, 7n)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   test('PROF-026 — link rejects PENDING document with BadRequestException("DOCUMENT_NOT_APPROVED")', async () => {

@@ -127,10 +127,7 @@ export class PortfolioService {
 
   async update(id: bigint, workerId: bigint, dto: UpdatePortfolioItemDto) {
     const owned = await this.assertWorkerOwns(id, workerId);
-    if (
-      dto.sort_order !== undefined &&
-      dto.sort_order !== owned.sort_order
-    ) {
+    if (dto.sort_order !== undefined && dto.sort_order !== owned.sort_order) {
       const colliding = await this.prisma.portfolioItem.findFirst({
         where: {
           worker_id: workerId,

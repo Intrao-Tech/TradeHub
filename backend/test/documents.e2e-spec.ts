@@ -3,10 +3,7 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { createTestApp, type TestHarness } from './util/test-app';
-import {
-  approveDocumentDirect,
-  seedActiveWorker,
-} from './util/factories';
+import { approveDocumentDirect, seedActiveWorker } from './util/factories';
 import { signAccessTokenFor } from './util/auth-helpers';
 import { mediaPngTooLarge, minimalPdf, nonImageZip } from './util/upload';
 
@@ -45,7 +42,7 @@ describe('TEST-PROF-077 documents (PROF-028, PROF-029, PROF-030)', () => {
     expect(res.body.file_url).toMatch(/^\/uploads\/[\w-]+\.pdf$/);
   });
 
-  test('PROF-028 — GET /documents/me lists the caller\'s documents', async () => {
+  test("PROF-028 — GET /documents/me lists the caller's documents", async () => {
     const seed = await seedActiveWorker(h.prisma);
     const token = signAccessTokenFor(h, {
       accountId: seed.id,

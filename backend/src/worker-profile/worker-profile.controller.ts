@@ -54,7 +54,9 @@ export class WorkerProfileController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('WORKER')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Link a specialisation to my worker profile (PROF-036)' })
+  @ApiOperation({
+    summary: 'Link a specialisation to my worker profile (PROF-036)',
+  })
   linkSpecialisation(
     @CurrentUser() user: CurrentUserPayload,
     @Param('specialisationId', ParseIntPipe) specialisationId: number,

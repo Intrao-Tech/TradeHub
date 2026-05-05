@@ -2,10 +2,7 @@
 // exemption per Auth contract §3).
 
 import { createTestApp, type TestHarness } from './util/test-app';
-import {
-  seedActiveWorker,
-  seedPendingWorker,
-} from './util/factories';
+import { seedActiveWorker, seedPendingWorker } from './util/factories';
 import { signAccessTokenFor } from './util/auth-helpers';
 
 describe('TEST-PROF-070 PATCH /client-profiles/me (PROF-011, AccountStateGuard exemption)', () => {
@@ -32,7 +29,11 @@ describe('TEST-PROF-070 PATCH /client-profiles/me (PROF-011, AccountStateGuard e
       .request()
       .patch('/api/client-profiles/me')
       .set('Authorization', `Bearer ${token}`)
-      .send({ display_name: 'Updated Name', city: 'Camden', postcode_area: 'NW1' })
+      .send({
+        display_name: 'Updated Name',
+        city: 'Camden',
+        postcode_area: 'NW1',
+      })
       .expect(200);
 
     expect(res.body.display_name).toBe('Updated Name');
@@ -53,7 +54,10 @@ describe('TEST-PROF-070 PATCH /client-profiles/me (PROF-011, AccountStateGuard e
       .request()
       .patch('/api/client-profiles/me')
       .set('Authorization', `Bearer ${token}`)
-      .send({ bio: 'Friendly chippy with 8 years experience.', city: 'Hackney' })
+      .send({
+        bio: 'Friendly chippy with 8 years experience.',
+        city: 'Hackney',
+      })
       .expect(200);
 
     const me = await h

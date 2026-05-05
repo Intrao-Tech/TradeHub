@@ -67,7 +67,6 @@ describe('TEST-AUTH-044 refresh / logout / logout-all', () => {
       .send({ refresh_token: session.refresh_token })
       .expect(401);
     expect(after.body.code).toBe('REFRESH_INVALID');
-
   });
 
   test('TEST-AUTH-017 spec — logout idempotent on missing body', async () => {

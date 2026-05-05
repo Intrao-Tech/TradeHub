@@ -92,7 +92,7 @@ describe('TEST-PROF-074 portfolio CRUD (PROF-020, PROF-021, PROF-022)', () => {
       .expect(200);
   });
 
-  test('PROF-021 — wrong worker cannot edit another worker\'s item (403 ForbiddenException)', async () => {
+  test("PROF-021 — wrong worker cannot edit another worker's item (403 ForbiddenException)", async () => {
     const owner = await seedActiveWorker(h.prisma);
     const ownerToken = signAccessTokenFor(h, {
       accountId: owner.id,

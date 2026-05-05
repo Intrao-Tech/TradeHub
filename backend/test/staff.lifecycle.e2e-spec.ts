@@ -64,7 +64,9 @@ describe('TEST-AUTH-048 staff lifecycle (AUTH-018-*)', () => {
     expect(invite).toBeDefined();
     expect((invite!.data.initialPassword as string).length).toBe(16);
     const expiresAt = invite!.data.inviteExpiresAt as Date;
-    expect(expiresAt.getTime()).toBeGreaterThan(Date.now() + 23 * 60 * 60 * 1000);
+    expect(expiresAt.getTime()).toBeGreaterThan(
+      Date.now() + 23 * 60 * 60 * 1000,
+    );
   });
 
   test('Decisions Log 2026-04-26 (existing-client promotion) — promote ACTIVE marketplace user without password change, send promotion mail', async () => {
@@ -95,7 +97,11 @@ describe('TEST-AUTH-048 staff lifecycle (AUTH-018-*)', () => {
     expect(after!.password_hash).toBe(passwordHashBefore);
 
     expect(h.mail.latest(existing.email, 'staff_promotion')).toBeDefined();
-    expect(h.mail.forAddress(existing.email).filter((m) => m.kind === 'staff_invite')).toHaveLength(0);
+    expect(
+      h.mail
+        .forAddress(existing.email)
+        .filter((m) => m.kind === 'staff_invite'),
+    ).toHaveLength(0);
 
     // The original password still works.
     await h
@@ -149,7 +155,9 @@ describe('TEST-AUTH-048 staff lifecycle (AUTH-018-*)', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(201);
 
-    const invites = h.mail.forAddress(fresh.email).filter((m) => m.kind === 'staff_invite');
+    const invites = h.mail
+      .forAddress(fresh.email)
+      .filter((m) => m.kind === 'staff_invite');
     expect(invites).toHaveLength(1);
     expect((invites[0].data.initialPassword as string).length).toBe(16);
   });
@@ -290,7 +298,9 @@ describe('TEST-AUTH-048 staff lifecycle (AUTH-018-*)', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
 
-    const account = await h.prisma.account.findUnique({ where: { id: mod.id } });
+    const account = await h.prisma.account.findUnique({
+      where: { id: mod.id },
+    });
     expect(account!.status).toBe('DEACTIVATED');
     expect(
       await h.prisma.refreshToken.count({ where: { account_id: mod.id } }),
