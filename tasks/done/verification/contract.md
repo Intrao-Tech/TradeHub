@@ -262,12 +262,13 @@ Stripe Identity events handled server-side (no public endpoint added):
 
 ### Document review (path to Certified)
 
-#### `GET /verification/queue?status=&doc_type=&page=&limit=`
+#### `GET /verification/queue?status=&doc_type=&assignment=&page=&limit=`
 Staff-only (`@Roles('STAFF')`). Paginated queue.
 
 Query params:
 - `status` (optional, default `PENDING,IN_REVIEW`) — comma-separated subset of `PENDING / IN_REVIEW / APPROVED / REJECTED`
 - `doc_type` (optional, default all)
+- `assignment` (optional, default `mine` for moderators / `all` for admins) — `mine` / `unassigned` / `all`. Non-admins requesting `all` get `403 FORBIDDEN`.
 - `page` (default 1)
 - `limit` (default 20, max 100)
 
@@ -277,12 +278,15 @@ Response `200`:
   "items": [
     {
       "document": { id, doc_type, file_url, status, rejection_reason, metadata, created_at, reviewed_at, reviewed_by },
-      "uploader": { id: clientProfileId, display_name, role: "WORKER" | "EMPLOYER" }
+      "uploader": { id: clientProfileId, display_name, role: "WORKER" | "EMPLOYER" },
+      "assignee": { id: staffMemberId, display_name } | null
     }
   ],
   "total": 42, "page": 1, "limit": 20
 }
 ```
+
+`document.metadata` carries the per-doc-type structured payload — for `OTHER` it includes `{ "title": string }` (3–100 chars, validated at upload). The staff queue surfaces `metadata.title` next to the doc-type so reviewers can identify free-form documents.
 
 Default sort: `created_at ASC` (oldest pending first — fairness).
 
@@ -372,7 +376,7 @@ Response `200`:
 { "on_duty": false, "reassigned": 3 }
 ```
 
-Audit: `staff.duty_changed { on_duty, reassigned_count }`.
+Audit: `staff.duty_on { reassigned_count: 0 }` when turning on, `staff.duty_off { reassigned_count: int }` when turning off (followed by per-doc `verification.document.assigned { reason: 'duty_off' }` for each redistributed document).
 
 #### `POST /verification/documents/:id/assign`
 ADMIN only. Body `{ staff_member_id: number | null }`. `null` removes assignment (returns to unassigned bucket). Target staff (if not null) must be on-duty AND `account.status === 'ACTIVE'`.
@@ -553,9 +557,13 @@ Written via `AuditService.log(account_id, action, entity_type?, entity_id?, meta
 | `verification.identity.started` | `POST /verification/identity/start` succeeds | `{ session_id }` |
 | `verification.identity.verified` | Stripe webhook `verified` | `{ session_id }` |
 | `verification.identity.failed` | Stripe webhook `requires_input` | `{ session_id, reason }` |
-| `verification.document.reviewed` | `POST /verification/documents/:id/review` succeeds | `{ decision, document_id, doc_type, reason? }` |
+| `verification.document.uploaded` | `POST /documents/upload` succeeds | `{ doc_type }` (no PII — never logs share-code, UTR, or NI) |
+| `verification.document.reviewed` | `POST /verification/documents/:id/review` succeeds | `{ decision, document_id, doc_type, reason?, admin_override? }` |
+| `verification.document.assigned` | Auto-assign / claim / admin reassign / off-duty redistribute | `{ from: staff_id\|null, to: staff_id\|null, reason: 'auto'\|'duty_off'\|'manual'\|'claim'\|'admin_reassign' }` |
 | `verification.level_changed` | Promotion engine writes a new level | `{ from, to, evidence_milestones: bigint[] }` |
-| `verification.share_code_submitted` | RTW upload validates | `{ document_id }` |
+| `verification.companies_house.checked` | `POST /verification/employer/companies-house-verify` runs | `{ company_number, outcome: 'verified'\|'mismatch'\|'not_found'\|'upstream_error' }` |
+| `staff.duty_on` | Staff toggles `is_on_duty=true` via `POST /staff/me/duty` | `{ reassigned_count: 0 }` |
+| `staff.duty_off` | Staff toggles `is_on_duty=false` via `POST /staff/me/duty` | `{ reassigned_count: int }` (open docs redistributed) |
 
 `account_id` is the **subject** (the user whose verification state changed), not the actor. Staff actions are tracked by `staff_member_id` in the metadata or via the `Document.reviewed_by` foreign key, not by repurposing `account_id`.
 

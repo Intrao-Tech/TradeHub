@@ -74,14 +74,12 @@ export function ConversationListItem({ conversation, active, onSelect, className
             <span className={cn('truncate text-sm', unread > 0 ? 'font-semibold text-fg' : 'font-medium text-fg')}>
               {name}
             </span>
-            {conversation.other_party_verification_level != null ? (
-              <VerificationBadge
-                state={verificationFromLevel(
-                  conversation.other_party_verification_level,
-                )}
-                className="shrink-0"
-              />
-            ) : null}
+            <VerificationBadge
+              state={verificationFromLevel(
+                conversation.other_party_verification_level,
+              )}
+              className="shrink-0"
+            />
           </div>
           <span className="shrink-0 text-xs text-fg-subtle">{formatTime(conversation.last_message_at)}</span>
         </div>

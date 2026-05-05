@@ -15,10 +15,7 @@ import { AuditService } from '../audit/audit.service';
 import { MailService } from '../mail/mail.service';
 import { STRIPE_CLIENT } from '../stripe/stripe.module';
 import { PromotionEngine } from './promotion-engine.service';
-import {
-  TERMINAL_DOCUMENT_STATUSES,
-  type VerificationLevel,
-} from './constants';
+import { type VerificationLevel } from './constants';
 
 type LadderRungState = 'DONE' | 'IN_PROGRESS' | 'NOT_STARTED' | 'COMING_SOON';
 
@@ -445,9 +442,9 @@ export class VerificationService {
   } {
     const identity = milestones.find((m) => m.milestone_type === 'IDENTITY_VERIFIED');
     const hasIdentity = !!identity;
-    const pendingIdentity = !hasIdentity && documents.some(
-      (d) => d.status === 'PENDING' && (d.doc_type === 'ID_PHOTO' || d.doc_type === 'SELFIE'),
-    );
+    // BASIC IN_PROGRESS would require querying the user's most recent Stripe
+    // session status (`processing`). The frontend reads that directly via
+    // `/verification/identity/status`; the ladder rung stays binary here.
 
     const certEvidenceTypes = isWorker
       ? ['CSCS_CARD', 'GAS_SAFE_CERT', 'NICEIC_CERT', 'FIRAS_CERT']
@@ -476,7 +473,7 @@ export class VerificationService {
       },
       {
         level: 'BASIC',
-        state: hasIdentity ? 'DONE' : pendingIdentity ? 'IN_PROGRESS' : 'NOT_STARTED',
+        state: hasIdentity ? 'DONE' : 'NOT_STARTED',
         label: hasIdentity
           ? 'Identity verified'
           : 'Verify your identity with Stripe',
@@ -527,10 +524,4 @@ export class VerificationService {
     return { rungs, next_action };
   }
 
-  // ─── Helpers ───────────────────────────────────────────────────
-
-  /** Returns true when the document state is terminal (no further transitions allowed). */
-  static isTerminalStatus(status: string): boolean {
-    return TERMINAL_DOCUMENT_STATUSES.includes(status as never);
-  }
 }
