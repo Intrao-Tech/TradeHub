@@ -293,7 +293,8 @@ export class AuthController {
     } catch (err) {
       // Surface explicit error codes so the SPA can render the right screen
       if (err && typeof err === 'object' && 'response' in err) {
-        const r = err.response;
+        const r = (err as { response?: { code?: string; email?: string } })
+          .response;
         const intent = (() => {
           try {
             const raw = req.query?.state;
@@ -366,7 +367,11 @@ export class AuthController {
     ) {
       throw new Error('bad signature');
     }
-    return JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    return JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as {
+      role?: string;
+      return_to?: string;
+      intent?: string;
+    };
   }
 
   private isSafeNext(path: string | undefined): path is string {

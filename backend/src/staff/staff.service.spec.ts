@@ -10,7 +10,6 @@
 //   is in TEST-AUTH-026 (password-policy.spec.ts) and currently fails — see
 //   followups.md FU-1.
 
-import * as bcrypt from 'bcrypt';
 import { mockDeep, type DeepMockProxy } from 'jest-mock-extended';
 import {
   BadRequestException,

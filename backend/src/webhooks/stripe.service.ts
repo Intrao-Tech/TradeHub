@@ -74,7 +74,7 @@ export class StripeWebhookService {
         break;
 
       case 'charge.dispute.closed':
-        await this.onDisputeClosed(event.data.object);
+        this.onDisputeClosed(event.data.object);
         break;
 
       case 'transfer.created':
@@ -86,7 +86,7 @@ export class StripeWebhookService {
         break;
 
       case 'checkout.session.completed':
-        await this.onCheckoutCompleted(event.data.object);
+        this.onCheckoutCompleted(event.data.object);
         break;
 
       case 'payout.paid':
@@ -249,8 +249,7 @@ export class StripeWebhookService {
     );
   }
 
-  private async onDisputeClosed(dispute: Stripe.Dispute): Promise<void> {
-    // status: won | lost | warning_closed etc — log only, human decides next step
+  private onDisputeClosed(dispute: Stripe.Dispute): void {
     this.logger.log(
       `Dispute ${dispute.id} closed with status: ${dispute.status}`,
     );
@@ -283,9 +282,7 @@ export class StripeWebhookService {
     );
   }
 
-  private async onCheckoutCompleted(
-    session: Stripe.Checkout.Session,
-  ): Promise<void> {
+  private onCheckoutCompleted(session: Stripe.Checkout.Session): void {
     const pi =
       typeof session.payment_intent === 'string'
         ? session.payment_intent

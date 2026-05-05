@@ -41,15 +41,14 @@ export function SpecialisationPicker({
       });
   }, []);
 
-  const linkedIds = new Set(
-    (links ?? [])
-      .map((l) => l.specialisation?.id ?? l.specialisation_id)
-      .filter((v): v is number => typeof v === 'number'),
-  );
-  const available = useMemo(
-    () => (options ?? []).filter((o) => !linkedIds.has(o.id)),
-    [options, linkedIds],
-  );
+  const available = useMemo(() => {
+    const linkedIds = new Set(
+      (links ?? [])
+        .map((l) => l.specialisation?.id ?? l.specialisation_id)
+        .filter((v): v is number => typeof v === 'number'),
+    );
+    return (options ?? []).filter((o) => !linkedIds.has(o.id));
+  }, [options, links]);
 
   async function add() {
     if (!picked) return;

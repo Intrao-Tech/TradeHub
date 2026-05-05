@@ -81,7 +81,9 @@ describe('TEST-JOBS-070 / 071 job-post CRUD + ownership', () => {
       .request()
       .get('/api/job-posts?status=OPEN')
       .expect(200);
-    expect(openOnly.body.items.find((j: { id: string }) => j.id === jobId)).toBeUndefined();
+    expect(
+      openOnly.body.items.find((j: { id: string }) => j.id === jobId),
+    ).toBeUndefined();
 
     // Reopen → visible again
     await h
@@ -100,7 +102,7 @@ describe('TEST-JOBS-070 / 071 job-post CRUD + ownership', () => {
     await h.request().get(`/api/job-posts/${jobId}`).expect(404);
   });
 
-  test('JOBS-020 — Employer A cannot edit Employer B\'s post → 403', async () => {
+  test("JOBS-020 — Employer A cannot edit Employer B's post → 403", async () => {
     const ownerA = await seedActiveEmployer(h.prisma);
     const ownerB = await seedActiveEmployer(h.prisma);
     const post = await seedJobPost(h.prisma, { employerId: ownerA.id });
@@ -313,7 +315,10 @@ describe('TEST-JOBS-087 anonymous browse', () => {
       status: 'CLOSED',
     });
 
-    const list = await h.request().get('/api/job-posts?status=OPEN').expect(200);
+    const list = await h
+      .request()
+      .get('/api/job-posts?status=OPEN')
+      .expect(200);
     const listIds = list.body.items.map((j: { id: unknown }) => String(j.id));
     expect(listIds).toContain(open.id.toString());
     expect(listIds).not.toContain(closed.id.toString());

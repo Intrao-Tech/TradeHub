@@ -2,7 +2,7 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import { INestApplication, Logger } from '@nestjs/common';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { Redis } from 'ioredis';
-import { ServerOptions } from 'socket.io';
+import { Server, ServerOptions } from 'socket.io';
 
 export class RedisIoAdapter extends IoAdapter {
   private adapterConstructor: ReturnType<typeof createAdapter> | null = null;
@@ -38,11 +38,11 @@ export class RedisIoAdapter extends IoAdapter {
     }
   }
 
-  createIOServer(port: number, options?: Partial<ServerOptions>) {
+  createIOServer(port: number, options?: Partial<ServerOptions>): Server {
     const server = super.createIOServer(port, {
       ...options,
       cors: { origin: '*' },
-    });
+    }) as Server;
     if (this.adapterConstructor) {
       server.adapter(this.adapterConstructor);
     }

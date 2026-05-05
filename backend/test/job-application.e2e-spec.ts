@@ -67,11 +67,7 @@ describe('TEST-JOBS-080 / 086 apply lifecycle (E2E-1, E2E-3, JOBS-029, BE-JOBS-1
     expect(list.body.items).toHaveLength(1);
 
     // Employer transitions
-    for (const status of [
-      'REVIEWED',
-      'SHORTLISTED',
-      'ACCEPTED',
-    ] as const) {
+    for (const status of ['REVIEWED', 'SHORTLISTED', 'ACCEPTED'] as const) {
       const r = await h
         .request()
         .patch(`/api/job-applications/${appId}/status`)
@@ -215,7 +211,7 @@ describe('TEST-JOBS-082 status authorisation (JOBS-037, JOBS-044)', () => {
     }
   });
 
-  test('JOBS-037 — employer A cannot mutate employer B\'s applications → 403', async () => {
+  test("JOBS-037 — employer A cannot mutate employer B's applications → 403", async () => {
     const employerA = await seedActiveEmployer(h.prisma);
     const employerB = await seedActiveEmployer(h.prisma);
     const worker = await seedActiveWorker(h.prisma);

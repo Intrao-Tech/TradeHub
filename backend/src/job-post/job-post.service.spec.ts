@@ -126,11 +126,7 @@ describe('TEST-JOBS-011 JobPostService.update() ownership — JOBS-020', () => {
       title: 'Edited',
     } as never);
 
-    const result = await service.update(
-      1n,
-      { title: 'Edited' },
-      OWNER_ID,
-    );
+    const result = await service.update(1n, { title: 'Edited' }, OWNER_ID);
 
     expect(result).toEqual({ id: 1n, title: 'Edited' });
     expect(prisma.jobPost.update).toHaveBeenCalledWith({
@@ -458,7 +454,9 @@ describe('TEST-JOBS-013 JobPostService.findById() — JOBS-008', () => {
   test('JOBS-008 — missing row → NotFoundException', async () => {
     const { service, prisma } = build();
     prisma.jobPost.findUnique.mockResolvedValueOnce(null as never);
-    await expect(service.findById(1n)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.findById(1n)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   test('JOBS-008 — present row returns through the include shape', async () => {

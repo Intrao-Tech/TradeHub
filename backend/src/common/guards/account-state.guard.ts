@@ -33,8 +33,10 @@ export class AccountStateGuard implements CanActivate {
     );
     if (!required) return true;
 
-    const request = context.switchToHttp().getRequest();
-    const user = request.user as CurrentUserPayload | undefined;
+    const request = context
+      .switchToHttp()
+      .getRequest<{ user?: CurrentUserPayload }>();
+    const user = request.user;
     if (!user) {
       // Should be impossible if JwtAuthGuard ran first, but fail safe.
       throw new ForbiddenException({

@@ -46,6 +46,43 @@ const OPTIONAL_LABELS: Record<OptionalRatingKey, string> = {
   safety_rating: 'Safety',
 };
 
+function OptionalRatingField({
+  name,
+  value,
+  onChange,
+}: {
+  name: OptionalRatingKey;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const numValue = value === '' ? 0 : Number(value);
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <p className="text-sm font-medium text-fg">{OPTIONAL_LABELS[name]}</p>
+        <p className="text-xs text-fg-subtle">Optional</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <StarRating
+          value={numValue}
+          onChange={(n) => onChange(String(n))}
+          label={OPTIONAL_LABELS[name]}
+        />
+        {value !== '' ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => onChange('')}
+          >
+            Clear
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function ReviewsPage() {
   const loggedIn = !!getToken();
   const [error, setError] = useState('');
@@ -135,84 +172,6 @@ export default function ReviewsPage() {
     }
   }
 
-  function OptionalRatingField({
-    name,
-    value,
-    onChange,
-  }: {
-    name: OptionalRatingKey;
-    value: string;
-    onChange: (v: string) => void;
-  }) {
-    const numValue = value === '' ? 0 : Number(value);
-    return (
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-fg">{OPTIONAL_LABELS[name]}</p>
-          <p className="text-xs text-fg-subtle">Optional</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <StarRating value={numValue} onChange={(n) => onChange(String(n))} label={OPTIONAL_LABELS[name]} />
-          {value !== '' ? (
-            <Button type="button" size="sm" variant="ghost" onClick={() => onChange('')}>
-              Clear
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
-  function renderReviewCards(items: ReviewRow[] | undefined) {
-    if (!items?.length) {
-      return (
-        <EmptyState
-          icon={MessageSquare}
-          title="No reviews"
-          description="No reviews in this result."
-        />
-      );
-    }
-    return (
-      <ul className="space-y-3">
-        {items.map((rev, i) => (
-          <li key={i}>
-            <Card>
-              <CardContent className="space-y-3 pt-6">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <StarRating value={rev.overall_rating ?? 0} size="md" label="Overall rating" />
-                    <span className="text-sm text-fg-muted">
-                      {rev.overall_rating ?? '—'} / 5
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {rev.reviewer_role ? (
-                      <Badge variant="outline">{rev.reviewer_role}</Badge>
-                    ) : null}
-                    <Badge variant={rev.is_published ? 'success' : 'warning'}>
-                      {rev.is_published ? 'Published' : 'Draft'}
-                    </Badge>
-                  </div>
-                </div>
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-fg-muted sm:grid-cols-5">
-                  <SubRating label="Quality" value={rev.quality_rating} />
-                  <SubRating label="Reliability" value={rev.reliability_rating} />
-                  <SubRating label="Communication" value={rev.communication_rating} />
-                  <SubRating label="Payment" value={rev.payment_rating} />
-                  <SubRating label="Safety" value={rev.safety_rating} />
-                </dl>
-                <p className="text-sm text-fg">
-                  {rev.comment ? rev.comment : <em className="text-fg-subtle">No comment</em>}
-                </p>
-              </CardContent>
-            </Card>
-          </li>
-        ))}
-      </ul>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <div>
@@ -256,7 +215,7 @@ export default function ReviewsPage() {
               </Button>
             </div>
           </form>
-          {renderReviewCards(workerReviews?.items)}
+          <ReviewCardsList items={workerReviews?.items} />
           <details className="text-xs text-fg-muted">
             <summary className="cursor-pointer">Raw JSON</summary>
             <pre className="mt-2 rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
@@ -293,7 +252,7 @@ export default function ReviewsPage() {
               </Button>
             </div>
           </form>
-          {renderReviewCards(employerReviews?.items)}
+          <ReviewCardsList items={employerReviews?.items} />
           <details className="text-xs text-fg-muted">
             <summary className="cursor-pointer">Raw JSON</summary>
             <pre className="mt-2 rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
@@ -384,7 +343,77 @@ export default function ReviewsPage() {
   );
 }
 
-function SubRating({ label, value }: { label: string; value: number | null | undefined }) {
+function ReviewCardsList({ items }: { items: ReviewRow[] | undefined }) {
+  if (!items?.length) {
+    return (
+      <EmptyState
+        icon={MessageSquare}
+        title="No reviews"
+        description="No reviews in this result."
+      />
+    );
+  }
+  return (
+    <ul className="space-y-3">
+      {items.map((rev, i) => (
+        <li key={i}>
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <StarRating
+                    value={rev.overall_rating ?? 0}
+                    size="md"
+                    label="Overall rating"
+                  />
+                  <span className="text-sm text-fg-muted">
+                    {rev.overall_rating ?? '—'} / 5
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {rev.reviewer_role ? (
+                    <Badge variant="outline">{rev.reviewer_role}</Badge>
+                  ) : null}
+                  <Badge variant={rev.is_published ? 'success' : 'warning'}>
+                    {rev.is_published ? 'Published' : 'Draft'}
+                  </Badge>
+                </div>
+              </div>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-fg-muted sm:grid-cols-5">
+                <SubRating label="Quality" value={rev.quality_rating} />
+                <SubRating
+                  label="Reliability"
+                  value={rev.reliability_rating}
+                />
+                <SubRating
+                  label="Communication"
+                  value={rev.communication_rating}
+                />
+                <SubRating label="Payment" value={rev.payment_rating} />
+                <SubRating label="Safety" value={rev.safety_rating} />
+              </dl>
+              <p className="text-sm text-fg">
+                {rev.comment ? (
+                  rev.comment
+                ) : (
+                  <em className="text-fg-subtle">No comment</em>
+                )}
+              </p>
+            </CardContent>
+          </Card>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SubRating({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | null | undefined;
+}) {
   return (
     <div className="flex flex-col">
       <span className="text-fg-subtle">{label}</span>

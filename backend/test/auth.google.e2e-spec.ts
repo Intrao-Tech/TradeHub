@@ -98,7 +98,7 @@ describe('TEST-AUTH-049 Google OAuth callback', () => {
 
   test('AUTH-015-006 (revised) — existing email + email_verified=true → AUTO-LINK + flip PENDING → ACTIVE on link', async () => {
     // Manually create a PENDING account with a password and no google_id.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+
     const bcrypt = require('bcrypt') as typeof import('bcrypt');
     const account = await h.prisma.account.create({
       data: {

@@ -19,7 +19,7 @@ export function signAccessTokenFor(
   opts: AccessTokenOpts,
 ): string {
   // Lazy resolve so we don't hold a JwtService reference across resets.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+
   const { JwtService: JwtServiceClass } = require('@nestjs/jwt') as {
     JwtService: typeof JwtService;
   };

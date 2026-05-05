@@ -182,8 +182,7 @@ export class JobPostService {
     if (existing._count.applications > 0) {
       throw new ConflictException({
         code: 'HAS_APPLICATIONS',
-        message:
-          'Close this job instead — applicants would lose their record.',
+        message: 'Close this job instead — applicants would lose their record.',
       });
     }
 

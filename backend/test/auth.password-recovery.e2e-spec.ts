@@ -83,7 +83,7 @@ describe('TEST-AUTH-045 password recovery + change', () => {
   test('AUTH-007 — reset with expired token → 400 TOKEN_INVALID', async () => {
     const seed = await seedActiveWorker(h.prisma);
     // Manually insert an already-expired token row.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+
     const crypto = require('node:crypto') as typeof import('node:crypto');
     const raw = 'expired-test-token';
     const hash = crypto.createHash('sha256').update(raw).digest('hex');

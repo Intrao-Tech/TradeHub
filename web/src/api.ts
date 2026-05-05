@@ -75,7 +75,7 @@ export function parseApiError(err: unknown): {
   return null;
 }
 
-export async function api<T = any>(
+export async function api<T = unknown>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {

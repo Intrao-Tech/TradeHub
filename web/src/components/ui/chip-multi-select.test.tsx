@@ -5,6 +5,7 @@
 // keyboard-nav contract enumerated in JOBS-021 plus the `Pick up to N`
 // soft cap, the chip-remove aria-label, and the empty-state copy.
 
+import { useState } from 'react';
 import { describe, expect, test, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { render, screen, within } from '@/test/render';
@@ -20,9 +21,7 @@ const OPTIONS: ChipOption[] = [
 function setup(initial: number[] = [], maxSelectedHint?: number) {
   const onChange = vi.fn<(next: number[]) => void>();
   function Harness({ start }: { start: number[] }) {
-    const [selected, setSelected] = (
-      require('react') as typeof import('react')
-    ).useState<number[]>(start);
+    const [selected, setSelected] = useState<number[]>(start);
     return (
       <ChipMultiSelect
         options={OPTIONS}

@@ -133,7 +133,10 @@ export class ConversationService {
         });
         return m;
       });
-      this.chatGateway.emitNewMessage(existingId, msg as any);
+      this.chatGateway.emitNewMessage(
+        existingId,
+        msg as unknown as Record<string, unknown>,
+      );
       return this.loadConversationPayload(existingId);
     }
 
@@ -164,9 +167,12 @@ export class ConversationService {
       },
     );
 
-    this.chatGateway.joinConversationRoom(senderId, created.id);
-    this.chatGateway.joinConversationRoom(recipientId, created.id);
-    this.chatGateway.emitNewMessage(created.id, msg as any);
+    void this.chatGateway.joinConversationRoom(senderId, created.id);
+    void this.chatGateway.joinConversationRoom(recipientId, created.id);
+    this.chatGateway.emitNewMessage(
+      created.id,
+      msg as unknown as Record<string, unknown>,
+    );
 
     return created;
   }
@@ -320,7 +326,10 @@ export class ConversationService {
       return m;
     });
 
-    this.chatGateway.emitNewMessage(conversationId, msg as any);
+    this.chatGateway.emitNewMessage(
+      conversationId,
+      msg as unknown as Record<string, unknown>,
+    );
     return this.loadConversationPayload(conversationId);
   }
 
