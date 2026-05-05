@@ -86,7 +86,7 @@ export default function MyJobApplicantsPage() {
       const [postRes, appsRes] = await Promise.all([
         api<JobPostDetail>(`/job-posts/${id}`),
         api<ApplicationsResponse>(
-          `/job-applications/jobs/${id}?page=1&limit=200`,
+          `/job-applications/jobs/${id}?page=1&limit=100`,
         ),
       ]);
       setPost(postRes);
