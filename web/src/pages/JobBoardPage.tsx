@@ -1,13 +1,21 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { Plus, RefreshCw, Search, Briefcase } from 'lucide-react';
-import { api, getToken } from '../api';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  Briefcase,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  RefreshCw,
+  Search,
+} from 'lucide-react';
+import { api, getToken, parseApiError } from '../api';
+import { useAccountMe } from '@/hooks/useAccountMe';
+import { useSpecialisations } from '@/hooks/useSpecialisations';
 import { JobCard, type JobCardData } from '@/components/JobCard';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Card,
   CardContent,
@@ -19,27 +27,14 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
-  SheetFooter,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { toast } from '@/components/ui/toast';
+import { JobPostForm } from '@/components/jobs/JobPostForm';
+import { ChipMultiSelect } from '@/components/ui/chip-multi-select';
 
 type JobPostRow = JobCardData & {
   pay_type: string;
@@ -53,137 +48,112 @@ type JobListResponse = {
   limit: number;
 };
 
-function parseIdList(s: string): number[] {
-  return s
-    .split(',')
-    .map((x) => x.trim())
-    .filter(Boolean)
-    .map((x) => Number(x))
-    .filter((n) => !Number.isNaN(n));
-}
+const PAGE_SIZE = 20;
 
 export default function JobBoardPage() {
+  const navigate = useNavigate();
   const loggedIn = !!getToken();
+  const { isEmployer, verificationState } = useAccountMe();
+  const canPostJob = loggedIn && isEmployer && verificationState === 'ACTIVE';
+
+  const [params, setParams] = useSearchParams();
+  const search = params.get('search') ?? '';
+  const postcodeArea = params.get('postcode_area') ?? '';
+  const specialisationParam = params.get('specialisation_id');
+  const specialisationId = specialisationParam
+    ? Number(specialisationParam)
+    : null;
+  const page = Math.max(1, Number(params.get('page') ?? '1') || 1);
+
+  const [searchInput, setSearchInput] = useState(search);
+  const [postcodeInput, setPostcodeInput] = useState(postcodeArea);
+
+  // Keep the controlled inputs in sync if the URL changes externally
+  // (back-button, deep link, refresh).
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
+  useEffect(() => {
+    setPostcodeInput(postcodeArea);
+  }, [postcodeArea]);
+
+  const { items: specialisationOptions, loading: specsLoading } =
+    useSpecialisations();
+
   const [list, setList] = useState<JobListResponse | null>(null);
   const [listError, setListError] = useState('');
-  const [actionError, setActionError] = useState('');
-  const [lastActionJson, setLastActionJson] = useState<unknown>(null);
-
-  const [searchTitle, setSearchTitle] = useState('');
-  const [postcodeArea, setPostcodeArea] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<JobPostRow | null>(null);
-  const [detailError, setDetailError] = useState('');
-  const [detailOpen, setDetailOpen] = useState(false);
-
-  const [applyCoverByJob, setApplyCoverByJob] = useState<Record<string, string>>({});
-
   const [createOpen, setCreateOpen] = useState(false);
-  const [createTitle, setCreateTitle] = useState('');
-  const [createDescription, setCreateDescription] = useState('');
-  const [createPayType, setCreatePayType] = useState<'DAY_RATE' | 'FIXED_PRICE'>('DAY_RATE');
-  const [createDayMin, setCreateDayMin] = useState('');
-  const [createDayMax, setCreateDayMax] = useState('');
-  const [createFixed, setCreateFixed] = useState('');
-  const [createPostcode, setCreatePostcode] = useState('');
-  const [createDuration, setCreateDuration] = useState('');
-  const [createUrgent, setCreateUrgent] = useState(false);
-  const [createSpecIds, setCreateSpecIds] = useState('');
-  const [createTagIds, setCreateTagIds] = useState('');
 
   const querySuffix = useMemo(() => {
     const p = new URLSearchParams();
     p.set('status', 'OPEN');
-    p.set('page', '1');
-    p.set('limit', '50');
-    if (searchTitle.trim()) p.set('search', searchTitle.trim());
+    p.set('page', String(page));
+    p.set('limit', String(PAGE_SIZE));
+    if (search.trim()) p.set('search', search.trim());
     if (postcodeArea.trim()) p.set('postcode_area', postcodeArea.trim());
+    if (specialisationId != null && Number.isFinite(specialisationId)) {
+      p.set('specialisation_id', String(specialisationId));
+    }
     return `?${p.toString()}`;
-  }, [searchTitle, postcodeArea]);
+  }, [search, postcodeArea, specialisationId, page]);
 
-  async function loadJobs() {
+  const loadJobs = useCallback(async () => {
     setListError('');
     try {
       const data = await api<JobListResponse>(`/job-posts${querySuffix}`);
       setList(data);
     } catch (e) {
-      setListError(e instanceof Error ? e.message : String(e));
+      setListError(parseApiError(e)?.message ?? 'Could not load jobs.');
       setList(null);
     }
-  }
+  }, [querySuffix]);
 
   useEffect(() => {
     void loadJobs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [querySuffix]);
+  }, [loadJobs]);
 
-  async function openDetail(id: string | number) {
-    const sid = String(id);
-    setSelectedId(sid);
-    setDetail(null);
-    setDetailError('');
-    setDetailOpen(true);
-    try {
-      const d = await api<JobPostRow>(`/job-posts/${sid}`);
-      setDetail(d);
-    } catch (e) {
-      setDetailError(e instanceof Error ? e.message : String(e));
+  function commitFilters(next: {
+    search?: string | null;
+    postcodeArea?: string | null;
+    specialisationId?: number | null;
+    page?: number | null;
+  }) {
+    const merged = new URLSearchParams(params);
+    if (next.search !== undefined) {
+      if (next.search) merged.set('search', next.search);
+      else merged.delete('search');
     }
-  }
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setActionError('');
-    setLastActionJson(null);
-    const body: Record<string, unknown> = {
-      title: createTitle,
-      description: createDescription || undefined,
-      postcode_area: createPostcode || undefined,
-      pay_type: createPayType,
-      is_urgent: createUrgent,
-      duration_days: createDuration === '' ? undefined : Number(createDuration),
-      specialisation_ids: parseIdList(createSpecIds),
-      tag_ids: parseIdList(createTagIds),
-    };
-    if (createPayType === 'DAY_RATE') {
-      if (createDayMin !== '') body.day_rate_min = Number(createDayMin);
-      if (createDayMax !== '') body.day_rate_max = Number(createDayMax);
+    if (next.postcodeArea !== undefined) {
+      if (next.postcodeArea) merged.set('postcode_area', next.postcodeArea);
+      else merged.delete('postcode_area');
+    }
+    if (next.specialisationId !== undefined) {
+      if (next.specialisationId != null) {
+        merged.set('specialisation_id', String(next.specialisationId));
+      } else {
+        merged.delete('specialisation_id');
+      }
+    }
+    // Any filter mutation resets to page 1; only an explicit `page` arg
+    // advances the paginator.
+    if (next.page != null) {
+      merged.set('page', String(next.page));
     } else {
-      if (createFixed !== '') body.fixed_price = Number(createFixed);
+      merged.delete('page');
     }
-    if ((body.specialisation_ids as number[]).length === 0) delete body.specialisation_ids;
-    if ((body.tag_ids as number[]).length === 0) delete body.tag_ids;
-
-    try {
-      const out = await api('/job-posts', { method: 'POST', body: JSON.stringify(body) });
-      setLastActionJson(out);
-      setCreateOpen(false);
-      await loadJobs();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
-    }
+    setParams(merged, { replace: false });
   }
 
-  async function applyToJob(jobId: string | number) {
-    const key = String(jobId);
-    setActionError('');
-    setLastActionJson(null);
-    try {
-      const out = await api(`/job-applications/jobs/${key}/apply`, {
-        method: 'POST',
-        body: JSON.stringify({
-          cover_message: applyCoverByJob[key]?.trim() || undefined,
-        }),
-      });
-      setLastActionJson(out);
-      await loadJobs();
-      if (selectedId === key) void openDetail(key);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
-    }
+  function applyFilters(e: React.FormEvent) {
+    e.preventDefault();
+    commitFilters({
+      search: searchInput.trim() || null,
+      postcodeArea: postcodeInput.trim() || null,
+    });
   }
 
-  const coverKey = selectedId ?? '';
+  const totalPages = list ? Math.max(1, Math.ceil(list.total / PAGE_SIZE)) : 1;
+  const showPaginator = list != null && list.total > PAGE_SIZE;
 
   return (
     <div className="space-y-6">
@@ -194,7 +164,7 @@ export default function JobBoardPage() {
             Browse open jobs from verified employers.
           </p>
         </div>
-        {loggedIn ? (
+        {canPostJob ? (
           <Sheet open={createOpen} onOpenChange={setCreateOpen}>
             <SheetTrigger asChild>
               <Button>
@@ -206,144 +176,22 @@ export default function JobBoardPage() {
               <SheetHeader>
                 <SheetTitle>Post a job</SheetTitle>
                 <SheetDescription>
-                  Employers only. Workers applying should return to the board.
+                  Tell verified workers what you need. You can edit anytime before
+                  applications arrive.
                 </SheetDescription>
               </SheetHeader>
-              <form onSubmit={handleCreate} className="mt-4 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="create-title">Title *</Label>
-                  <Input
-                    id="create-title"
-                    value={createTitle}
-                    onChange={(e) => setCreateTitle(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="create-description">Description</Label>
-                  <Textarea
-                    id="create-description"
-                    rows={3}
-                    value={createDescription}
-                    onChange={(e) => setCreateDescription(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Pay type</Label>
-                  <Select
-                    value={createPayType}
-                    onValueChange={(v) => setCreatePayType(v as 'DAY_RATE' | 'FIXED_PRICE')}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="DAY_RATE">Day rate</SelectItem>
-                      <SelectItem value="FIXED_PRICE">Fixed price</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {createPayType === 'DAY_RATE' ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="create-day-min">Day rate min</Label>
-                      <Input
-                        id="create-day-min"
-                        type="number"
-                        step="any"
-                        value={createDayMin}
-                        onChange={(e) => setCreateDayMin(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="create-day-max">Day rate max</Label>
-                      <Input
-                        id="create-day-max"
-                        type="number"
-                        step="any"
-                        value={createDayMax}
-                        onChange={(e) => setCreateDayMax(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Label htmlFor="create-fixed">Fixed price</Label>
-                    <Input
-                      id="create-fixed"
-                      type="number"
-                      step="any"
-                      value={createFixed}
-                      onChange={(e) => setCreateFixed(e.target.value)}
-                    />
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="create-postcode">Postcode area</Label>
-                    <Input
-                      id="create-postcode"
-                      value={createPostcode}
-                      onChange={(e) => setCreatePostcode(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="create-duration">Duration (days)</Label>
-                    <Input
-                      id="create-duration"
-                      type="number"
-                      value={createDuration}
-                      onChange={(e) => setCreateDuration(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <label className="flex items-center gap-2 text-sm text-fg">
-                  <input
-                    type="checkbox"
-                    checked={createUrgent}
-                    onChange={(e) => setCreateUrgent(e.target.checked)}
-                    className="h-4 w-4"
-                  />
-                  Mark as urgent
-                </label>
-                <div className="space-y-2">
-                  <Label htmlFor="create-spec-ids">Specialisation IDs (comma-separated)</Label>
-                  <Input
-                    id="create-spec-ids"
-                    value={createSpecIds}
-                    onChange={(e) => setCreateSpecIds(e.target.value)}
-                    placeholder="1, 2"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="create-tag-ids">Tag IDs (comma-separated)</Label>
-                  <Input
-                    id="create-tag-ids"
-                    value={createTagIds}
-                    onChange={(e) => setCreateTagIds(e.target.value)}
-                    placeholder="1, 2"
-                  />
-                </div>
-                {actionError ? (
-                  <div
-                    role="alert"
-                    className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
-                  >
-                    {actionError}
-                  </div>
-                ) : null}
-                <SheetFooter>
-                  <Button type="submit">Create job post</Button>
-                </SheetFooter>
-              </form>
-              {lastActionJson ? (
-                <div className="mt-4">
-                  <p className="text-xs font-medium text-fg-muted mb-1">Last response</p>
-                  <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
-                    {JSON.stringify(lastActionJson, null, 2)}
-                  </pre>
-                </div>
-              ) : null}
+              <div className="mt-4">
+                <JobPostForm
+                  mode="create"
+                  onSuccess={(created) => {
+                    toast.success('Job posted');
+                    setCreateOpen(false);
+                    if (created?.id != null) navigate(`/jobs/${created.id}`);
+                    else void loadJobs();
+                  }}
+                  onCancel={() => setCreateOpen(false)}
+                />
+              </div>
             </SheetContent>
           </Sheet>
         ) : null}
@@ -362,6 +210,15 @@ export default function JobBoardPage() {
         </div>
       ) : null}
 
+      {loggedIn && isEmployer && verificationState !== 'ACTIVE' ? (
+        <div
+          role="status"
+          className="rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-warning"
+        >
+          Verify your email to post jobs.
+        </div>
+      ) : null}
+
       {listError ? (
         <div
           role="alert"
@@ -370,48 +227,62 @@ export default function JobBoardPage() {
           {listError}
         </div>
       ) : null}
-      {actionError && !createOpen ? (
-        <div
-          role="alert"
-          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
-        >
-          {actionError}
-        </div>
-      ) : null}
 
       <Card>
         <CardHeader>
           <CardTitle>Filters</CardTitle>
           <CardDescription>Search open job posts.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-[1fr_200px_auto]">
-          <div className="space-y-2">
-            <Label htmlFor="search-title">Search title</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
+        <CardContent>
+          <form
+            onSubmit={applyFilters}
+            className="grid gap-3 sm:grid-cols-[1fr_200px_auto]"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="search-title">Search title</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
+                <Input
+                  id="search-title"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="e.g. electrician"
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="postcode-area">Postcode area</Label>
               <Input
-                id="search-title"
-                value={searchTitle}
-                onChange={(e) => setSearchTitle(e.target.value)}
-                placeholder="e.g. electrician"
-                className="pl-9"
+                id="postcode-area"
+                value={postcodeInput}
+                onChange={(e) => setPostcodeInput(e.target.value)}
+                placeholder="e.g. SW1"
               />
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="postcode-area">Postcode area</Label>
-            <Input
-              id="postcode-area"
-              value={postcodeArea}
-              onChange={(e) => setPostcodeArea(e.target.value)}
-              placeholder="e.g. SW1"
+            <div className="flex items-end">
+              <Button type="submit" variant="outline" className="w-full sm:w-auto">
+                <RefreshCw />
+                Apply
+              </Button>
+            </div>
+          </form>
+          <div className="mt-3 space-y-2">
+            <Label htmlFor="job-board-spec">Specialisation</Label>
+            <ChipMultiSelect
+              id="job-board-spec"
+              options={specialisationOptions}
+              loading={specsLoading}
+              selectedIds={specialisationId != null ? [specialisationId] : []}
+              onChange={(next) => {
+                // Single-select for the public board: pick the latest id.
+                const last = next.length > 0 ? next[next.length - 1] : null;
+                commitFilters({ specialisationId: last });
+              }}
+              ariaLabel="Specialisation filter"
+              placeholder="Filter by specialisation…"
+              emptyText="No specialisations match."
             />
-          </div>
-          <div className="flex items-end">
-            <Button type="button" variant="outline" onClick={() => void loadJobs()} className="w-full sm:w-auto">
-              <RefreshCw />
-              Refresh
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -424,16 +295,61 @@ export default function JobBoardPage() {
           ) : null}
         </div>
         {list?.items?.length ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {list.items.map((j) => (
-              <JobCard
-                key={String(j.id)}
-                job={j}
-                onSelect={() => void openDetail(j.id)}
-                selected={selectedId === String(j.id)}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {list.items.map((j) => (
+                <JobCard
+                  key={String(j.id)}
+                  job={j}
+                  onSelect={() => navigate(`/jobs/${j.id}`)}
+                />
+              ))}
+            </div>
+            {showPaginator ? (
+              <nav
+                aria-label="Job board pagination"
+                className="flex items-center justify-between gap-2 pt-2"
+              >
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() =>
+                    commitFilters({
+                      search: search || null,
+                      postcodeArea: postcodeArea || null,
+                      specialisationId: specialisationId,
+                      page: page - 1,
+                    })
+                  }
+                >
+                  <ChevronLeft />
+                  Previous
+                </Button>
+                <span className="text-xs text-fg-muted">
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() =>
+                    commitFilters({
+                      search: search || null,
+                      postcodeArea: postcodeArea || null,
+                      specialisationId: specialisationId,
+                      page: page + 1,
+                    })
+                  }
+                >
+                  Next
+                  <ChevronRight />
+                </Button>
+              </nav>
+            ) : null}
+          </>
         ) : list ? (
           <EmptyState
             icon={Briefcase}
@@ -444,82 +360,6 @@ export default function JobBoardPage() {
           <p className="text-sm text-fg-muted">Loading…</p>
         )}
       </section>
-
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{detail?.title ?? 'Job details'}</DialogTitle>
-            <DialogDescription>
-              {selectedId ? `Job ID: ${selectedId}` : null}
-            </DialogDescription>
-          </DialogHeader>
-          {detailError ? (
-            <div
-              role="alert"
-              className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
-            >
-              {detailError}
-            </div>
-          ) : null}
-          {detail ? (
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {detail.is_urgent ? <Badge variant="danger">Urgent</Badge> : null}
-                {detail.status ? <Badge variant="outline">{detail.status}</Badge> : null}
-                {detail._count?.applications != null ? (
-                  <Badge variant="secondary">
-                    {detail._count.applications} applications
-                  </Badge>
-                ) : null}
-              </div>
-              {detail.description ? (
-                <p className="whitespace-pre-wrap text-sm text-fg">{detail.description}</p>
-              ) : null}
-              <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
-                {JSON.stringify(detail, null, 2)}
-              </pre>
-
-              {loggedIn && selectedId ? (
-                <div className="space-y-2 border-t border-border-default pt-4">
-                  <Label htmlFor={`cover-${coverKey}`}>Cover message (optional)</Label>
-                  <Textarea
-                    id={`cover-${coverKey}`}
-                    rows={3}
-                    placeholder="Tell the employer why you're a fit."
-                    value={applyCoverByJob[coverKey] ?? ''}
-                    onChange={(e) =>
-                      setApplyCoverByJob((p) => ({ ...p, [coverKey]: e.target.value }))
-                    }
-                  />
-                  <DialogFooter>
-                    <Button type="button" onClick={() => void applyToJob(selectedId)}>
-                      Apply (worker only)
-                    </Button>
-                  </DialogFooter>
-                </div>
-              ) : !loggedIn ? (
-                <p className="text-sm text-fg-muted">
-                  <Link to="/login" className="font-medium text-primary underline-offset-4 hover:underline">
-                    Sign in
-                  </Link>{' '}
-                  to apply.
-                </p>
-              ) : null}
-            </div>
-          ) : !detailError ? (
-            <p className="text-sm text-fg-muted">Loading…</p>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-
-      {lastActionJson && !createOpen ? (
-        <section className="space-y-2">
-          <h3 className="text-sm font-medium text-fg-muted">Last action response</h3>
-          <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
-            {JSON.stringify(lastActionJson, null, 2)}
-          </pre>
-        </section>
-      ) : null}
     </div>
   );
 }

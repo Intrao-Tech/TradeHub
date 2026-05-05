@@ -22,7 +22,10 @@ describe('TEST-PROF-080 public profile reads (PROF-001..PROF-008)', () => {
 
   test('PROF-001 — GET /worker-profiles/:id reachable without auth', async () => {
     const seed = await seedActiveWorker(h.prisma);
-    const res = await h.request().get(`/api/worker-profiles/${seed.id}`).expect(200);
+    const res = await h
+      .request()
+      .get(`/api/worker-profiles/${seed.id}`)
+      .expect(200);
     expect(String(res.body.id)).toBe(String(seed.id));
     // Public response must include the consumer-visible fields the SPA renders.
     expect(res.body.client_profile).toBeDefined();
@@ -30,7 +33,10 @@ describe('TEST-PROF-080 public profile reads (PROF-001..PROF-008)', () => {
 
   test('PROF-002 — GET /employer-profiles/:id reachable without auth', async () => {
     const seed = await seedActiveEmployer(h.prisma);
-    const res = await h.request().get(`/api/employer-profiles/${seed.id}`).expect(200);
+    const res = await h
+      .request()
+      .get(`/api/employer-profiles/${seed.id}`)
+      .expect(200);
     expect(String(res.body.id)).toBe(String(seed.id));
   });
 

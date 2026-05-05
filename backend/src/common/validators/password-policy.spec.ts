@@ -74,7 +74,19 @@ describe('TEST-AUTH-010 password-policy', () => {
     });
 
     test('AUTH-015-004 — special chars include common punctuation', () => {
-      for (const special of ['!', '@', '#', '$', '%', '^', '&', '*', '?', '_', '-']) {
+      for (const special of [
+        '!',
+        '@',
+        '#',
+        '$',
+        '%',
+        '^',
+        '&',
+        '*',
+        '?',
+        '_',
+        '-',
+      ]) {
         const pwd = `Aa1${special}aaaa`;
         expect(checkPasswordPolicy(pwd)).toEqual({ ok: true });
       }

@@ -48,7 +48,10 @@ function build(): { service: StaffService; mocks: Mocks } {
     return undefined;
   });
 
-  return { service: new StaffService(prisma, mail, audit), mocks: { prisma, mail, audit } };
+  return {
+    service: new StaffService(prisma, mail, audit),
+    mocks: { prisma, mail, audit },
+  };
 }
 
 // ── AUTH-018-001 — create / promote / reject ────────────────────
@@ -62,7 +65,8 @@ describe('TEST-AUTH-024 StaffService.create — AUTH-018-001', () => {
       return {
         id: 100n,
         email: (args as { data: { email: string } }).data.email,
-        password_hash: (args as { data: { password_hash: string } }).data.password_hash,
+        password_hash: (args as { data: { password_hash: string } }).data
+          .password_hash,
         staff_member: { id: 100n },
       } as never;
     });
@@ -77,7 +81,7 @@ describe('TEST-AUTH-024 StaffService.create — AUTH-018-001', () => {
       mocks.mail.sendStaffInvite.mock.calls[0];
     expect(initialPassword).toHaveLength(16);
     expect(inviteExpiresAt).toBeInstanceOf(Date);
-    const ttlMs = (inviteExpiresAt as Date).getTime() - Date.now();
+    const ttlMs = inviteExpiresAt.getTime() - Date.now();
     // Allow 1s of clock drift inside the assertion.
     expect(ttlMs).toBeGreaterThan(24 * 60 * 60 * 1000 - 1500);
     expect(ttlMs).toBeLessThanOrEqual(24 * 60 * 60 * 1000 + 100);

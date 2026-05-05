@@ -47,7 +47,12 @@ describe('TEST-PROF-030 DocumentService.upload (PROF-029)', () => {
     const out = await service.upload(7n, { doc_type: 'CSCS_CARD' }, fakeFile());
     expect(out).toMatchObject({ status: 'PENDING', doc_type: 'CSCS_CARD' });
     const call = prisma.document.create.mock.calls[0][0] as {
-      data: { client_profile_id: bigint; doc_type: string; file_url: string; status: string };
+      data: {
+        client_profile_id: bigint;
+        doc_type: string;
+        file_url: string;
+        status: string;
+      };
     };
     expect(call.data.client_profile_id).toBe(7n);
     expect(call.data.doc_type).toBe('CSCS_CARD');

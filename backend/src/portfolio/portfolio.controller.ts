@@ -47,11 +47,7 @@ import {
 import { PortfolioService } from './portfolio.service';
 
 const PORTFOLIO_MEDIA_MAX_BYTES = 10 * 1024 * 1024;
-const PORTFOLIO_MEDIA_ALLOWED_MIMES = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-];
+const PORTFOLIO_MEDIA_ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 
 function workerIdOrThrow(user: CurrentUserPayload): bigint {
   if (user.clientProfileId == null) {
@@ -222,7 +218,9 @@ export class PortfolioController {
       },
     },
   })
-  @ApiOperation({ summary: 'Upload a media file to a portfolio item (PROF-024)' })
+  @ApiOperation({
+    summary: 'Upload a media file to a portfolio item (PROF-024)',
+  })
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({

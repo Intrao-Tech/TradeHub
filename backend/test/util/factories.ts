@@ -33,16 +33,18 @@ function uniqueEmail(prefix: string): string {
 
 // ── Object-shape factories (no DB writes) ────────────────────────
 
-export function makeAccount(overrides: {
-  id?: bigint;
-  email?: string;
-  status?: AccountStatus;
-  password_hash?: string | null;
-  google_id?: string | null;
-  email_verified_at?: Date | null;
-  last_login_at?: Date | null;
-  phone?: string | null;
-} = {}) {
+export function makeAccount(
+  overrides: {
+    id?: bigint;
+    email?: string;
+    status?: AccountStatus;
+    password_hash?: string | null;
+    google_id?: string | null;
+    email_verified_at?: Date | null;
+    last_login_at?: Date | null;
+    phone?: string | null;
+  } = {},
+) {
   const id = overrides.id ?? nextId();
   return {
     id,
@@ -61,12 +63,14 @@ export function makeAccount(overrides: {
   };
 }
 
-export function makeStaff(overrides: {
-  id?: bigint;
-  display_name?: string;
-  staff_role?: 'ADMIN' | 'MODERATOR';
-  invite_expires_at?: Date | null;
-} = {}) {
+export function makeStaff(
+  overrides: {
+    id?: bigint;
+    display_name?: string;
+    staff_role?: 'ADMIN' | 'MODERATOR';
+    invite_expires_at?: Date | null;
+  } = {},
+) {
   return {
     id: overrides.id ?? nextId(),
     display_name: overrides.display_name ?? 'Test Staff',
@@ -85,7 +89,8 @@ export function makeRefreshToken(overrides: {
   return {
     id: overrides.id ?? nextId(),
     account_id: overrides.account_id,
-    token: overrides.token ?? `refresh_${crypto.randomBytes(8).toString('hex')}`,
+    token:
+      overrides.token ?? `refresh_${crypto.randomBytes(8).toString('hex')}`,
     expires_at:
       overrides.expires_at ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     created_at: new Date(),
@@ -163,7 +168,8 @@ export async function seedActiveEmployer(
 ): Promise<SeededAccount> {
   const email = overrides.email ?? uniqueEmail('employer');
   const password = overrides.password ?? TEST_PASSWORD;
-  const displayName = overrides.displayName ?? overrides.companyName ?? 'Test Co';
+  const displayName =
+    overrides.displayName ?? overrides.companyName ?? 'Test Co';
   const account = await prisma.account.create({
     data: {
       email,
@@ -510,13 +516,181 @@ export async function approveDocumentDirect(
   });
 }
 
+// ── TEST-JOBS-002: Jobs & Applications factory extensions ──────────
+//
+// `seedJobPost` / `seedJobApplication` commit through Prisma and return the
+// row with the same `include` shape the production service returns. The
+// catalog helpers (`seedSpecialisation` / `seedTag`) use upserts on the
+// auto-generated slug so e2e specs can opt into a deterministic catalog
+// without colliding with the dev seed (which `seed.ts` populates the same
+// way) when both run against a freshly migrated container.
+
+const jobPostInclude = {
+  employer: { include: { client_profile: true } },
+  specialisations: { include: { specialisation: true } },
+  tags: { include: { tag: true } },
+  _count: { select: { applications: true } },
+} as const;
+
+const jobApplicationInclude = {
+  job_post: { include: { employer: { include: { client_profile: true } } } },
+  worker_profile: { include: { client_profile: true } },
+} as const;
+
+function specSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+export async function seedSpecialisation(
+  prisma: PrismaService,
+  name: string,
+): Promise<{ id: number; name: string; slug: string }> {
+  const slug = specSlug(name);
+  const row = await prisma.specialisation.upsert({
+    where: { slug },
+    update: {},
+    create: { name, slug },
+  });
+  return { id: row.id, name: row.name, slug: row.slug };
+}
+
+export async function seedTag(
+  prisma: PrismaService,
+  name: string,
+): Promise<{ id: number; name: string; slug: string }> {
+  const slug = specSlug(name);
+  const row = await prisma.tag.upsert({
+    where: { slug },
+    update: {},
+    create: { name, slug },
+  });
+  return { id: row.id, name: row.name, slug: row.slug };
+}
+
+export type SeedJobPostOpts = {
+  employerId: bigint;
+  title?: string;
+  description?: string | null;
+  status?: 'OPEN' | 'CLOSED' | 'FILLED' | 'CANCELLED';
+  isUrgent?: boolean;
+  payType?: 'DAY_RATE' | 'FIXED_PRICE';
+  dayRateMin?: number | null;
+  dayRateMax?: number | null;
+  fixedPrice?: number | null;
+  postcodeArea?: string | null;
+  siteAddress?: string | null;
+  durationDays?: number | null;
+  startDate?: Date | null;
+  expiresAt?: Date | null;
+  specialisationIds?: number[];
+  tagIds?: number[];
+};
+
+export async function seedJobPost(
+  prisma: PrismaService,
+  opts: SeedJobPostOpts,
+) {
+  const payType = opts.payType ?? 'DAY_RATE';
+  // Lazy require to avoid a hard import on `@prisma/client` at module load,
+  // matching the pattern used elsewhere in this file.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Prisma } = require('@prisma/client') as typeof import('@prisma/client');
+  return prisma.jobPost.create({
+    data: {
+      employer_id: opts.employerId,
+      title: opts.title ?? 'Test job',
+      description: opts.description ?? null,
+      postcode_area: opts.postcodeArea ?? null,
+      site_address: opts.siteAddress ?? null,
+      pay_type: payType,
+      day_rate_min:
+        opts.dayRateMin != null ? new Prisma.Decimal(opts.dayRateMin) : null,
+      day_rate_max:
+        opts.dayRateMax != null ? new Prisma.Decimal(opts.dayRateMax) : null,
+      fixed_price:
+        opts.fixedPrice != null ? new Prisma.Decimal(opts.fixedPrice) : null,
+      duration_days: opts.durationDays ?? null,
+      start_date: opts.startDate ?? null,
+      status: opts.status ?? 'OPEN',
+      is_urgent: opts.isUrgent ?? false,
+      expires_at: opts.expiresAt ?? null,
+      specialisations: {
+        create:
+          opts.specialisationIds?.map((id) => ({ specialisation_id: id })) ??
+          [],
+      },
+      tags: {
+        create: opts.tagIds?.map((id) => ({ tag_id: id })) ?? [],
+      },
+    },
+    include: jobPostInclude,
+  });
+}
+
+export type SeedJobApplicationOpts = {
+  jobPostId: bigint;
+  workerId: bigint;
+  initiatedBy?: 'WORKER' | 'EMPLOYER';
+  status?:
+    | 'PENDING'
+    | 'REVIEWED'
+    | 'SHORTLISTED'
+    | 'ACCEPTED'
+    | 'REJECTED'
+    | 'WITHDRAWN';
+  coverMessage?: string | null;
+  proposedRate?: number | null;
+};
+
+export async function seedJobApplication(
+  prisma: PrismaService,
+  opts: SeedJobApplicationOpts,
+) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Prisma } = require('@prisma/client') as typeof import('@prisma/client');
+  // Upsert on the unique pair so callers can use this idempotently in
+  // re-apply tests without dealing with the constraint at this layer.
+  return prisma.jobApplication.upsert({
+    where: {
+      job_post_id_worker_id: {
+        job_post_id: opts.jobPostId,
+        worker_id: opts.workerId,
+      },
+    },
+    update: {
+      status: opts.status ?? 'PENDING',
+      cover_message: opts.coverMessage ?? null,
+      proposed_rate:
+        opts.proposedRate != null
+          ? new Prisma.Decimal(opts.proposedRate)
+          : null,
+    },
+    create: {
+      job_post_id: opts.jobPostId,
+      worker_id: opts.workerId,
+      initiated_by: opts.initiatedBy ?? 'WORKER',
+      status: opts.status ?? 'PENDING',
+      cover_message: opts.coverMessage ?? null,
+      proposed_rate:
+        opts.proposedRate != null
+          ? new Prisma.Decimal(opts.proposedRate)
+          : null,
+    },
+    include: jobApplicationInclude,
+  });
+}
+
 /** For unit tests of the Google flow — Google-only account, no password set. */
 export async function seedGoogleOnlyAccount(
   prisma: PrismaService,
   overrides: { email?: string; googleId?: string } = {},
 ): Promise<{ id: bigint; email: string; googleId: string }> {
   const email = overrides.email ?? uniqueEmail('google');
-  const googleId = overrides.googleId ?? `gid_${crypto.randomBytes(6).toString('hex')}`;
+  const googleId =
+    overrides.googleId ?? `gid_${crypto.randomBytes(6).toString('hex')}`;
   const displayName = 'Google User';
   const account = await prisma.account.create({
     data: {

@@ -6,10 +6,7 @@
 
 import * as path from 'node:path';
 import { mockDeep, type DeepMockProxy } from 'jest-mock-extended';
-import {
-  BadRequestException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ClientProfileService } from './client-profile.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {

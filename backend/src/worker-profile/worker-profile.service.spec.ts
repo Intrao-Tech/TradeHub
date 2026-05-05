@@ -56,9 +56,9 @@ describe('TEST-PROF-012 WorkerProfileService.update (PROF-012)', () => {
   test('PROF-012 — Prisma update failure surfaces as 404', async () => {
     const { service, prisma } = build();
     prisma.workerProfile.update.mockRejectedValue(new Error('boom'));
-    await expect(service.update(1n, { years_experience: 1 })).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.update(1n, { years_experience: 1 }),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   test.skip(
@@ -86,7 +86,12 @@ describe('TEST-PROF-014 WorkerProfileService specialisation linkage (PROF-036, B
     const out = await service.linkSpecialisation(1n, 5, true);
     expect(out).toMatchObject({ specialisation_id: 5, is_primary: true });
     const call = prisma.workerSpecialisation.upsert.mock.calls[0][0] as {
-      where: { worker_id_specialisation_id: { worker_id: bigint; specialisation_id: number } };
+      where: {
+        worker_id_specialisation_id: {
+          worker_id: bigint;
+          specialisation_id: number;
+        };
+      };
       create: { is_primary: boolean };
       update: { is_primary: boolean };
     };
@@ -100,7 +105,9 @@ describe('TEST-PROF-014 WorkerProfileService specialisation linkage (PROF-036, B
 
   test('BE-PROF-3 — unlinkSpecialisation deletes the join row', async () => {
     const { service, prisma } = build();
-    prisma.workerSpecialisation.deleteMany.mockResolvedValue({ count: 1 } as never);
+    prisma.workerSpecialisation.deleteMany.mockResolvedValue({
+      count: 1,
+    } as never);
     await service.unlinkSpecialisation(1n, 5);
     const call = prisma.workerSpecialisation.deleteMany.mock.calls[0][0] as {
       where: { worker_id: bigint; specialisation_id: number };

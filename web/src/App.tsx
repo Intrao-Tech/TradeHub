@@ -13,6 +13,7 @@ import {
 } from './lib/host';
 import { AppShell, type NavItem } from './components/AppShell';
 import { Skeleton } from './components/ui/skeleton';
+import { Toaster } from './components/ui/toast';
 
 // ── Lazy pages ──────────────────────────────────────────────────────
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -39,6 +40,10 @@ const ReviewsPage = lazy(() => import('./pages/ReviewsPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const JobBoardPage = lazy(() => import('./pages/JobBoardPage'));
+const JobDetailPage = lazy(() => import('./pages/JobDetailPage'));
+const MyJobsPage = lazy(() => import('./pages/MyJobsPage'));
+const MyJobApplicantsPage = lazy(() => import('./pages/MyJobApplicantsPage'));
+const EditJobPage = lazy(() => import('./pages/EditJobPage'));
 const MyApplicationsPage = lazy(() => import('./pages/MyApplicationsPage'));
 const InboxPage = lazy(() => import('./pages/InboxPage'));
 
@@ -55,6 +60,7 @@ const PRIVATE_NAV: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/profile', label: 'Profile' },
   { to: '/my-applications', label: 'Applications' },
+  { to: '/my-jobs', label: 'Posted jobs' },
   { to: '/collaborations', label: 'Work' },
   { to: '/referrals', label: 'Referrals' },
   { to: '/inbox', label: 'Inbox' },
@@ -196,6 +202,7 @@ function MarketplaceRouter() {
         <Routes>
           {/* Public */}
           <Route path="/jobs" element={<JobBoardPage />} />
+          <Route path="/jobs/:id" element={<JobDetailPage />} />
           <Route path="/workers" element={<WorkerSearchPage />} />
           <Route path="/workers/:id" element={<WorkerDetailPage />} />
           <Route path="/employers" element={<EmployerSearchPage />} />
@@ -211,6 +218,9 @@ function MarketplaceRouter() {
           <Route path="/referrals" element={<Protected loggedIn={loggedIn}><ReferralsPage /></Protected>} />
           <Route path="/notifications" element={<Protected loggedIn={loggedIn}><NotificationsPage /></Protected>} />
           <Route path="/my-applications" element={<Protected loggedIn={loggedIn}><MyApplicationsPage /></Protected>} />
+          <Route path="/my-jobs" element={<Protected loggedIn={loggedIn}><MyJobsPage /></Protected>} />
+          <Route path="/my-jobs/:id/applicants" element={<Protected loggedIn={loggedIn}><MyJobApplicantsPage /></Protected>} />
+          <Route path="/my-jobs/:id/edit" element={<Protected loggedIn={loggedIn}><EditJobPage /></Protected>} />
           <Route path="/inbox" element={<Protected loggedIn={loggedIn}><InboxPage /></Protected>} />
           <Route path="/settings/security" element={<Protected loggedIn={loggedIn}><SettingsSecurityPage /></Protected>} />
 
@@ -270,6 +280,7 @@ function App() {
   return (
     <BrowserRouter>
       {IS_STAFF_HOST ? <StaffRouter /> : <MarketplaceRouter />}
+      <Toaster />
     </BrowserRouter>
   );
 }

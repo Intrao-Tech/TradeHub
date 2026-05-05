@@ -25,17 +25,23 @@ describe('TEST-PROF-050 ClientProfileController avatar Multer config (BE-PROF-8 
         {
           provide: ClientProfileService,
           useValue: {
-            updateAvatar: uploadStub.mockResolvedValue({ avatar_url: '/uploads/x.png' }),
+            updateAvatar: uploadStub.mockResolvedValue({
+              avatar_url: '/uploads/x.png',
+            }),
             update: jest.fn(),
             getBySlug: jest.fn(),
-            search: jest.fn().mockResolvedValue({ data: [], total: 0, page: 1, limit: 20 }),
+            search: jest
+              .fn()
+              .mockResolvedValue({ data: [], total: 0, page: 1, limit: 20 }),
           },
         },
       ],
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({
-        canActivate: (ctx: { switchToHttp: () => { getRequest: () => { user: unknown } } }) => {
+        canActivate: (ctx: {
+          switchToHttp: () => { getRequest: () => { user: unknown } };
+        }) => {
           const req = ctx.switchToHttp().getRequest();
           (req as { user: unknown }).user = {
             accountId: 1n,
@@ -52,7 +58,9 @@ describe('TEST-PROF-050 ClientProfileController avatar Multer config (BE-PROF-8 
 
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, transform: true }),
+    );
     app.useGlobalFilters(new GlobalExceptionFilter());
     await app.init();
   });

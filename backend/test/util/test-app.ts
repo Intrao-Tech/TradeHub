@@ -20,10 +20,7 @@ import { BigIntSerializationInterceptor } from '../../src/common/interceptors/bi
 import { StaffHostMiddleware } from '../../src/common/middleware/staff-host.middleware';
 import { startPostgres, truncateAll } from './postgres-container';
 import { TestMailService } from './test-mail.service';
-import {
-  StubGoogleAuthGuard,
-  resetGoogleQueue,
-} from './stub-google.strategy';
+import { StubGoogleAuthGuard, resetGoogleQueue } from './stub-google.strategy';
 
 // Always-pass throttler — used by every e2e suite EXCEPT TEST-AUTH-050
 // (auth.rate-limit.e2e-spec.ts) which boots its own app with the real guard.
@@ -84,12 +81,10 @@ export async function createTestApp(
   process.env.JWT_REFRESH_TTL = process.env.JWT_REFRESH_TTL ?? '7d';
   process.env.FRONTEND_URL =
     options.marketplaceOrigin ?? DEFAULT_MARKETPLACE_ORIGIN;
-  process.env.STAFF_FRONTEND_URL =
-    options.staffOrigin ?? DEFAULT_STAFF_ORIGIN;
+  process.env.STAFF_FRONTEND_URL = options.staffOrigin ?? DEFAULT_STAFF_ORIGIN;
   process.env.STAFF_LOGIN_HOST = options.staffHost ?? DEFAULT_STAFF_HOST;
   process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
-  process.env.GOOGLE_CLIENT_SECRET =
-    process.env.GOOGLE_CLIENT_SECRET ?? '';
+  process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
   process.env.GOOGLE_CALLBACK_URL =
     process.env.GOOGLE_CALLBACK_URL ??
     'http://localhost:8081/api/auth/google/callback';
@@ -114,7 +109,9 @@ export async function createTestApp(
     // Belt-and-braces: also override the @UseGuards-style references so any
     // route that pulls ThrottlerGuard via decorator (none today, but defensive)
     // also short-circuits.
-    builder = builder.overrideGuard(ThrottlerGuard).useClass(NoopThrottlerGuard);
+    builder = builder
+      .overrideGuard(ThrottlerGuard)
+      .useClass(NoopThrottlerGuard);
   }
 
   // The StaffHostMiddleware reads ConfigService at construction. Re-construct
@@ -140,13 +137,16 @@ export async function createTestApp(
   void app.get(StaffHostMiddleware);
 
   const prisma = moduleRef.get(PrismaService);
-  const mail = moduleRef.get(MailService) as unknown as TestMailService;
+  const mail = moduleRef.get(MailService);
 
   const harness: TestHarness = {
     app,
     prisma,
     mail,
-    request: () => supertest(app.getHttpServer()) as unknown as ReturnType<TestHarness['request']>,
+    request: () =>
+      supertest(app.getHttpServer()) as unknown as ReturnType<
+        TestHarness['request']
+      >,
     async reset() {
       mail.reset();
       resetGoogleQueue();

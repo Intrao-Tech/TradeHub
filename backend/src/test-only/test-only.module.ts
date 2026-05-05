@@ -5,7 +5,10 @@
 
 import { Module, type OnModuleInit } from '@nestjs/common';
 import { MailService } from '../mail/mail.service';
-import { TestMailboxController, recordRawToken } from './test-mailbox.controller';
+import {
+  TestMailboxController,
+  recordRawToken,
+} from './test-mailbox.controller';
 import { TestSeedController } from './test-seed.controller';
 
 @Module({

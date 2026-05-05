@@ -39,7 +39,10 @@ describe('TEST-AUTH-023 StaffHostMiddleware — AUTH-016-002', () => {
     });
     expect(() =>
       mw.use(
-        req({ origin: 'https://internal.tradehub.co.uk', host: 'api.localhost:8081' }),
+        req({
+          origin: 'https://internal.tradehub.co.uk',
+          host: 'api.localhost:8081',
+        }),
         {} as Response,
         next,
       ),
@@ -53,11 +56,7 @@ describe('TEST-AUTH-023 StaffHostMiddleware — AUTH-016-002', () => {
       STAFF_FRONTEND_URL: 'http://internal.localhost:3000',
     });
     expect(() =>
-      mw.use(
-        req({ host: 'internal.localhost:8081' }),
-        {} as Response,
-        next,
-      ),
+      mw.use(req({ host: 'internal.localhost:8081' }), {} as Response, next),
     ).not.toThrow();
     expect(next).toHaveBeenCalledTimes(1);
   });
@@ -102,11 +101,7 @@ describe('TEST-AUTH-023 StaffHostMiddleware — AUTH-016-002', () => {
       STAFF_FRONTEND_URL: '',
     });
     expect(() =>
-      mw.use(
-        req({ host: 'internal.localhost:8081' }),
-        {} as Response,
-        next,
-      ),
+      mw.use(req({ host: 'internal.localhost:8081' }), {} as Response, next),
     ).not.toThrow();
   });
 

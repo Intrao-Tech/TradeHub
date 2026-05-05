@@ -54,8 +54,14 @@ describe('TEST-AUTH-045 password recovery + change', () => {
       .post('/api/auth/forgot-password')
       .send({ email: admin.email })
       .expect(200);
-    expect(h.mail.forAddress(admin.email).filter((m) => m.kind === 'password_reset')).toHaveLength(0);
-    expect(h.mail.forAddress(admin.email).filter((m) => m.kind === 'google_signin_reminder')).toHaveLength(0);
+    expect(
+      h.mail.forAddress(admin.email).filter((m) => m.kind === 'password_reset'),
+    ).toHaveLength(0);
+    expect(
+      h.mail
+        .forAddress(admin.email)
+        .filter((m) => m.kind === 'google_signin_reminder'),
+    ).toHaveLength(0);
   });
 
   test('Decisions Log 2026-04-26 (Google-only friendlier reminder) — Google-only account → 200, sign-in-reminder mail captured (NOT a reset link)', async () => {
@@ -69,7 +75,9 @@ describe('TEST-AUTH-045 password recovery + change', () => {
       .expect(200);
 
     expect(h.mail.latest(goog.email, 'google_signin_reminder')).toBeDefined();
-    expect(h.mail.forAddress(goog.email).filter((m) => m.kind === 'password_reset')).toHaveLength(0);
+    expect(
+      h.mail.forAddress(goog.email).filter((m) => m.kind === 'password_reset'),
+    ).toHaveLength(0);
   });
 
   test('AUTH-007 — reset with expired token → 400 TOKEN_INVALID', async () => {
@@ -185,7 +193,9 @@ describe('TEST-AUTH-045 password recovery + change', () => {
       .expect(200);
 
     // Sanity: the password actually changed.
-    const account = await h.prisma.account.findUnique({ where: { id: seed.id } });
+    const account = await h.prisma.account.findUnique({
+      where: { id: seed.id },
+    });
     const ok = await bcrypt.compare('NewPass1!Aaa', account!.password_hash!);
     expect(ok).toBe(true);
     expect(TEST_BCRYPT_ROUNDS).toBeGreaterThan(0); // sanity: factory constant unchanged

@@ -13,7 +13,9 @@ async function buildState(
 ): Promise<string> {
   const res = await h
     .request()
-    .get(`/api/auth/google/start?role=${role}&return_to=/profile&intent=${intent}`)
+    .get(
+      `/api/auth/google/start?role=${role}&return_to=/profile&intent=${intent}`,
+    )
     .expect(200);
   const url = new URL(res.body.redirect_url);
   return url.searchParams.get('state')!;
@@ -58,7 +60,9 @@ describe('TEST-AUTH-049 Google OAuth callback', () => {
     });
     expect(account!.status).toBe('ACTIVE');
     expect(account!.email_verified_at).toBeInstanceOf(Date);
-    expect(h.mail.latest('verified-new@example.com', 'verification')).toBeUndefined();
+    expect(
+      h.mail.latest('verified-new@example.com', 'verification'),
+    ).toBeUndefined();
     expect(h.mail.latest('verified-new@example.com', 'welcome')).toBeDefined();
 
     // Redirect URL should carry tokens for the SPA to pick up.
@@ -87,7 +91,9 @@ describe('TEST-AUTH-049 Google OAuth callback', () => {
     });
     expect(account!.status).toBe('PENDING_EMAIL_VERIFICATION');
     expect(account!.email_verified_at).toBeNull();
-    expect(h.mail.latest('unverified@example.com', 'verification')).toBeDefined();
+    expect(
+      h.mail.latest('unverified@example.com', 'verification'),
+    ).toBeDefined();
   });
 
   test('AUTH-015-006 (revised) — existing email + email_verified=true → AUTO-LINK + flip PENDING → ACTIVE on link', async () => {

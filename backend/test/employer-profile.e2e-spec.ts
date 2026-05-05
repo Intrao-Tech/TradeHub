@@ -1,10 +1,7 @@
 // TEST-PROF-072 — employer-profile e2e (PROF-013).
 
 import { createTestApp, type TestHarness } from './util/test-app';
-import {
-  seedActiveEmployer,
-  seedActiveWorker,
-} from './util/factories';
+import { seedActiveEmployer, seedActiveWorker } from './util/factories';
 import { signAccessTokenFor } from './util/auth-helpers';
 
 describe('TEST-PROF-072 PATCH /employer-profiles/me (PROF-013)', () => {

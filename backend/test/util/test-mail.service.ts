@@ -37,10 +37,7 @@ export class TestMailService {
   }
 
   /** Latest captured mail of the given kind for the given recipient. */
-  latest(
-    to: string,
-    kind?: CapturedMail['kind'],
-  ): CapturedMail | undefined {
+  latest(to: string, kind?: CapturedMail['kind']): CapturedMail | undefined {
     const list = this.forAddress(to).filter((m) =>
       kind ? m.kind === kind : true,
     );

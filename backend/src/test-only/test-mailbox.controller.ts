@@ -63,14 +63,12 @@ export class TestMailboxController implements OnModuleInit {
       latest_verification: getLatestRaw('verify', account.email),
       latest_reset: getLatestRaw('reset', account.email),
       latest_staff_invite_password: getLatestRaw('staff_invite', account.email),
-      verification_tokens: account.email_verification_tokens.map(
-        (t) => ({
-          token_hash: t.token_hash,
-          expires_at: t.expires_at,
-          consumed_at: t.consumed_at,
-          created_at: t.created_at,
-        }),
-      ),
+      verification_tokens: account.email_verification_tokens.map((t) => ({
+        token_hash: t.token_hash,
+        expires_at: t.expires_at,
+        consumed_at: t.consumed_at,
+        created_at: t.created_at,
+      })),
       password_reset_tokens: account.password_reset_tokens.map((t) => ({
         token_hash: t.token_hash,
         expires_at: t.expires_at,
@@ -93,7 +91,6 @@ type RawKind = 'verify' | 'reset' | 'staff_invite';
 type RawSink = Map<string, { kind: RawKind; token: string }[]>;
 
 declare global {
-  // eslint-disable-next-line no-var
   var __TEST_MAILBOX__: RawSink | undefined;
 }
 

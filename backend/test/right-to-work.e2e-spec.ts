@@ -55,10 +55,7 @@ describe('TEST-PROF-078 right-to-work submission (PROF-052, PROF-053 fallback)',
     },
   );
 
-  test.skip(
-    'PROF-052 document path — TODO: doc_type=RIGHT_TO_WORK_DOCUMENT once Verification ships the enum extension.',
-    async () => {
-      // empty
-    },
-  );
+  test.skip('PROF-052 document path — TODO: doc_type=RIGHT_TO_WORK_DOCUMENT once Verification ships the enum extension.', async () => {
+    // empty
+  });
 });

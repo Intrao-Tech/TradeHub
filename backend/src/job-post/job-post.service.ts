@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -65,7 +66,13 @@ export class JobPostService {
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    const where = this.buildWhere(query);
+    // JOBS-002: anonymous browse defaults to OPEN. Callers that genuinely
+    // want CLOSED / FILLED / CANCELLED rows must opt in by setting `status`
+    // explicitly (any value, including the literal string "ALL", which the
+    // service treats as "no status filter").
+    const effectiveQuery: JobPostQueryDto =
+      query.status == null ? { ...query, status: 'OPEN' } : query;
+    const where = this.buildWhere(effectiveQuery);
 
     const [items, total] = await Promise.all([
       this.prisma.jobPost.findMany({
@@ -166,10 +173,18 @@ export class JobPostService {
   async delete(id: bigint, employerId: bigint) {
     const existing = await this.prisma.jobPost.findUnique({
       where: { id },
+      include: { _count: { select: { applications: true } } },
     });
     if (!existing) throw new NotFoundException('Job post not found');
     if (existing.employer_id !== employerId) {
       throw new ForbiddenException('Only the owner can delete this job post');
+    }
+    if (existing._count.applications > 0) {
+      throw new ConflictException({
+        code: 'HAS_APPLICATIONS',
+        message:
+          'Close this job instead — applicants would lose their record.',
+      });
     }
 
     await this.prisma.jobPost.delete({ where: { id } });
@@ -181,8 +196,14 @@ export class JobPostService {
         ? query.search.trim()
         : null;
 
+    // `status: 'ALL'` is the explicit opt-out for anonymous + employer
+    // dashboards that need to see every status.
+    const status =
+      query.status != null && query.status.toUpperCase() !== 'ALL'
+        ? query.status
+        : null;
     return {
-      ...(query.status != null ? { status: query.status } : {}),
+      ...(status != null ? { status } : {}),
       ...(query.postcode_area != null
         ? { postcode_area: query.postcode_area }
         : {}),

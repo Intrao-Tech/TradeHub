@@ -36,7 +36,11 @@ export type DiskUploadFixture = UploadFixture & {
   cleanup: () => void;
 };
 
-async function pngBuffer(width: number, height: number, padBytes = 0): Promise<Buffer> {
+async function pngBuffer(
+  width: number,
+  height: number,
+  padBytes = 0,
+): Promise<Buffer> {
   // sharp creates a deterministic PNG from a raw RGBA buffer. `padBytes` lets
   // us push the encoded result above a target byte-count for size-cap
   // failure cases without asking sharp for a 5MiB image.
@@ -150,7 +154,9 @@ export function asDiskFile(
   fixture: UploadFixture,
   ext = path.extname(fixture.filename).slice(1) || 'bin',
 ): DiskUploadFixture {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tradehub-test-upload-'));
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'tradehub-test-upload-'),
+  );
   const filename = `${crypto.randomUUID()}.${ext}`;
   const filepath = path.join(tmpDir, filename);
   fs.writeFileSync(filepath, fixture.buffer);

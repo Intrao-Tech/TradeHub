@@ -35,8 +35,9 @@ type Mocks = {
 function build(): { service: AuthService; mocks: Mocks } {
   const prisma = mockDeep<PrismaService>();
   const jwt = {
-    sign: jest.fn((p: object, opts?: { secret?: string; expiresIn?: string }) =>
-      `signed:${JSON.stringify(p)}:${opts?.expiresIn ?? 'access'}`,
+    sign: jest.fn(
+      (p: object, opts?: { secret?: string; expiresIn?: string }) =>
+        `signed:${JSON.stringify(p)}:${opts?.expiresIn ?? 'access'}`,
     ),
     verify: jest.fn(),
     verifyAsync: jest.fn(),
@@ -143,9 +144,15 @@ describe('TEST-AUTH-011 AuthService.register', () => {
     );
 
     const createArgs = mocks.prisma.account.create.mock.calls[0][0] as {
-      data: { client_profile: { create: { employer_profile: { create: { company_name: string } } } } };
+      data: {
+        client_profile: {
+          create: { employer_profile: { create: { company_name: string } } };
+        };
+      };
     };
-    expect(createArgs.data.client_profile.create.employer_profile.create).toEqual({
+    expect(
+      createArgs.data.client_profile.create.employer_profile.create,
+    ).toEqual({
       company_name: 'Acme Build Ltd',
     });
   });
@@ -312,7 +319,10 @@ describe('TEST-AUTH-012 AuthService.login', () => {
       err = e;
     }
     expect(err).toBeInstanceOf(HttpException);
-    const body = (err as HttpException).getResponse() as Record<string, unknown>;
+    const body = (err as HttpException).getResponse() as Record<
+      string,
+      unknown
+    >;
     expect(body.code).toBe('EMAIL_NOT_VERIFIED');
     expect(body.email).toBe('pending@x.io');
     // Tokens are still issued in the body so the SPA can call verify-email/send.
@@ -474,7 +484,9 @@ describe('TEST-AUTH-014 AuthService.resetPassword', () => {
       fail('expected BadRequestException');
     } catch (err) {
       expect(err).toBeInstanceOf(BadRequestException);
-      const body = (err as BadRequestException).getResponse() as { code: string };
+      const body = (err as BadRequestException).getResponse() as {
+        code: string;
+      };
       expect(body.code).toBe('TOKEN_INVALID');
     }
   });
@@ -507,7 +519,9 @@ describe('TEST-AUTH-014 AuthService.resetPassword', () => {
     } as never);
     mocks.prisma.account.update.mockResolvedValue({} as never);
     mocks.prisma.passwordResetToken.update.mockResolvedValue({} as never);
-    mocks.prisma.refreshToken.deleteMany.mockResolvedValue({ count: 3 } as never);
+    mocks.prisma.refreshToken.deleteMany.mockResolvedValue({
+      count: 3,
+    } as never);
 
     const result = await service.resetPassword('rawtoken', VALID_PWD);
     expect(result).toEqual({ ok: true });
@@ -528,7 +542,9 @@ describe('TEST-AUTH-014 AuthService.resetPassword', () => {
     } as never);
     mocks.prisma.account.update.mockResolvedValue({} as never);
     mocks.prisma.passwordResetToken.update.mockResolvedValue({} as never);
-    mocks.prisma.refreshToken.deleteMany.mockResolvedValue({ count: 0 } as never);
+    mocks.prisma.refreshToken.deleteMany.mockResolvedValue({
+      count: 0,
+    } as never);
 
     const result = await service.resetPassword('rawtoken', VALID_PWD);
     expect(result).toEqual({ ok: true });
@@ -560,7 +576,9 @@ describe('TEST-AUTH-015 AuthService.changePassword', () => {
       err = e;
     }
     expect(err).toBeInstanceOf(UnauthorizedException);
-    const body = (err as UnauthorizedException).getResponse() as { code: string };
+    const body = (err as UnauthorizedException).getResponse() as {
+      code: string;
+    };
     expect(body.code).toBe('INVALID_CURRENT_PASSWORD');
   });
 
@@ -573,9 +591,16 @@ describe('TEST-AUTH-015 AuthService.changePassword', () => {
       password_hash: currentHash,
     } as never);
     mocks.prisma.account.update.mockResolvedValue({} as never);
-    mocks.prisma.refreshToken.deleteMany.mockResolvedValue({ count: 2 } as never);
+    mocks.prisma.refreshToken.deleteMany.mockResolvedValue({
+      count: 2,
+    } as never);
 
-    await service.changePassword(9n, current, 'NewPass1!Aaa', 'CURRENT_REFRESH');
+    await service.changePassword(
+      9n,
+      current,
+      'NewPass1!Aaa',
+      'CURRENT_REFRESH',
+    );
 
     expect(mocks.prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
       where: {
@@ -594,7 +619,9 @@ describe('TEST-AUTH-015 AuthService.changePassword', () => {
       password_hash: currentHash,
     } as never);
     mocks.prisma.account.update.mockResolvedValue({} as never);
-    mocks.prisma.refreshToken.deleteMany.mockResolvedValue({ count: 5 } as never);
+    mocks.prisma.refreshToken.deleteMany.mockResolvedValue({
+      count: 5,
+    } as never);
 
     await service.changePassword(10n, current, 'NewPass1!Aaa', undefined);
 
@@ -753,7 +780,9 @@ describe('TEST-AUTH-016 AuthService.refreshTokens', () => {
 describe('TEST-AUTH-017 AuthService.logout', () => {
   test('AUTH-008 — invalidates the supplied refresh token (current session)', async () => {
     const { service, mocks } = build();
-    mocks.prisma.refreshToken.deleteMany.mockResolvedValue({ count: 1 } as never);
+    mocks.prisma.refreshToken.deleteMany.mockResolvedValue({
+      count: 1,
+    } as never);
     const result = await service.logout(5n, 'this-refresh');
     expect(result).toEqual({ ok: true });
     expect(mocks.prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
@@ -774,7 +803,9 @@ describe('TEST-AUTH-017 AuthService.logout', () => {
 describe('TEST-AUTH-018 AuthService.logoutAll', () => {
   test('AUTH-008 — revokes EVERY refresh token for the account and returns the count', async () => {
     const { service, mocks } = build();
-    mocks.prisma.refreshToken.deleteMany.mockResolvedValue({ count: 4 } as never);
+    mocks.prisma.refreshToken.deleteMany.mockResolvedValue({
+      count: 4,
+    } as never);
 
     const result = await service.logoutAll(7n);
     expect(result).toEqual({ revoked: 4 });
@@ -1089,8 +1120,7 @@ describe('TEST-AUTH-021 AuthService.confirmVerificationEmail', () => {
     const result = await service.confirmVerificationEmail('raw');
 
     const accountUpdate = mocks.prisma.account.update.mock.calls.find(
-      (c) =>
-        (c[0] as { data: { status?: string } }).data.status === 'ACTIVE',
+      (c) => (c[0] as { data: { status?: string } }).data.status === 'ACTIVE',
     );
     expect(accountUpdate).toBeDefined();
     expect(

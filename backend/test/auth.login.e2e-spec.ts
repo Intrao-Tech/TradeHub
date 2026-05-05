@@ -95,7 +95,9 @@ describe('TEST-AUTH-043 POST /auth/login', () => {
 
   test('AUTH-014-001 — successful login bumps account.last_login_at', async () => {
     const seed = await seedActiveWorker(h.prisma);
-    const before = await h.prisma.account.findUnique({ where: { id: seed.id } });
+    const before = await h.prisma.account.findUnique({
+      where: { id: seed.id },
+    });
     expect(before!.last_login_at).toBeNull();
 
     await h

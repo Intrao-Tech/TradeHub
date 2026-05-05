@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -32,9 +33,10 @@ export class JobApplicationService {
     });
     if (!jobPost) throw new NotFoundException('Job post not found');
     if (jobPost.status !== 'OPEN') {
-      throw new BadRequestException(
-        'This job post is not open for applications',
-      );
+      throw new BadRequestException({
+        code: 'JOB_CLOSED',
+        message: 'This job post is not open for applications',
+      });
     }
 
     const existing = await this.prisma.jobApplication.findUnique({
@@ -43,7 +45,10 @@ export class JobApplicationService {
       },
     });
     if (existing) {
-      throw new BadRequestException('You have already applied to this job');
+      throw new ConflictException({
+        code: 'ALREADY_APPLIED',
+        message: 'You have already applied to this job',
+      });
     }
 
     return this.prisma.jobApplication.create({
@@ -202,7 +207,10 @@ export class JobApplicationService {
     if (!application) throw new NotFoundException('Application not found');
 
     if (application.status === status) {
-      throw new BadRequestException('Status is already ' + status);
+      throw new BadRequestException({
+        code: 'STATUS_UNCHANGED',
+        message: `Application is already ${status.toLowerCase()}.`,
+      });
     }
 
     const isWorker = userId === application.worker_id;

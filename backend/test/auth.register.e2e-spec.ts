@@ -2,10 +2,7 @@
 // Contract: AUTH-015-001..AUTH-015-003, AUTH-019-001, Decisions Log
 // "Re-registration on PENDING".
 
-import {
-  createTestApp,
-  type TestHarness,
-} from './util/test-app';
+import { createTestApp, type TestHarness } from './util/test-app';
 import { TEST_PASSWORD, seedActiveWorker } from './util/factories';
 
 describe('TEST-AUTH-041 POST /auth/register', () => {
@@ -39,7 +36,9 @@ describe('TEST-AUTH-041 POST /auth/register', () => {
     const account = await h.prisma.account.findUnique({
       where: { email },
       include: {
-        client_profile: { include: { worker_profile: true, employer_profile: true } },
+        client_profile: {
+          include: { worker_profile: true, employer_profile: true },
+        },
       },
     });
     expect(account).not.toBeNull();
@@ -89,7 +88,9 @@ describe('TEST-AUTH-041 POST /auth/register', () => {
         surname: 'P',
       })
       .expect(201);
-    expect(h.mail.forAddress(email).filter((m) => m.kind === 'verification')).toHaveLength(1);
+    expect(
+      h.mail.forAddress(email).filter((m) => m.kind === 'verification'),
+    ).toHaveLength(1);
 
     await h
       .request()
@@ -105,11 +106,15 @@ describe('TEST-AUTH-041 POST /auth/register', () => {
 
     const accounts = await h.prisma.account.findMany({ where: { email } });
     expect(accounts).toHaveLength(1);
-    expect(h.mail.forAddress(email).filter((m) => m.kind === 'verification')).toHaveLength(2);
+    expect(
+      h.mail.forAddress(email).filter((m) => m.kind === 'verification'),
+    ).toHaveLength(2);
   });
 
   test('AUTH-015-001 — re-register on ACTIVE account → 409 EMAIL_TAKEN', async () => {
-    const seed = await seedActiveWorker(h.prisma, { email: 'live@example.com' });
+    const seed = await seedActiveWorker(h.prisma, {
+      email: 'live@example.com',
+    });
     const res = await h
       .request()
       .post('/api/auth/register')

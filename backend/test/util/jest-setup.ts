@@ -7,14 +7,13 @@ Logger.overrideLogger(false);
 
 // Friendlier BigInt JSON serialisation for assertion failure dumps.
 // Doesn't affect Nest's BigIntSerializationInterceptor — that runs first.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
 };
 
 // Hard fail if a test forgets to await a promise that throws.
 process.on('unhandledRejection', (err) => {
-  // eslint-disable-next-line no-console
   console.error('Unhandled rejection in test:', err);
   throw err;
 });

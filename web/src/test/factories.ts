@@ -271,6 +271,183 @@ export function mockAccountMe(overrides: {
   };
 }
 
+// ── TEST-JOBS-003: Jobs & Applications mock builders ─────────────
+//
+// Shapes mirror what the API returns through `web/src/api.ts` for the
+// Jobs surface. Override-friendly so tests can flip a single field
+// (e.g., `status: 'CLOSED'`, `_count.applications: 1`) without rebuilding
+// the whole nested tree.
+
+export type MockSpecialisationCatalogItem = {
+  id: number;
+  name: string;
+  slug: string;
+};
+
+export type MockTagCatalogItem = { id: number; name: string; slug: string };
+
+export type MockEmployerForJob = {
+  id: string;
+  company_name: string | null;
+  client_profile: {
+    id: string;
+    display_name: string;
+    avatar_url: string | null;
+    verification_level: string;
+  };
+};
+
+export type MockJobPost = {
+  id: string;
+  employer_id: string;
+  title: string;
+  description: string | null;
+  postcode_area: string | null;
+  site_address: string | null;
+  pay_type: 'DAY_RATE' | 'FIXED_PRICE';
+  day_rate_min: string | null;
+  day_rate_max: string | null;
+  fixed_price: string | null;
+  duration_days: number | null;
+  start_date: string | null;
+  status: 'OPEN' | 'CLOSED' | 'FILLED' | 'CANCELLED';
+  is_urgent: boolean;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+  employer: MockEmployerForJob;
+  specialisations: Array<{
+    specialisation: MockSpecialisationCatalogItem;
+  }>;
+  tags: Array<{ tag: MockTagCatalogItem }>;
+  _count: { applications: number };
+};
+
+export type MockJobApplication = {
+  id: string;
+  job_post_id: string;
+  worker_id: string;
+  initiated_by: 'WORKER' | 'EMPLOYER';
+  status:
+    | 'PENDING'
+    | 'REVIEWED'
+    | 'SHORTLISTED'
+    | 'ACCEPTED'
+    | 'REJECTED'
+    | 'WITHDRAWN';
+  cover_message: string | null;
+  proposed_rate: string | null;
+  responded_at: string | null;
+  created_at: string;
+  job_post: MockJobPost;
+  worker_profile: {
+    id: string;
+    rating_avg: string;
+    rating_count: number;
+    client_profile: {
+      id: string;
+      display_name: string;
+      avatar_url: string | null;
+      verification_level: string;
+    };
+  };
+};
+
+export function mockSpecialisationCatalog(): MockSpecialisationCatalogItem[] {
+  return [
+    { id: 1, name: 'Plumbing', slug: 'plumbing' },
+    { id: 2, name: 'Electrical', slug: 'electrical' },
+    { id: 3, name: 'Carpentry', slug: 'carpentry' },
+    { id: 4, name: 'Tiling', slug: 'tiling' },
+    { id: 5, name: 'Roofing', slug: 'roofing' },
+  ];
+}
+
+export function mockTagCatalog(): MockTagCatalogItem[] {
+  return [
+    { id: 10, name: 'Loft Conversion', slug: 'loft-conversion' },
+    { id: 11, name: 'Kitchen Fitting', slug: 'kitchen-fitting' },
+    { id: 12, name: 'Commercial Wiring', slug: 'commercial-wiring' },
+  ];
+}
+
+function mockEmployerForJob(
+  overrides: Partial<MockEmployerForJob> = {},
+): MockEmployerForJob {
+  return {
+    id: '900',
+    company_name: 'Acme Build Ltd',
+    client_profile: {
+      id: '900',
+      display_name: 'Acme Build',
+      avatar_url: null,
+      verification_level: 'IDENTITY_VERIFIED',
+    },
+    ...overrides,
+  };
+}
+
+export function mockJobPost(overrides: Partial<MockJobPost> = {}): MockJobPost {
+  const now = new Date().toISOString();
+  return {
+    id: '1001',
+    employer_id: '900',
+    title: 'Wire two-bed flat',
+    description: 'First fix electrical for a Camden flat. Two-week duration.',
+    postcode_area: 'NW1',
+    site_address: null,
+    pay_type: 'DAY_RATE',
+    day_rate_min: '200.00',
+    day_rate_max: '280.00',
+    fixed_price: null,
+    duration_days: 10,
+    start_date: null,
+    status: 'OPEN',
+    is_urgent: false,
+    expires_at: null,
+    created_at: now,
+    updated_at: now,
+    employer: mockEmployerForJob(),
+    specialisations: [
+      { specialisation: { id: 2, name: 'Electrical', slug: 'electrical' } },
+    ],
+    tags: [{ tag: { id: 12, name: 'Commercial Wiring', slug: 'commercial-wiring' } }],
+    _count: { applications: 0 },
+    ...overrides,
+  };
+}
+
+export function mockJobApplication(
+  overrides: Partial<MockJobApplication> = {},
+): MockJobApplication {
+  const now = new Date().toISOString();
+  const post = overrides.job_post ?? mockJobPost();
+  return {
+    id: '5001',
+    job_post_id: post.id,
+    worker_id: '42',
+    initiated_by: 'WORKER',
+    status: 'PENDING',
+    cover_message: null,
+    proposed_rate: null,
+    responded_at: null,
+    created_at: now,
+    job_post: post,
+    worker_profile: {
+      id: '42',
+      rating_avg: '4.5',
+      rating_count: 8,
+      client_profile: {
+        id: '42',
+        display_name: 'Mike Builder',
+        avatar_url: null,
+        verification_level: 'UNVERIFIED',
+      },
+    },
+    ...overrides,
+  };
+}
+
 /** Common error body shape produced by the backend GlobalExceptionFilter. */
 export function makeErrorBody(
   code: string,
