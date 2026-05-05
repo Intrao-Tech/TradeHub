@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { MapPin, CalendarCheck } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -5,8 +6,10 @@ import {
   VerificationBadge,
   verificationFromLevel,
 } from '../VerificationBadge';
+import { MilestonesStrip } from '../MilestonesStrip';
 import { StarRating } from '../StarRating';
 import { publicFileUrl } from '../../lib/files';
+import { api } from '../../api';
 
 export type ProfileHeaderProps = {
   displayName: string;
@@ -15,10 +18,26 @@ export type ProfileHeaderProps = {
   city?: string | null;
   postcodeArea?: string | null;
   verificationLevel?: string | number | null;
+  /** When provided, ProfileHeader fetches public milestone flags for this profile. */
+  clientProfileId?: string | number | bigint | null;
   rating?: string | number | null;
   ratingCount?: number | null;
   /** Worker only: shows availability chip when present. */
   isAvailable?: boolean | null;
+};
+
+type PublicLevelResponse = {
+  verification_level: string;
+  flags?: {
+    identity_verified?: boolean;
+    insurance_approved?: boolean;
+    company_house_verified?: boolean;
+    company_letterhead_approved?: boolean;
+    right_to_work_verified?: boolean;
+    hmrc_cis_verified?: boolean;
+    certification_doc_types?: string[];
+  };
+  reviews?: { count?: number; average?: number | null };
 };
 
 const ROLE_LABEL: Record<ProfileHeaderProps['role'], string> = {
@@ -46,6 +65,7 @@ export function ProfileHeader({
   city,
   postcodeArea,
   verificationLevel,
+  clientProfileId,
   rating,
   ratingCount,
   isAvailable,
@@ -55,6 +75,25 @@ export function ProfileHeader({
   const verification = verificationFromLevel(verificationLevel);
   const location = [city, postcodeArea].filter(Boolean).join(' · ');
   const renderedAvatar = publicFileUrl(avatarUrl);
+
+  const [publicLevel, setPublicLevel] = useState<PublicLevelResponse | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (clientProfileId == null) return;
+    let cancelled = false;
+    api<PublicLevelResponse>(`/verification/levels/${clientProfileId}`)
+      .then((d) => {
+        if (!cancelled) setPublicLevel(d);
+      })
+      .catch(() => {
+        // Public endpoint failures are non-fatal — header still renders.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientProfileId]);
 
   return (
     <header className="rounded-md border border-border-default bg-raised p-5 sm:p-6">
@@ -102,6 +141,12 @@ export function ProfileHeader({
               <span className="text-fg-muted">No reviews yet</span>
             )}
           </div>
+          {publicLevel ? (
+            <MilestonesStrip
+              flags={publicLevel.flags}
+              reviews={publicLevel.reviews}
+            />
+          ) : null}
         </div>
       </div>
     </header>

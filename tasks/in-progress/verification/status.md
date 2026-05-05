@@ -1,9 +1,9 @@
 # Status
 
-- State: product (brief only — spec / notes / contract to be drafted by feature owner)
+- State: in-progress (spec + contract drafted, implementation pending)
 - Owner: Artem (carved out from Profiles on 2026-05-03)
 - Created: 2026-05-03
-- Last Updated: 2026-05-03
+- Last Updated: 2026-05-05
 - Shipped:
 
 ## Notes
@@ -13,6 +13,7 @@
 - **2026-05-03**: Profiles owner-side surface shipped (`tasks/done/profiles/`). Profiles' user-side `DocumentsTab` consumes `Document.status` today and renders `Document.rejection_reason` against an optional passthrough field; Verification needs to publish that column for rejection text to appear. Trust-ladder panel (PROF-032 / 033 / 034) and Right-to-Work submission (PROF-052) are explicitly held until Verification's contract is sealed — see `tasks/done/profiles/followups.md` §1 and §2 for what Profiles is waiting on and the integration shape.
 - Profiles (`tasks/done/profiles/`) consumes this feature's contract — see Profiles `spec.md` "Sealed Verification dependencies" subsection at the top of Requirements for the consumed surface. Coordinate any contract changes with the Profiles owner before changing field names that landed in production.
 - The Right-to-Work backend scope is undecided as of carve-out. Profiles' `PROF-052` is held until that decision lands; the spec authorises a generic-`OTHER`-doc fallback if Verification scopes RTW out.
+- **2026-05-05** — Folder moved `product/` → `in-progress/`. All 8 Open Questions from `brief.md` resolved; spec / notes / contract drafted (see Decisions Log in `spec.md`). The headline architectural decisions: (a) Stripe Identity is the **only** path to the Basic rung (automatic on webhook); (b) manual document review by staff drives Certified; (c) Premium ladder rung renders but is not computable until Reviews ships; (d) Right-to-Work scoped IN with a `RIGHT_TO_WORK_SHARE_CODE` doc-type plus the existing `OTHER` doc fallback for free-text edge cases; (e) `verification_level` enum REPLACED — `IDENTITY_VERIFIED` migrates to `BASIC`; (f) deprecated `PATCH /documents/:id/status` in favour of `POST /verification/documents/:id/review` so one canonical endpoint handles approve/reject + reason capture.
 
 ## Source inputs available to the drafting AI
 

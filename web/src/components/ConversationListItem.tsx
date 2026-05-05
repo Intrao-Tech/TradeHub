@@ -1,11 +1,16 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import {
+  VerificationBadge,
+  verificationFromLevel,
+} from './VerificationBadge';
 import { cn } from '@/lib/utils';
 
 export type ConversationListItemData = {
   id: string | number;
   other_party_name?: string | null;
   other_party_avatar?: string | null;
+  other_party_verification_level?: string | number | null;
   last_message_preview?: string | null;
   last_message_at?: string | null;
   unread_count?: number | null;
@@ -65,9 +70,19 @@ export function ConversationListItem({ conversation, active, onSelect, className
       </Avatar>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className={cn('truncate text-sm', unread > 0 ? 'font-semibold text-fg' : 'font-medium text-fg')}>
-            {name}
-          </span>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className={cn('truncate text-sm', unread > 0 ? 'font-semibold text-fg' : 'font-medium text-fg')}>
+              {name}
+            </span>
+            {conversation.other_party_verification_level != null ? (
+              <VerificationBadge
+                state={verificationFromLevel(
+                  conversation.other_party_verification_level,
+                )}
+                className="shrink-0"
+              />
+            ) : null}
+          </div>
           <span className="shrink-0 text-xs text-fg-subtle">{formatTime(conversation.last_message_at)}</span>
         </div>
         <div className="flex items-center justify-between gap-2">

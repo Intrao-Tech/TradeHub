@@ -137,7 +137,7 @@ export async function createTestApp(
   void app.get(StaffHostMiddleware);
 
   const prisma = moduleRef.get(PrismaService);
-  const mail = moduleRef.get(MailService);
+  const mail = moduleRef.get(MailService) as unknown as TestMailService;
 
   const harness: TestHarness = {
     app,

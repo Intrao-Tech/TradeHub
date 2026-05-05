@@ -7,6 +7,11 @@ import { AvatarUploader } from '../components/profile/AvatarUploader';
 import { PortfolioTab } from '../components/profile/PortfolioTab';
 import { DocumentsTab } from '../components/profile/DocumentsTab';
 import {
+  VerificationBadge,
+  verificationFromLevel,
+} from '../components/VerificationBadge';
+import { MilestonesStrip } from '../components/MilestonesStrip';
+import {
   CompletenessPanel,
   type CompletenessAction,
 } from '../components/profile/CompletenessPanel';
@@ -301,6 +306,8 @@ export default function ProfilePage() {
         ) : null}
       </div>
 
+      {cp ? <MyTrustSummary clientProfileId={cp.id} /> : null}
+
       {verificationState === 'PENDING_EMAIL_VERIFICATION' && account ? (
         <EmailNotVerifiedBanner email={account.email} />
       ) : null}
@@ -329,7 +336,9 @@ export default function ProfilePage() {
       >
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
+          {isWorker ? (
+            <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
+          ) : null}
           <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
 
@@ -603,15 +612,13 @@ export default function ProfilePage() {
           {cp ? <VerificationSection /> : null}
         </TabsContent>
 
-        <TabsContent value="portfolio" className="space-y-6">
-          {cp && isWorker ? (
-            <PortfolioTab workerId={workerId} flash={flash} />
-          ) : (
-            <p className="text-sm text-fg-muted">
-              Portfolio is available for workers only.
-            </p>
-          )}
-        </TabsContent>
+        {isWorker ? (
+          <TabsContent value="portfolio" className="space-y-6">
+            {cp ? (
+              <PortfolioTab workerId={workerId} flash={flash} />
+            ) : null}
+          </TabsContent>
+        ) : null}
 
         <TabsContent value="documents" className="space-y-6">
           {cp ? (
@@ -775,28 +782,129 @@ function EmailNotVerifiedBanner({ email }: { email: string }) {
   );
 }
 
+type PublicLevelResponse = {
+  verification_level: string;
+  flags?: {
+    identity_verified?: boolean;
+    insurance_approved?: boolean;
+    company_house_verified?: boolean;
+    company_letterhead_approved?: boolean;
+    right_to_work_verified?: boolean;
+    hmrc_cis_verified?: boolean;
+    certification_doc_types?: string[];
+  };
+  reviews?: { count?: number; average?: number | null };
+};
+
+function MyTrustSummary({
+  clientProfileId,
+}: {
+  clientProfileId: string | number | bigint;
+}) {
+  const [data, setData] = useState<PublicLevelResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<PublicLevelResponse>(`/verification/levels/${clientProfileId}`)
+      .then((d) => {
+        if (!cancelled) setData(d);
+      })
+      .catch(() => {
+        if (!cancelled) setData(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientProfileId]);
+
+  if (!data) return null;
+
+  return (
+    <div className="rounded-md border border-border-default bg-raised p-3 sm:p-4 space-y-2">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="font-medium text-fg">Trust status</span>
+        <VerificationBadge state={verificationFromLevel(data.verification_level)} />
+      </div>
+      <MilestonesStrip flags={data.flags} reviews={data.reviews} />
+    </div>
+  );
+}
+
+type StripeIdentityStatus =
+  | 'requires_input'
+  | 'processing'
+  | 'verified'
+  | 'canceled';
+
+const VERIFICATION_LEVEL_LABEL: Record<string, string> = {
+  UNVERIFIED: 'Unverified',
+  BASIC: 'Basic — identity verified',
+  CERTIFIED: 'Certified',
+  PREMIUM: 'Premium',
+};
+
 function VerificationSection() {
   const [searchParams] = useSearchParams();
   const justCompleted = searchParams.get('verification') === 'complete';
-  const [status, setStatus] = useState<string | null>(null);
+  const cameFromRetryEmail = searchParams.get('verification') === 'retry';
+  const [level, setLevel] = useState<string | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<StripeIdentityStatus | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const refresh = useMemo(
+    () => async () => {
+      try {
+        const me = await api<{ verification_level: string }>('/verification/me');
+        setLevel(me.verification_level);
+      } catch {
+        setLevel('UNVERIFIED');
+      }
+      try {
+        const s = await api<{ status: StripeIdentityStatus | null }>(
+          '/verification/identity/status',
+        );
+        setSessionStatus(s.status);
+      } catch {
+        setSessionStatus(null);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
-    api<{ verification_level: string }>('/verification/status')
-      .then((d) => setStatus(d.verification_level))
-      .catch(() => setStatus('UNVERIFIED'));
-  }, []);
+    void refresh();
+  }, [refresh]);
+
+  // Poll only while Stripe is actually processing (or the user just returned
+  // from the redirect and the webhook may not have landed yet). Once Stripe
+  // settles to a terminal state — `verified`, `requires_input`, `canceled` —
+  // there's nothing to wait for, so we stop polling.
+  useEffect(() => {
+    const verifiedNow =
+      level === 'BASIC' || level === 'CERTIFIED' || level === 'PREMIUM';
+    if (verifiedNow) return;
+    const shouldPoll = justCompleted || sessionStatus === 'processing';
+    if (!shouldPoll) return;
+    const t = setInterval(() => void refresh(), 4000);
+    return () => clearInterval(t);
+  }, [justCompleted, sessionStatus, level, refresh]);
 
   async function startVerification() {
     setError('');
     setLoading(true);
     try {
-      const res = await api<{ verification_url: string }>('/verification/start', {
-        method: 'POST',
-      });
+      const res = await api<{ verification_url: string }>(
+        '/verification/identity/start',
+        { method: 'POST' },
+      );
       if (res.verification_url) {
         window.open(res.verification_url, '_blank');
+        // Optimistically reflect the new in-progress state so the CTA hides
+        // immediately; the next refresh confirms via Stripe.
+        setSessionStatus('processing');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -805,7 +913,13 @@ function VerificationSection() {
     }
   }
 
-  const verified = status === 'IDENTITY_VERIFIED';
+  const verified = level !== null && level !== 'UNVERIFIED';
+  // ONLY hide the CTA while Stripe is actively reviewing. `requires_input` /
+  // `canceled` are terminal failure states — the user must be able to retry.
+  const inProgress = !verified && sessionStatus === 'processing';
+  const lastAttemptFailed =
+    !verified &&
+    (sessionStatus === 'requires_input' || sessionStatus === 'canceled');
 
   return (
     <Card>
@@ -816,27 +930,63 @@ function VerificationSection() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {justCompleted ? (
+        {justCompleted && !verified && !lastAttemptFailed ? (
           <div
             role="status"
-            className="rounded-md border border-success/40 bg-success-subtle px-3 py-2 text-sm text-success"
+            className="rounded-md border border-info/40 bg-info-subtle px-3 py-2 text-sm text-info"
           >
-            Verification submitted — status will update shortly.
+            Verification submitted — your status will update once Stripe finishes
+            the check (usually a few seconds).
+          </div>
+        ) : null}
+        {(cameFromRetryEmail || lastAttemptFailed) && !verified && !inProgress ? (
+          <div
+            role="status"
+            className="rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-warning"
+          >
+            Your last verification attempt didn't go through. Try again with a
+            sharper photo and an in-date ID — you can re-run the check below.
           </div>
         ) : null}
         <div className="flex items-center gap-2 text-sm">
           <span className="text-fg-muted">Status:</span>
-          <Badge variant={verified ? 'success' : 'warning'}>
-            {status ?? 'loading…'}
+          <Badge
+            variant={
+              verified
+                ? 'success'
+                : inProgress
+                  ? 'info'
+                  : lastAttemptFailed
+                    ? 'danger'
+                    : 'warning'
+            }
+          >
+            {verified
+              ? VERIFICATION_LEVEL_LABEL[level!] ?? level
+              : inProgress
+                ? 'In review'
+                : lastAttemptFailed
+                  ? 'Last attempt failed'
+                  : level
+                    ? VERIFICATION_LEVEL_LABEL[level] ?? level
+                    : 'Loading…'}
           </Badge>
         </div>
         {verified ? (
           <p className="text-sm text-success">Your identity has been verified.</p>
+        ) : inProgress ? (
+          <p className="text-sm text-info">
+            We're waiting for Stripe to confirm your check. You'll get an email
+            with the result, or refresh this page in a minute or two.
+          </p>
         ) : (
           <>
-            <p className="text-sm text-fg-muted">
-              Verify your identity with a passport, driving licence, or national ID card.
-            </p>
+            {!lastAttemptFailed ? (
+              <p className="text-sm text-fg-muted">
+                Verify your identity with a passport, driving licence, or
+                national ID card.
+              </p>
+            ) : null}
             {error ? (
               <div
                 role="alert"
@@ -846,7 +996,11 @@ function VerificationSection() {
               </div>
             ) : null}
             <Button type="button" onClick={startVerification} disabled={loading}>
-              {loading ? 'Starting…' : 'Verify my identity'}
+              {loading
+                ? 'Starting…'
+                : lastAttemptFailed
+                  ? 'Try again'
+                  : 'Verify my identity'}
             </Button>
           </>
         )}
