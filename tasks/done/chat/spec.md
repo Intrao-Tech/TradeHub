@@ -247,11 +247,14 @@ Conventions: each requirement has a stable ID. **Must** = MVP-blocking. **Should
 
 ## Open Questions
 
-- **Q1.** When the auto-created system message (`CHAT-011`) is rendered, should it count toward the unread count for the counterparty? Default: **yes**, because we want the unread badge to flash and pull them into the new chat. Reconsider if dogfooding shows it's annoying noise.
-- **Q2.** Should we persist a "conversation paused" flag when the linked collab moves to `REJECTED`, or rely on a frontend lookup of the collab's status? Default: **frontend lookup** (no extra column) — the collab's status is already on the thread header, and the send-path guard reads it server-side.
-- **Q3.** Is the 60-second consecutive-message grouping window (`CHAT-061`) right? Slack uses 5 minutes, iMessage uses 1 minute, WhatsApp uses 0 (always groups). Default to 60 s; revisit after dogfooding.
-- **Q4.** Pagination: existing `GET /conversations/:id/messages` does offset pagination by `page` + an ISO `before` cursor. The thread page should use cursor-based infinite scroll-up (load older messages when the user scrolls within 200 px of the top), not page-based. **Confirmed.** No further question — implementer uses `before` cursor.
-- **Q5.** Should the `MessageAttachment.uploaded_by_id` reference `ClientProfile.id` (matches `JobAttachment`) or `Account.id`? Matching `JobAttachment` is consistent; the relation goes through the account's client profile. **Default: `ClientProfile.id`** to match. Reconsider if a future surface needs to attach files without a client profile (unlikely — every active user has one by `auth-flow` contract).
+- **Q3 (open).** Is the 60-second consecutive-message grouping window (`CHAT-061`) right? Slack uses 5 minutes, iMessage uses 1 minute, WhatsApp uses 0 (always groups). Default to 60 s; revisit after dogfooding.
+
+### Resolved
+
+- **Q1 — RESOLVED 2026-05-07.** The auto-created `SYSTEM` welcome message **does** count toward the counterparty's unread (default kept). Implementation: no special-case in `unreadCountForParticipant`; the SYSTEM row is just a `Message` like any other, so the inbox unread badge flashes for the responder. Re-evaluate on dogfooding.
+- **Q2 — RESOLVED 2026-05-07.** Frontend looks up `Collaboration.status` via the inbox payload (`InboxItem.collaboration`) — no separate "paused" column. Server-side, `ConversationService.sendMessage` reads the linked `Collaboration.status` and rejects sends with `403 COLLABORATION_REJECTED` when the collab is `REJECTED`.
+- **Q4 — RESOLVED 2026-05-06.** Cursor-based pagination on `GET /conversations/:id/messages` via the existing `before` ISO param. The thread page wires `onLoadOlder` to fire when the scroll position is within 200 px of the top.
+- **Q5 — RESOLVED 2026-05-07.** `MessageAttachment.uploaded_by_id` references `ClientProfile.id` (mirrors `JobAttachment`). The shared-PK pattern (`Account.id == ClientProfile.id`) keeps the join cheap, and every active user has a client profile by the auth-flow contract.
 
 ## Decisions Log
 
@@ -262,3 +265,6 @@ Conventions: each requirement has a stable ID. **Must** = MVP-blocking. **Should
 - **2026-05-06 — Auto-created system message author = the user who triggered the confirm.** Alternative was a synthetic "TradeHub" sender; rejected because we don't have a system account row, and creating one for one message is overengineering. The system bubble UI hides the sender chip anyway (`CHAT-051`).
 - **2026-05-06 — Public-profile cold DM is deferred.** The "message worker / employer from their public profile" entry point is a separate feature folder (`tasks/product/profile-message-cta/`). Removing the raw `recipient_id` numeric input from `InboxPage` is unconditional — it's a debug input that should never have shipped.
 - **2026-05-06 — Tests are mandatory and a sibling folder opens the same week.** `tasks/GUIDE.md` Working Principles + the precedent set by `tests-collaborations-polish/`. Implementer opens `tasks/in-progress/tests-chat/` immediately on starting.
+- **2026-05-07 — Implementation closed Q1, Q2, Q5.** See the Resolved subsection of `Open Questions`. Q3 (60-second sender-grouping window) stays open pending dogfooding.
+- **2026-05-07 — REST send-message route uses `@Throttle({ limit: 10, ttl: 10_000 })` to mirror the WS bucket.** Both paths share the same per-account quota; the gateway's in-memory bucket is keyed by socket. Acceptable because sticky sessions hold the WS to one node, and the REST throttler keys by IP+user via Nest's default tracker.
+- **2026-05-07 — WS broadcasts must stringify BigInts.** `@socket.io/redis-adapter` encodes payloads with `notepack.io`, which throws on raw `BigInt`. `chat.gateway.ts` passes every payload through `stripBigInts` before emit. The REST response interceptor (`BigIntSerializationInterceptor`) handles the HTTP path separately.
