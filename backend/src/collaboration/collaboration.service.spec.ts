@@ -554,3 +554,129 @@ describe('TEST-COLLAB-014 CollaborationService.getByUser() — COLLAB-011 list',
     expect(result.total).toBe(57);
   });
 });
+
+// ════════════════════════════════════════════════════════════════════
+// TEST-CHAT-040 / TEST-CHAT-041 — Auto-create chat thread on confirm
+// (CHAT-010..013)
+// ════════════════════════════════════════════════════════════════════
+
+describe('TEST-CHAT-040 CollaborationService.updateStatus() auto-creates chat thread on CONFIRMED — CHAT-010..013', () => {
+  function buildWithChat(): {
+    service: CollaborationService;
+    prisma: DeepMockProxy<PrismaService>;
+    conversations: {
+      ensureCollaborationConversation: jest.Mock;
+      announceConversationCreated: jest.Mock;
+    };
+  } {
+    const prisma = mockDeep<PrismaService>();
+    const conversations = {
+      ensureCollaborationConversation: jest.fn(),
+      announceConversationCreated: jest.fn().mockResolvedValue(undefined),
+    };
+    prisma.$transaction.mockImplementation(((cb: unknown) => {
+      if (typeof cb === 'function') {
+        return Promise.resolve(
+          (cb as (tx: typeof prisma) => unknown)(prisma),
+        );
+      }
+      return Promise.resolve(cb);
+    }) as unknown as typeof prisma.$transaction);
+    const service = new CollaborationService(
+      prisma,
+      conversations as unknown as ConstructorParameters<
+        typeof CollaborationService
+      >[1],
+    );
+    return { service, prisma, conversations };
+  }
+
+  test('TEST-CHAT-040 / CHAT-010 — PENDING → CONFIRMED (responder) calls ensureCollaborationConversation inside the same tx', async () => {
+    const { service, prisma, conversations } = buildWithChat();
+    const row = fakeRow({ initiated_by: 'WORKER' });
+    prisma.collaboration.findUnique
+      .mockResolvedValueOnce(row as never)
+      .mockResolvedValueOnce(row as never);
+    prisma.collaboration.update.mockResolvedValue(row as never);
+    conversations.ensureCollaborationConversation.mockResolvedValueOnce(123n);
+
+    await service.updateStatus(1n, 'CONFIRMED', EMPLOYER_ID);
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(conversations.ensureCollaborationConversation).toHaveBeenCalledTimes(
+      1,
+    );
+    const args = conversations.ensureCollaborationConversation.mock.calls[0];
+    expect(args[1]).toBe(row.id); // collab id
+    expect(args[2]).toBe(WORKER_ID);
+    expect(args[3]).toBe(EMPLOYER_ID);
+    expect(args[4]).toBe(EMPLOYER_ID); // triggered by
+    // Announce fires AFTER the tx commits, only when a row was created.
+    expect(conversations.announceConversationCreated).toHaveBeenCalledWith(
+      123n,
+      [WORKER_ID, EMPLOYER_ID],
+    );
+  });
+
+  test('TEST-CHAT-040 / CHAT-010 — non-CONFIRMED transitions skip the auto-create seam', async () => {
+    const { service, prisma, conversations } = buildWithChat();
+    const row = fakeRow({ initiated_by: 'WORKER' });
+    prisma.collaboration.findUnique
+      .mockResolvedValueOnce(row as never)
+      .mockResolvedValueOnce(row as never);
+    prisma.collaboration.update.mockResolvedValue(row as never);
+    await service.updateStatus(1n, 'REJECTED', EMPLOYER_ID);
+    expect(conversations.ensureCollaborationConversation).not.toHaveBeenCalled();
+    expect(conversations.announceConversationCreated).not.toHaveBeenCalled();
+  });
+
+  test('TEST-CHAT-040 / CHAT-010 — re-confirm (idempotent path: ensure returns null) → no announce', async () => {
+    const { service, prisma, conversations } = buildWithChat();
+    const row = fakeRow({ initiated_by: 'WORKER' });
+    prisma.collaboration.findUnique
+      .mockResolvedValueOnce(row as never)
+      .mockResolvedValueOnce(row as never);
+    prisma.collaboration.update.mockResolvedValue(row as never);
+    conversations.ensureCollaborationConversation.mockResolvedValueOnce(null);
+    await service.updateStatus(1n, 'CONFIRMED', EMPLOYER_ID);
+    expect(conversations.ensureCollaborationConversation).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(conversations.announceConversationCreated).not.toHaveBeenCalled();
+  });
+});
+
+describe('TEST-CHAT-041 Auto-create rollback — CHAT-012', () => {
+  test('TEST-CHAT-041 / CHAT-012 — ensure-throws inside tx rejects the whole transaction (no announce)', async () => {
+    const prisma = mockDeep<PrismaService>();
+    const conversations = {
+      ensureCollaborationConversation: jest
+        .fn()
+        .mockRejectedValueOnce(new Error('insert failed')),
+      announceConversationCreated: jest.fn(),
+    };
+    prisma.$transaction.mockImplementation(((cb: unknown) => {
+      if (typeof cb === 'function') {
+        return Promise.resolve(
+          (cb as (tx: typeof prisma) => Promise<unknown>)(prisma),
+        );
+      }
+      return Promise.resolve(cb);
+    }) as unknown as typeof prisma.$transaction);
+    const service = new CollaborationService(
+      prisma,
+      conversations as unknown as ConstructorParameters<
+        typeof CollaborationService
+      >[1],
+    );
+
+    const row = fakeRow({ initiated_by: 'WORKER' });
+    prisma.collaboration.findUnique.mockResolvedValueOnce(row as never);
+    prisma.collaboration.update.mockResolvedValue(row as never);
+
+    await expect(
+      service.updateStatus(1n, 'CONFIRMED', EMPLOYER_ID),
+    ).rejects.toThrow(/insert failed/);
+    expect(conversations.announceConversationCreated).not.toHaveBeenCalled();
+  });
+});

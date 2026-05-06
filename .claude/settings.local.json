@@ -13,7 +13,9 @@
       "Bash(/usr/bin/sed *)",
       "Bash(rtk proxy *)",
       "Bash(npm test *)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(npm install *)",
+      "Bash(npm ls *)"
     ]
   }
 }
