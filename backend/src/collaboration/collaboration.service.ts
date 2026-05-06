@@ -1,11 +1,14 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ConversationService } from '../conversation/conversation.service';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import {
   CollaborationQueryDto,
@@ -22,7 +25,11 @@ const collaborationInclude = {
 
 @Injectable()
 export class CollaborationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => ConversationService))
+    private readonly conversations?: ConversationService,
+  ) {}
 
   async create(
     dto: CreateCollaborationDto,
@@ -170,10 +177,37 @@ export class CollaborationService {
       );
     }
 
-    await this.prisma.collaboration.update({
-      where: { id },
-      data,
+    // CHAT-010..012 — auto-create the chat thread inside the same
+    // transaction as the status update, idempotently. The conversation
+    // service is optional in tests that pre-date this contract.
+    let createdConversationId: bigint | null = null;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.collaboration.update({ where: { id }, data });
+      if (
+        current === 'PENDING' &&
+        nextStatus === 'CONFIRMED' &&
+        this.conversations
+      ) {
+        // Account ids equal worker/employer profile ids by the
+        // shared-PK pattern (Account → ClientProfile → Worker/Employer).
+        createdConversationId =
+          await this.conversations.ensureCollaborationConversation(
+            tx,
+            collab.id,
+            collab.worker_id,
+            collab.employer_id,
+            userId,
+          );
+      }
     });
+
+    if (createdConversationId !== null && this.conversations) {
+      await this.conversations.announceConversationCreated(
+        createdConversationId,
+        [collab.worker_id, collab.employer_id],
+      );
+    }
+
     return this.getById(id);
   }
 

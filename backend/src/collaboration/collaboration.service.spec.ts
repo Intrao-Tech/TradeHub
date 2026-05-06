@@ -21,6 +21,18 @@ function build(): {
   prisma: DeepMockProxy<PrismaService>;
 } {
   const prisma = mockDeep<PrismaService>();
+  // updateStatus runs `prisma.$transaction(cb)` to wrap the collab update +
+  // (optionally) the chat-thread auto-create in one tx. Make the mocked
+  // transaction invoke the callback with `prisma` as `tx` so the existing
+  // assertions on `prisma.collaboration.update.mock.calls` still see the call.
+  prisma.$transaction.mockImplementation(((cb: unknown) => {
+    if (typeof cb === 'function') {
+      return Promise.resolve(
+        (cb as (tx: typeof prisma) => unknown)(prisma),
+      );
+    }
+    return Promise.resolve(cb);
+  }) as unknown as typeof prisma.$transaction);
   const service = new CollaborationService(prisma);
   return { service, prisma };
 }
