@@ -26,7 +26,7 @@ function workerFixture() {
       city: 'Camden',
       postcode_area: 'NW1',
       avatar_url: null,
-      verification_level: 'KYC',
+      verification_level: 'BASIC',
     },
     portfolio_items: [
       { id: '1', item_type: 'CERTIFICATION', title: 'CSCS', verified: true },
@@ -55,7 +55,7 @@ describe('TEST-PROF-110 WorkerDetailPage (PROF-001, PROF-006, PROF-007, PROF-008
       expect(screen.getByText('Mike Builder')).toBeInTheDocument();
     });
     expect(screen.getByText(/camden/i)).toBeInTheDocument();
-    expect(screen.getByText(/kyc verified/i)).toBeInTheDocument();
+    expect(screen.getByText(/id verified/i)).toBeInTheDocument();
   });
 
   test('PROF-008 — tabs render: About / Portfolio / Certifications / Reviews placeholder', async () => {

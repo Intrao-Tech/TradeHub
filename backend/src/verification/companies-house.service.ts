@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -97,7 +96,7 @@ export class CompaniesHouseService {
         { result: 'INACTIVE', registry_status: company.company_status },
         ip,
       );
-      throw new ForbiddenException({
+      throw new BadRequestException({
         code: 'COMPANIES_HOUSE_MISMATCH',
         message: `Companies House records this company as ${company.company_status}, not active.`,
         registry_response: {
@@ -234,10 +233,13 @@ export class CompaniesHouseService {
 }
 
 function normaliseCompanyName(input: string): string {
+  // Order matters: PUBLIC LIMITED COMPANY → PLC must run BEFORE LIMITED → LTD,
+  // otherwise the LIMITED token is consumed first and the PLC alias never
+  // matches. (FU-VER-3, fixed 2026-05-06.)
   return input
     .toUpperCase()
-    .replace(/\bLIMITED\b/g, 'LTD')
     .replace(/\bPUBLIC LIMITED COMPANY\b/g, 'PLC')
+    .replace(/\bLIMITED\b/g, 'LTD')
     .replace(/[.,()&]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();

@@ -96,15 +96,15 @@ describe('TEST-VER-230..235 verification companies-house (VER-140..145)', () => 
     });
   });
 
-  describe('TEST-VER-232 inactive → 403 (FU-VER-2)', () => {
-    test('Dissolved company → 403 COMPANIES_HOUSE_MISMATCH', async () => {
+  describe('TEST-VER-232 inactive → 400 (VER-142; FU-VER-2 resolved)', () => {
+    test('Dissolved company → 400 COMPANIES_HOUSE_MISMATCH', async () => {
       const { token } = await asEmployer();
       mockNextFetch(CH_FIXTURES.dissolved('12345678', 'Acme Limited'));
       const res = await h
         .request()
         .post('/api/verification/employer/companies-house-verify')
         .set('Authorization', `Bearer ${token}`);
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(400);
       expect(res.body.code).toBe('COMPANIES_HOUSE_MISMATCH');
     });
   });

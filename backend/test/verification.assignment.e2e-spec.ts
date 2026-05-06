@@ -126,8 +126,7 @@ describe('TEST-VER-220..225 verification assignment (VER-125..128, VER-137)', ()
       expect(res.body).toMatchObject({ ok: true, assigned_to: String(mod.id) });
     });
 
-    // FU-VER-1: spec says 409, code throws 400. Locks today's behaviour.
-    test('Already-assigned-to-someone-else → 400 ALREADY_ASSIGNED (FU-VER-1)', async () => {
+    test('Already-assigned-to-someone-else → 409 ALREADY_ASSIGNED (VER-137; FU-VER-1 resolved 2026-05-06)', async () => {
       const owner = await seedActiveWorker(h.prisma);
       const modA = await seedModerator(h.prisma);
       const modB = await seedModerator(h.prisma);
@@ -144,7 +143,7 @@ describe('TEST-VER-220..225 verification assignment (VER-125..128, VER-137)', ()
         .request()
         .post(`/api/verification/documents/${doc.id}/claim`)
         .set('Authorization', `Bearer ${tokenB}`);
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(409);
       expect(res.body.code).toBe('ALREADY_ASSIGNED');
     });
 
@@ -190,7 +189,7 @@ describe('TEST-VER-220..225 verification assignment (VER-125..128, VER-137)', ()
           .set('Authorization', `Bearer ${tokenB}`),
       ]);
       const statuses = [resA.status, resB.status].sort();
-      expect(statuses).toEqual([200, 400]);
+      expect(statuses).toEqual([200, 409]);
     });
   });
 

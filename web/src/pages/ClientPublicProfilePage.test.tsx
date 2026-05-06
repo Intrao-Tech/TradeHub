@@ -19,7 +19,7 @@ describe('TEST-PROF-112 ClientPublicProfilePage (PROF-003)', () => {
           display_name: 'Mike Builder',
           city: 'Camden',
           postcode_area: 'NW1',
-          verification_level: 'KYC',
+          verification_level: 'BASIC',
           bio: 'Friendly chippy.',
         }),
       ),
@@ -33,6 +33,6 @@ describe('TEST-PROF-112 ClientPublicProfilePage (PROF-003)', () => {
     await waitFor(() => {
       expect(screen.getByText('Mike Builder')).toBeInTheDocument();
     });
-    expect(screen.getByText(/kyc verified/i)).toBeInTheDocument();
+    expect(screen.getByText(/id verified/i)).toBeInTheDocument();
   });
 });

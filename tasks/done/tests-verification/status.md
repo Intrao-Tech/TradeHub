@@ -53,55 +53,58 @@
   ≥1 TEST-VER-NNN.
 - **Followups** filed in `followups.md` (FU-VER-1..4 — see below).
 
-## Test runs at hand-off
+## Test runs at hand-off (after followup fixes)
 
-- `cd backend && npm test` → **406 passed**, 6 skipped, 0 failed
-  (412 total, 21 spec files + 6 we authored).
-- `cd backend && npm run test:e2e` → **196 passed**, 4 skipped, 0 failed
-  (200 total, ~261s).
-- `cd web && npm test` → **177 passed**, 7 skipped, 5 failed (189 total).
-  The 5 failures are pre-existing — they reference legacy "KYC verified"
-  / "HMRC confirmed" badge text that the Verification rename removed
-  (Profiles-side tests that the rename PR should have updated). Tracked
-  in `followups.md` as **FU-VER-4**. Before this feature: 15 failures.
+- `cd backend && npm test` → **406 passed**, 6 skipped, 0 failed (~2s).
+- `cd backend && npm run test:e2e` (verification subset) → **70 passed**, 2 skipped, 0 failed (~49s).
+- `cd web && npm test` → **182 passed**, 7 skipped, 0 failed (~7s).
+  Up from 177 passing / 5 failing pre-followup-fix.
 - `cd web && npm run test:e2e` → **Not run in this hand-off.** The
   `verification.guardrails.spec.ts` is authored; running it requires the
   full backend + Vite + Postgres Testcontainer bootstrap which adds
   several minutes per CI cycle. The unit-layer no-`<pre>` guardrail
   (TEST-VER-307) covers the same surface today.
 
-## Followups created
+## Followups (all four resolved 2026-05-06)
 
-1. **FU-VER-1** — `claim()` returns 400 ALREADY_ASSIGNED, spec says 409.
-2. **FU-VER-2** — Companies House inactive returns 403, name mismatch
-   returns 400; spec promises 400 for both.
-3. **FU-VER-3** — `normaliseCompanyName` `LIMITED→LTD` rule pre-empts
-   `PUBLIC LIMITED COMPANY→PLC`, so `"Acme Public Limited Company"` does
-   not match `"Acme PLC"` (test row pinned at expect=false).
-4. **FU-VER-4** — Pre-existing Profile-side tests reference legacy
-   verification badge vocabulary; not fixed here per the
-   "no production-code edits from this feature" working principle.
+After the test suite landed, the user explicitly authorised a code-fix
+pass to close all four followups in the same hand-off. See
+`followups.md` for per-fix detail and the parent
+`tasks/done/verification/spec.md` Decisions Log for per-fix rationale
+(entries dated 2026-05-06).
+
+1. **~~FU-VER-1~~** ✅ Resolved — `claim()` now throws `ConflictException`
+   (HTTP 409). Tests re-pointed `expect(400)` → `expect(409)`.
+2. **~~FU-VER-2~~** ✅ Resolved — Companies House inactive branch now
+   throws `BadRequestException` (HTTP 400), matching the name-mismatch
+   branch. Tests re-pointed `expect(403)` → `expect(400)`.
+3. **~~FU-VER-3~~** ✅ Resolved — `normaliseCompanyName` substitution
+   order swapped so `PUBLIC LIMITED COMPANY → PLC` runs before
+   `LIMITED → LTD`. TEST-VER-137 truth-table row flipped to
+   `expect=true`. Comment added to lock the ordering invariant.
+4. **~~FU-VER-4~~** ✅ Resolved — Profile-side tests realigned to the
+   ladder vocabulary (`BASIC` / `CERTIFIED` fixtures, `/id verified/i` /
+   `/certified/i` assertions); `DocumentsTab.test.tsx` multi-match
+   issue switched to `getAllByText(...).length >= 1`.
 
 ## Decisions Log entries (this feature)
 
-- **2026-05-06 — PLC normalisation gap pinned, not fixed.** TEST-VER-137
-  truth-table row for "Acme Public Limited Company vs Acme PLC" is
-  locked at `expect=false`. FU-VER-3 tracks the production fix.
-- **2026-05-06 — claim/inactive error-code discrepancies pinned.**
-  Both unit and e2e specs assert today's HTTP statuses (400 for both,
-  rather than the spec's 409 / 400 split). FU-VER-1 / FU-VER-2 track
-  the unification.
+- **2026-05-06 — Followups closed in same hand-off.** Original plan had
+  TEST-VER-601 lock today's-behaviour and file followups for a
+  separate PR; the user authorised resolving all four in this one. The
+  `followups.md` audit trail is preserved with `~~strikethrough~~ ✅
+  Resolved` per entry.
+- **2026-05-06 — Spec wins, not code, for all three discrepancies.**
+  RFC 7231 alignment for `409 Conflict` (FU-VER-1), authz-vs-validity
+  semantics for `400` over `403` (FU-VER-2), longer-pattern-first
+  invariant for the regex order (FU-VER-3) — all three fixes brought
+  the code into the spec contract rather than amending the spec to
+  match buggy behaviour.
 - **2026-05-06 — Stripe-webhook Playwright flows deferred.** Webhook
   signed-payload replay needs a Stripe-stub harness extension
   (TEST-VER-005) that wasn't wired in this feature. Unit-layer coverage
   via `verification.service.spec.ts` (TEST-VER-143..147) locks the
   contract; the Playwright deferral is recorded in `coverage-matrix.md`.
-- **2026-05-06 — Profile-side test drift not absorbed.** The 5 pre-
-  existing failures in `WorkerCard.test.tsx`, `ClientPublicProfilePage`,
-  `WorkerDetailPage`, `DocumentsTab` are tracked in FU-VER-4 rather
-  than fixed here, per the working principle (this feature does not
-  edit Profile production code or Profile test code outside its
-  explicit cleanup mandate).
 
 ## Source inputs used during drafting
 

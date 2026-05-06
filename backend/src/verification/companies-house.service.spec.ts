@@ -6,7 +6,6 @@
 
 import {
   BadRequestException,
-  ForbiddenException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -132,10 +131,8 @@ describe('TEST-VER-132 verifyEmployer not found — VER-141', () => {
   });
 });
 
-describe('TEST-VER-133 verifyEmployer inactive — VER-142 (FU-VER-2)', () => {
-  // NOTE: spec says 400 for mismatch; impl throws 403 ForbiddenException
-  // for inactive status. We lock today's behaviour and track in followups.
-  test('inactive status → 403 COMPANIES_HOUSE_MISMATCH (locks today, FU-VER-2)', async () => {
+describe('TEST-VER-133 verifyEmployer inactive — VER-142 (FU-VER-2 resolved)', () => {
+  test('inactive status → 400 COMPANIES_HOUSE_MISMATCH (matches spec; FU-VER-2 resolved 2026-05-06)', async () => {
     const { service, prisma, audit } = build();
     prisma.employerProfile.findUnique.mockResolvedValueOnce({
       id: EMPLOYER_ID,
@@ -147,9 +144,9 @@ describe('TEST-VER-133 verifyEmployer inactive — VER-142 (FU-VER-2)', () => {
 
     const err = await service
       .verifyEmployer(EMPLOYER_ID)
-      .catch((e: ForbiddenException) => e);
-    expect(err).toBeInstanceOf(ForbiddenException);
-    const body = (err as ForbiddenException).getResponse() as {
+      .catch((e: BadRequestException) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    const body = (err as BadRequestException).getResponse() as {
       code: string;
       registry_response?: { status?: string };
     };
@@ -317,14 +314,10 @@ describe('TEST-VER-136 verifyEmployer happy path — VER-145', () => {
 
 describe('TEST-VER-137 normaliseCompanyName — VER-145', () => {
   // Pin the predicate via the public surface (verifyEmployer match path).
-  // NOTE: "Acme Public Limited Company" vs "Acme PLC" should match per spec
-  // but `normaliseCompanyName` runs `LIMITED→LTD` before `PUBLIC LIMITED
-  // COMPANY→PLC`, so the PLC branch is pre-empted. Locked here as
-  // expect=false; tracked in followups.md as FU-VER-3.
   const cases: Array<[string, string, boolean]> = [
     ['Acme Limited', 'Acme Ltd', true],
     ['acme  limited.', 'Acme Ltd', true],
-    ['Acme Public Limited Company', 'Acme PLC', false],
+    ['Acme Public Limited Company', 'Acme PLC', true], // FU-VER-3 resolved 2026-05-06
     ['Foo & Bar Ltd', 'Foo Bar Limited', true],
     ['FooBar Ltd', 'Foo Bar Ltd', false],
   ];

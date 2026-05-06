@@ -23,7 +23,7 @@ describe('TEST-PROF-113 WorkerCard (PROF-005, PROF-044, PROF-046)', () => {
       postcode_area: 'NW1',
       client_profile: {
         display_name: 'Mike Builder',
-        verification_level: 'KYC',
+        verification_level: 'BASIC',
       },
     };
     renderWithRouter(<WorkerCard worker={worker} onSelect={onSelect} />);
@@ -33,16 +33,16 @@ describe('TEST-PROF-113 WorkerCard (PROF-005, PROF-044, PROF-046)', () => {
     expect(onSelect).toHaveBeenCalledWith(worker);
   });
 
-  test('PROF-046 — verification badge renders consistent with PROF-032 vocabulary', () => {
+  test('PROF-046 — verification badge renders consistent with PROF-032 vocabulary (FU-VER-4 resolved 2026-05-06)', () => {
     renderWithRouter(
       <WorkerCard
         worker={{
           id: '1',
-          client_profile: { display_name: 'X', verification_level: 'KYC' },
+          client_profile: { display_name: 'X', verification_level: 'BASIC' },
         }}
       />,
     );
-    expect(screen.getByText(/kyc verified/i)).toBeInTheDocument();
+    expect(screen.getByText(/id verified/i)).toBeInTheDocument();
   });
 
   test('PROF-044 — no `<pre>{JSON.stringify(...)}</pre>` block in the card DOM', () => {
@@ -70,15 +70,15 @@ describe('TEST-PROF-113 EmployerCard (PROF-005, PROF-044, PROF-046)', () => {
     expect(onSelect).toHaveBeenCalledWith(employer);
   });
 
-  test('PROF-046 — verification badge renders for employers too', () => {
+  test('PROF-046 — verification badge renders for employers too (FU-VER-4 resolved 2026-05-06)', () => {
     renderWithRouter(
       <EmployerCard
         employer={{
           id: '7',
-          client_profile: { display_name: 'Acme', verification_level: 'HMRC' },
+          client_profile: { display_name: 'Acme', verification_level: 'CERTIFIED' },
         }}
       />,
     );
-    expect(screen.getByText(/hmrc confirmed/i)).toBeInTheDocument();
+    expect(screen.getByText(/certified/i)).toBeInTheDocument();
   });
 });

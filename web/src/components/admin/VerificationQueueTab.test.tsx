@@ -292,9 +292,9 @@ describe('TEST-VER-304 Claim button — VER-072', () => {
           {
             code: 'ALREADY_ASSIGNED',
             message: 'This document is already assigned to another staff member.',
-            statusCode: 400,
+            statusCode: 409,
           },
-          { status: 400 },
+          { status: 409 },
         ),
       ),
     );

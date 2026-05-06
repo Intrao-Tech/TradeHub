@@ -64,7 +64,10 @@ describe('TEST-PROF-106 DocumentsTab (PROF-028, PROF-030)', () => {
       <DocumentsTab isWorker={true} isEmployer={false} flash={vi.fn()} />,
     );
     await waitFor(() => {
-      expect(screen.getByText(/cscs card/i)).toBeInTheDocument();
+      // Both the checklist row and the documents-list row render "CSCS card";
+      // assert on the multi-match so the test isn't dependent on which copy
+      // appears first in the DOM.
+      expect(screen.getAllByText(/cscs card/i).length).toBeGreaterThanOrEqual(1);
     });
     expect(screen.getAllByText('Pending').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('In review').length).toBeGreaterThanOrEqual(1);

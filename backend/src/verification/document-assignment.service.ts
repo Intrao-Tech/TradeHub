@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -181,7 +182,7 @@ export class DocumentAssignmentService {
         select: { id: true, assigned_to: true },
       });
       if (!doc) throw new NotFoundException({ code: 'DOCUMENT_NOT_FOUND' });
-      throw new BadRequestException({
+      throw new ConflictException({
         code: 'ALREADY_ASSIGNED',
         message: 'This document is already assigned to another staff member.',
       });

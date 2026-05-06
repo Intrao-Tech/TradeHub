@@ -241,7 +241,7 @@ export class VerificationController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Claim an unassigned document. Returns 400 ALREADY_ASSIGNED if the doc has someone else.',
+      'Claim an unassigned document. Returns 409 ALREADY_ASSIGNED if the doc has someone else.',
   })
   async claimDocument(
     @Param('id', ParseBigIntPipe) id: bigint,

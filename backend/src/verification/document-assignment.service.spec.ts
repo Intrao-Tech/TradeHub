@@ -4,6 +4,7 @@
 
 import {
   BadRequestException,
+  ConflictException,
   NotFoundException,
 } from '@nestjs/common';
 import { mockDeep, type DeepMockProxy } from 'jest-mock-extended';
@@ -270,10 +271,7 @@ describe('TEST-VER-124 DocumentAssignmentService.claim() race-safety — VER-137
     );
   });
 
-  // NOTE: the spec (VER-137) says 409 ALREADY_ASSIGNED but the impl throws
-  // BadRequestException (HTTP 400). FU-VER-1 in followups.md tracks the
-  // unification. We lock today's behaviour here.
-  test('already-assigned doc → throws BadRequestException ALREADY_ASSIGNED (locks today behaviour, FU-VER-1)', async () => {
+  test('already-assigned doc → throws ConflictException ALREADY_ASSIGNED (VER-137; FU-VER-1 resolved 2026-05-06)', async () => {
     const { service, prisma } = build();
     prisma.document.updateMany.mockResolvedValueOnce({ count: 0 } as never);
     prisma.document.findUnique.mockResolvedValueOnce({
@@ -283,9 +281,9 @@ describe('TEST-VER-124 DocumentAssignmentService.claim() race-safety — VER-137
 
     const err = await service
       .claim(DOC_ID, 11n)
-      .catch((e: BadRequestException | NotFoundException) => e);
-    expect(err).toBeInstanceOf(BadRequestException);
-    expect(((err as BadRequestException).getResponse() as { code: string }).code).toBe(
+      .catch((e: ConflictException | NotFoundException) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect(((err as ConflictException).getResponse() as { code: string }).code).toBe(
       'ALREADY_ASSIGNED',
     );
   });
