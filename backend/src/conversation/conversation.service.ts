@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { MessageAttachmentService } from '../message-attachment/message-attachment.service';
 import { ChatGateway } from './chat.gateway';
 import { ConversationQueryDto } from './dto/conversation-query.dto';
 import { MessageQueryDto } from './dto/message-query.dto';
@@ -20,7 +21,19 @@ const conversationWithParticipantsAndLastMessage =
       participants: {
         include: { account: { include: { client_profile: true } } },
       },
-      messages: { orderBy: { created_at: 'desc' }, take: 1 },
+      messages: {
+        orderBy: { created_at: 'desc' },
+        take: 1,
+        include: { attachments: true },
+      },
+      collaboration: {
+        select: {
+          id: true,
+          status: true,
+          worker_id: true,
+          employer_id: true,
+        },
+      },
     },
   });
 
@@ -28,12 +41,15 @@ type ConversationWithParticipantsAndLastMessage = Prisma.ConversationGetPayload<
   typeof conversationWithParticipantsAndLastMessage
 >;
 
+const SYSTEM_MESSAGE_TYPE = 'SYSTEM';
+
 @Injectable()
 export class ConversationService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
+    private readonly attachments: MessageAttachmentService,
   ) {}
 
   /**
@@ -46,6 +62,7 @@ export class ConversationService {
     const row = await this.prisma.conversation.findFirst({
       where: {
         AND: [
+          { collaboration_id: null },
           { participants: { some: { account_id: a } } },
           { participants: { some: { account_id: b } } },
           {
@@ -126,6 +143,7 @@ export class ConversationService {
             message_type: messageType,
             metadata,
           },
+          include: { attachments: true },
         });
         await tx.conversation.update({
           where: { id: existingId },
@@ -157,6 +175,7 @@ export class ConversationService {
             message_type: messageType,
             metadata,
           },
+          include: { attachments: true },
         });
         const updated = await tx.conversation.update({
           where: { id: conv.id },
@@ -173,8 +192,76 @@ export class ConversationService {
       created.id,
       msg as unknown as Record<string, unknown>,
     );
+    this.chatGateway.emitConversationCreated(
+      created.id,
+      [senderId, recipientId],
+    );
 
     return created;
+  }
+
+  /**
+   * CHAT-010..013 — Idempotently create a conversation linked to a
+   * collaboration with two participants and the auto-generated SYSTEM
+   * welcome message. Designed to be called inside an outer Prisma
+   * transaction so a status-transition rollback also rolls back the
+   * conversation.
+   *
+   * Returns the created conversation id, or `null` if one already existed.
+   * The caller is responsible for emitting `conversation_created` after
+   * the outer transaction commits.
+   */
+  async ensureCollaborationConversation(
+    tx: Prisma.TransactionClient,
+    collaborationId: bigint,
+    workerAccountId: bigint,
+    employerAccountId: bigint,
+    triggeredByAccountId: bigint,
+  ): Promise<bigint | null> {
+    const existing = await tx.conversation.findUnique({
+      where: { collaboration_id: collaborationId },
+      select: { id: true },
+    });
+    if (existing) return null;
+
+    const now = new Date();
+    const conv = await tx.conversation.create({
+      data: {
+        collaboration_id: collaborationId,
+        last_message_at: now,
+        participants: {
+          create: [
+            { account_id: workerAccountId },
+            { account_id: employerAccountId },
+          ],
+        },
+      },
+    });
+    await tx.message.create({
+      data: {
+        conversation_id: conv.id,
+        sender_id: triggeredByAccountId,
+        content:
+          'Collaboration confirmed. You can now message each other about the project.',
+        message_type: SYSTEM_MESSAGE_TYPE,
+      },
+    });
+    return conv.id;
+  }
+
+  /**
+   * Post-commit broadcast for an auto-created collaboration conversation.
+   * Call after `ensureCollaborationConversation` has returned a non-null id
+   * (i.e., the outer transaction committed).
+   */
+  async announceConversationCreated(
+    conversationId: bigint,
+    accountIds: bigint[],
+  ) {
+    for (const accountId of accountIds) {
+      void this.chatGateway.joinConversationRoom(accountId, conversationId);
+    }
+    this.chatGateway.emitConversationCreated(conversationId, accountIds);
   }
 
   private async unreadCountForParticipant(
@@ -210,7 +297,19 @@ export class ConversationService {
               participants: {
                 include: { account: { include: { client_profile: true } } },
               },
-              messages: { orderBy: { created_at: 'desc' }, take: 1 },
+              messages: {
+                orderBy: { created_at: 'desc' },
+                take: 1,
+                include: { attachments: true },
+              },
+              collaboration: {
+                select: {
+                  id: true,
+                  status: true,
+                  worker_id: true,
+                  employer_id: true,
+                },
+              },
             },
           },
         },
@@ -235,9 +334,11 @@ export class ConversationService {
       return {
         conversation: {
           id: conv.id,
+          collaboration_id: conv.collaboration_id,
           last_message_at: conv.last_message_at,
           created_at: conv.created_at,
         },
+        collaboration: conv.collaboration ?? null,
         other_participant: other
           ? {
               account_id: other.account_id,
@@ -283,6 +384,7 @@ export class ConversationService {
         orderBy: { created_at: 'desc' },
         skip,
         take: limit,
+        include: { attachments: true },
       }),
       this.prisma.message.count({ where }),
     ]);
@@ -301,6 +403,11 @@ export class ConversationService {
     return { items: messages, total, page, limit };
   }
 
+  async getById(conversationId: bigint, accountId: bigint) {
+    await this.assertParticipant(conversationId, accountId);
+    return this.loadConversationPayload(conversationId);
+  }
+
   async sendMessage(
     conversationId: bigint,
     senderId: bigint,
@@ -308,9 +415,24 @@ export class ConversationService {
   ) {
     await this.assertParticipant(conversationId, senderId);
 
+    // Block sends if the linked collaboration is REJECTED — read-only state
+    // per the Edge Cases entry on rejected collabs.
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { collaboration: { select: { status: true } } },
+    });
+    if (conv?.collaboration?.status === 'REJECTED') {
+      throw new ForbiddenException({
+        code: 'COLLABORATION_REJECTED',
+        message: 'This collaboration was rejected — messages are read-only.',
+      });
+    }
+
     const now = new Date();
     const messageType = dto.message_type ?? 'TEXT';
-    const metadata = this.toJson(dto.metadata);
+    const baseMetadata = (dto.metadata ?? {}) as Record<string, unknown>;
+    if (dto.client_id) baseMetadata.client_id = dto.client_id;
+    const metadata = baseMetadata as Prisma.InputJsonValue;
 
     const msg = await this.prisma.$transaction(async (tx) => {
       const m = await tx.message.create({
@@ -322,17 +444,29 @@ export class ConversationService {
           metadata,
         },
       });
+      // Wire orphan attachments by ownership (account_id == client_profile_id).
+      await this.attachments.wireOrphans(
+        tx,
+        dto.attachment_ids,
+        m.id,
+        senderId,
+      );
       await tx.conversation.update({
         where: { id: conversationId },
         data: { last_message_at: now },
       });
-      return m;
+      return tx.message.findUnique({
+        where: { id: m.id },
+        include: { attachments: true },
+      });
     });
 
-    this.chatGateway.emitNewMessage(
-      conversationId,
-      msg as unknown as Record<string, unknown>,
-    );
+    if (msg) {
+      this.chatGateway.emitNewMessage(
+        conversationId,
+        msg as unknown as Record<string, unknown>,
+      );
+    }
     return this.loadConversationPayload(conversationId);
   }
 
