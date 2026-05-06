@@ -106,8 +106,6 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-                <dt className="text-fg-muted">ID</dt>
-                <dd className="text-fg">{String(me.id)}</dd>
                 <dt className="text-fg-muted">Email</dt>
                 <dd className="text-fg">{me.email}</dd>
                 <dt className="text-fg-muted">Status</dt>
