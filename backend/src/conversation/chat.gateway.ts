@@ -295,15 +295,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   emitNewMessage(conversationId: bigint, message: Record<string, unknown>) {
-    this.server
-      .to(`conv:${conversationId}`)
-      .emit('new_message', { conversation_id: conversationId, ...message });
+    this.server.to(`conv:${conversationId}`).emit(
+      'new_message',
+      stripBigInts({
+        conversation_id: String(conversationId),
+        ...message,
+      }),
+    );
   }
 
   emitMessageRead(conversationId: bigint, accountId: bigint, lastReadAt: Date) {
     this.server.to(`conv:${conversationId}`).emit('message_read', {
-      conversation_id: conversationId,
-      account_id: accountId,
+      conversation_id: String(conversationId),
+      account_id: String(accountId),
       last_read_at: lastReadAt,
     });
   }
@@ -313,13 +317,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     accountIds: bigint[],
     payload: Record<string, unknown> = {},
   ) {
+    const safe = stripBigInts(payload);
     for (const accountId of accountIds) {
       const sockets = this.accountToSockets.get(String(accountId));
       if (!sockets) continue;
       for (const socketId of sockets) {
         this.server.to(socketId).emit('conversation_created', {
           conversation_id: String(conversationId),
-          ...payload,
+          ...safe,
         });
       }
     }
@@ -335,6 +340,25 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (socket) socket.join(`conv:${conversationId}`);
     }
   }
+}
+
+// Socket.IO's Redis adapter encodes payloads with msgpack (notepack.io),
+// which throws on `bigint`. Stringify any bigint before broadcasting.
+function stripBigInts<T>(value: T): T {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'bigint') return String(value) as unknown as T;
+  if (Array.isArray(value)) {
+    return value.map((v) => stripBigInts(v)) as unknown as T;
+  }
+  if (value instanceof Date) return value;
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = stripBigInts(v);
+    }
+    return out as T;
+  }
+  return value;
 }
 
 function errorCode(err: unknown): string | undefined {
