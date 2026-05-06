@@ -413,6 +413,16 @@ export class ConversationService {
     senderId: bigint,
     dto: SendMessageDto,
   ) {
+    const content = typeof dto.content === 'string' ? dto.content : '';
+    const hasAttachments =
+      Array.isArray(dto.attachment_ids) && dto.attachment_ids.length > 0;
+    if (content.trim().length === 0 && !hasAttachments) {
+      throw new BadRequestException({
+        code: 'INVALID_INPUT',
+        message: 'Message content or attachment is required.',
+      });
+    }
+
     await this.assertParticipant(conversationId, senderId);
 
     // Block sends if the linked collaboration is REJECTED — read-only state
@@ -439,7 +449,7 @@ export class ConversationService {
         data: {
           conversation_id: conversationId,
           sender_id: senderId,
-          content: dto.content,
+          content,
           message_type: messageType,
           metadata,
         },

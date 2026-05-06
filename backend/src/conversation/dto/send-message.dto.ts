@@ -4,7 +4,6 @@ import {
   ArrayMaxSize,
   IsArray,
   IsInt,
-  IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
@@ -14,7 +13,6 @@ import {
 export class SendMessageDto {
   @ApiProperty()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(20_000)
   content: string;
 

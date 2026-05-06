@@ -15,7 +15,8 @@
       "Bash(npm test *)",
       "WebSearch",
       "Bash(npm install *)",
-      "Bash(npm ls *)"
+      "Bash(npm ls *)",
+      "Bash(lsof *)"
     ]
   }
 }

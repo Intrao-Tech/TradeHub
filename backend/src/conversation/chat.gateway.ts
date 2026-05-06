@@ -184,10 +184,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
       return;
     }
-    if (typeof body?.content !== 'string' || body.content.trim().length === 0) {
+    const content = typeof body?.content === 'string' ? body.content : '';
+    const hasAttachments =
+      Array.isArray(body?.attachment_ids) && body.attachment_ids.length > 0;
+    if (content.trim().length === 0 && !hasAttachments) {
       client.emit('error', {
         code: 'INVALID_INPUT',
-        message: 'Message content is required.',
+        message: 'Message content or attachment is required.',
         client_id: body?.client_id,
       });
       return;
@@ -209,7 +212,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         conversationId,
         BigInt(accountId),
         {
-          content: body.content,
+          content,
           message_type: body.message_type,
           client_id: body.client_id,
           attachment_ids: body.attachment_ids,
