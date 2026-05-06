@@ -35,6 +35,8 @@ const ClientDirectoryPage = lazy(() => import('./pages/ClientDirectoryPage'));
 const ClientPublicProfilePage = lazy(() => import('./pages/ClientPublicProfilePage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const CollaborationsPage = lazy(() => import('./pages/CollaborationsPage'));
+const CollaborationDetailPage = lazy(() => import('./pages/CollaborationDetailPage'));
+const EscrowPlaceholderPage = lazy(() => import('./pages/EscrowPlaceholderPage'));
 const ReferralsPage = lazy(() => import('./pages/ReferralsPage'));
 const ReviewsPage = lazy(() => import('./pages/ReviewsPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
@@ -215,6 +217,8 @@ function MarketplaceRouter() {
           <Route path="/dashboard" element={<Protected loggedIn={loggedIn}><DashboardPage /></Protected>} />
           <Route path="/profile" element={<Protected loggedIn={loggedIn}><ProfilePage /></Protected>} />
           <Route path="/collaborations" element={<Protected loggedIn={loggedIn}><CollaborationsPage /></Protected>} />
+          <Route path="/collaborations/:id" element={<Protected loggedIn={loggedIn}><CollaborationDetailPage /></Protected>} />
+          <Route path="/escrow/:id" element={<Protected loggedIn={loggedIn}><EscrowPlaceholderPage /></Protected>} />
           <Route path="/referrals" element={<Protected loggedIn={loggedIn}><ReferralsPage /></Protected>} />
           <Route path="/notifications" element={<Protected loggedIn={loggedIn}><NotificationsPage /></Protected>} />
           <Route path="/my-applications" element={<Protected loggedIn={loggedIn}><MyApplicationsPage /></Protected>} />

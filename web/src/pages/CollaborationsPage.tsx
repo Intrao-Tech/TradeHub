@@ -1,38 +1,42 @@
-import { useState, useEffect } from 'react';
-import { Flag, RefreshCw, Handshake } from 'lucide-react';
-import { api } from '../api';
-import { EmptyState } from '@/components/EmptyState';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Briefcase, Handshake, Plus } from 'lucide-react';
+import { api, parseApiError } from '../api';
+import { useAccountMe } from '@/hooks/useAccountMe';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { EmptyState } from '@/components/EmptyState';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+  CollaborationStatusBadge,
+  type CollaborationStatus,
+} from '@/components/collaborations/CollaborationStatusBadge';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+  CounterpartyChip,
+  type CounterpartyParty,
+} from '@/components/collaborations/CounterpartyChip';
+import {
+  NewCollaborationSheet,
+  type NewCollaborationRole,
+} from '@/components/collaborations/NewCollaborationSheet';
 
 type CollaborationRow = {
   id: string | number;
   worker_id: string | number;
   employer_id: string | number;
+  initiated_by: 'WORKER' | 'EMPLOYER' | string;
   status: string;
   project_type?: string | null;
-  agreed_amount?: unknown;
+  site_postcode?: string | null;
+  agreed_amount?: string | number | null;
+  flagged?: boolean;
   started_at?: string | null;
   ended_at?: string | null;
+  created_at?: string | null;
+  worker?: CounterpartyParty | null;
+  employer?: CounterpartyParty | null;
 };
 
 type ListResponse = {
@@ -42,484 +46,345 @@ type ListResponse = {
   limit: number;
 };
 
-function statusVariant(
-  status: string,
-): 'default' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' | 'outline' {
-  switch (status) {
-    case 'COMPLETED':
-      return 'success';
-    case 'IN_PROGRESS':
-      return 'info';
-    case 'CONFIRMED':
-      return 'secondary';
-    case 'DISPUTED':
-      return 'danger';
-    case 'REJECTED':
-      return 'danger';
-    case 'PENDING':
-      return 'warning';
-    default:
-      return 'outline';
-  }
+type StatusTab = 'ALL' | CollaborationStatus;
+
+const STATUS_TABS: StatusTab[] = [
+  'ALL',
+  'PENDING',
+  'CONFIRMED',
+  'IN_PROGRESS',
+  'COMPLETED',
+  'DISPUTED',
+  'REJECTED',
+];
+
+const STATUS_LABEL: Record<StatusTab, string> = {
+  ALL: 'All',
+  PENDING: 'Pending',
+  CONFIRMED: 'Confirmed',
+  IN_PROGRESS: 'In progress',
+  COMPLETED: 'Completed',
+  DISPUTED: 'Disputed',
+  REJECTED: 'Rejected',
+};
+
+type RoleTab = 'WORKER' | 'EMPLOYER';
+
+function formatGbp(value?: string | number | null): string {
+  if (value == null || value === '') return '—';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'GBP',
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
+function formatDate(value?: string | null): string {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 export default function CollaborationsPage() {
-  const [list, setList] = useState<ListResponse | null>(null);
-  const [listError, setListError] = useState('');
-  const [actionError, setActionError] = useState('');
-  const [lastActionJson, setLastActionJson] = useState<unknown>(null);
+  const navigate = useNavigate();
+  const { clientProfile, isWorker, isEmployer, loading: accountLoading } =
+    useAccountMe();
 
-  const [createWorkerId, setCreateWorkerId] = useState('');
-  const [createEmployerId, setCreateEmployerId] = useState('');
-  const [createProjectType, setCreateProjectType] = useState('');
-  const [createPostcode, setCreatePostcode] = useState('');
-  const [createAmount, setCreateAmount] = useState('');
-  const [createReferralId, setCreateReferralId] = useState('');
+  const [data, setData] = useState<CollaborationRow[]>([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [statusTab, setStatusTab] = useState<StatusTab>('ALL');
+  const [roleTab, setRoleTab] = useState<RoleTab | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetRole, setSheetRole] = useState<NewCollaborationRole>('WORKER');
 
-  const [flagOpenId, setFlagOpenId] = useState<string | null>(null);
-  const [flagReasons, setFlagReasons] = useState<Record<string, string>>({});
-  const [escrowJob, setEscrowJob] = useState<Record<string, string>>({});
-  const [escrowFee, setEscrowFee] = useState<Record<string, string>>({});
-  const [escrowByCollab, setEscrowByCollab] = useState<Record<string, unknown>>({});
+  const myClientProfileId =
+    clientProfile?.id != null ? String(clientProfile.id) : null;
 
-  async function loadCollaborations() {
-    setListError('');
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
     try {
-      const data = await api<ListResponse>('/collaborations/me?page=1&limit=20');
-      setList(data);
-    } catch (e) {
-      setListError(e instanceof Error ? e.message : String(e));
-      setList(null);
+      const res = await api<ListResponse>('/collaborations/me?page=1&limit=100');
+      setData(res.items ?? []);
+    } catch (err) {
+      setError(parseApiError(err)?.message ?? 'Could not load your collaborations.');
+      setData([]);
+    } finally {
+      setLoading(false);
     }
-  }
-
-  useEffect(() => {
-    void loadCollaborations();
   }, []);
 
-  async function handleCreateCollaboration(e: React.FormEvent) {
-    e.preventDefault();
-    setActionError('');
-    setLastActionJson(null);
-    try {
-      const body: Record<string, unknown> = {
-        project_type: createProjectType || undefined,
-        site_postcode: createPostcode || undefined,
-      };
-      if (createAmount !== '') body.agreed_amount = Number(createAmount);
-      if (createReferralId !== '') body.referral_id = Number(createReferralId);
-      if (createWorkerId !== '') body.worker_id = Number(createWorkerId);
-      if (createEmployerId !== '') body.employer_id = Number(createEmployerId);
+  useEffect(() => {
+    if (accountLoading) return;
+    void load();
+  }, [accountLoading, load]);
 
-      const created = await api('/collaborations', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      });
-      setLastActionJson(created);
-      await loadCollaborations();
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
+  // Derive which role tabs are present based on the rows (Decision Q1).
+  const availableRoles = useMemo<RoleTab[]>(() => {
+    if (!myClientProfileId) return [];
+    const roles = new Set<RoleTab>();
+    for (const row of data) {
+      if (String(row.worker_id) === myClientProfileId) roles.add('WORKER');
+      if (String(row.employer_id) === myClientProfileId) roles.add('EMPLOYER');
     }
-  }
+    return Array.from(roles);
+  }, [data, myClientProfileId]);
 
-  async function patchStatus(id: string | number, status: string) {
-    setActionError('');
-    setLastActionJson(null);
-    try {
-      const out = await api(`/collaborations/${id}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status }),
-      });
-      setLastActionJson(out);
-      await loadCollaborations();
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  async function flagCollaboration(id: string | number) {
-    const reason = flagReasons[String(id)]?.trim();
-    if (!reason) {
-      setActionError('Flag reason is required');
+  // Set a sensible default role tab once we know what roles the user has rows for.
+  useEffect(() => {
+    if (availableRoles.length < 2) {
+      if (roleTab !== null) setRoleTab(null);
       return;
     }
-    setActionError('');
-    setLastActionJson(null);
-    try {
-      const out = await api(`/collaborations/${id}/flag`, {
-        method: 'POST',
-        body: JSON.stringify({ reason }),
-      });
-      setLastActionJson(out);
-      setFlagOpenId(null);
-      await loadCollaborations();
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
+    if (roleTab == null) {
+      setRoleTab(isWorker ? 'WORKER' : 'EMPLOYER');
     }
+  }, [availableRoles, roleTab, isWorker]);
+
+  const filteredByRole = useMemo(() => {
+    if (!myClientProfileId || roleTab == null) return data;
+    return data.filter((row) =>
+      roleTab === 'WORKER'
+        ? String(row.worker_id) === myClientProfileId
+        : String(row.employer_id) === myClientProfileId,
+    );
+  }, [data, myClientProfileId, roleTab]);
+
+  const counts = useMemo(() => {
+    const c: Record<StatusTab, number> = {
+      ALL: 0,
+      PENDING: 0,
+      CONFIRMED: 0,
+      IN_PROGRESS: 0,
+      COMPLETED: 0,
+      DISPUTED: 0,
+      REJECTED: 0,
+    };
+    for (const row of filteredByRole) {
+      c.ALL += 1;
+      const k = (row.status ?? '').toUpperCase() as StatusTab;
+      if (k in c) c[k] += 1;
+    }
+    return c;
+  }, [filteredByRole]);
+
+  const visible = useMemo(() => {
+    if (statusTab === 'ALL') return filteredByRole;
+    return filteredByRole.filter(
+      (r) => (r.status ?? '').toUpperCase() === statusTab,
+    );
+  }, [filteredByRole, statusTab]);
+
+  function openSheet(role: NewCollaborationRole) {
+    setSheetRole(role);
+    setSheetOpen(true);
   }
 
-  async function createEscrow(id: string | number) {
-    const job = escrowJob[String(id)];
-    const fee = escrowFee[String(id)];
-    setActionError('');
-    setLastActionJson(null);
-    try {
-      const out = await api(`/escrow/collaboration/${id}`, {
-        method: 'POST',
-        body: JSON.stringify({
-          job_amount: Number(job),
-          platform_fee: Number(fee),
-        }),
-      });
-      setLastActionJson(out);
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  async function viewEscrow(id: string | number) {
-    setActionError('');
-    try {
-      const out = await api(`/escrow/collaboration/${id}`);
-      setEscrowByCollab((prev) => ({ ...prev, [String(id)]: out }));
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  async function fundEscrow(escrowId: string | number) {
-    setActionError('');
-    try {
-      const out = await api<{ checkout_url: string }>(`/escrow/${escrowId}/deposit`, {
-        method: 'POST',
-      });
-      if (out.checkout_url) {
-        window.open(out.checkout_url, '_blank');
-      }
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
-    }
-  }
+  const canInitiate = isWorker || isEmployer;
+  const initiatorRole: NewCollaborationRole = isWorker ? 'WORKER' : 'EMPLOYER';
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Collaborations</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-fg">
+            Collaborations
+          </h1>
           <p className="text-sm text-fg-muted">
-            Manage your active and past work agreements.
+            Track engagements through pending, confirmed, in-progress, and
+            completed.
           </p>
         </div>
-        <Button type="button" variant="outline" onClick={() => void loadCollaborations()}>
-          <RefreshCw />
-          Refresh list
-        </Button>
+        {canInitiate ? (
+          <Button
+            type="button"
+            onClick={() => openSheet(initiatorRole)}
+            className="self-start sm:self-auto"
+          >
+            <Plus />
+            New collaboration
+          </Button>
+        ) : null}
       </div>
 
-      {listError ? (
+      {error ? (
         <div
           role="alert"
           className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
         >
-          {listError}
+          {error}
         </div>
       ) : null}
-      {actionError ? (
-        <div
-          role="alert"
-          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+
+      {availableRoles.length >= 2 ? (
+        <Tabs
+          value={roleTab ?? 'WORKER'}
+          onValueChange={(v) => setRoleTab(v as RoleTab)}
         >
-          {actionError}
-        </div>
+          <TabsList className="bg-subtle p-1">
+            <TabsTrigger value="WORKER">As worker</TabsTrigger>
+            <TabsTrigger value="EMPLOYER">As employer</TabsTrigger>
+          </TabsList>
+        </Tabs>
       ) : null}
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold tracking-tight">My collaborations</h2>
-        {list?.items?.length ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            {list.items.map((c) => {
-              const id = c.id;
-              const key = String(id);
-              const escrow = escrowByCollab[key] as Record<string, unknown> | undefined;
-              const escrowStatus = escrow?.status as string | undefined;
-              const escrowFundable =
-                escrowStatus === 'CREATED' || escrowStatus === 'DEPOSIT_PENDING';
-              return (
-                <Card key={key} className="flex flex-col">
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <CardTitle className="text-base">Collaboration #{key}</CardTitle>
-                        <CardDescription>
-                          worker {String(c.worker_id)} · employer {String(c.employer_id)}
-                        </CardDescription>
-                      </div>
-                      <Badge variant={statusVariant(c.status)}>{c.status}</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="flex-1 space-y-3 text-sm">
-                    <dl className="grid grid-cols-2 gap-2">
-                      <div>
-                        <dt className="text-xs text-fg-muted">Project type</dt>
-                        <dd>{c.project_type ?? '—'}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-fg-muted">Agreed amount</dt>
-                        <dd>{c.agreed_amount != null ? String(c.agreed_amount) : '—'}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-fg-muted">Started</dt>
-                        <dd>{c.started_at ?? '—'}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-fg-muted">Ended</dt>
-                        <dd>{c.ended_at ?? '—'}</dd>
-                      </div>
-                    </dl>
+      <Tabs value={statusTab} onValueChange={(v) => setStatusTab(v as StatusTab)}>
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-subtle p-1 sm:w-auto">
+          {STATUS_TABS.map((t) => (
+            <TabsTrigger key={t} value={t} className="gap-2">
+              {STATUS_LABEL[t]}
+              <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+                {counts[t]}
+              </Badge>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
-                    <div className="space-y-2 rounded-md border border-border-default bg-subtle p-3">
-                      <p className="text-xs font-medium text-fg-muted">Create escrow (employer)</p>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <Input
-                          placeholder="job_amount"
-                          value={escrowJob[key] ?? ''}
-                          onChange={(e) =>
-                            setEscrowJob((p) => ({ ...p, [key]: e.target.value }))
-                          }
-                        />
-                        <Input
-                          placeholder="platform_fee"
-                          value={escrowFee[key] ?? ''}
-                          onChange={(e) =>
-                            setEscrowFee((p) => ({ ...p, [key]: e.target.value }))
-                          }
-                        />
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => void createEscrow(id)}
-                        >
-                          Create escrow
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => void viewEscrow(id)}
-                        >
-                          View escrow
-                        </Button>
-                      </div>
-                      {escrow ? (
-                        <div className="space-y-2">
-                          <pre className="rounded-md bg-raised text-fg p-2 text-xs overflow-auto">
-                            {JSON.stringify(escrow, null, 2)}
-                          </pre>
-                          {escrowFundable ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() => void fundEscrow(escrow.id as string)}
-                            >
-                              Fund via Stripe
-                            </Button>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex flex-col items-stretch gap-2 border-t border-border-default pt-4">
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void patchStatus(id, 'CONFIRMED')}
-                      >
-                        Confirm
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void patchStatus(id, 'IN_PROGRESS')}
-                      >
-                        Start
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void patchStatus(id, 'COMPLETED')}
-                      >
-                        Complete
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void patchStatus(id, 'REJECTED')}
-                      >
-                        Reject
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void patchStatus(id, 'DISPUTED')}
-                      >
-                        Dispute
-                      </Button>
-                      <Dialog
-                        open={flagOpenId === key}
-                        onOpenChange={(open) => setFlagOpenId(open ? key : null)}
-                      >
-                        <DialogTrigger asChild>
-                          <Button type="button" size="sm" variant="ghost">
-                            <Flag />
-                            Flag
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Flag collaboration #{key}</DialogTitle>
-                            <DialogDescription>
-                              Provide a reason. Staff will review.
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-2">
-                            <Label htmlFor={`flag-${key}`}>Reason</Label>
-                            <Input
-                              id={`flag-${key}`}
-                              placeholder="e.g. payment dispute"
-                              value={flagReasons[key] ?? ''}
-                              onChange={(e) =>
-                                setFlagReasons((p) => ({ ...p, [key]: e.target.value }))
-                              }
-                            />
-                          </div>
-                          <DialogFooter>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => setFlagOpenId(null)}
-                            >
-                              Cancel
-                            </Button>
-                            <Button type="button" onClick={() => void flagCollaboration(id)}>
-                              Submit flag
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                  </CardFooter>
-                </Card>
-              );
-            })}
-          </div>
-        ) : list ? (
-          <EmptyState
-            icon={Handshake}
-            title="No collaborations yet"
-            description="Create one below or accept a referral offer."
-          />
-        ) : (
-          <p className="text-sm text-fg-muted">Loading…</p>
-        )}
+      {loading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+      ) : visible.length === 0 ? (
+        <EmptyState
+          icon={Handshake}
+          title={
+            data.length === 0
+              ? 'No collaborations yet'
+              : 'No collaborations match these filters'
+          }
+          description={
+            data.length === 0
+              ? 'Accept a job application to start one, or invite someone manually.'
+              : 'Try a different status or role filter.'
+          }
+          action={
+            data.length === 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button asChild variant="outline">
+                  <Link to="/jobs">
+                    <Briefcase />
+                    Browse jobs
+                  </Link>
+                </Button>
+                {canInitiate ? (
+                  <Button onClick={() => openSheet(initiatorRole)}>
+                    <Plus />
+                    New collaboration
+                  </Button>
+                ) : null}
+              </div>
+            ) : null
+          }
+        />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {visible.map((row) => (
+            <CollaborationRowCard
+              key={String(row.id)}
+              row={row}
+              myClientProfileId={myClientProfileId}
+            />
+          ))}
+        </div>
+      )}
 
-        {list ? (
-          <details className="rounded-md border border-border-default bg-raised">
-            <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-fg-muted">
-              Raw list JSON
-            </summary>
-            <pre className="rounded-b-md bg-subtle text-fg p-3 text-xs overflow-auto">
-              {JSON.stringify(list, null, 2)}
-            </pre>
-          </details>
+      <NewCollaborationSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        role={sheetRole}
+        onCreated={(created) => {
+          void load();
+          if (created.id != null) {
+            navigate(`/collaborations/${String(created.id)}`);
+          }
+        }}
+      />
+    </div>
+  );
+}
+
+function CollaborationRowCard({
+  row,
+  myClientProfileId,
+}: {
+  row: CollaborationRow;
+  myClientProfileId: string | null;
+}) {
+  const myRole: 'WORKER' | 'EMPLOYER' | null =
+    myClientProfileId == null
+      ? null
+      : String(row.worker_id) === myClientProfileId
+        ? 'WORKER'
+        : String(row.employer_id) === myClientProfileId
+          ? 'EMPLOYER'
+          : null;
+
+  // The counterparty is the *other* side from `myRole`.
+  const counterpartyRole: 'WORKER' | 'EMPLOYER' =
+    myRole === 'WORKER' ? 'EMPLOYER' : 'WORKER';
+  const counterparty =
+    counterpartyRole === 'WORKER' ? row.worker ?? null : row.employer ?? null;
+
+  const status = (row.status ?? '').toUpperCase() as CollaborationStatus;
+  const detailHref = `/collaborations/${String(row.id)}`;
+
+  return (
+    <Card className="flex flex-col">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-2">
+          <CounterpartyChip party={counterparty} role={counterpartyRole} />
+          <CollaborationStatusBadge status={row.status} />
+        </div>
+      </CardHeader>
+      <CardContent className="flex-1 space-y-3 text-sm">
+        <dl className="grid grid-cols-2 gap-3">
+          <Field label="Project type">{row.project_type ?? '—'}</Field>
+          <Field label="Agreed amount">{formatGbp(row.agreed_amount)}</Field>
+          <Field label="Started">{formatDate(row.started_at)}</Field>
+          <Field label="Ended">
+            {row.ended_at
+              ? formatDate(row.ended_at)
+              : status === 'IN_PROGRESS'
+                ? 'In progress'
+                : '—'}
+          </Field>
+        </dl>
+        {row.flagged ? (
+          <Badge variant="danger" className="gap-1">
+            Flagged for review
+          </Badge>
         ) : null}
-      </section>
+      </CardContent>
+      <CardFooter className="border-t border-border-default pt-4">
+        <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
+          <Link to={detailHref}>View collaboration</Link>
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Create collaboration</CardTitle>
-          <CardDescription>
-            Employers: set worker_id only. Workers: set employer_id only.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleCreateCollaboration} className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="c-worker-id">worker_id (employer)</Label>
-              <Input
-                id="c-worker-id"
-                type="number"
-                value={createWorkerId}
-                onChange={(e) => setCreateWorkerId(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="c-employer-id">employer_id (worker)</Label>
-              <Input
-                id="c-employer-id"
-                type="number"
-                value={createEmployerId}
-                onChange={(e) => setCreateEmployerId(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="c-project-type">project_type</Label>
-              <Input
-                id="c-project-type"
-                value={createProjectType}
-                onChange={(e) => setCreateProjectType(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="c-postcode">site_postcode</Label>
-              <Input
-                id="c-postcode"
-                value={createPostcode}
-                onChange={(e) => setCreatePostcode(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="c-amount">agreed_amount</Label>
-              <Input
-                id="c-amount"
-                type="number"
-                step="any"
-                value={createAmount}
-                onChange={(e) => setCreateAmount(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="c-referral-id">referral_id (optional)</Label>
-              <Input
-                id="c-referral-id"
-                type="number"
-                value={createReferralId}
-                onChange={(e) => setCreateReferralId(e.target.value)}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <Button type="submit">Create collaboration</Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-
-      {lastActionJson ? (
-        <section className="space-y-2">
-          <h3 className="text-sm font-medium text-fg-muted">Last mutation response</h3>
-          <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
-            {JSON.stringify(lastActionJson, null, 2)}
-          </pre>
-        </section>
-      ) : null}
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-0.5">
+      <dt className="text-xs text-fg-muted">{label}</dt>
+      <dd className="text-fg">{children}</dd>
     </div>
   );
 }

@@ -9,6 +9,27 @@ import { afterAll, afterEach, beforeAll, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import { server } from './msw-server';
 
+// jsdom does not implement Pointer Events (needed by Radix Select / Dialog
+// since Radix v1.x). Polyfill the no-op shims so tests that interact with
+// `<Select>` triggers don't blow up — TEST-COLLAB-140 was the first test
+// in the repo to drive a Radix Select with userEvent and surfaced this.
+if (typeof window !== 'undefined') {
+  if (!('PointerEvent' in window)) {
+    (window as unknown as { PointerEvent: typeof MouseEvent }).PointerEvent =
+      class extends MouseEvent {} as unknown as typeof MouseEvent;
+  }
+  const proto = Element.prototype as unknown as {
+    hasPointerCapture?: () => boolean;
+    setPointerCapture?: () => void;
+    releasePointerCapture?: () => void;
+    scrollIntoView?: () => void;
+  };
+  if (!proto.hasPointerCapture) proto.hasPointerCapture = () => false;
+  if (!proto.setPointerCapture) proto.setPointerCapture = () => {};
+  if (!proto.releasePointerCapture) proto.releasePointerCapture = () => {};
+  if (!proto.scrollIntoView) proto.scrollIntoView = () => {};
+}
+
 // Boot MSW with `error` so any unhandled fetch becomes a loud test failure
 // instead of a silent network call (per Acceptance Criteria — "no real
 // network requests escape").

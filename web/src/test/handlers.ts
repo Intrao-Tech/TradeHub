@@ -6,12 +6,16 @@ import { http, HttpResponse } from 'msw';
 import { makeAccountSummary, makeLoginResponse } from './factories';
 import { jobsHandlers } from './handlers/jobs';
 import { verificationHandlers } from './handlers/verification';
+import { collaborationsHandlers } from './handlers/collaborations';
+import { escrowHandlers } from './handlers/escrow';
 
 const API = 'http://localhost:8081/api';
 
 export const handlers = [
   ...jobsHandlers,
   ...verificationHandlers,
+  ...collaborationsHandlers,
+  ...escrowHandlers,
   // ── Discovery ───────────────────────────────────────────────
   http.get(`${API}/auth/providers`, () => HttpResponse.json({ google: true })),
 

@@ -107,7 +107,8 @@ export class CollaborationController {
   }
 
   @Patch(':id/status')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AccountStateGuard)
+  @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update collaboration status' })
   updateStatus(
@@ -126,7 +127,8 @@ export class CollaborationController {
   }
 
   @Post(':id/flag')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AccountStateGuard)
+  @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Flag a collaboration' })
   flag(

@@ -863,6 +863,149 @@ export async function seedMilestone(
   return { id: m.id };
 }
 
+// ── TEST-COLLAB-002: Collaborations factory extensions ────────────
+//
+// `seedCollaboration` and `seedEscrowTransaction` commit through Prisma so
+// the e2e specs can drive the lifecycle endpoints against real rows. The
+// include shape mirrors `collaborationInclude` in
+// `backend/src/collaboration/collaboration.service.ts` so callers can read
+// the same payload the controller would return.
+
+const collaborationInclude = {
+  worker: { include: { client_profile: true } },
+  employer: { include: { client_profile: true } },
+  reviews: true,
+  escrow_transaction: true,
+  referral: true,
+} as const;
+
+export type SeedCollaborationOpts = {
+  workerId: bigint;
+  employerId: bigint;
+  initiatedBy?: 'WORKER' | 'EMPLOYER';
+  status?:
+    | 'PENDING'
+    | 'CONFIRMED'
+    | 'IN_PROGRESS'
+    | 'COMPLETED'
+    | 'REJECTED'
+    | 'DISPUTED';
+  projectType?: string | null;
+  sitePostcode?: string | null;
+  agreedAmount?: number | string | null;
+  referralId?: bigint | null;
+  jobPostId?: bigint | null;
+  flagged?: boolean;
+  flagReason?: string | null;
+  confirmedAt?: Date | null;
+  startedAt?: Date | null;
+  endedAt?: Date | null;
+};
+
+/**
+ * Seeds a collaboration row with the include shape the controller returns.
+ * Auto-populates the relevant lifecycle timestamps based on `status` so a
+ * caller asking for `status: 'IN_PROGRESS'` gets a row with `confirmed_at`
+ * and `started_at` set, mirroring how `updateStatus` would have produced it.
+ */
+export async function seedCollaboration(
+  prisma: PrismaService,
+  opts: SeedCollaborationOpts,
+) {
+  const { Prisma } =
+    require('@prisma/client') as typeof import('@prisma/client');
+  const status = opts.status ?? 'PENDING';
+  const now = new Date();
+  const confirmedAt =
+    opts.confirmedAt ??
+    (['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'].includes(status) ? now : null);
+  const startedAt =
+    opts.startedAt ??
+    (['IN_PROGRESS', 'COMPLETED'].includes(status) ? now : null);
+  const endedAt =
+    opts.endedAt ?? (status === 'COMPLETED' ? now : null);
+
+  return prisma.collaboration.create({
+    data: {
+      worker_id: opts.workerId,
+      employer_id: opts.employerId,
+      initiated_by: opts.initiatedBy ?? 'EMPLOYER',
+      referral_id: opts.referralId ?? null,
+      job_post_id: opts.jobPostId ?? null,
+      status,
+      project_type: opts.projectType ?? null,
+      site_postcode: opts.sitePostcode ?? null,
+      agreed_amount:
+        opts.agreedAmount != null ? new Prisma.Decimal(opts.agreedAmount) : null,
+      flagged: opts.flagged ?? false,
+      flag_reason: opts.flagReason ?? null,
+      confirmed_at: confirmedAt,
+      started_at: startedAt,
+      ended_at: endedAt,
+    },
+    include: collaborationInclude,
+  });
+}
+
+export type SeedEscrowOpts = {
+  collaborationId: bigint;
+  status?:
+    | 'CREATED'
+    | 'DEPOSIT_PENDING'
+    | 'HELD'
+    | 'RELEASED'
+    | 'REFUNDED'
+    | 'DISPUTED';
+  jobAmount?: number | string;
+  platformFee?: number | string;
+  referralCommission?: number | string;
+  workerPayout?: number | string;
+  currency?: string;
+  depositConfirmedAt?: Date | null;
+  releasedAt?: Date | null;
+  refundedAt?: Date | null;
+  disputedAt?: Date | null;
+};
+
+/**
+ * Minimal escrow seed — Stripe identifier columns are intentionally left
+ * null. The Collaborations test surface only reads escrow rows; mutation
+ * coverage belongs to `tests-escrow/`.
+ */
+export async function seedEscrowTransaction(
+  prisma: PrismaService,
+  opts: SeedEscrowOpts,
+) {
+  const { Prisma } =
+    require('@prisma/client') as typeof import('@prisma/client');
+  const status = opts.status ?? 'HELD';
+  const jobAmount = new Prisma.Decimal(opts.jobAmount ?? 1000);
+  const platformFee = new Prisma.Decimal(opts.platformFee ?? 100);
+  const referralCommission = new Prisma.Decimal(opts.referralCommission ?? 0);
+  const workerPayout = new Prisma.Decimal(
+    opts.workerPayout ?? Number(jobAmount) - Number(platformFee) - Number(referralCommission),
+  );
+  return prisma.escrowTransaction.create({
+    data: {
+      collaboration_id: opts.collaborationId,
+      status,
+      job_amount: jobAmount,
+      platform_fee: platformFee,
+      referral_commission: referralCommission,
+      worker_payout: workerPayout,
+      currency: opts.currency ?? 'GBP',
+      deposit_confirmed_at:
+        opts.depositConfirmedAt ??
+        (['HELD', 'RELEASED', 'REFUNDED', 'DISPUTED'].includes(status)
+          ? new Date()
+          : null),
+      released_at: opts.releasedAt ?? (status === 'RELEASED' ? new Date() : null),
+      refunded_at: opts.refundedAt ?? (status === 'REFUNDED' ? new Date() : null),
+      disputed_at: opts.disputedAt ?? (status === 'DISPUTED' ? new Date() : null),
+    },
+  });
+}
+
 /** For unit tests of the Google flow — Google-only account, no password set. */
 export async function seedGoogleOnlyAccount(
   prisma: PrismaService,

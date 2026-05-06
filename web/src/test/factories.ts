@@ -653,6 +653,229 @@ export function mockProviders(overrides: Partial<MockProviders> = {}): MockProvi
   };
 }
 
+// ── TEST-COLLAB-003: Collaborations mock builders ─────────────────
+//
+// Shapes mirror the production payloads from
+// `backend/src/collaboration/collaboration.service.ts` (`collaborationInclude`)
+// and `backend/src/escrow/escrow.service.ts`. Override-friendly so a single
+// field can be flipped without rebuilding the whole nested tree.
+
+export type MockCollaborationParty = {
+  id: string;
+  rating_avg: string;
+  rating_count: number;
+  client_profile: {
+    id: string;
+    display_name: string;
+    avatar_url: string | null;
+    verification_level: string;
+    slug: string;
+  };
+};
+
+export type MockReview = {
+  id: string;
+  collaboration_id: string;
+  reviewer_role: 'WORKER' | 'EMPLOYER';
+  overall_rating: number;
+  is_published: boolean;
+  published_at: string | null;
+  created_at: string;
+};
+
+export type MockEscrowTransaction = {
+  id: string;
+  collaboration_id: string;
+  status:
+    | 'CREATED'
+    | 'DEPOSIT_PENDING'
+    | 'HELD'
+    | 'RELEASED'
+    | 'REFUNDED'
+    | 'DISPUTED';
+  job_amount: string;
+  platform_fee: string;
+  referral_commission: string;
+  worker_payout: string;
+  currency: string;
+  deposit_confirmed_at: string | null;
+  released_at: string | null;
+  refunded_at: string | null;
+  disputed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MockCollaboration = {
+  id: string;
+  worker_id: string;
+  employer_id: string;
+  initiated_by: 'WORKER' | 'EMPLOYER';
+  status:
+    | 'PENDING'
+    | 'CONFIRMED'
+    | 'IN_PROGRESS'
+    | 'COMPLETED'
+    | 'REJECTED'
+    | 'DISPUTED';
+  project_type: string | null;
+  site_postcode: string | null;
+  agreed_amount: string | null;
+  referral_id: string | null;
+  job_post_id: string | null;
+  flagged: boolean;
+  flag_reason: string | null;
+  confirmed_at: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  created_at: string;
+  updated_at: string;
+  worker: MockCollaborationParty;
+  employer: MockCollaborationParty;
+  reviews: MockReview[];
+  escrow_transaction: MockEscrowTransaction | null;
+  referral: null;
+};
+
+function mockWorkerParty(
+  overrides: Partial<MockCollaborationParty> & {
+    client_profile?: Partial<MockCollaborationParty['client_profile']>;
+  } = {},
+): MockCollaborationParty {
+  return {
+    id: '101',
+    rating_avg: '4.8',
+    rating_count: 12,
+    ...overrides,
+    client_profile: {
+      id: '101',
+      display_name: 'Mike Builder',
+      avatar_url: null,
+      verification_level: 'BASIC',
+      slug: 'mike-builder-abc',
+      ...(overrides.client_profile ?? {}),
+    },
+  };
+}
+
+function mockEmployerParty(
+  overrides: Partial<MockCollaborationParty> & {
+    client_profile?: Partial<MockCollaborationParty['client_profile']>;
+  } = {},
+): MockCollaborationParty {
+  return {
+    id: '202',
+    rating_avg: '4.6',
+    rating_count: 5,
+    ...overrides,
+    client_profile: {
+      id: '202',
+      display_name: 'Acme Build',
+      avatar_url: null,
+      verification_level: 'BASIC',
+      slug: 'acme-build-xyz',
+      ...(overrides.client_profile ?? {}),
+    },
+  };
+}
+
+export function mockCollaboration(
+  overrides: Partial<MockCollaboration> & {
+    worker?: Partial<MockCollaborationParty> & {
+      client_profile?: Partial<MockCollaborationParty['client_profile']>;
+    };
+    employer?: Partial<MockCollaborationParty> & {
+      client_profile?: Partial<MockCollaborationParty['client_profile']>;
+    };
+  } = {},
+): MockCollaboration {
+  const now = new Date().toISOString();
+  const status = overrides.status ?? 'PENDING';
+  const worker = mockWorkerParty(overrides.worker ?? {});
+  const employer = mockEmployerParty(overrides.employer ?? {});
+  const { worker: _w, employer: _e, ...rest } = overrides;
+  void _w;
+  void _e;
+  return {
+    id: '7000',
+    worker_id: worker.id,
+    employer_id: employer.id,
+    initiated_by: 'EMPLOYER',
+    status,
+    project_type: 'Kitchen refit',
+    site_postcode: 'NW1',
+    agreed_amount: '1500.00',
+    referral_id: null,
+    job_post_id: null,
+    flagged: false,
+    flag_reason: null,
+    confirmed_at:
+      ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'].includes(status) ? now : null,
+    started_at:
+      ['IN_PROGRESS', 'COMPLETED'].includes(status) ? now : null,
+    ended_at: status === 'COMPLETED' ? now : null,
+    created_at: now,
+    updated_at: now,
+    reviews: [],
+    escrow_transaction: null,
+    referral: null,
+    ...rest,
+    worker,
+    employer,
+  };
+}
+
+const ESCROW_DEFAULTS = {
+  job_amount: '1000.00',
+  platform_fee: '100.00',
+  referral_commission: '0.00',
+  worker_payout: '900.00',
+  currency: 'GBP',
+};
+
+export function mockEscrowTransaction(
+  overrides: Partial<MockEscrowTransaction> = {},
+): MockEscrowTransaction {
+  const now = new Date().toISOString();
+  const status = overrides.status ?? 'HELD';
+  const baseTimestamps = {
+    deposit_confirmed_at:
+      ['HELD', 'RELEASED', 'REFUNDED', 'DISPUTED'].includes(status) ? now : null,
+    released_at: status === 'RELEASED' ? now : null,
+    refunded_at: status === 'REFUNDED' ? now : null,
+    disputed_at: status === 'DISPUTED' ? now : null,
+  };
+  return {
+    id: '900',
+    collaboration_id: '7000',
+    status,
+    ...ESCROW_DEFAULTS,
+    ...baseTimestamps,
+    created_at: now,
+    updated_at: now,
+    ...overrides,
+  };
+}
+
+export const mockEscrowCreated = (
+  overrides: Partial<MockEscrowTransaction> = {},
+) => mockEscrowTransaction({ status: 'CREATED', ...overrides });
+export const mockEscrowDepositPending = (
+  overrides: Partial<MockEscrowTransaction> = {},
+) => mockEscrowTransaction({ status: 'DEPOSIT_PENDING', ...overrides });
+export const mockEscrowHeld = (
+  overrides: Partial<MockEscrowTransaction> = {},
+) => mockEscrowTransaction({ status: 'HELD', ...overrides });
+export const mockEscrowReleased = (
+  overrides: Partial<MockEscrowTransaction> = {},
+) => mockEscrowTransaction({ status: 'RELEASED', ...overrides });
+export const mockEscrowRefunded = (
+  overrides: Partial<MockEscrowTransaction> = {},
+) => mockEscrowTransaction({ status: 'REFUNDED', ...overrides });
+export const mockEscrowDisputed = (
+  overrides: Partial<MockEscrowTransaction> = {},
+) => mockEscrowTransaction({ status: 'DISPUTED', ...overrides });
+
 /** Common error body shape produced by the backend GlobalExceptionFilter. */
 export function makeErrorBody(
   code: string,
