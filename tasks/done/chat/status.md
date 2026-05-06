@@ -1,12 +1,19 @@
 # Status
 
-- State: product
-- Owner:
+- State: done
+- Owner: Igor
 - Created: 2026-05-06
-- Last Updated: 2026-05-06
-- Shipped:
+- Started: 2026-05-07
+- Last Updated: 2026-05-07
+- Shipped: 2026-05-07
 
 ## Notes
+
+- Shipped 2026-05-07: implementation pass landed in five commits on `develop` (schema migration → backend WS+REST → auto-create on confirm → frontend rebuild → BigInt-broadcast hotfix). All `CHAT-001..CHAT-092` requirements satisfied; `CHAT-100` (`tests-chat/`) remains a sibling in-progress folder.
+- Verification gates: `cd backend && npm test` clean (28 suites passed, 451 tests). `npm run build` clean. `cd web && npm run lint:tokens` clean (65 files). `vite build` clean. `npm test` clean (251 tests).
+- Manual smoke (worker = `mike.builder@example.com`, employer = `james@acmebuild.co.uk`): confirmed PENDING → CONFIRMED auto-creates conversation 5 with the SYSTEM welcome message; REST send returns 201; 11th send in 10s rejected with 429 RATE_LIMITED; attachment upload accepts PNG and rejects `application/zip` with `INVALID_MIME_TYPE`; an `attachment_ids[]` referencing another participant's row is rejected with `NOT_OWNER`; WS handshake disconnects bogus tokens.
+- Open Question Q1 left as default per spec (auto SYSTEM message *does* count toward the counterparty's unread). Re-evaluate after dogfooding.
+- Followups in `followups.md`: orphan `MessageAttachment` cron sweep (24 h) is explicit Edge-Case scope, deferred from this feature.
 
 - Drafted 2026-05-06 as the next feature after `tasks/done/collaborations-polish/`. Sequencing per `collaborations-polish/spec.md` Decisions Log: chat → escrow → reviews-write → staff-tools.
 - Build vs buy decided in spec `Decisions Log` (2026-05-06): **build, no third-party SDK**. Re-evaluate at MAU > ~50k or when voice / video are scoped.

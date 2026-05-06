@@ -116,6 +116,7 @@ model ClientProfile {
   referrals               Referral[]
   user_subscriptions      UserSubscription[]
   job_attachments         JobAttachment[]
+  message_attachments     MessageAttachment[]
 
   @@index([postcode_area])
   @@map("client_profile")
@@ -510,6 +511,7 @@ model Collaboration {
 
   reviews            Review[]
   escrow_transaction EscrowTransaction?
+  conversation       Conversation?
 
   @@index([worker_id])
   @@index([employer_id])
@@ -799,13 +801,16 @@ model JobAttachment {
 // ============================================
 
 model Conversation {
-  id              BigInt    @id @default(autoincrement())
-  last_message_at DateTime? @db.Timestamptz()
-  created_at      DateTime  @default(now()) @db.Timestamptz()
+  id               BigInt    @id @default(autoincrement())
+  collaboration_id BigInt?
+  last_message_at  DateTime? @db.Timestamptz()
+  created_at       DateTime  @default(now()) @db.Timestamptz()
 
-  participants ConversationParticipant[]
-  messages     Message[]
+  collaboration Collaboration?            @relation(fields: [collaboration_id], references: [id], onDelete: SetNull)
+  participants  ConversationParticipant[]
+  messages      Message[]
 
+  @@unique([collaboration_id])
   @@map("conversation")
 }
 
@@ -836,7 +841,31 @@ model Message {
 
   conversation Conversation            @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
   participant  ConversationParticipant @relation(fields: [conversation_id, sender_id], references: [conversation_id, account_id])
+  attachments  MessageAttachment[]
 
   @@index([conversation_id, created_at])
   @@map("message")
+}
+
+// ============================================
+// 30A. MESSAGE ATTACHMENT (file rows for chat — mirrors JobAttachment)
+// ============================================
+
+model MessageAttachment {
+  id             BigInt   @id @default(autoincrement())
+  message_id     BigInt?
+  uploaded_by_id BigInt
+  file_url       String   @db.VarChar(500)
+  original_name  String   @db.VarChar(255)
+  mime_type      String   @db.VarChar(100)
+  size_bytes     Int
+  created_at     DateTime @default(now()) @db.Timestamptz()
+
+  message  Message?      @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  uploader ClientProfile @relation(fields: [uploaded_by_id], references: [id], onDelete: Cascade)
+
+  @@index([message_id])
+  @@index([uploaded_by_id])
+  @@index([created_at])
+  @@map("message_attachment")
 }

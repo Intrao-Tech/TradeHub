@@ -42,6 +42,30 @@ export async function registerWorker(
   await page.waitForURL(/\/verify-email/);
 }
 
+/**
+ * Mirror of `registerWorker` for the EMPLOYER role. Picks "I'm hiring"
+ * on the role-card screen and fills the Company-name field instead of
+ * First/Surname. Lands on /verify-email like the worker flow.
+ *
+ * Unblocks the two-context Playwright specs that need an employer party
+ * (TEST-CHAT-200 seeded variant, TEST-CHAT-210/220/240, TEST-COLLAB-203
+ * authed half, TEST-JOBS-202..204).
+ */
+export async function registerEmployer(
+  page: Page,
+  opts: { email: string; password?: string; companyName?: string },
+) {
+  const password = opts.password ?? TEST_PASSWORD;
+  await page.goto('/register');
+  await page.getByText(/I'm hiring/i).click();
+  await page.getByLabel(/Email/i).fill(opts.email);
+  await page.getByLabel(/^Password$/i).fill(password);
+  await page.getByLabel(/Confirm password/i).fill(password);
+  await page.getByLabel(/Company name/i).fill(opts.companyName ?? 'Acme E2E Ltd');
+  await page.getByRole('button', { name: /Create account/i }).click();
+  await page.waitForURL(/\/verify-email/);
+}
+
 export async function confirmEmailViaApi(
   request: APIRequestContext,
   email: string,
@@ -84,6 +108,81 @@ export async function seedAdminViaApi(
   if (!res.ok()) {
     throw new Error(
       `seed-admin failed: ${res.status()} ${await res.text()}`,
+    );
+  }
+  return res.json();
+}
+
+/**
+ * Plant a JobPost owned by an already-registered employer (and
+ * optionally a JobApplication from a worker) via the test-only seed
+ * endpoint. Skips the "Post a job" Sheet so Jobs e2e scenarios can
+ * start from a known post / application state.
+ */
+export async function seedJobPostViaApi(
+  request: APIRequestContext,
+  opts: {
+    employerEmail: string;
+    title?: string;
+    payType?: 'DAY_RATE' | 'FIXED_PRICE';
+    dayRateMin?: number;
+    dayRateMax?: number;
+    fixedPrice?: number;
+    postcodeArea?: string;
+    durationDays?: number;
+    isUrgent?: boolean;
+    status?: 'OPEN' | 'CLOSED' | 'FILLED' | 'CANCELLED';
+    withApplicationFromWorkerEmail?: string;
+    applicationStatus?:
+      | 'PENDING'
+      | 'REVIEWED'
+      | 'SHORTLISTED'
+      | 'ACCEPTED'
+      | 'REJECTED'
+      | 'WITHDRAWN';
+  },
+): Promise<{
+  jobPostId: string;
+  employerAccountId: string;
+  applicationId: string | null;
+  workerAccountId: string | null;
+}> {
+  const res = await request.post(`${API}/test/seed/job-post`, { data: opts });
+  if (!res.ok()) {
+    throw new Error(
+      `seed-job-post failed: ${res.status()} ${await res.text()}`,
+    );
+  }
+  return res.json();
+}
+
+/**
+ * Plant a Collaboration + auto-created Conversation between two already-
+ * registered worker / employer accounts via `POST /test/seed/collab-
+ * conversation` (gated by NODE_ENV === 'test'). Used by the chat e2e
+ * specs (TEST-CHAT-200, 210, 220..222, 230..232, 240) to bypass the
+ * Jobs accept-flow UI fixture and start from a known thread state.
+ */
+export async function seedCollabConversationViaApi(
+  request: APIRequestContext,
+  opts: {
+    workerEmail: string;
+    employerEmail: string;
+    status?: 'PENDING' | 'CONFIRMED';
+    welcomeContent?: string;
+  },
+): Promise<{
+  collaborationId: string;
+  conversationId: string | null;
+  workerAccountId: string;
+  employerAccountId: string;
+}> {
+  const res = await request.post(`${API}/test/seed/collab-conversation`, {
+    data: opts,
+  });
+  if (!res.ok()) {
+    throw new Error(
+      `seed-collab-conversation failed: ${res.status()} ${await res.text()}`,
     );
   }
   return res.json();

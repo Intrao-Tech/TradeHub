@@ -2,9 +2,11 @@ import { type ReactNode, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { ArrowLeft, Menu, Moon, Sun, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useTheme } from '@/lib/theme';
+import { useUnreadCount } from '@/components/chat/useUnreadCount';
 
 export type NavItem = { to: string; label: string };
 
@@ -20,6 +22,9 @@ export function AppShell({ loggedIn, publicNav, privateNav, onLogout, children }
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const items = [...publicNav, ...(loggedIn ? privateNav : [])];
+  // Surface the chat unread badge in the nav whenever the user is logged in.
+  // Hook is no-op'd internally when there's no token.
+  const { total: unreadTotal } = useUnreadCount();
 
   return (
     <div className="min-h-screen bg-page text-fg">
@@ -32,7 +37,11 @@ export function AppShell({ loggedIn, publicNav, privateNav, onLogout, children }
 
           <nav className="hidden flex-1 items-center gap-1 md:flex">
             {items.map((n) => (
-              <NavItemLink key={n.to} item={n} />
+              <NavItemLink
+                key={n.to}
+                item={n}
+                badge={loggedIn && n.to === '/inbox' && unreadTotal > 0 ? unreadTotal : null}
+              />
             ))}
           </nav>
 
@@ -86,14 +95,19 @@ export function AppShell({ loggedIn, publicNav, privateNav, onLogout, children }
                 onClick={() => setMobileOpen(false)}
                 className={({ isActive }) =>
                   cn(
-                    'flex min-h-12 items-center rounded-md px-3 text-sm font-medium',
+                    'flex min-h-12 items-center justify-between rounded-md px-3 text-sm font-medium',
                     isActive
                       ? 'bg-primary text-primary-fg'
                       : 'text-fg-muted hover:bg-subtle hover:text-fg',
                   )
                 }
               >
-                {n.label}
+                <span>{n.label}</span>
+                {loggedIn && n.to === '/inbox' && unreadTotal > 0 ? (
+                  <Badge variant="default" className="ml-2 h-5 min-w-5 justify-center px-1.5 text-xs">
+                    {unreadTotal > 99 ? '99+' : unreadTotal}
+                  </Badge>
+                ) : null}
               </NavLink>
             ))}
             {!loggedIn && (
@@ -126,20 +140,25 @@ export function AppShell({ loggedIn, publicNav, privateNav, onLogout, children }
 }
 AppShell.displayName = 'AppShell';
 
-function NavItemLink({ item }: { item: NavItem }) {
+function NavItemLink({ item, badge }: { item: NavItem; badge?: number | null }) {
   return (
     <NavLink
       to={item.to}
       className={({ isActive }) =>
         cn(
-          'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+          'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
           isActive
             ? 'bg-subtle text-fg'
             : 'text-fg-muted hover:bg-subtle hover:text-fg',
         )
       }
     >
-      {item.label}
+      <span>{item.label}</span>
+      {badge != null && badge > 0 ? (
+        <Badge variant="default" className="h-5 min-w-5 justify-center px-1.5 text-xs">
+          {badge > 99 ? '99+' : badge}
+        </Badge>
+      ) : null}
     </NavLink>
   );
 }

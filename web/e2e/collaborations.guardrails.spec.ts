@@ -18,7 +18,9 @@ import { expect, test } from '@playwright/test';
 import {
   confirmEmailViaApi,
   loginViaForm,
+  registerEmployer,
   registerWorker,
+  seedCollabConversationViaApi,
   TEST_PASSWORD,
 } from './util';
 
@@ -74,23 +76,45 @@ test.describe('TEST-COLLAB-203 Collaborations guardrails (COLLAB-001 / COLLAB-02
     expect(offenders).toEqual([]);
   });
 
-  test.fixme(
-    'TEST-COLLAB-203 / COLLAB-022 — /collaborations/:id has zero escrow mutation buttons + zero <textarea>',
-    async () => {
-      // Unblock when:
-      //   1. e2e/util.ts gains `registerEmployer()`.
-      //   2. A test-only API endpoint exists to plant a Collaboration row
-      //      between two seeded parties (or the Jobs accept-flow can be
-      //      driven end-to-end from Playwright once `registerEmployer()`
-      //      lands — that already routes to /collaborations/:id).
-      // Steps:
-      //   - register + verify worker.
-      //   - seat a collab via the planted row.
-      //   - visit /collaborations/<id>.
-      //   - assert page.locator('pre').count() === 0
-      //   - for each /create escrow|fund|confirm deposit|^release$|^refund$/i
-      //     — assert page.getByRole('button', { name: re }).count() === 0
-      //   - assert page.locator('textarea').count() === 0
-    },
-  );
+  test('TEST-COLLAB-203 / COLLAB-022 — /collaborations/:id has zero escrow mutation buttons + zero <textarea>', async ({
+    page,
+    request,
+  }) => {
+    const workerEmail = `pw-collab-203-w-${Date.now()}@example.com`;
+    const employerEmail = `pw-collab-203-e-${Date.now()}@example.com`;
+    await registerWorker(page, { email: workerEmail });
+    await confirmEmailViaApi(request, workerEmail);
+    const empCtx = await page.context().browser()!.newContext();
+    const ep = await empCtx.newPage();
+    try {
+      await registerEmployer(ep, { email: employerEmail });
+      await confirmEmailViaApi(request, employerEmail);
+    } finally {
+      await empCtx.close();
+    }
+    const seeded = await seedCollabConversationViaApi(request, {
+      workerEmail,
+      employerEmail,
+    });
+
+    await loginViaForm(page, workerEmail, TEST_PASSWORD);
+    await page.waitForURL(/\/profile/);
+    await page.goto(`/collaborations/${seeded.collaborationId}`);
+    await page.waitForLoadState('networkidle');
+
+    expect(await page.locator('pre').count()).toBe(0);
+    // Escrow mutation buttons are explicitly out of scope on the collab
+    // surface — they live on /escrow/:id.
+    for (const re of [
+      /create escrow/i,
+      /^fund$/i,
+      /confirm deposit/i,
+      /^release$/i,
+      /^refund$/i,
+    ]) {
+      await expect(page.getByRole('button', { name: re })).toHaveCount(0);
+    }
+    // Chat owns message composition — no textarea on the collab page.
+    expect(await page.locator('textarea').count()).toBe(0);
+  });
 });

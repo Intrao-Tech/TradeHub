@@ -8,6 +8,7 @@
 
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
+import type { Prisma } from '@prisma/client';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 
 export const TEST_PASSWORD = 'TestPass1!aZ#';
@@ -1002,6 +1003,105 @@ export async function seedEscrowTransaction(
       released_at: opts.releasedAt ?? (status === 'RELEASED' ? new Date() : null),
       refunded_at: opts.refundedAt ?? (status === 'REFUNDED' ? new Date() : null),
       disputed_at: opts.disputedAt ?? (status === 'DISPUTED' ? new Date() : null),
+    },
+  });
+}
+
+// ── TEST-CHAT-003: Chat factory extensions ────────────────────────
+//
+// `seedConversation` / `seedMessage` / `seedMessageAttachment` commit
+// through Prisma so the e2e specs can drive the conversation REST + WS
+// surface against real rows. Names mirror the factory naming used by
+// the Profiles / Jobs / Collaborations specs.
+
+export type SeedConversationOpts = {
+  /** Two accounts for direct / collab-bound chat. Group chat is out of scope. */
+  participantAccountIds: bigint[];
+  collaborationId?: bigint | null;
+  lastMessageAt?: Date | null;
+};
+
+export async function seedConversation(
+  prisma: PrismaService,
+  opts: SeedConversationOpts,
+) {
+  if (opts.participantAccountIds.length !== 2) {
+    throw new Error(
+      'seedConversation: exactly two participants required (group chat is out of scope)',
+    );
+  }
+  return prisma.conversation.create({
+    data: {
+      collaboration_id: opts.collaborationId ?? null,
+      last_message_at: opts.lastMessageAt ?? null,
+      participants: {
+        create: opts.participantAccountIds.map((account_id) => ({
+          account_id,
+        })),
+      },
+    },
+    include: { participants: true },
+  });
+}
+
+export type SeedMessageOpts = {
+  conversationId: bigint;
+  senderId: bigint;
+  content?: string;
+  messageType?: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: Date;
+};
+
+export async function seedMessage(
+  prisma: PrismaService,
+  opts: SeedMessageOpts,
+) {
+  const { Prisma } =
+    require('@prisma/client') as typeof import('@prisma/client');
+  const data: Record<string, unknown> = {
+    conversation_id: opts.conversationId,
+    sender_id: opts.senderId,
+    content: opts.content ?? 'hi',
+    message_type: opts.messageType ?? 'TEXT',
+    metadata:
+      opts.metadata != null
+        ? (opts.metadata as Prisma.InputJsonValue)
+        : (Prisma.JsonNull as unknown),
+  };
+  if (opts.createdAt) data.created_at = opts.createdAt;
+  return prisma.message.create({
+    data: data as Parameters<typeof prisma.message.create>[0]['data'],
+  });
+}
+
+export type SeedMessageAttachmentOpts = {
+  /** Pass `null` (or omit) for the orphan / "uploaded but unattached" path. */
+  messageId?: bigint | null;
+  /** ClientProfile.id == Account.id by the shared-PK pattern. */
+  uploadedById: bigint;
+  fileUrl?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  originalName?: string;
+};
+
+export async function seedMessageAttachment(
+  prisma: PrismaService,
+  opts: SeedMessageAttachmentOpts,
+) {
+  return prisma.messageAttachment.create({
+    data: {
+      message_id: opts.messageId ?? null,
+      uploaded_by_id: opts.uploadedById,
+      file_url:
+        opts.fileUrl ??
+        `/uploads/message-attachments/seed-${crypto
+          .randomBytes(3)
+          .toString('hex')}.png`,
+      mime_type: opts.mimeType ?? 'image/png',
+      size_bytes: opts.sizeBytes ?? 12_345,
+      original_name: opts.originalName ?? 'seed-attachment.png',
     },
   });
 }

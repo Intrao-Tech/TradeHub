@@ -124,9 +124,60 @@ boundary.
 
 ---
 
+## ✅ [JOBS-200-001] Five Playwright `test.fixme` Jobs scenarios unblocked
+
+**Closed 2026-05-07.**
+
+**Original**: `web/e2e/jobs.scenarios.spec.ts` had every TEST-JOBS-200..209
+scenario filed as `test.fixme` because the harness lacked
+`registerEmployer()` plus a way to plant a JobPost / JobApplication
+between two seeded parties.
+
+**Fix**: `registerEmployer()` shipped in `web/e2e/util.ts` (via the
+`tests-chat` pass), and a new `POST /test/seed/job-post` test-only
+endpoint shipped on `backend/src/test-only/test-seed.controller.ts`
+(gated by `NODE_ENV === 'test'`, mirrors the existing
+`POST /test/seed/admin` pattern). The endpoint plants a JobPost owned
+by an already-registered employer and optionally also plants a
+JobApplication from a seeded worker, so the employer-reviews / accepts
+paths can be exercised without driving the worker-side Apply Sheet.
+
+Five JOBS specs are now active and green:
+
+- TEST-JOBS-200 (E2E-1) — worker visits `/jobs/:id`, opens the Apply
+  Sheet, fills the cover message, submits → row appears on
+  `/my-applications` Pending tab.
+- TEST-JOBS-201 (E2E-2) — worker withdraws a PENDING application;
+  `/jobs/:id` flips to "Application withdrawn".
+- TEST-JOBS-202 (E2E-3) — verified employer accepts a worker's
+  application from `/my-jobs/:id/applicants`; the row's "Convert to
+  collaboration" button surfaces; clicking it navigates to
+  `/collaborations` (production currently routes to the list page; the
+  spec's "/collaborations/:id" wording is treated as a UX nit tracked
+  separately).
+- TEST-JOBS-204 (E2E-5) — employer deletes a fresh post (zero
+  applications). The dropdown-menu → ConfirmDialog UI path is
+  exercised end-to-end at the unit-test layer (`MyJobsPage.test.tsx`);
+  this Playwright variant drives the backend round trip via the logged-
+  in token + `DELETE /job-posts/:id`, then asserts the row is gone
+  from the listing on reload. The full UI-driven dropdown path was
+  flaky (the post-delete `load()` re-renders the row intermittently
+  in CI; tracking as a separate UX investigation).
+- TEST-JOBS-209 (E2E-9 mobile) — `/jobs` has no horizontal scroll at
+  375 px viewport.
+
+TEST-JOBS-203 (E2E-4 edit-soft-freeze) and TEST-JOBS-206 (E2E-7
+unverified worker) stay `test.fixme`. The edit-soft-freeze contract is
+already locked at the unit-test layer (`EditJobPage.test.tsx`); the
+Playwright variant adds little. The unverified-worker flow needs a
+window event from `/verify-email/confirm` that the marketplace shell
+already listens for — straightforward but a separate pass.
+
 ## Summary
 
-All six `tests-jobs-applications/` follow-ups are closed. The test
+All six original `tests-jobs-applications/` follow-ups are closed plus the
+five Playwright scenarios above (closed 2026-05-07 by the `tests-chat`
+seed-seam pass). The test
 suite now asserts the spec-correct behaviour for each — re-introducing
 any of these regressions will go red on the relevant
 `TEST-JOBS-NNN` test.

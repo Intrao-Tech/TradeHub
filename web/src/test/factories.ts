@@ -876,6 +876,188 @@ export const mockEscrowDisputed = (
   overrides: Partial<MockEscrowTransaction> = {},
 ) => mockEscrowTransaction({ status: 'DISPUTED', ...overrides });
 
+// ── TEST-CHAT-004: Chat mock builders ─────────────────────────────
+//
+// Shapes mirror the production payloads from
+// `backend/src/conversation/conversation.service.ts` (the inbox row,
+// `GET /conversations/:id`, and `GET /conversations/:id/messages`) plus
+// the new `MessageAttachment` row shipped by the parent feature. Override
+// pattern matches the rest of this file.
+
+export type MockMessageAttachment = {
+  id: string;
+  message_id: string | null;
+  uploaded_by_id: string;
+  file_url: string | null;
+  download_url: string | null;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  created_at: string;
+};
+
+export function mockMessageAttachment(
+  overrides: Partial<MockMessageAttachment> = {},
+): MockMessageAttachment {
+  const id = overrides.id ?? '4001';
+  return {
+    id,
+    message_id: overrides.message_id ?? null,
+    uploaded_by_id: overrides.uploaded_by_id ?? '101',
+    file_url: overrides.file_url ?? `/uploads/message-attachments/${id}.png`,
+    download_url:
+      overrides.download_url ?? `/api/message-attachments/${id}/download`,
+    original_name: overrides.original_name ?? 'test.png',
+    mime_type: overrides.mime_type ?? 'image/png',
+    size_bytes: overrides.size_bytes ?? 12_345,
+    created_at: overrides.created_at ?? new Date().toISOString(),
+  };
+}
+
+export type MockChatMessage = {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  content: string;
+  message_type: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  attachments: MockMessageAttachment[];
+};
+
+export function mockMessage(
+  overrides: Partial<MockChatMessage> = {},
+): MockChatMessage {
+  const now = overrides.created_at ?? new Date().toISOString();
+  return {
+    id: overrides.id ?? '5001',
+    conversation_id: overrides.conversation_id ?? '6001',
+    sender_id: overrides.sender_id ?? '101',
+    content: overrides.content ?? 'hello',
+    message_type: overrides.message_type ?? 'TEXT',
+    metadata: overrides.metadata ?? {},
+    created_at: now,
+    attachments: overrides.attachments ?? [],
+  };
+}
+
+export type MockOtherParticipant = {
+  account_id: string;
+  client_profile_id: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  verification_level: string | null;
+};
+
+export type MockConversationDetail = {
+  id: string;
+  collaboration_id: string | null;
+  collaboration: {
+    id: string;
+    status: string;
+    worker_id: string;
+    employer_id: string;
+  } | null;
+  participants: Array<{
+    account_id: string;
+    last_read_at?: string | null;
+    account: {
+      client_profile?: {
+        id?: string;
+        display_name?: string | null;
+        avatar_url?: string | null;
+        verification_level?: string | null;
+      } | null;
+    };
+  }>;
+  last_message_at: string | null;
+};
+
+export function mockConversation(
+  overrides: Partial<MockConversationDetail> = {},
+): MockConversationDetail {
+  const now = new Date().toISOString();
+  return {
+    id: overrides.id ?? '6001',
+    collaboration_id: overrides.collaboration_id ?? null,
+    collaboration: overrides.collaboration ?? null,
+    participants:
+      overrides.participants ?? [
+        {
+          account_id: '101',
+          last_read_at: null,
+          account: {
+            client_profile: {
+              id: '101',
+              display_name: 'Mike Builder',
+              avatar_url: null,
+              verification_level: 'BASIC',
+            },
+          },
+        },
+        {
+          account_id: '202',
+          last_read_at: null,
+          account: {
+            client_profile: {
+              id: '202',
+              display_name: 'Acme Build',
+              avatar_url: null,
+              verification_level: 'BASIC',
+            },
+          },
+        },
+      ],
+    last_message_at: overrides.last_message_at ?? now,
+  };
+}
+
+export type MockInboxItem = {
+  conversation: {
+    id: string;
+    collaboration_id: string | null;
+    last_message_at: string | null;
+    created_at: string;
+  };
+  collaboration: {
+    id: string;
+    status: string;
+    worker_id: string;
+    employer_id: string;
+  } | null;
+  other_participant: MockOtherParticipant | null;
+  last_message: MockChatMessage | null;
+  unread_count: number;
+};
+
+export function mockInboxItem(
+  overrides: Partial<MockInboxItem> = {},
+): MockInboxItem {
+  const now = overrides.conversation?.last_message_at ?? new Date().toISOString();
+  return {
+    conversation: {
+      id: overrides.conversation?.id ?? '6001',
+      collaboration_id: overrides.conversation?.collaboration_id ?? null,
+      last_message_at: now,
+      created_at: overrides.conversation?.created_at ?? now,
+    },
+    collaboration: overrides.collaboration ?? null,
+    other_participant:
+      overrides.other_participant ?? {
+        account_id: '202',
+        client_profile_id: '202',
+        display_name: 'Acme Build',
+        avatar_url: null,
+        verification_level: 'BASIC',
+      },
+    last_message:
+      overrides.last_message === undefined
+        ? mockMessage({ conversation_id: overrides.conversation?.id ?? '6001' })
+        : overrides.last_message,
+    unread_count: overrides.unread_count ?? 0,
+  };
+}
+
 /** Common error body shape produced by the backend GlobalExceptionFilter. */
 export function makeErrorBody(
   code: string,

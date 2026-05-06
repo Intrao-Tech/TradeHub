@@ -377,8 +377,9 @@ describe('TEST-COLLAB-113 — COLLAB-022 escrow summary read-only', () => {
 // ════════════════════════════════════════════════════════════════════
 
 describe('TEST-COLLAB-114 — COLLAB-023 chat summary card', () => {
-  test('TEST-COLLAB-114 / COLLAB-023 — Conversation card rendered with footer link to /inbox', async () => {
+  test('TEST-COLLAB-114 / COLLAB-023 — no linked thread → Conversation card with placeholder /inbox link', async () => {
     withCollaboration({ status: 'CONFIRMED' });
+    // Default conversations handler returns an empty inbox.
     const account = await asWorker();
     renderWithProfile(withRoute(), { route: '/collaborations/42', account });
     await waitFor(() =>
@@ -386,6 +387,50 @@ describe('TEST-COLLAB-114 — COLLAB-023 chat summary card', () => {
     );
     const link = screen.getByRole('link', { name: /open inbox/i });
     expect(link).toHaveAttribute('href', '/inbox');
+  });
+
+  test('TEST-COLLAB-114 / CHAT-013 — linked thread → "Open chat" deep-links to /inbox/<conversationId>', async () => {
+    withCollaboration({ status: 'CONFIRMED' });
+    server.use(
+      http.get(`${API}/conversations`, () =>
+        HttpResponse.json({
+          items: [
+            {
+              conversation: {
+                id: '7777',
+                collaboration_id: '42',
+                last_message_at: new Date().toISOString(),
+                created_at: new Date().toISOString(),
+              },
+              collaboration: {
+                id: '42',
+                status: 'CONFIRMED',
+                worker_id: MY_ID,
+                employer_id: '900',
+              },
+              other_participant: {
+                account_id: '900',
+                client_profile_id: '900',
+                display_name: 'Acme Build',
+                avatar_url: null,
+                verification_level: 'BASIC',
+              },
+              last_message: null,
+              unread_count: 4,
+            },
+          ],
+          total: 1,
+          page: 1,
+          limit: 100,
+        }),
+      ),
+    );
+    const account = await asWorker();
+    renderWithProfile(withRoute(), { route: '/collaborations/42', account });
+    const link = await screen.findByRole('link', { name: /open chat/i });
+    expect(link).toHaveAttribute('href', '/inbox/7777');
+    // Per-collab unread badge surfaces.
+    expect(screen.getByText(/4 unread/i)).toBeInTheDocument();
   });
 
   test('TEST-COLLAB-114 / COLLAB-023 — no <textarea> anywhere on the page (chat owns message composition)', async () => {

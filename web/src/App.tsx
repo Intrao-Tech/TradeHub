@@ -226,6 +226,7 @@ function MarketplaceRouter() {
           <Route path="/my-jobs/:id/applicants" element={<Protected loggedIn={loggedIn}><MyJobApplicantsPage /></Protected>} />
           <Route path="/my-jobs/:id/edit" element={<Protected loggedIn={loggedIn}><EditJobPage /></Protected>} />
           <Route path="/inbox" element={<Protected loggedIn={loggedIn}><InboxPage /></Protected>} />
+          <Route path="/inbox/:conversationId" element={<Protected loggedIn={loggedIn}><InboxPage /></Protected>} />
           <Route path="/settings/security" element={<Protected loggedIn={loggedIn}><SettingsSecurityPage /></Protected>} />
 
           {/* Marketplace stragglers landing on /internal/* — punt them to the staff subdomain */}
