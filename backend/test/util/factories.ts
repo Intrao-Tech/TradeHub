@@ -684,6 +684,183 @@ export async function seedJobApplication(
   });
 }
 
+// ── TEST-VER-002: Verification factory extensions ─────────────────
+//
+// `seedVerifiedWorker` / `seedVerifiedEmployer` commit a worker/employer
+// already at BASIC with the IDENTITY_VERIFIED milestone seeded so e2e specs
+// can skip the Stripe round-trip. `seedDocumentForReview` and
+// `seedOnDutyStaff` cover the staff-decision and assignment surfaces.
+// `seedMilestone` is the "bypass-the-engine" helper for read-projection
+// tests — it writes the milestone directly so we can assert
+// `getPublicLevel` flag mapping without re-running the promotion chain.
+
+export async function seedVerifiedWorker(
+  prisma: PrismaService,
+  overrides: { email?: string; password?: string; displayName?: string } = {},
+): Promise<SeededAccount & { milestoneId: bigint }> {
+  const account = await seedActiveWorker(prisma, overrides);
+  await prisma.clientProfile.update({
+    where: { id: account.id },
+    data: { verification_level: 'BASIC' },
+  });
+  const milestone = await prisma.verificationMilestone.create({
+    data: {
+      client_profile_id: account.id,
+      milestone_type: 'IDENTITY_VERIFIED',
+      evidence_ref: `vs_seed_${crypto.randomBytes(4).toString('hex')}`,
+    },
+  });
+  return { ...account, milestoneId: milestone.id };
+}
+
+export async function seedVerifiedEmployer(
+  prisma: PrismaService,
+  overrides: {
+    email?: string;
+    password?: string;
+    displayName?: string;
+    companyName?: string;
+    companyNumber?: string;
+  } = {},
+): Promise<SeededAccount & { milestoneId: bigint }> {
+  const account = await seedActiveEmployer(prisma, {
+    email: overrides.email,
+    password: overrides.password,
+    displayName: overrides.displayName,
+    companyName: overrides.companyName ?? 'Acme Limited',
+  });
+  await prisma.clientProfile.update({
+    where: { id: account.id },
+    data: { verification_level: 'BASIC' },
+  });
+  await prisma.employerProfile.update({
+    where: { id: account.id },
+    data: {
+      company_name: overrides.companyName ?? 'Acme Limited',
+      company_number: overrides.companyNumber ?? '12345678',
+    },
+  });
+  const milestone = await prisma.verificationMilestone.create({
+    data: {
+      client_profile_id: account.id,
+      milestone_type: 'IDENTITY_VERIFIED',
+      evidence_ref: `vs_seed_${crypto.randomBytes(4).toString('hex')}`,
+    },
+  });
+  return { ...account, milestoneId: milestone.id };
+}
+
+export type SeedDocumentOpts = {
+  ownerId: bigint;
+  docType: string;
+  status?: 'PENDING' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED';
+  assignedTo?: bigint | null;
+  metadata?: Record<string, unknown> | null;
+  rejectionReason?: string | null;
+  fileUrl?: string;
+};
+
+export async function seedDocumentForReview(
+  prisma: PrismaService,
+  opts: SeedDocumentOpts,
+): Promise<{ id: bigint; doc_type: string; status: string }> {
+  const { Prisma } =
+    require('@prisma/client') as typeof import('@prisma/client');
+  const doc = await prisma.document.create({
+    data: {
+      client_profile: { connect: { id: opts.ownerId } },
+      doc_type: opts.docType,
+      file_url:
+        opts.fileUrl ??
+        `/uploads/seed-${opts.ownerId}-${crypto.randomBytes(3).toString('hex')}.pdf`,
+      status: opts.status ?? 'PENDING',
+      ...(opts.assignedTo != null
+        ? { assignee: { connect: { id: opts.assignedTo } } }
+        : {}),
+      ...(opts.rejectionReason != null
+        ? { rejection_reason: opts.rejectionReason }
+        : {}),
+      metadata:
+        opts.metadata != null
+          ? (opts.metadata as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+    },
+  });
+  return { id: doc.id, doc_type: doc.doc_type, status: doc.status };
+}
+
+export async function seedOnDutyStaff(
+  prisma: PrismaService,
+  opts: {
+    role?: 'ADMIN' | 'MODERATOR';
+    isOnDuty?: boolean;
+    assignedDocCount?: number;
+    email?: string;
+    password?: string;
+    displayName?: string;
+  } = {},
+): Promise<SeededAccount & { staffId: bigint }> {
+  const role = opts.role ?? 'MODERATOR';
+  const seed =
+    role === 'ADMIN'
+      ? await seedAdmin(prisma, {
+          email: opts.email,
+          password: opts.password,
+          displayName: opts.displayName,
+        })
+      : await seedModerator(prisma, {
+          email: opts.email,
+          password: opts.password,
+        });
+
+  await prisma.staffMember.update({
+    where: { id: seed.id },
+    data: { is_on_duty: opts.isOnDuty ?? true },
+  });
+
+  if (opts.assignedDocCount) {
+    // Create N owner accounts to host the assigned documents — they need
+    // ClientProfiles to satisfy the FK on document.client_profile_id.
+    for (let i = 0; i < opts.assignedDocCount; i += 1) {
+      const owner = await seedActiveWorker(prisma);
+      await prisma.document.create({
+        data: {
+          client_profile_id: owner.id,
+          doc_type: 'CSCS_CARD',
+          file_url: `/uploads/preassigned-${seed.id}-${i}.pdf`,
+          status: 'PENDING',
+          assigned_to: seed.id,
+        },
+      });
+    }
+  }
+
+  return { ...seed, staffId: seed.id };
+}
+
+export async function seedMilestone(
+  prisma: PrismaService,
+  opts: {
+    clientProfileId: bigint;
+    type: string;
+    evidenceRef?: string | null;
+    staffMemberId?: bigint | null;
+    notes?: string | null;
+  },
+): Promise<{ id: bigint }> {
+  const data: Record<string, unknown> = {
+    client_profile_id: opts.clientProfileId,
+    milestone_type: opts.type,
+  };
+  if (opts.evidenceRef != null) data.evidence_ref = opts.evidenceRef;
+  if (opts.notes != null) data.notes = opts.notes;
+  if (opts.staffMemberId != null) data.staff_member_id = opts.staffMemberId;
+  const m = await prisma.verificationMilestone.create({
+    data: data as Parameters<typeof prisma.verificationMilestone.create>[0]['data'],
+  });
+  return { id: m.id };
+}
+
 /** For unit tests of the Google flow — Google-only account, no password set. */
 export async function seedGoogleOnlyAccount(
   prisma: PrismaService,

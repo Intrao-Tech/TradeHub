@@ -448,6 +448,211 @@ export function mockJobApplication(
   };
 }
 
+// ── TEST-VER-003: Verification mock builders ────────────────────────
+//
+// Mirrors `GET /verification/levels/:id`, `GET /verification/me`,
+// `GET /verification/ladder/:id`, and the staff queue payloads. Override
+// pattern matches the rest of this file: spread + per-key overrides.
+
+export type MockVerificationFlags = {
+  identity_verified: boolean;
+  insurance_approved: boolean;
+  company_house_verified: boolean;
+  company_letterhead_approved: boolean;
+  right_to_work_verified: boolean;
+  hmrc_cis_verified: boolean;
+  certification_doc_types: string[];
+};
+
+export type MockVerificationLevels = {
+  verification_level: 'UNVERIFIED' | 'BASIC' | 'CERTIFIED' | 'PREMIUM';
+  last_evaluated_at: string;
+  flags: MockVerificationFlags;
+  reviews: { count: number; average: string | null };
+};
+
+export function mockVerificationLevels(
+  overrides: Partial<MockVerificationLevels> & {
+    flags?: Partial<MockVerificationFlags>;
+    reviews?: Partial<MockVerificationLevels['reviews']>;
+  } = {},
+): MockVerificationLevels {
+  return {
+    verification_level: overrides.verification_level ?? 'BASIC',
+    last_evaluated_at: overrides.last_evaluated_at ?? new Date().toISOString(),
+    flags: {
+      identity_verified: true,
+      insurance_approved: false,
+      company_house_verified: false,
+      company_letterhead_approved: false,
+      right_to_work_verified: false,
+      hmrc_cis_verified: false,
+      certification_doc_types: [],
+      ...(overrides.flags ?? {}),
+    },
+    reviews: {
+      count: 0,
+      average: null,
+      ...(overrides.reviews ?? {}),
+    },
+  };
+}
+
+export type MockVerificationMilestone = {
+  milestone_type: string;
+  achieved_at: string;
+  expires_at: string | null;
+  evidence_ref: string | null;
+};
+
+export type MockVerificationMe = {
+  verification_level: 'UNVERIFIED' | 'BASIC' | 'CERTIFIED' | 'PREMIUM';
+  milestones: MockVerificationMilestone[];
+  documents: {
+    pending: MockDocument[];
+    in_review: MockDocument[];
+    approved: MockDocument[];
+    rejected: MockDocument[];
+  };
+  next_action: { rung: string; label: string; doc_types?: string[] } | null;
+};
+
+export function mockVerificationMe(
+  overrides: Partial<MockVerificationMe> = {},
+): MockVerificationMe {
+  return {
+    verification_level: 'UNVERIFIED',
+    milestones: [],
+    documents: { pending: [], in_review: [], approved: [], rejected: [] },
+    next_action: { rung: 'BASIC', label: 'Verify your identity' },
+    ...overrides,
+  };
+}
+
+export type MockLadderRung = {
+  level: 'UNVERIFIED' | 'BASIC' | 'CERTIFIED' | 'PREMIUM';
+  state: 'DONE' | 'IN_PROGRESS' | 'NOT_STARTED' | 'COMING_SOON';
+  label: string;
+  next_doc_types?: string[];
+  estimated_time?: string;
+  completed_at?: string | null;
+};
+
+export type MockVerificationLadder = {
+  current_level: 'UNVERIFIED' | 'BASIC' | 'CERTIFIED' | 'PREMIUM';
+  rungs: MockLadderRung[];
+};
+
+export function mockVerificationLadder(
+  overrides: Partial<MockVerificationLadder> = {},
+): MockVerificationLadder {
+  return {
+    current_level: 'UNVERIFIED',
+    rungs: [
+      { level: 'UNVERIFIED', state: 'DONE', label: 'Account created' },
+      {
+        level: 'BASIC',
+        state: 'NOT_STARTED',
+        label: 'Verify your identity with Stripe',
+        estimated_time: 'Usually takes 2–5 minutes',
+      },
+      {
+        level: 'CERTIFIED',
+        state: 'NOT_STARTED',
+        label: 'Upload a trade certification (CSCS / Gas Safe / NICEIC / FIRAS)',
+        next_doc_types: ['CSCS_CARD', 'GAS_SAFE_CERT', 'NICEIC_CERT', 'FIRAS_CERT'],
+      },
+      {
+        level: 'PREMIUM',
+        state: 'COMING_SOON',
+        label: 'Coming soon — requires 5+ verified reviews',
+      },
+    ],
+    ...overrides,
+  };
+}
+
+export type MockQueueItem = {
+  document: {
+    id: string;
+    doc_type: string;
+    file_url: string;
+    status: 'PENDING' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED';
+    rejection_reason: string | null;
+    metadata: Record<string, unknown> | null;
+    created_at: string;
+    reviewed_at: string | null;
+    reviewed_by: string | null;
+  };
+  uploader: {
+    id: string;
+    display_name: string;
+    role: 'WORKER' | 'EMPLOYER' | 'UNKNOWN';
+  };
+  assignee: { id: string; display_name: string } | null;
+};
+
+export type MockQueueResponse = {
+  items: MockQueueItem[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+export function mockQueueItem(
+  overrides: Partial<MockQueueItem> & {
+    document?: Partial<MockQueueItem['document']>;
+    uploader?: Partial<MockQueueItem['uploader']>;
+  } = {},
+): MockQueueItem {
+  return {
+    document: {
+      id: '101',
+      doc_type: 'CSCS_CARD',
+      file_url: '/uploads/test.pdf',
+      status: 'PENDING',
+      rejection_reason: null,
+      metadata: null,
+      created_at: new Date().toISOString(),
+      reviewed_at: null,
+      reviewed_by: null,
+      ...(overrides.document ?? {}),
+    },
+    uploader: {
+      id: '42',
+      display_name: 'Mike Builder',
+      role: 'WORKER',
+      ...(overrides.uploader ?? {}),
+    },
+    assignee: overrides.assignee === undefined ? null : overrides.assignee,
+  };
+}
+
+export function mockQueueResponse(
+  overrides: Partial<MockQueueResponse> & { items?: MockQueueItem[] } = {},
+): MockQueueResponse {
+  const items = overrides.items ?? [mockQueueItem()];
+  return {
+    items,
+    total: overrides.total ?? items.length,
+    page: overrides.page ?? 1,
+    limit: overrides.limit ?? 50,
+  };
+}
+
+export type MockProviders = {
+  stripe_identity: boolean;
+  companies_house: boolean;
+};
+
+export function mockProviders(overrides: Partial<MockProviders> = {}): MockProviders {
+  return {
+    stripe_identity: true,
+    companies_house: true,
+    ...overrides,
+  };
+}
+
 /** Common error body shape produced by the backend GlobalExceptionFilter. */
 export function makeErrorBody(
   code: string,
