@@ -8,9 +8,7 @@
 
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
-import {
-  MESSAGE_ATTACHMENT_UPLOAD_SUBDIR,
-} from '../../src/message-attachment/message-attachment.constants';
+import { MESSAGE_ATTACHMENT_UPLOAD_SUBDIR } from '../../src/message-attachment/message-attachment.constants';
 
 const ROOT = process.cwd();
 

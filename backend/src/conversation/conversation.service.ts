@@ -192,10 +192,10 @@ export class ConversationService {
       created.id,
       msg as unknown as Record<string, unknown>,
     );
-    this.chatGateway.emitConversationCreated(
-      created.id,
-      [senderId, recipientId],
-    );
+    this.chatGateway.emitConversationCreated(created.id, [
+      senderId,
+      recipientId,
+    ]);
 
     return created;
   }
@@ -254,10 +254,7 @@ export class ConversationService {
    * Call after `ensureCollaborationConversation` has returned a non-null id
    * (i.e., the outer transaction committed).
    */
-  async announceConversationCreated(
-    conversationId: bigint,
-    accountIds: bigint[],
-  ) {
+  announceConversationCreated(conversationId: bigint, accountIds: bigint[]) {
     for (const accountId of accountIds) {
       void this.chatGateway.joinConversationRoom(accountId, conversationId);
     }
@@ -440,7 +437,7 @@ export class ConversationService {
 
     const now = new Date();
     const messageType = dto.message_type ?? 'TEXT';
-    const baseMetadata = (dto.metadata ?? {}) as Record<string, unknown>;
+    const baseMetadata = dto.metadata ?? {};
     if (dto.client_id) baseMetadata.client_id = dto.client_id;
     const metadata = baseMetadata as Prisma.InputJsonValue;
 

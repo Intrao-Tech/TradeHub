@@ -35,9 +35,7 @@ function build(): MockedDeps {
   const attachments = new MessageAttachmentService(prisma);
   prisma.$transaction.mockImplementation(((cb: unknown) => {
     if (typeof cb === 'function') {
-      return Promise.resolve(
-        (cb as (tx: typeof prisma) => unknown)(prisma),
-      );
+      return Promise.resolve((cb as (tx: typeof prisma) => unknown)(prisma));
     }
     return Promise.resolve(cb);
   }) as unknown as typeof prisma.$transaction);

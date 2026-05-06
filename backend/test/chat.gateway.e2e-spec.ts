@@ -186,7 +186,10 @@ describe('TEST-CHAT-080..088 ChatGateway WS e2e', () => {
       sockA.emit('join_conversation', { conversation_id: String(conv.id) });
       await new Promise((r) => setTimeout(r, 100));
       const gw = h.app.get(ChatGateway);
-      const got = waitForEvent<{ conversation_id: string }>(sockA, 'new_message');
+      const got = waitForEvent<{ conversation_id: string }>(
+        sockA,
+        'new_message',
+      );
       gw.emitNewMessage(conv.id, { id: 1, content: 'hi' });
       const payload = await got;
       expect(payload.conversation_id).toBe(String(conv.id));

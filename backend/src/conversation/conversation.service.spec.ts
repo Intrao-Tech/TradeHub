@@ -32,9 +32,7 @@ function build(): MockedDeps {
   // test pattern so the callback runs against the deep-mocked client.
   prisma.$transaction.mockImplementation(((cb: unknown) => {
     if (typeof cb === 'function') {
-      return Promise.resolve(
-        (cb as (tx: typeof prisma) => unknown)(prisma),
-      );
+      return Promise.resolve((cb as (tx: typeof prisma) => unknown)(prisma));
     }
     return Promise.resolve(cb);
   }) as unknown as typeof prisma.$transaction);
@@ -87,7 +85,9 @@ describe('TEST-CHAT-010 ConversationService.startConversation() — CHAT-030', (
 
   test('TEST-CHAT-010 / CHAT-030 — happy path: creates conversation + 2 participants + first message + bumps last_message_at', async () => {
     const { service, prisma, gateway } = build();
-    prisma.account.findUnique.mockResolvedValueOnce({ id: RECIPIENT_ID } as never);
+    prisma.account.findUnique.mockResolvedValueOnce({
+      id: RECIPIENT_ID,
+    } as never);
     prisma.conversation.findFirst.mockResolvedValueOnce(null); // no existing direct
     prisma.conversation.create.mockResolvedValueOnce({ id: 1n } as never);
     prisma.conversationParticipant.createMany.mockResolvedValueOnce({
@@ -130,7 +130,9 @@ describe('TEST-CHAT-010 ConversationService.startConversation() — CHAT-030', (
 
   test('TEST-CHAT-010 / CHAT-030 — existing direct conversation reused; appends message; no new participants', async () => {
     const { service, prisma } = build();
-    prisma.account.findUnique.mockResolvedValueOnce({ id: RECIPIENT_ID } as never);
+    prisma.account.findUnique.mockResolvedValueOnce({
+      id: RECIPIENT_ID,
+    } as never);
     prisma.conversation.findFirst.mockResolvedValueOnce({ id: 5n } as never);
     prisma.message.create.mockResolvedValueOnce({
       id: 200n,
@@ -152,7 +154,9 @@ describe('TEST-CHAT-010 ConversationService.startConversation() — CHAT-030', (
 
   test('TEST-CHAT-010 / CHAT-030 — message_type defaults to TEXT', async () => {
     const { service, prisma } = build();
-    prisma.account.findUnique.mockResolvedValueOnce({ id: RECIPIENT_ID } as never);
+    prisma.account.findUnique.mockResolvedValueOnce({
+      id: RECIPIENT_ID,
+    } as never);
     prisma.conversation.findFirst.mockResolvedValueOnce({ id: 5n } as never);
     prisma.message.create.mockResolvedValueOnce({
       id: 1n,
@@ -174,7 +178,9 @@ describe('TEST-CHAT-010 ConversationService.startConversation() — CHAT-030', (
 
   test('TEST-CHAT-010 / CHAT-030 — metadata round-trips as InputJsonValue', async () => {
     const { service, prisma } = build();
-    prisma.account.findUnique.mockResolvedValueOnce({ id: RECIPIENT_ID } as never);
+    prisma.account.findUnique.mockResolvedValueOnce({
+      id: RECIPIENT_ID,
+    } as never);
     prisma.conversation.findFirst.mockResolvedValueOnce({ id: 5n } as never);
     prisma.message.create.mockResolvedValueOnce({
       id: 1n,
@@ -245,7 +251,9 @@ describe('TEST-CHAT-011 ConversationService.getInbox() — CHAT-050 / CHAT-051',
   test('TEST-CHAT-011 — unread_count uses last_read_at; null counts every message', async () => {
     const { service, prisma } = build();
     const row = inboxRow();
-    prisma.conversationParticipant.findMany.mockResolvedValueOnce([row] as never);
+    prisma.conversationParticipant.findMany.mockResolvedValueOnce([
+      row,
+    ] as never);
     prisma.conversationParticipant.count.mockResolvedValueOnce(1 as never);
     prisma.message.count.mockResolvedValueOnce(7 as never);
     const out = await service.getInbox(SENDER_ID, {});
@@ -417,7 +425,9 @@ describe('TEST-CHAT-013 ConversationService.sendMessage() — CHAT-030', () => {
       account_id: SENDER_ID,
     } as never);
     prisma.conversation.findUnique
-      .mockResolvedValueOnce({ collaboration: { status: 'CONFIRMED' } } as never)
+      .mockResolvedValueOnce({
+        collaboration: { status: 'CONFIRMED' },
+      } as never)
       .mockResolvedValueOnce(fakeConvWithIncludes() as never);
     prisma.message.create.mockResolvedValueOnce({
       id: 11n,
@@ -602,10 +612,13 @@ describe('TEST-CHAT-040 ConversationService.ensureCollaborationConversation() �
 // ════════════════════════════════════════════════════════════════════
 
 describe('TEST-CHAT-040b ConversationService.announceConversationCreated() — CHAT-013', () => {
-  test('TEST-CHAT-040b / CHAT-013 — joins each account socket and emits conversation_created', async () => {
+  test('TEST-CHAT-040b / CHAT-013 — joins each account socket and emits conversation_created', () => {
     const { service, gateway } = build();
-    await service.announceConversationCreated(7n, [11n, 22n]);
+    service.announceConversationCreated(7n, [11n, 22n]);
     expect(gateway.joinConversationRoom).toHaveBeenCalledTimes(2);
-    expect(gateway.emitConversationCreated).toHaveBeenCalledWith(7n, [11n, 22n]);
+    expect(gateway.emitConversationCreated).toHaveBeenCalledWith(7n, [
+      11n,
+      22n,
+    ]);
   });
 });

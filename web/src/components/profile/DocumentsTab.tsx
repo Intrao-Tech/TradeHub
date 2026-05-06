@@ -45,17 +45,14 @@ type DocumentRow = {
   metadata?: { title?: string } | null;
 };
 
-const DOC_TYPES = [
-  'INSURANCE',
-  'CSCS_CARD',
-  'GAS_SAFE_CERT',
-  'NICEIC_CERT',
-  'FIRAS_CERT',
-  'COMPANY_LETTERHEAD',
-  'OTHER',
-] as const;
-
-type DocType = (typeof DOC_TYPES)[number];
+type DocType =
+  | 'INSURANCE'
+  | 'CSCS_CARD'
+  | 'GAS_SAFE_CERT'
+  | 'NICEIC_CERT'
+  | 'FIRAS_CERT'
+  | 'COMPANY_LETTERHEAD'
+  | 'OTHER';
 
 const DOC_LABELS: Record<DocType, string> = {
   INSURANCE: 'Insurance certificate',

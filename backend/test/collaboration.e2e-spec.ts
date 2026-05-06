@@ -666,7 +666,8 @@ describe('TEST-COLLAB-078 cross-feature seam Jobs → Collaborations (COLLAB-001
       .expect(200);
     expect(
       employerList.body.items.some(
-        (row: { id: string | number }) => String(row.id) === String(conv.body.id),
+        (row: { id: string | number }) =>
+          String(row.id) === String(conv.body.id),
       ),
     ).toBe(true);
 
@@ -677,7 +678,8 @@ describe('TEST-COLLAB-078 cross-feature seam Jobs → Collaborations (COLLAB-001
       .expect(200);
     expect(
       workerList.body.items.some(
-        (row: { id: string | number }) => String(row.id) === String(conv.body.id),
+        (row: { id: string | number }) =>
+          String(row.id) === String(conv.body.id),
       ),
     ).toBe(true);
   });

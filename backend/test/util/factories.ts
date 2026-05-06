@@ -923,8 +923,7 @@ export async function seedCollaboration(
   const startedAt =
     opts.startedAt ??
     (['IN_PROGRESS', 'COMPLETED'].includes(status) ? now : null);
-  const endedAt =
-    opts.endedAt ?? (status === 'COMPLETED' ? now : null);
+  const endedAt = opts.endedAt ?? (status === 'COMPLETED' ? now : null);
 
   return prisma.collaboration.create({
     data: {
@@ -937,7 +936,9 @@ export async function seedCollaboration(
       project_type: opts.projectType ?? null,
       site_postcode: opts.sitePostcode ?? null,
       agreed_amount:
-        opts.agreedAmount != null ? new Prisma.Decimal(opts.agreedAmount) : null,
+        opts.agreedAmount != null
+          ? new Prisma.Decimal(opts.agreedAmount)
+          : null,
       flagged: opts.flagged ?? false,
       flag_reason: opts.flagReason ?? null,
       confirmed_at: confirmedAt,
@@ -984,7 +985,8 @@ export async function seedEscrowTransaction(
   const platformFee = new Prisma.Decimal(opts.platformFee ?? 100);
   const referralCommission = new Prisma.Decimal(opts.referralCommission ?? 0);
   const workerPayout = new Prisma.Decimal(
-    opts.workerPayout ?? Number(jobAmount) - Number(platformFee) - Number(referralCommission),
+    opts.workerPayout ??
+      Number(jobAmount) - Number(platformFee) - Number(referralCommission),
   );
   return prisma.escrowTransaction.create({
     data: {
@@ -1000,9 +1002,12 @@ export async function seedEscrowTransaction(
         (['HELD', 'RELEASED', 'REFUNDED', 'DISPUTED'].includes(status)
           ? new Date()
           : null),
-      released_at: opts.releasedAt ?? (status === 'RELEASED' ? new Date() : null),
-      refunded_at: opts.refundedAt ?? (status === 'REFUNDED' ? new Date() : null),
-      disputed_at: opts.disputedAt ?? (status === 'DISPUTED' ? new Date() : null),
+      released_at:
+        opts.releasedAt ?? (status === 'RELEASED' ? new Date() : null),
+      refunded_at:
+        opts.refundedAt ?? (status === 'REFUNDED' ? new Date() : null),
+      disputed_at:
+        opts.disputedAt ?? (status === 'DISPUTED' ? new Date() : null),
     },
   });
 }

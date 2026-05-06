@@ -67,7 +67,6 @@ describe('TEST-CHAT-030 ChatGateway rate-limit token bucket — CHAT-021', () =>
     const sock = fakeSocket('11');
     conversation.sendMessage.mockResolvedValue({} as never);
     for (let i = 0; i < 10; i++) {
-      // eslint-disable-next-line no-await-in-loop
       await gateway.handleSendMessage(sock as never, {
         conversation_id: 1,
         content: `m${i}`,
@@ -96,7 +95,6 @@ describe('TEST-CHAT-030 ChatGateway rate-limit token bucket — CHAT-021', () =>
       const sock = fakeSocket('11');
       conversation.sendMessage.mockResolvedValue({} as never);
       for (let i = 0; i < 10; i++) {
-        // eslint-disable-next-line no-await-in-loop
         await gateway.handleSendMessage(sock as never, {
           conversation_id: 1,
           content: `m${i}`,
@@ -127,7 +125,6 @@ describe('TEST-CHAT-030 ChatGateway rate-limit token bucket — CHAT-021', () =>
     const b = fakeSocket('22', 'B');
     conversation.sendMessage.mockResolvedValue({} as never);
     for (let i = 0; i < 10; i++) {
-      // eslint-disable-next-line no-await-in-loop
       await gateway.handleSendMessage(a as never, {
         conversation_id: 1,
         content: `${i}`,
@@ -180,7 +177,7 @@ describe('TEST-CHAT-031 ChatGateway room composition', () => {
     const lastReadAt = new Date('2026-05-01T00:00:00Z');
     gateway.emitMessageRead(42n, 11n, lastReadAt);
     expect(server.to).toHaveBeenCalledWith('conv:42');
-    const emitMock = (server.to.mock.results[0]!.value as { emit: jest.Mock })
+    const emitMock = (server.to.mock.results[0].value as { emit: jest.Mock })
       .emit;
     expect(emitMock).toHaveBeenCalledWith('message_read', {
       conversation_id: '42',
@@ -196,7 +193,7 @@ describe('TEST-CHAT-031 ChatGateway room composition', () => {
       sender_id: 11n,
       content: 'hi',
     });
-    const emitMock = (server.to.mock.results[0]!.value as { emit: jest.Mock })
+    const emitMock = (server.to.mock.results[0].value as { emit: jest.Mock })
       .emit;
     const payload = emitMock.mock.calls[0][1] as Record<string, unknown>;
     // No bigint anywhere in the emitted object tree.
@@ -222,9 +219,11 @@ describe('TEST-CHAT-032 ChatGateway accountToSockets map', () => {
     const { gateway } = build();
     // Reach inside via private map for the assertion. ChatGateway exposes
     // no public accessor today, so we type the field as `unknown` and cast.
-    const map = (gateway as unknown as {
-      accountToSockets: Map<string, Set<string>>;
-    }).accountToSockets;
+    const map = (
+      gateway as unknown as {
+        accountToSockets: Map<string, Set<string>>;
+      }
+    ).accountToSockets;
     map.set('11', new Set(['s1', 's2']));
     gateway.handleDisconnect({
       data: { accountId: '11' },

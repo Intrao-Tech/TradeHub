@@ -11,12 +11,7 @@ import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  forwardRef,
-  Inject,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import type { ConversationService } from './conversation.service';
 import { ConversationService as ConversationServiceClass } from './conversation.service';
 
@@ -81,12 +76,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         account.email_verified_at == null
       ) {
         client.emit('error', {
-          code:
-            !account
-              ? 'ACCOUNT_NOT_FOUND'
-              : account.status !== 'ACTIVE'
-                ? 'ACCOUNT_NOT_ACTIVE'
-                : 'EMAIL_NOT_VERIFIED',
+          code: !account
+            ? 'ACCOUNT_NOT_FOUND'
+            : account.status !== 'ACTIVE'
+              ? 'ACCOUNT_NOT_ACTIVE'
+              : 'EMAIL_NOT_VERIFIED',
           message: 'Cannot connect to chat in current account state.',
         });
         void client.disconnect();
@@ -351,7 +345,7 @@ function stripBigInts<T>(value: T): T {
   if (value === null || value === undefined) return value;
   if (typeof value === 'bigint') return String(value) as unknown as T;
   if (Array.isArray(value)) {
-    return value.map((v) => stripBigInts(v)) as unknown as T;
+    return value.map((v: unknown) => stripBigInts(v)) as unknown as T;
   }
   if (value instanceof Date) return value;
   if (typeof value === 'object') {

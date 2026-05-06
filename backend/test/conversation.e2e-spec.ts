@@ -198,7 +198,6 @@ describe('TEST-CHAT-073 REST rate limit (CHAT-021)', () => {
     });
     const ta = signAccessTokenFor(h, { accountId: a.id, email: a.email });
     for (let i = 0; i < 10; i++) {
-      // eslint-disable-next-line no-await-in-loop
       await h
         .request()
         .post(`/api/conversations/${conv.id}/messages`)
@@ -262,9 +261,7 @@ describe('TEST-CHAT-074 pagination cursor (CHAT-061 Q4)', () => {
       .set(...bearer(ta))
       .expect(200);
     expect(res.body.items).toHaveLength(2);
-    const contents = res.body.items.map(
-      (m: { content: string }) => m.content,
-    );
+    const contents = res.body.items.map((m: { content: string }) => m.content);
     expect(contents.sort()).toEqual(['first', 'second'].sort());
   });
 
@@ -275,7 +272,6 @@ describe('TEST-CHAT-074 pagination cursor (CHAT-061 Q4)', () => {
       participantAccountIds: [a.id, b.id],
     });
     for (let i = 0; i < 5; i++) {
-      // eslint-disable-next-line no-await-in-loop
       await seedMessage(h.prisma, {
         conversationId: conv.id,
         senderId: a.id,

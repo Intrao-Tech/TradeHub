@@ -27,9 +27,7 @@ function build(): {
   // assertions on `prisma.collaboration.update.mock.calls` still see the call.
   prisma.$transaction.mockImplementation(((cb: unknown) => {
     if (typeof cb === 'function') {
-      return Promise.resolve(
-        (cb as (tx: typeof prisma) => unknown)(prisma),
-      );
+      return Promise.resolve((cb as (tx: typeof prisma) => unknown)(prisma));
     }
     return Promise.resolve(cb);
   }) as unknown as typeof prisma.$transaction);
@@ -150,27 +148,23 @@ describe('TEST-COLLAB-010 CollaborationService.create() — COLLAB-030 role reso
 
   test('TEST-COLLAB-010 / COLLAB-030 — worker omits employer_id → BadRequestException', async () => {
     const { service } = build();
-    await expect(service.create({}, 'WORKER', WORKER_ID)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(
+      service.create({}, 'WORKER', WORKER_ID),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   test('TEST-COLLAB-010 / COLLAB-030 — employer omits worker_id → BadRequestException', async () => {
     const { service } = build();
-    await expect(service.create({}, 'EMPLOYER', EMPLOYER_ID)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(
+      service.create({}, 'EMPLOYER', EMPLOYER_ID),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   test('TEST-COLLAB-010 / COLLAB-030 — worker_id === employer_id → BadRequestException', async () => {
     const { service } = build();
     await expect(
       // worker initiates, but the employer_id resolves to the same as the caller
-      service.create(
-        { employer_id: Number(WORKER_ID) },
-        'WORKER',
-        WORKER_ID,
-      ),
+      service.create({ employer_id: Number(WORKER_ID) }, 'WORKER', WORKER_ID),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -206,7 +200,9 @@ describe('TEST-COLLAB-011 CollaborationService.getByIdForUser() — access contr
   test('TEST-COLLAB-011 — worker party reads → returns row', async () => {
     const { service, prisma } = build();
     prisma.collaboration.findUnique.mockResolvedValue(fakeRow() as never);
-    await expect(service.getByIdForUser(1n, userPayload())).resolves.toBeDefined();
+    await expect(
+      service.getByIdForUser(1n, userPayload()),
+    ).resolves.toBeDefined();
   });
 
   test('TEST-COLLAB-011 — employer party reads → returns row', async () => {
@@ -215,7 +211,11 @@ describe('TEST-COLLAB-011 CollaborationService.getByIdForUser() — access contr
     await expect(
       service.getByIdForUser(
         1n,
-        userPayload({ clientProfileId: EMPLOYER_ID, isWorker: false, isEmployer: true }),
+        userPayload({
+          clientProfileId: EMPLOYER_ID,
+          isWorker: false,
+          isEmployer: true,
+        }),
       ),
     ).resolves.toBeDefined();
   });
@@ -224,10 +224,7 @@ describe('TEST-COLLAB-011 CollaborationService.getByIdForUser() — access contr
     const { service, prisma } = build();
     prisma.collaboration.findUnique.mockResolvedValue(fakeRow() as never);
     await expect(
-      service.getByIdForUser(
-        1n,
-        userPayload({ clientProfileId: OUTSIDER_ID }),
-      ),
+      service.getByIdForUser(1n, userPayload({ clientProfileId: OUTSIDER_ID })),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
@@ -248,7 +245,11 @@ describe('TEST-COLLAB-011 CollaborationService.getByIdForUser() — access contr
     await expect(
       service.getByIdForUser(
         1n,
-        userPayload({ clientProfileId: null, isWorker: false, isEmployer: false }),
+        userPayload({
+          clientProfileId: null,
+          isWorker: false,
+          isEmployer: false,
+        }),
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -256,9 +257,9 @@ describe('TEST-COLLAB-011 CollaborationService.getByIdForUser() — access contr
   test('TEST-COLLAB-011 — missing collaboration → NotFoundException', async () => {
     const { service, prisma } = build();
     prisma.collaboration.findUnique.mockResolvedValue(null);
-    await expect(service.getByIdForUser(1n, userPayload())).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.getByIdForUser(1n, userPayload()),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
@@ -427,15 +428,23 @@ describe('TEST-COLLAB-013 CollaborationService.flag() — COLLAB-040 / COLLAB-05
     const { service, prisma } = build();
     prisma.collaboration.findUnique
       .mockResolvedValueOnce(fakeRow() as never)
-      .mockResolvedValueOnce(fakeRow({ flagged: true, flag_reason: 'PAYMENT_LATE' }) as never);
+      .mockResolvedValueOnce(
+        fakeRow({ flagged: true, flag_reason: 'PAYMENT_LATE' }) as never,
+      );
     prisma.collaboration.update.mockResolvedValue(fakeRow() as never);
 
-    await service.flag(1n, 'PAYMENT_LATE: cheque is two weeks late', userPayload());
+    await service.flag(
+      1n,
+      'PAYMENT_LATE: cheque is two weeks late',
+      userPayload(),
+    );
     const update = prisma.collaboration.update.mock.calls[0][0] as {
       data: Record<string, unknown>;
     };
     expect(update.data.flagged).toBe(true);
-    expect(update.data.flag_reason).toBe('PAYMENT_LATE: cheque is two weeks late');
+    expect(update.data.flag_reason).toBe(
+      'PAYMENT_LATE: cheque is two weeks late',
+    );
   });
 
   test('TEST-COLLAB-013 / COLLAB-051 — staff can flag a non-party collaboration', async () => {
@@ -475,8 +484,12 @@ describe('TEST-COLLAB-013 CollaborationService.flag() — COLLAB-040 / COLLAB-05
   test('TEST-COLLAB-013 — second flag overwrites flag_reason (no append) — locked behaviour', async () => {
     const { service, prisma } = build();
     prisma.collaboration.findUnique
-      .mockResolvedValueOnce(fakeRow({ flagged: true, flag_reason: 'PAYMENT_LATE' }) as never)
-      .mockResolvedValueOnce(fakeRow({ flagged: true, flag_reason: 'WORK_QUALITY' }) as never);
+      .mockResolvedValueOnce(
+        fakeRow({ flagged: true, flag_reason: 'PAYMENT_LATE' }) as never,
+      )
+      .mockResolvedValueOnce(
+        fakeRow({ flagged: true, flag_reason: 'WORK_QUALITY' }) as never,
+      );
     prisma.collaboration.update.mockResolvedValue(fakeRow() as never);
 
     await service.flag(1n, 'WORK_QUALITY: subcontracted out', userPayload());
@@ -576,9 +589,7 @@ describe('TEST-CHAT-040 CollaborationService.updateStatus() auto-creates chat th
     };
     prisma.$transaction.mockImplementation(((cb: unknown) => {
       if (typeof cb === 'function') {
-        return Promise.resolve(
-          (cb as (tx: typeof prisma) => unknown)(prisma),
-        );
+        return Promise.resolve((cb as (tx: typeof prisma) => unknown)(prisma));
       }
       return Promise.resolve(cb);
     }) as unknown as typeof prisma.$transaction);
@@ -626,7 +637,9 @@ describe('TEST-CHAT-040 CollaborationService.updateStatus() auto-creates chat th
       .mockResolvedValueOnce(row as never);
     prisma.collaboration.update.mockResolvedValue(row as never);
     await service.updateStatus(1n, 'REJECTED', EMPLOYER_ID);
-    expect(conversations.ensureCollaborationConversation).not.toHaveBeenCalled();
+    expect(
+      conversations.ensureCollaborationConversation,
+    ).not.toHaveBeenCalled();
     expect(conversations.announceConversationCreated).not.toHaveBeenCalled();
   });
 

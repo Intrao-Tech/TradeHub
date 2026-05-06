@@ -17,7 +17,6 @@ import {
   AttachmentsField,
   attachmentIdsFromValue,
   type AttachedFile,
-  valueFromReadAttachments,
 } from '@/components/jobs/AttachmentsField';
 import { useSpecialisations } from '@/hooks/useSpecialisations';
 import { useTags } from '@/hooks/useTags';

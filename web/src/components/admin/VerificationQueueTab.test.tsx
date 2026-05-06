@@ -3,7 +3,7 @@
 // MSW v2 handlers from `web/src/test/handlers/verification.ts` provide the
 // default queue + review responses; per-test overrides via `server.use`.
 
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import {
   renderWithRouter,

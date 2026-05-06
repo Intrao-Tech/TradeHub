@@ -84,15 +84,14 @@ export class MessageAttachmentService implements OnModuleInit {
     }
 
     // Caller must be a participant of the conversation.
-    const participant =
-      await this.prisma.conversationParticipant.findUnique({
-        where: {
-          conversation_id_account_id: {
-            conversation_id: conversationId,
-            account_id: senderId,
-          },
+    const participant = await this.prisma.conversationParticipant.findUnique({
+      where: {
+        conversation_id_account_id: {
+          conversation_id: conversationId,
+          account_id: senderId,
         },
-      });
+      },
+    });
     if (!participant) {
       this.tryUnlinkUpload(file.filename);
       throw new ForbiddenException({
@@ -181,10 +180,7 @@ export class MessageAttachmentService implements OnModuleInit {
 
     if (row.message_id == null || row.message == null) {
       // Orphan — only the uploader may download.
-      if (
-        ctx.accountId == null ||
-        row.uploaded_by_id !== ctx.accountId
-      ) {
+      if (ctx.accountId == null || row.uploaded_by_id !== ctx.accountId) {
         throw new NotFoundException({ code: 'NOT_FOUND' });
       }
     } else {

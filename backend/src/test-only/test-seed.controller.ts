@@ -131,17 +131,17 @@ export class TestSeedController implements OnModuleInit {
         },
       });
       if (status !== 'CONFIRMED') {
-        return { collaborationId: collab.id, conversationId: null as bigint | null };
+        return {
+          collaborationId: collab.id,
+          conversationId: null as bigint | null,
+        };
       }
       const conv = await tx.conversation.create({
         data: {
           collaboration_id: collab.id,
           last_message_at: now,
           participants: {
-            create: [
-              { account_id: worker.id },
-              { account_id: employer.id },
-            ],
+            create: [{ account_id: worker.id }, { account_id: employer.id }],
           },
         },
       });

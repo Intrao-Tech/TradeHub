@@ -202,10 +202,10 @@ export class CollaborationService {
     });
 
     if (createdConversationId !== null && this.conversations) {
-      await this.conversations.announceConversationCreated(
-        createdConversationId,
-        [collab.worker_id, collab.employer_id],
-      );
+      this.conversations.announceConversationCreated(createdConversationId, [
+        collab.worker_id,
+        collab.employer_id,
+      ]);
     }
 
     return this.getById(id);

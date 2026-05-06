@@ -56,10 +56,10 @@ test.describe('TEST-VER-410 guardrails', () => {
     expect(spec.paths).toBeDefined();
     const paths = Object.keys(spec.paths ?? {});
     const required = [
-      '/verification/me',
-      '/verification/identity/start',
-      '/verification/queue',
-      '/verification/documents/{id}/review',
+      '/api/verification/me',
+      '/api/verification/identity/start',
+      '/api/verification/queue',
+      '/api/verification/documents/{id}/review',
     ];
     for (const route of required) {
       expect(paths).toContain(route);

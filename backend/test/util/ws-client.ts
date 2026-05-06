@@ -45,7 +45,12 @@ async function ensureListening(app: INestApplication): Promise<string> {
   if (!server.listening) {
     await new Promise<void>((resolve, reject) => {
       server.listen(0, '127.0.0.1', (err?: unknown) => {
-        if (err) reject(err);
+        if (err)
+          reject(
+            err instanceof Error
+              ? err
+              : new Error(`server.listen failed: ${typeof err}`),
+          );
         else resolve();
       });
     });
@@ -97,7 +102,11 @@ export async function connectChatClient(
     const t = setTimeout(() => {
       socket.removeAllListeners('connect');
       socket.removeAllListeners('connect_error');
-      reject(new Error(`socket.io-client connect timeout after ${opts.timeoutMs ?? 4000}ms`));
+      reject(
+        new Error(
+          `socket.io-client connect timeout after ${opts.timeoutMs ?? 4000}ms`,
+        ),
+      );
     }, opts.timeoutMs ?? 4000);
     socket.once('connect', () => {
       clearTimeout(t);
@@ -137,10 +146,7 @@ export function waitForEvent<T = unknown>(
 /**
  * Resolve once the socket emits `disconnect` (e.g., a rejected handshake).
  */
-export function waitForDisconnect(
-  socket: Socket,
-  ms = 2000,
-): Promise<string> {
+export function waitForDisconnect(socket: Socket, ms = 2000): Promise<string> {
   return new Promise((resolve, reject) => {
     if (socket.disconnected) {
       resolve('already');
