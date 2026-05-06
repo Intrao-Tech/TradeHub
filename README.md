@@ -120,3 +120,4 @@ TradeHub/
 ├── docker-compose.yml
 └── schema.sql          DDL for Redgate
 ```
+ <-- test commit by Maks -->
