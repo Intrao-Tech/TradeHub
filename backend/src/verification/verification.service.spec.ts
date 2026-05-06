@@ -86,9 +86,10 @@ describe('TEST-VER-140 startIdentitySession not configured — VER-021', () => {
       .startIdentitySession(PROFILE_ID)
       .catch((e: ServiceUnavailableException) => e);
     expect(err).toBeInstanceOf(ServiceUnavailableException);
-    expect(((err as ServiceUnavailableException).getResponse() as { code: string }).code).toBe(
-      'STRIPE_NOT_CONFIGURED',
-    );
+    expect(
+      ((err as ServiceUnavailableException).getResponse() as { code: string })
+        .code,
+    ).toBe('STRIPE_NOT_CONFIGURED');
   });
 });
 
@@ -107,9 +108,9 @@ describe('TEST-VER-141 startIdentitySession already-verified — VER-022', () =>
         .startIdentitySession(PROFILE_ID)
         .catch((e: ConflictException) => e);
       expect(err).toBeInstanceOf(ConflictException);
-      expect(((err as ConflictException).getResponse() as { code: string }).code).toBe(
-        'ALREADY_VERIFIED',
-      );
+      expect(
+        ((err as ConflictException).getResponse() as { code: string }).code,
+      ).toBe('ALREADY_VERIFIED');
     },
   );
 
@@ -144,7 +145,9 @@ describe('TEST-VER-142 startIdentitySession happy path — VER-023', () => {
       session_id: 'vs_test_123',
       status: 'requires_input',
     });
-    expect(mocks.stripe.identity.verificationSessions.create).toHaveBeenCalledWith(
+    expect(
+      mocks.stripe.identity.verificationSessions.create,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'document',
         metadata: expect.objectContaining({
@@ -173,7 +176,9 @@ describe('TEST-VER-142 startIdentitySession happy path — VER-023', () => {
 describe('TEST-VER-143 webhook verified happy path — VER-024', () => {
   test('writes IDENTITY_VERIFIED milestone, audit, fires mail, runs promotion', async () => {
     const { service, mocks } = build();
-    mocks.prisma.verificationMilestone.findFirst.mockResolvedValueOnce(null as never);
+    mocks.prisma.verificationMilestone.findFirst.mockResolvedValueOnce(
+      null as never,
+    );
     mocks.prisma.verificationMilestone.create.mockResolvedValueOnce({
       id: 999n,
     } as never);
@@ -343,7 +348,9 @@ describe('TEST-VER-147 webhook mail fire-and-forget', () => {
     const rejection = Promise.reject(new Error('SMTP down'));
     rejection.catch(() => undefined);
     mocks.mail.sendVerificationVerified.mockReturnValueOnce(rejection);
-    mocks.prisma.verificationMilestone.findFirst.mockResolvedValueOnce(null as never);
+    mocks.prisma.verificationMilestone.findFirst.mockResolvedValueOnce(
+      null as never,
+    );
     mocks.prisma.verificationMilestone.create.mockResolvedValueOnce({
       id: 1n,
     } as never);
@@ -373,7 +380,9 @@ describe('TEST-VER-148 getIdentityStatus — VER-027', () => {
     mocks.prisma.auditLog.findFirst.mockResolvedValueOnce(null as never);
     const result = await service.getIdentityStatus(PROFILE_ID);
     expect(result).toEqual({ session_id: null, status: null });
-    expect(mocks.stripe.identity.verificationSessions.retrieve).not.toHaveBeenCalled();
+    expect(
+      mocks.stripe.identity.verificationSessions.retrieve,
+    ).not.toHaveBeenCalled();
   });
 
   test('Stripe missing → returns nulls without calling Stripe', async () => {
@@ -407,10 +416,14 @@ describe('TEST-VER-150 getMe — VER-053', () => {
   test('profile not found → 404 PROFILE_NOT_FOUND', async () => {
     const { service, mocks } = build();
     mocks.prisma.clientProfile.findUnique.mockResolvedValueOnce(null as never);
-    mocks.prisma.verificationMilestone.findMany.mockResolvedValueOnce([] as never);
+    mocks.prisma.verificationMilestone.findMany.mockResolvedValueOnce(
+      [] as never,
+    );
     mocks.prisma.document.findMany.mockResolvedValueOnce([] as never);
 
-    const err = await service.getMe(PROFILE_ID).catch((e: NotFoundException) => e);
+    const err = await service
+      .getMe(PROFILE_ID)
+      .catch((e: NotFoundException) => e);
     expect(err).toBeInstanceOf(NotFoundException);
   });
 
@@ -422,7 +435,9 @@ describe('TEST-VER-150 getMe — VER-053', () => {
       worker_profile: { id: PROFILE_ID },
       employer_profile: null,
     } as never);
-    mocks.prisma.verificationMilestone.findMany.mockResolvedValueOnce([] as never);
+    mocks.prisma.verificationMilestone.findMany.mockResolvedValueOnce(
+      [] as never,
+    );
     mocks.prisma.document.findMany.mockResolvedValueOnce([
       { id: 1n, doc_type: 'CSCS_CARD', status: 'PENDING' },
       { id: 2n, doc_type: 'CSCS_CARD', status: 'IN_REVIEW' },
@@ -450,7 +465,9 @@ describe('TEST-VER-150 getMe — VER-053', () => {
       worker_profile: { id: PROFILE_ID },
       employer_profile: null,
     } as never);
-    mocks.prisma.verificationMilestone.findMany.mockResolvedValueOnce([] as never);
+    mocks.prisma.verificationMilestone.findMany.mockResolvedValueOnce(
+      [] as never,
+    );
     mocks.prisma.document.findMany.mockResolvedValueOnce([] as never);
 
     const result = await service.getMe(PROFILE_ID);
@@ -516,7 +533,9 @@ describe('TEST-VER-151 getPublicLevel — VER-060', () => {
       worker_profile: null,
       employer_profile: { rating_avg: '4.0', rating_count: 3 },
     } as never);
-    mocks.prisma.verificationMilestone.findMany.mockResolvedValueOnce([] as never);
+    mocks.prisma.verificationMilestone.findMany.mockResolvedValueOnce(
+      [] as never,
+    );
 
     const result = await service.getPublicLevel(PROFILE_ID);
     expect(result.reviews).toEqual({ count: 3, average: '4.0' });
@@ -554,9 +573,9 @@ describe('TEST-VER-153 getLadder ownership — VER-061', () => {
       .getLadder(PROFILE_ID, { clientProfileId: 999n, isStaff: false })
       .catch((e: ForbiddenException) => e);
     expect(err).toBeInstanceOf(ForbiddenException);
-    expect(((err as ForbiddenException).getResponse() as { code: string }).code).toBe(
-      'FORBIDDEN',
-    );
+    expect(
+      ((err as ForbiddenException).getResponse() as { code: string }).code,
+    ).toBe('FORBIDDEN');
   });
 
   test('owner → succeeds', async () => {
@@ -567,7 +586,9 @@ describe('TEST-VER-153 getLadder ownership — VER-061', () => {
       worker_profile: { id: PROFILE_ID },
       employer_profile: null,
     } as never);
-    mocks.prisma.verificationMilestone.findMany.mockResolvedValueOnce([] as never);
+    mocks.prisma.verificationMilestone.findMany.mockResolvedValueOnce(
+      [] as never,
+    );
     mocks.prisma.document.findMany.mockResolvedValueOnce([] as never);
 
     const result = await service.getLadder(PROFILE_ID, {
@@ -632,14 +653,19 @@ describe('TEST-VER-154 computeLadder truth table — VER-061', () => {
       milestones: [],
       documents: [],
     });
-    expect(result.rungs[0]).toMatchObject({ level: 'UNVERIFIED', state: 'DONE' });
+    expect(result.rungs[0]).toMatchObject({
+      level: 'UNVERIFIED',
+      state: 'DONE',
+    });
   });
 
   test('BASIC rung DONE when identity present', async () => {
     const result = await ladder({
       level: 'BASIC',
       isWorker: true,
-      milestones: [{ milestone_type: 'IDENTITY_VERIFIED', achieved_at: new Date() }],
+      milestones: [
+        { milestone_type: 'IDENTITY_VERIFIED', achieved_at: new Date() },
+      ],
       documents: [],
     });
     expect(result.rungs[1]).toMatchObject({ level: 'BASIC', state: 'DONE' });
@@ -663,7 +689,9 @@ describe('TEST-VER-154 computeLadder truth table — VER-061', () => {
     const result = await ladder({
       level: 'BASIC',
       isWorker: true,
-      milestones: [{ milestone_type: 'IDENTITY_VERIFIED', achieved_at: new Date() }],
+      milestones: [
+        { milestone_type: 'IDENTITY_VERIFIED', achieved_at: new Date() },
+      ],
       documents: [{ doc_type: 'CSCS_CARD', status: 'PENDING' }],
     });
     expect(result.rungs[2]).toMatchObject({
@@ -676,7 +704,9 @@ describe('TEST-VER-154 computeLadder truth table — VER-061', () => {
     const result = await ladder({
       level: 'CERTIFIED',
       isWorker: true,
-      milestones: [{ milestone_type: 'IDENTITY_VERIFIED', achieved_at: new Date() }],
+      milestones: [
+        { milestone_type: 'IDENTITY_VERIFIED', achieved_at: new Date() },
+      ],
       documents: [{ doc_type: 'CSCS_CARD', status: 'APPROVED' }],
     });
     expect(result.rungs[2]).toMatchObject({ state: 'DONE' });
@@ -686,12 +716,19 @@ describe('TEST-VER-154 computeLadder truth table — VER-061', () => {
     const result = await ladder({
       level: 'BASIC',
       isWorker: true,
-      milestones: [{ milestone_type: 'IDENTITY_VERIFIED', achieved_at: new Date() }],
+      milestones: [
+        { milestone_type: 'IDENTITY_VERIFIED', achieved_at: new Date() },
+      ],
       documents: [],
     });
     expect(result.rungs[2]).toMatchObject({
       state: 'NOT_STARTED',
-      next_doc_types: ['CSCS_CARD', 'GAS_SAFE_CERT', 'NICEIC_CERT', 'FIRAS_CERT'],
+      next_doc_types: [
+        'CSCS_CARD',
+        'GAS_SAFE_CERT',
+        'NICEIC_CERT',
+        'FIRAS_CERT',
+      ],
     });
   });
 
@@ -699,7 +736,9 @@ describe('TEST-VER-154 computeLadder truth table — VER-061', () => {
     const result = await ladder({
       level: 'CERTIFIED',
       isWorker: false,
-      milestones: [{ milestone_type: 'IDENTITY_VERIFIED', achieved_at: new Date() }],
+      milestones: [
+        { milestone_type: 'IDENTITY_VERIFIED', achieved_at: new Date() },
+      ],
       documents: [
         { doc_type: 'INSURANCE', status: 'APPROVED' },
         { doc_type: 'COMPANY_LETTERHEAD', status: 'APPROVED' },
@@ -712,7 +751,9 @@ describe('TEST-VER-154 computeLadder truth table — VER-061', () => {
     const result = await ladder({
       level: 'CERTIFIED',
       isWorker: true,
-      milestones: [{ milestone_type: 'IDENTITY_VERIFIED', achieved_at: new Date() }],
+      milestones: [
+        { milestone_type: 'IDENTITY_VERIFIED', achieved_at: new Date() },
+      ],
       documents: [{ doc_type: 'CSCS_CARD', status: 'APPROVED' }],
     });
     expect(result.rungs[3]).toMatchObject({

@@ -54,16 +54,15 @@ function makeDoc(
     status: overrides.status ?? 'PENDING',
     rejection_reason: null as string | null,
     metadata: null,
-    assigned_to: overrides.assignedTo === undefined ? STAFF_ID : overrides.assignedTo,
+    assigned_to:
+      overrides.assignedTo === undefined ? STAFF_ID : overrides.assignedTo,
     reviewed_by: null,
     reviewed_at: null,
     created_at: new Date(),
   };
 }
 
-function actor(
-  overrides: { isAdmin?: boolean; staffId?: bigint } = {},
-): {
+function actor(overrides: { isAdmin?: boolean; staffId?: bigint } = {}): {
   accountId: bigint;
   staffMemberId: bigint;
   isAdmin: boolean;
@@ -420,7 +419,9 @@ describe('TEST-VER-117 DocumentReviewService milestone mapping — VER-051', () 
       );
 
       if (expectedMilestoneType === null) {
-        expect(mocks.prisma.verificationMilestone.create).not.toHaveBeenCalled();
+        expect(
+          mocks.prisma.verificationMilestone.create,
+        ).not.toHaveBeenCalled();
         expect(result.milestones_written).toEqual([]);
       } else {
         expect(mocks.prisma.verificationMilestone.create).toHaveBeenCalledWith({

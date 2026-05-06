@@ -92,10 +92,7 @@ describe('TEST-VER-250..253 verification reads (VER-053 / VER-060 / VER-061)', (
 
     test('VER-060a — deactivated account → 404', async () => {
       const seed = await seedDeactivatedWorker(h.prisma);
-      await h
-        .request()
-        .get(`/api/verification/levels/${seed.id}`)
-        .expect(404);
+      await h.request().get(`/api/verification/levels/${seed.id}`).expect(404);
     });
 
     test('VER-060 — certification_doc_types includes only APPROVED cert docs', async () => {

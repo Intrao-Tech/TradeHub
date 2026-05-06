@@ -8,7 +8,12 @@
  * Trust ladder rungs (per product spec §3.2).
  * Replaces the legacy `UNVERIFIED | IDENTITY_VERIFIED` enum.
  */
-export const VERIFICATION_LEVELS = ['UNVERIFIED', 'BASIC', 'CERTIFIED', 'PREMIUM'] as const;
+export const VERIFICATION_LEVELS = [
+  'UNVERIFIED',
+  'BASIC',
+  'CERTIFIED',
+  'PREMIUM',
+] as const;
 export type VerificationLevel = (typeof VERIFICATION_LEVELS)[number];
 
 /**
@@ -17,14 +22,14 @@ export type VerificationLevel = (typeof VERIFICATION_LEVELS)[number];
  * engine itself; the rest are written by the per-evidence flows.
  */
 export const MILESTONE_TYPES = [
-  'IDENTITY_VERIFIED',          // Stripe Identity webhook
-  'CERTIFICATION_APPROVED',     // CSCS / Gas Safe / NICEIC / FIRAS — staff manual
-  'INSURANCE_APPROVED',         // staff manual
-  'COMPANY_LETTERHEAD_APPROVED',// staff manual
-  'COMPANY_HOUSE_VERIFIED',     // Companies House public API
-  'RIGHT_TO_WORK_VERIFIED',     // staff manual via gov.uk Right-to-Work check
-  'HMRC_CIS_VERIFIED',          // staff manual via gov.uk CIS gateway
-  'LEVEL_PROMOTED',             // promotion engine (pseudo-event for ladder transitions)
+  'IDENTITY_VERIFIED', // Stripe Identity webhook
+  'CERTIFICATION_APPROVED', // CSCS / Gas Safe / NICEIC / FIRAS — staff manual
+  'INSURANCE_APPROVED', // staff manual
+  'COMPANY_LETTERHEAD_APPROVED', // staff manual
+  'COMPANY_HOUSE_VERIFIED', // Companies House public API
+  'RIGHT_TO_WORK_VERIFIED', // staff manual via gov.uk Right-to-Work check
+  'HMRC_CIS_VERIFIED', // staff manual via gov.uk CIS gateway
+  'LEVEL_PROMOTED', // promotion engine (pseudo-event for ladder transitions)
 ] as const;
 export type MilestoneType = (typeof MILESTONE_TYPES)[number];
 
@@ -63,7 +68,15 @@ export const CERT_DOC_TYPES = [
 ] as const;
 
 /** Document statuses — the four-state machine. */
-export const DOCUMENT_STATUSES = ['PENDING', 'IN_REVIEW', 'APPROVED', 'REJECTED'] as const;
+export const DOCUMENT_STATUSES = [
+  'PENDING',
+  'IN_REVIEW',
+  'APPROVED',
+  'REJECTED',
+] as const;
 export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 
-export const TERMINAL_DOCUMENT_STATUSES: DocumentStatus[] = ['APPROVED', 'REJECTED'];
+export const TERMINAL_DOCUMENT_STATUSES: DocumentStatus[] = [
+  'APPROVED',
+  'REJECTED',
+];

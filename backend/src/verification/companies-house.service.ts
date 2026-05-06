@@ -106,11 +106,14 @@ export class CompaniesHouseService {
       });
     }
 
-    if (!normaliseCompanyName(company.company_name).includes(
-      normaliseCompanyName(employer.company_name),
-    ) && !normaliseCompanyName(employer.company_name).includes(
-      normaliseCompanyName(company.company_name),
-    )) {
+    if (
+      !normaliseCompanyName(company.company_name).includes(
+        normaliseCompanyName(employer.company_name),
+      ) &&
+      !normaliseCompanyName(employer.company_name).includes(
+        normaliseCompanyName(company.company_name),
+      )
+    ) {
       await this.audit.log(
         employerProfileId,
         'verification.companies_house.checked',
@@ -217,7 +220,8 @@ export class CompaniesHouseService {
       );
       throw new BadRequestException({
         code: 'COMPANIES_HOUSE_BAD_REQUEST',
-        message: 'Companies House rejected the lookup. Check the company number.',
+        message:
+          'Companies House rejected the lookup. Check the company number.',
       });
     }
 

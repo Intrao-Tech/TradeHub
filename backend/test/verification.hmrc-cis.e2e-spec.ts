@@ -59,7 +59,10 @@ describe('TEST-VER-243..245 HMRC CIS submission (VER-146 / VER-149)', () => {
         .expect(201);
 
       const audits = await h.prisma.auditLog.findMany({
-        where: { account_id: seed.id, action: 'verification.document.uploaded' },
+        where: {
+          account_id: seed.id,
+          action: 'verification.document.uploaded',
+        },
       });
       expect(audits.length).toBeGreaterThan(0);
       for (const a of audits) {

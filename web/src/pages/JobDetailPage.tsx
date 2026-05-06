@@ -13,6 +13,7 @@ import { EmployerChip } from '@/components/jobs/EmployerChip';
 import { JobStatusBadge } from '@/components/jobs/JobStatusBadge';
 import { ApplicationStatusBadge } from '@/components/jobs/ApplicationStatusBadge';
 import { ApplyJobSheet } from '@/components/jobs/ApplyJobSheet';
+import { AttachmentList } from '@/components/jobs/AttachmentList';
 import { formatPay } from '@/components/jobs/PayLine';
 import { formatRelative } from '@/lib/relative-time';
 import { toast } from '@/components/ui/toast';
@@ -47,6 +48,12 @@ type JobDetail = {
   } | null;
   specialisations?: Array<{ specialisation?: Specialisation }>;
   tags?: Array<{ tag?: Tag }>;
+  attachments?: Array<{
+    id: string | number;
+    original_name: string;
+    mime_type: string;
+    size_bytes: number;
+  }>;
   _count?: { applications?: number };
 };
 
@@ -302,6 +309,11 @@ export default function JobDetailPage() {
           </div>
         </section>
       ) : null}
+
+      <AttachmentList
+        heading="Attachments"
+        attachments={detail.attachments}
+      />
 
       <CtaBar
         loggedIn={loggedIn}

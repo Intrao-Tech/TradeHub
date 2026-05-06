@@ -164,7 +164,9 @@ describe('TEST-VER-171 HMRC_CIS_DOCUMENT — VER-146 / VER-149', () => {
 
 describe('TEST-VER-172 OTHER — VER-041', () => {
   test('VER-041 — happy title returned as-is', () => {
-    const result = validateDocumentMetadata('OTHER', { title: 'Plumbing license' });
+    const result = validateDocumentMetadata('OTHER', {
+      title: 'Plumbing license',
+    });
     expect(result).toEqual({ title: 'Plumbing license' });
   });
 
@@ -204,7 +206,9 @@ describe('TEST-VER-172 OTHER — VER-041', () => {
   });
 
   test('VER-041 — title with surrounding whitespace is trimmed before length check', () => {
-    const result = validateDocumentMetadata('OTHER', { title: '  Plumbing license  ' });
+    const result = validateDocumentMetadata('OTHER', {
+      title: '  Plumbing license  ',
+    });
     expect(result).toEqual({ title: 'Plumbing license' });
   });
 });
@@ -247,7 +251,9 @@ describe('TEST-VER-173 optional structured capture — VER-040', () => {
 
 describe('TEST-VER-174 unknown doc type — default branch', () => {
   test('unknown doc type returns null (no enforcement)', () => {
-    expect(validateDocumentMetadata('SOMETHING_NEW', { foo: 'bar' })).toBeNull();
+    expect(
+      validateDocumentMetadata('SOMETHING_NEW', { foo: 'bar' }),
+    ).toBeNull();
     expect(validateDocumentMetadata('SOMETHING_NEW', null)).toBeNull();
     expect(validateDocumentMetadata('SOMETHING_NEW', 'literal')).toBeNull();
   });

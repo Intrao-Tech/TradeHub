@@ -12,7 +12,10 @@ export type CompaniesHouseFixture = {
 
 export const CH_FIXTURES = {
   /** Active company whose name matches "Acme Ltd" → MATCHED. */
-  activeMatch(companyNumber = '12345678', name = 'Acme Limited'): CompaniesHouseFixture {
+  activeMatch(
+    companyNumber = '12345678',
+    name = 'Acme Limited',
+  ): CompaniesHouseFixture {
     return {
       status: 200,
       body: {
@@ -39,7 +42,10 @@ export const CH_FIXTURES = {
   },
 
   /** Dissolved company → INACTIVE. */
-  dissolved(companyNumber = '12345678', name = 'Acme Limited'): CompaniesHouseFixture {
+  dissolved(
+    companyNumber = '12345678',
+    name = 'Acme Limited',
+  ): CompaniesHouseFixture {
     return {
       status: 200,
       body: {
@@ -52,7 +58,10 @@ export const CH_FIXTURES = {
 
   /** Registry 404 — company doesn't exist. */
   notFound(): CompaniesHouseFixture {
-    return { status: 404, body: { errors: [{ error: 'company-profile-not-found' }] } };
+    return {
+      status: 404,
+      body: { errors: [{ error: 'company-profile-not-found' }] },
+    };
   },
 
   /** Registry 500 — upstream error. */
@@ -89,8 +98,7 @@ export function mockNextFetch(
           status: fixture.status,
           ok: fixture.status >= 200 && fixture.status < 300,
           json: async () => fixture.body ?? {},
-          text: async () =>
-            fixture.body ? JSON.stringify(fixture.body) : '',
+          text: async () => (fixture.body ? JSON.stringify(fixture.body) : ''),
         }) as Response) as never,
     );
   }

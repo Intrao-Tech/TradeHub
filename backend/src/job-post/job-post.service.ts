@@ -14,6 +14,7 @@ const jobPostInclude = {
   employer: { include: { client_profile: true } },
   specialisations: { include: { specialisation: true } },
   tags: { include: { tag: true } },
+  attachments: { orderBy: { created_at: 'asc' } },
   _count: { select: { applications: true } },
 } satisfies Prisma.JobPostInclude;
 
@@ -22,7 +23,7 @@ export class JobPostService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateJobPostDto, employerId: bigint) {
-    return this.prisma.jobPost.create({
+    const created = await this.prisma.jobPost.create({
       data: {
         employer_id: employerId,
         title: dto.title,
@@ -59,6 +60,21 @@ export class JobPostService {
       },
       include: jobPostInclude,
     });
+
+    if (dto.attachment_ids && dto.attachment_ids.length > 0) {
+      await attachOrphansToJobPost(
+        this.prisma,
+        dto.attachment_ids,
+        created.id,
+        employerId,
+      );
+      return this.prisma.jobPost.findUniqueOrThrow({
+        where: { id: created.id },
+        include: jobPostInclude,
+      });
+    }
+
+    return created;
   }
 
   async findAll(query: JobPostQueryDto) {
@@ -155,6 +171,24 @@ export class JobPostService {
               job_post_id: id,
               tag_id: tid,
             })),
+          });
+        }
+      }
+
+      if (dto.attachment_ids !== undefined) {
+        const keepIds = dto.attachment_ids.map(BigInt);
+        // Detach rows currently attached to this post but not in the new list.
+        await tx.jobAttachment.updateMany({
+          where: {
+            job_post_id: id,
+            ...(keepIds.length > 0 ? { id: { notIn: keepIds } } : {}),
+          },
+          data: { job_post_id: null },
+        });
+        // Attach any new orphans owned by the caller.
+        if (keepIds.length > 0) {
+          await attachOrphansToJobPost(tx, dto.attachment_ids, id, employerId, {
+            allowAlreadyAttached: true,
           });
         }
       }
@@ -270,5 +304,44 @@ export class JobPostService {
     if (dto.status !== undefined) data.status = dto.status;
 
     return data;
+  }
+}
+
+/**
+ * Wire orphan attachments to a job post. The caller must own each row
+ * (uploaded_by_id matches employerId). Rows already attached to a different
+ * parent or owned by someone else cause a NOT_OWNER error, which is the
+ * defence against id-stealing.
+ */
+export async function attachOrphansToJobPost(
+  tx: Prisma.TransactionClient,
+  attachmentIds: number[],
+  jobPostId: bigint,
+  employerId: bigint,
+  opts: { allowAlreadyAttached?: boolean } = {},
+): Promise<void> {
+  if (attachmentIds.length === 0) return;
+  const ids = attachmentIds.map(BigInt);
+
+  const updateWhere: Prisma.JobAttachmentWhereInput = {
+    id: { in: ids },
+    uploaded_by_id: employerId,
+    job_application_id: null,
+    ...(opts.allowAlreadyAttached
+      ? { OR: [{ job_post_id: null }, { job_post_id: jobPostId }] }
+      : { job_post_id: null }),
+  };
+
+  const result = await tx.jobAttachment.updateMany({
+    where: updateWhere,
+    data: { job_post_id: jobPostId },
+  });
+
+  if (result.count !== ids.length) {
+    throw new ForbiddenException({
+      code: 'NOT_OWNER',
+      message:
+        'One or more attachments could not be wired (not owned by you, or already attached elsewhere).',
+    });
   }
 }

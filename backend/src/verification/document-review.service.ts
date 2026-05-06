@@ -147,7 +147,10 @@ export class DocumentReviewService {
           evidence_ref: documentId.toString(),
         },
       });
-      milestonesWritten.push({ type: milestoneType, id: milestone.id.toString() });
+      milestonesWritten.push({
+        type: milestoneType,
+        id: milestone.id.toString(),
+      });
 
       const promotion = await this.promotionEngine.runPromotion(
         doc.client_profile_id,
@@ -172,7 +175,9 @@ export class DocumentReviewService {
     };
   }
 
-  private serializeDocument(doc: Awaited<ReturnType<PrismaService['document']['update']>>) {
+  private serializeDocument(
+    doc: Awaited<ReturnType<PrismaService['document']['update']>>,
+  ) {
     return {
       id: doc.id.toString(),
       client_profile_id: doc.client_profile_id.toString(),

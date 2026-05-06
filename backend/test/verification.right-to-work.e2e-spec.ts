@@ -4,11 +4,7 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { createTestApp, type TestHarness } from './util/test-app';
-import {
-  seedActiveWorker,
-  seedAdmin,
-  seedMilestone,
-} from './util/factories';
+import { seedActiveWorker, seedAdmin, seedMilestone } from './util/factories';
 import { signAccessTokenFor } from './util/auth-helpers';
 import { minimalPdf } from './util/upload';
 

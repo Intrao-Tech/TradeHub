@@ -35,7 +35,8 @@ function build(opts: { apiKey?: string } = {}): {
   const engine = { runPromotion: jest.fn().mockResolvedValue(null) };
   const config = {
     get: jest.fn().mockImplementation((key: string) => {
-      if (key === 'COMPANIES_HOUSE_API_KEY') return opts.apiKey ?? 'test-api-key';
+      if (key === 'COMPANIES_HOUSE_API_KEY')
+        return opts.apiKey ?? 'test-api-key';
       return undefined;
     }),
   } as unknown as ConfigService;
@@ -59,9 +60,10 @@ describe('TEST-VER-130 verifyEmployer not configured — VER-140', () => {
       .verifyEmployer(EMPLOYER_ID)
       .catch((e: ServiceUnavailableException) => e);
     expect(err).toBeInstanceOf(ServiceUnavailableException);
-    expect(((err as ServiceUnavailableException).getResponse() as { code: string }).code).toBe(
-      'COMPANIES_HOUSE_NOT_CONFIGURED',
-    );
+    expect(
+      ((err as ServiceUnavailableException).getResponse() as { code: string })
+        .code,
+    ).toBe('COMPANIES_HOUSE_NOT_CONFIGURED');
   });
 });
 
@@ -79,9 +81,9 @@ describe('TEST-VER-131 verifyEmployer details missing — VER-141', () => {
       .verifyEmployer(EMPLOYER_ID)
       .catch((e: BadRequestException) => e);
     expect(err).toBeInstanceOf(BadRequestException);
-    expect(((err as BadRequestException).getResponse() as { code: string }).code).toBe(
-      'COMPANY_DETAILS_MISSING',
-    );
+    expect(
+      ((err as BadRequestException).getResponse() as { code: string }).code,
+    ).toBe('COMPANY_DETAILS_MISSING');
   });
 
   test('empty company_name → 400 COMPANY_DETAILS_MISSING', async () => {
@@ -125,9 +127,9 @@ describe('TEST-VER-132 verifyEmployer not found — VER-141', () => {
       .verifyEmployer(EMPLOYER_ID)
       .catch((e: NotFoundException) => e);
     expect(err).toBeInstanceOf(NotFoundException);
-    expect(((err as NotFoundException).getResponse() as { code: string }).code).toBe(
-      'COMPANIES_HOUSE_NOT_FOUND',
-    );
+    expect(
+      ((err as NotFoundException).getResponse() as { code: string }).code,
+    ).toBe('COMPANIES_HOUSE_NOT_FOUND');
   });
 });
 
@@ -173,15 +175,17 @@ describe('TEST-VER-134 verifyEmployer name mismatch — VER-142', () => {
       company_name: 'FooBar Builders',
       client_profile: { display_name: 'FooBar' },
     } as never);
-    mockNextFetch(CH_FIXTURES.activeNameMismatch(COMPANY_NUMBER, 'Acme Holdings Ltd'));
+    mockNextFetch(
+      CH_FIXTURES.activeNameMismatch(COMPANY_NUMBER, 'Acme Holdings Ltd'),
+    );
 
     const err = await service
       .verifyEmployer(EMPLOYER_ID)
       .catch((e: BadRequestException) => e);
     expect(err).toBeInstanceOf(BadRequestException);
-    expect(((err as BadRequestException).getResponse() as { code: string }).code).toBe(
-      'COMPANIES_HOUSE_MISMATCH',
-    );
+    expect(
+      ((err as BadRequestException).getResponse() as { code: string }).code,
+    ).toBe('COMPANIES_HOUSE_MISMATCH');
     expect(audit.log).toHaveBeenCalledWith(
       EMPLOYER_ID,
       'verification.companies_house.checked',
@@ -208,9 +212,10 @@ describe('TEST-VER-135 verifyEmployer upstream errors — VER-143', () => {
       .verifyEmployer(EMPLOYER_ID)
       .catch((e: ServiceUnavailableException) => e);
     expect(err).toBeInstanceOf(ServiceUnavailableException);
-    expect(((err as ServiceUnavailableException).getResponse() as { code: string }).code).toBe(
-      'COMPANIES_HOUSE_UPSTREAM',
-    );
+    expect(
+      ((err as ServiceUnavailableException).getResponse() as { code: string })
+        .code,
+    ).toBe('COMPANIES_HOUSE_UPSTREAM');
   });
 
   test('fetch throws (network error) → 503 COMPANIES_HOUSE_UPSTREAM', async () => {
@@ -227,9 +232,10 @@ describe('TEST-VER-135 verifyEmployer upstream errors — VER-143', () => {
       .verifyEmployer(EMPLOYER_ID)
       .catch((e: ServiceUnavailableException) => e);
     expect(err).toBeInstanceOf(ServiceUnavailableException);
-    expect(((err as ServiceUnavailableException).getResponse() as { code: string }).code).toBe(
-      'COMPANIES_HOUSE_UPSTREAM',
-    );
+    expect(
+      ((err as ServiceUnavailableException).getResponse() as { code: string })
+        .code,
+    ).toBe('COMPANIES_HOUSE_UPSTREAM');
   });
 
   test('registry 401 → 503 COMPANIES_HOUSE_NOT_CONFIGURED', async () => {
@@ -246,9 +252,10 @@ describe('TEST-VER-135 verifyEmployer upstream errors — VER-143', () => {
       .verifyEmployer(EMPLOYER_ID)
       .catch((e: ServiceUnavailableException) => e);
     expect(err).toBeInstanceOf(ServiceUnavailableException);
-    expect(((err as ServiceUnavailableException).getResponse() as { code: string }).code).toBe(
-      'COMPANIES_HOUSE_NOT_CONFIGURED',
-    );
+    expect(
+      ((err as ServiceUnavailableException).getResponse() as { code: string })
+        .code,
+    ).toBe('COMPANIES_HOUSE_NOT_CONFIGURED');
   });
 });
 
@@ -300,7 +307,9 @@ describe('TEST-VER-136 verifyEmployer happy path — VER-145', () => {
       client_profile: { display_name: 'Acme' },
     } as never);
     mockNextFetch(CH_FIXTURES.activeMatch(COMPANY_NUMBER, 'Acme Limited'));
-    prisma.verificationMilestone.create.mockResolvedValueOnce({ id: 700n } as never);
+    prisma.verificationMilestone.create.mockResolvedValueOnce({
+      id: 700n,
+    } as never);
 
     await service.verifyEmployer(EMPLOYER_ID);
     const create = prisma.verificationMilestone.create.mock.calls[0][0] as {

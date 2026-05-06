@@ -1,6 +1,7 @@
 import { ExecutionContext, Injectable, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { CommonModule } from './common/common.module';
@@ -21,6 +22,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
 import { AuditModule } from './audit/audit.module';
 import { JobPostModule } from './job-post/job-post.module';
 import { JobApplicationModule } from './job-application/job-application.module';
+import { JobAttachmentModule } from './job-attachment/job-attachment.module';
 import { ConversationModule } from './conversation/conversation.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
@@ -37,6 +39,7 @@ import { TestOnlyModule } from './test-only/test-only.module';
 
 const baseImports = [
   ConfigModule.forRoot({ isGlobal: true }),
+  ScheduleModule.forRoot(),
   ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
   PrismaModule,
   CommonModule,
@@ -61,6 +64,7 @@ const baseImports = [
   AuditModule,
   JobPostModule,
   JobApplicationModule,
+  JobAttachmentModule,
   ConversationModule,
   VerificationModule,
   WebhooksModule,

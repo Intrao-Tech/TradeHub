@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/EmptyState';
 import { JobStatusBadge } from '@/components/jobs/JobStatusBadge';
 import { ApplicationStatusBadge } from '@/components/jobs/ApplicationStatusBadge';
+import { AttachmentList } from '@/components/jobs/AttachmentList';
 import { EmployerChip } from '@/components/jobs/EmployerChip';
 import { formatPay } from '@/components/jobs/PayLine';
 import { ConfirmDialog } from '@/components/jobs/ConfirmDialog';
@@ -42,6 +43,12 @@ type WorkerApplication = {
       } | null;
     } | null;
   } | null;
+  attachments?: Array<{
+    id: string | number;
+    original_name: string;
+    mime_type: string;
+    size_bytes: number;
+  }>;
 };
 
 type ApplicationsResponse = {
@@ -301,6 +308,10 @@ function ApplicationRow({
             <span>Proposed: £{String(application.proposed_rate)}</span>
           ) : null}
         </div>
+        <AttachmentList
+          heading="Your attachments"
+          attachments={application.attachments}
+        />
       </div>
       <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
         {isInvitation && post?.id != null ? (

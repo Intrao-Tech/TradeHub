@@ -1,8 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -76,4 +78,15 @@ export class CreateJobPostDto {
   @IsOptional()
   @IsArray()
   tag_ids?: number[];
+
+  @ApiPropertyOptional({
+    type: [Number],
+    description:
+      'Ids of previously uploaded JobAttachment rows to wire to the new post.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsInt({ each: true })
+  attachment_ids?: number[];
 }

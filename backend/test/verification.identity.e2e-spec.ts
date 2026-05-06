@@ -47,39 +47,33 @@ describe('TEST-VER-200..201 verification identity endpoints', () => {
       expect(res.body.code).toBe('STRIPE_NOT_CONFIGURED');
     });
 
-    test.skip(
-      'PENDING_EMAIL_VERIFICATION account → 403 from AccountStateGuard — needs Stripe stub harness (TEST-VER-005). With Stripe unconfigured, the 503 short-circuits this branch.',
-      async () => {
-        const seed = await seedPendingWorker(h.prisma);
-        const token = signAccessTokenFor(h, {
-          accountId: seed.id,
-          email: seed.email,
-          verificationState: 'PENDING_EMAIL_VERIFICATION',
-        });
-        const res = await h
-          .request()
-          .post('/api/verification/identity/start')
-          .set('Authorization', `Bearer ${token}`);
-        expect(res.status).toBe(403);
-      },
-    );
+    test.skip('PENDING_EMAIL_VERIFICATION account → 403 from AccountStateGuard — needs Stripe stub harness (TEST-VER-005). With Stripe unconfigured, the 503 short-circuits this branch.', async () => {
+      const seed = await seedPendingWorker(h.prisma);
+      const token = signAccessTokenFor(h, {
+        accountId: seed.id,
+        email: seed.email,
+        verificationState: 'PENDING_EMAIL_VERIFICATION',
+      });
+      const res = await h
+        .request()
+        .post('/api/verification/identity/start')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(403);
+    });
 
-    test.skip(
-      'BASIC user → 409 ALREADY_VERIFIED — needs Stripe stub harness (TEST-VER-005)',
-      async () => {
-        const seed = await seedVerifiedWorker(h.prisma);
-        const token = signAccessTokenFor(h, {
-          accountId: seed.id,
-          email: seed.email,
-        });
-        const res = await h
-          .request()
-          .post('/api/verification/identity/start')
-          .set('Authorization', `Bearer ${token}`);
-        expect(res.status).toBe(409);
-        expect(res.body.code).toBe('ALREADY_VERIFIED');
-      },
-    );
+    test.skip('BASIC user → 409 ALREADY_VERIFIED — needs Stripe stub harness (TEST-VER-005)', async () => {
+      const seed = await seedVerifiedWorker(h.prisma);
+      const token = signAccessTokenFor(h, {
+        accountId: seed.id,
+        email: seed.email,
+      });
+      const res = await h
+        .request()
+        .post('/api/verification/identity/start')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('ALREADY_VERIFIED');
+    });
   });
 
   describe('TEST-VER-201 GET /verification/identity/status', () => {

@@ -13,6 +13,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ChipMultiSelect } from '@/components/ui/chip-multi-select';
+import {
+  AttachmentsField,
+  attachmentIdsFromValue,
+  type AttachedFile,
+  valueFromReadAttachments,
+} from '@/components/jobs/AttachmentsField';
 import { useSpecialisations } from '@/hooks/useSpecialisations';
 import { useTags } from '@/hooks/useTags';
 import {
@@ -36,6 +42,7 @@ export type JobPostFormValues = {
   is_urgent: boolean;
   specialisation_ids: number[];
   tag_ids: number[];
+  attachments: AttachedFile[];
 };
 
 type JobPostFormProps = {
@@ -64,6 +71,7 @@ const EMPTY: JobPostFormValues = {
   is_urgent: false,
   specialisation_ids: [],
   tag_ids: [],
+  attachments: [],
 };
 
 const POSTCODE_AREAS = Array.from(
@@ -189,6 +197,7 @@ export function JobPostForm({
       is_urgent: values.is_urgent,
       specialisation_ids: values.specialisation_ids,
       tag_ids: values.tag_ids,
+      attachment_ids: attachmentIdsFromValue(values.attachments),
     };
 
     if (values.pay_type === 'DAY_RATE') {
@@ -477,6 +486,12 @@ export function JobPostForm({
           maxSelectedHint={10}
         />
       </Field>
+
+      <AttachmentsField
+        value={values.attachments}
+        onChange={(next) => setValue('attachments', next)}
+        helperText="Add references — drawings, site photos, the spec sheet — so workers can size up the job."
+      />
 
       {errors.form ? (
         <div

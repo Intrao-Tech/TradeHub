@@ -158,7 +158,9 @@ export class VerificationService {
       },
     });
     if (existing) {
-      this.logger.log(`Duplicate IDENTITY_VERIFIED webhook for ${session.id} — no-op`);
+      this.logger.log(
+        `Duplicate IDENTITY_VERIFIED webhook for ${session.id} — no-op`,
+      );
       return;
     }
 
@@ -217,9 +219,8 @@ export class VerificationService {
         ? (lastStart.metadata as { session_id?: string }).session_id
         : undefined;
     if (!sessionId) return { session_id: null, status: null };
-    const session = await this.stripe.identity.verificationSessions.retrieve(
-      sessionId,
-    );
+    const session =
+      await this.stripe.identity.verificationSessions.retrieve(sessionId);
     return { session_id: session.id, status: session.status };
   }
 
@@ -438,9 +439,15 @@ export class VerificationService {
       estimated_time?: string;
       completed_at?: Date | null;
     }>;
-    next_action: { rung: VerificationLevel; label: string; doc_types?: string[] } | null;
+    next_action: {
+      rung: VerificationLevel;
+      label: string;
+      doc_types?: string[];
+    } | null;
   } {
-    const identity = milestones.find((m) => m.milestone_type === 'IDENTITY_VERIFIED');
+    const identity = milestones.find(
+      (m) => m.milestone_type === 'IDENTITY_VERIFIED',
+    );
     const hasIdentity = !!identity;
     // BASIC IN_PROGRESS would require querying the user's most recent Stripe
     // session status (`processing`). The frontend reads that directly via
@@ -508,7 +515,8 @@ export class VerificationService {
       },
     ];
 
-    let next_action: ReturnType<typeof this.computeLadder>['next_action'] = null;
+    let next_action: ReturnType<typeof this.computeLadder>['next_action'] =
+      null;
     if (currentLevel === 'UNVERIFIED') {
       next_action = { rung: 'BASIC', label: 'Verify your identity' };
     } else if (currentLevel === 'BASIC') {
@@ -523,5 +531,4 @@ export class VerificationService {
 
     return { rungs, next_action };
   }
-
 }

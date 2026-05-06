@@ -12,6 +12,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  AttachmentsField,
+  attachmentIdsFromValue,
+  type AttachedFile,
+} from '@/components/jobs/AttachmentsField';
 
 type ApplyJobSheetProps = {
   open: boolean;
@@ -34,12 +39,14 @@ export function ApplyJobSheet({
 }: ApplyJobSheetProps) {
   const [coverMessage, setCoverMessage] = useState('');
   const [proposedRate, setProposedRate] = useState('');
+  const [attachments, setAttachments] = useState<AttachedFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   function reset() {
     setCoverMessage('');
     setProposedRate('');
+    setAttachments([]);
     setError('');
   }
 
@@ -64,6 +71,7 @@ export function ApplyJobSheet({
           body: JSON.stringify({
             cover_message: coverMessage.trim() || undefined,
             proposed_rate: proposedRate ? Number(proposedRate) : undefined,
+            attachment_ids: attachmentIdsFromValue(attachments),
           }),
         },
       );
@@ -132,6 +140,11 @@ export function ApplyJobSheet({
               onChange={(e) => setProposedRate(e.target.value)}
             />
           </div>
+          <AttachmentsField
+            value={attachments}
+            onChange={setAttachments}
+            helperText="Add work samples to strengthen your proposal. Please remove any contact details, as sharing these before a contract is against our policy."
+          />
           {error ? (
             <div
               role="alert"

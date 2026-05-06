@@ -9,6 +9,7 @@ import {
 } from '@/components/VerificationBadge';
 import { StarRating } from '@/components/StarRating';
 import { ApplicationStatusBadge } from './ApplicationStatusBadge';
+import { AttachmentList } from './AttachmentList';
 import { publicFileUrl } from '@/lib/files';
 import { formatRelative } from '@/lib/relative-time';
 
@@ -29,6 +30,12 @@ export type ApplicantApplication = {
       verification_level?: string | null;
     } | null;
   } | null;
+  attachments?: Array<{
+    id: string | number;
+    original_name: string;
+    mime_type: string;
+    size_bytes: number;
+  }>;
 };
 
 type ApplicantCardProps = {
@@ -123,6 +130,10 @@ export function ApplicantCard({
         ) : (
           <p className="text-sm italic text-fg-muted">No cover message.</p>
         )}
+        <AttachmentList
+          heading="Work samples"
+          attachments={application.attachments}
+        />
         <ActionRow
           status={status}
           pending={pending}

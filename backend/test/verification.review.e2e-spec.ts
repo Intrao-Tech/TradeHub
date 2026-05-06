@@ -112,7 +112,9 @@ describe('TEST-VER-210..214 verification review (VER-032 / VER-033 / VER-037 / V
         .set('Authorization', `Bearer ${ownerToken}`)
         .expect(200);
       expect(me.body.documents.rejected).toHaveLength(1);
-      expect(me.body.documents.rejected[0].rejection_reason).toContain('blurry');
+      expect(me.body.documents.rejected[0].rejection_reason).toContain(
+        'blurry',
+      );
     });
   });
 

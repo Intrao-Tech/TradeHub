@@ -856,7 +856,9 @@ export async function seedMilestone(
   if (opts.notes != null) data.notes = opts.notes;
   if (opts.staffMemberId != null) data.staff_member_id = opts.staffMemberId;
   const m = await prisma.verificationMilestone.create({
-    data: data as Parameters<typeof prisma.verificationMilestone.create>[0]['data'],
+    data: data as Parameters<
+      typeof prisma.verificationMilestone.create
+    >[0]['data'],
   });
   return { id: m.id };
 }

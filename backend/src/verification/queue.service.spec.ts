@@ -23,10 +23,13 @@ function build(): {
   return { service, prisma };
 }
 
-function captureWhere(prisma: DeepMockProxy<PrismaService>): Record<string, unknown> {
+function captureWhere(
+  prisma: DeepMockProxy<PrismaService>,
+): Record<string, unknown> {
   const calls = prisma.document.findMany.mock.calls;
   expect(calls.length).toBeGreaterThan(0);
-  return (calls[calls.length - 1][0] as { where: Record<string, unknown> }).where;
+  return (calls[calls.length - 1][0] as { where: Record<string, unknown> })
+    .where;
 }
 
 describe('TEST-VER-160 QueueService.list() default scoping — VER-130', () => {
@@ -48,12 +51,15 @@ describe('TEST-VER-160 QueueService.list() default scoping — VER-130', () => {
   test('moderator passing assignment=all → 403 FORBIDDEN', async () => {
     const { service } = build();
     const err = await service
-      .list({ staffMemberId: SELF_STAFF, isAdmin: false }, { assignment: 'all' })
+      .list(
+        { staffMemberId: SELF_STAFF, isAdmin: false },
+        { assignment: 'all' },
+      )
       .catch((e: ForbiddenException) => e);
     expect(err).toBeInstanceOf(ForbiddenException);
-    expect(((err as ForbiddenException).getResponse() as { code: string }).code).toBe(
-      'FORBIDDEN',
-    );
+    expect(
+      ((err as ForbiddenException).getResponse() as { code: string }).code,
+    ).toBe('FORBIDDEN');
   });
 
   test('assignment=unassigned → assigned_to: null', async () => {
@@ -224,13 +230,11 @@ describe('TEST-VER-164 QueueService.getOne() — VER-074', () => {
   test('doc not found → 404 DOCUMENT_NOT_FOUND', async () => {
     const { service, prisma } = build();
     prisma.document.findUnique.mockResolvedValueOnce(null as never);
-    const err = await service
-      .getOne(DOC_ID)
-      .catch((e: NotFoundException) => e);
+    const err = await service.getOne(DOC_ID).catch((e: NotFoundException) => e);
     expect(err).toBeInstanceOf(NotFoundException);
-    expect(((err as NotFoundException).getResponse() as { code: string }).code).toBe(
-      'DOCUMENT_NOT_FOUND',
-    );
+    expect(
+      ((err as NotFoundException).getResponse() as { code: string }).code,
+    ).toBe('DOCUMENT_NOT_FOUND');
   });
 
   test('returns uploader.verification_level + history excluding self', async () => {

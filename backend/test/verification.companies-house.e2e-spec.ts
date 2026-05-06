@@ -28,10 +28,12 @@ describe('TEST-VER-230..235 verification companies-house (VER-140..145)', () => 
     jest.restoreAllMocks();
   });
 
-  async function asEmployer(opts: {
-    companyName?: string;
-    companyNumber?: string;
-  } = {}) {
+  async function asEmployer(
+    opts: {
+      companyName?: string;
+      companyNumber?: string;
+    } = {},
+  ) {
     const seed = await seedActiveEmployer(h.prisma, {
       companyName: opts.companyName ?? 'Acme Limited',
     });
@@ -112,7 +114,9 @@ describe('TEST-VER-230..235 verification companies-house (VER-140..145)', () => 
   describe('TEST-VER-233 name mismatch — VER-142', () => {
     test('Name diff → 400 COMPANIES_HOUSE_MISMATCH', async () => {
       const { token } = await asEmployer({ companyName: 'FooBar Builders' });
-      mockNextFetch(CH_FIXTURES.activeNameMismatch('12345678', 'Acme Holdings'));
+      mockNextFetch(
+        CH_FIXTURES.activeNameMismatch('12345678', 'Acme Holdings'),
+      );
       const res = await h
         .request()
         .post('/api/verification/employer/companies-house-verify')

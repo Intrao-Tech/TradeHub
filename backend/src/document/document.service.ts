@@ -102,7 +102,9 @@ export class DocumentService implements OnModuleInit {
     );
 
     return this.serialize(
-      await this.prisma.document.findUniqueOrThrow({ where: { id: created.id } }),
+      await this.prisma.document.findUniqueOrThrow({
+        where: { id: created.id },
+      }),
     );
   }
 
@@ -155,9 +157,7 @@ export class DocumentService implements OnModuleInit {
    * never leak via the document-list endpoints. Staff queue endpoints use
    * `QueueService` which has its own serialisation.
    */
-  private serialize(
-    doc: Prisma.DocumentGetPayload<Record<string, never>>,
-  ) {
+  private serialize(doc: Prisma.DocumentGetPayload<Record<string, never>>) {
     const safeMetadata = redactSensitiveMetadata(doc.doc_type, doc.metadata);
     return {
       id: doc.id.toString(),

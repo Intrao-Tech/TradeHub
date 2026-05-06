@@ -29,8 +29,16 @@ function build(): {
 const DOC_ID = 200n;
 const ACTOR = 1000n;
 
-const STAFF_A = { id: 11n, created_at: new Date('2026-01-01'), _count: { assigned_documents: 0 } };
-const STAFF_B = { id: 22n, created_at: new Date('2026-02-01'), _count: { assigned_documents: 0 } };
+const STAFF_A = {
+  id: 11n,
+  created_at: new Date('2026-01-01'),
+  _count: { assigned_documents: 0 },
+};
+const STAFF_B = {
+  id: 22n,
+  created_at: new Date('2026-02-01'),
+  _count: { assigned_documents: 0 },
+};
 
 describe('TEST-VER-120 DocumentAssignmentService.pickNextAssignee() — VER-125', () => {
   test('no on-duty staff → null', async () => {
@@ -41,7 +49,9 @@ describe('TEST-VER-120 DocumentAssignmentService.pickNextAssignee() — VER-125'
 
   test('single on-duty staff → that staff id', async () => {
     const { service, prisma } = build();
-    prisma.staffMember.findMany.mockResolvedValueOnce([{ ...STAFF_A }] as never);
+    prisma.staffMember.findMany.mockResolvedValueOnce([
+      { ...STAFF_A },
+    ] as never);
     expect(await service.pickNextAssignee()).toBe(11n);
   });
 
@@ -118,7 +128,9 @@ describe('TEST-VER-121 DocumentAssignmentService.assignNext() — VER-126', () =
 
   test('on-duty available → assigns to picked staff, reason auto', async () => {
     const { service, prisma, audit } = build();
-    prisma.staffMember.findMany.mockResolvedValueOnce([{ ...STAFF_A }] as never);
+    prisma.staffMember.findMany.mockResolvedValueOnce([
+      { ...STAFF_A },
+    ] as never);
     prisma.document.findUnique.mockResolvedValueOnce({
       assigned_to: null,
       status: 'PENDING',
@@ -170,9 +182,9 @@ describe('TEST-VER-123 DocumentAssignmentService.assignToStaff() validation — 
       .assignToStaff(DOC_ID, 999n, ACTOR)
       .catch((e: BadRequestException) => e);
     expect(err).toBeInstanceOf(BadRequestException);
-    expect(((err as BadRequestException).getResponse() as { code: string }).code).toBe(
-      'STAFF_NOT_FOUND',
-    );
+    expect(
+      ((err as BadRequestException).getResponse() as { code: string }).code,
+    ).toBe('STAFF_NOT_FOUND');
   });
 
   test('target deactivated → 400 STAFF_DEACTIVATED', async () => {
@@ -186,9 +198,9 @@ describe('TEST-VER-123 DocumentAssignmentService.assignToStaff() validation — 
       .assignToStaff(DOC_ID, 999n, ACTOR)
       .catch((e: BadRequestException) => e);
     expect(err).toBeInstanceOf(BadRequestException);
-    expect(((err as BadRequestException).getResponse() as { code: string }).code).toBe(
-      'STAFF_DEACTIVATED',
-    );
+    expect(
+      ((err as BadRequestException).getResponse() as { code: string }).code,
+    ).toBe('STAFF_DEACTIVATED');
   });
 
   test('target off-duty → 400 STAFF_OFF_DUTY', async () => {
@@ -202,9 +214,9 @@ describe('TEST-VER-123 DocumentAssignmentService.assignToStaff() validation — 
       .assignToStaff(DOC_ID, 999n, ACTOR)
       .catch((e: BadRequestException) => e);
     expect(err).toBeInstanceOf(BadRequestException);
-    expect(((err as BadRequestException).getResponse() as { code: string }).code).toBe(
-      'STAFF_OFF_DUTY',
-    );
+    expect(
+      ((err as BadRequestException).getResponse() as { code: string }).code,
+    ).toBe('STAFF_OFF_DUTY');
   });
 
   test('target null → clears assignment, audit reason admin_reassign', async () => {
@@ -283,9 +295,9 @@ describe('TEST-VER-124 DocumentAssignmentService.claim() race-safety — VER-137
       .claim(DOC_ID, 11n)
       .catch((e: ConflictException | NotFoundException) => e);
     expect(err).toBeInstanceOf(ConflictException);
-    expect(((err as ConflictException).getResponse() as { code: string }).code).toBe(
-      'ALREADY_ASSIGNED',
-    );
+    expect(
+      ((err as ConflictException).getResponse() as { code: string }).code,
+    ).toBe('ALREADY_ASSIGNED');
   });
 
   test('doc not found → 404 DOCUMENT_NOT_FOUND', async () => {
@@ -297,9 +309,9 @@ describe('TEST-VER-124 DocumentAssignmentService.claim() race-safety — VER-137
       .claim(DOC_ID, 11n)
       .catch((e: NotFoundException | BadRequestException) => e);
     expect(err).toBeInstanceOf(NotFoundException);
-    expect(((err as NotFoundException).getResponse() as { code: string }).code).toBe(
-      'DOCUMENT_NOT_FOUND',
-    );
+    expect(
+      ((err as NotFoundException).getResponse() as { code: string }).code,
+    ).toBe('DOCUMENT_NOT_FOUND');
   });
 });
 
@@ -315,13 +327,23 @@ describe('TEST-VER-125 DocumentAssignmentService.reassignFromStaff() — VER-127
     ] as never);
     // Each pickNextAssignee call returns staffB (the other on-duty member).
     prisma.staffMember.findMany.mockResolvedValue([
-      { id: staffB, created_at: new Date('2026-01-01'), _count: { assigned_documents: 0 } },
+      {
+        id: staffB,
+        created_at: new Date('2026-01-01'),
+        _count: { assigned_documents: 0 },
+      },
     ] as never);
 
     // For each setAssignment call:
     prisma.document.findUnique
-      .mockResolvedValueOnce({ assigned_to: staffA, status: 'PENDING' } as never)
-      .mockResolvedValueOnce({ assigned_to: staffA, status: 'PENDING' } as never);
+      .mockResolvedValueOnce({
+        assigned_to: staffA,
+        status: 'PENDING',
+      } as never)
+      .mockResolvedValueOnce({
+        assigned_to: staffA,
+        status: 'PENDING',
+      } as never);
     prisma.document.update.mockResolvedValue({} as never);
 
     const count = await service.reassignFromStaff(staffA, 'duty_off', null);
@@ -339,7 +361,11 @@ describe('TEST-VER-125 DocumentAssignmentService.reassignFromStaff() — VER-127
 
     prisma.document.findMany.mockResolvedValueOnce([{ id: 100n }] as never);
     prisma.staffMember.findMany.mockResolvedValue([
-      { id: staffA, created_at: new Date('2026-01-01'), _count: { assigned_documents: 0 } },
+      {
+        id: staffA,
+        created_at: new Date('2026-01-01'),
+        _count: { assigned_documents: 0 },
+      },
     ] as never);
     prisma.document.findUnique.mockResolvedValueOnce({
       assigned_to: staffA,

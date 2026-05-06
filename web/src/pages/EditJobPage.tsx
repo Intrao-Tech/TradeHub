@@ -9,6 +9,7 @@ import {
   JobPostForm,
   type JobPostFormValues,
 } from '@/components/jobs/JobPostForm';
+import { valueFromReadAttachments } from '@/components/jobs/AttachmentsField';
 import { toast } from '@/components/ui/toast';
 
 type JobPostDetail = {
@@ -29,6 +30,12 @@ type JobPostDetail = {
   employer_id?: string | number;
   specialisations?: Array<{ specialisation_id?: number }>;
   tags?: Array<{ tag_id?: number }>;
+  attachments?: Array<{
+    id: string | number;
+    original_name: string;
+    mime_type: string;
+    size_bytes: number;
+  }>;
   _count?: { applications?: number };
 };
 
@@ -103,6 +110,7 @@ export default function EditJobPage() {
         post.tags
           ?.map((t) => t.tag_id)
           .filter((x): x is number => typeof x === 'number') ?? [],
+      attachments: valueFromReadAttachments(post.attachments ?? []),
     };
   }, [post]);
 

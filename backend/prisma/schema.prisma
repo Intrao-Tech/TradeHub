@@ -115,6 +115,7 @@ model ClientProfile {
   verification_milestones VerificationMilestone[]
   referrals               Referral[]
   user_subscriptions      UserSubscription[]
+  job_attachments         JobAttachment[]
 
   @@index([postcode_area])
   @@map("client_profile")
@@ -708,6 +709,7 @@ model JobPost {
   tags            JobPostTag[]
   applications    JobApplication[]
   collaborations  Collaboration[]
+  attachments     JobAttachment[]
 
   @@index([employer_id])
   @@index([status, postcode_area])
@@ -756,11 +758,40 @@ model JobApplication {
 
   job_post       JobPost       @relation(fields: [job_post_id], references: [id], onDelete: Cascade)
   worker_profile WorkerProfile @relation(fields: [worker_id], references: [id])
+  attachments    JobAttachment[]
 
   @@unique([job_post_id, worker_id])
   @@index([job_post_id, status])
   @@index([worker_id, status])
   @@map("job_application")
+}
+
+// ============================================
+// 29b. JOB ATTACHMENT (polymorphic — exactly one of job_post_id /
+// job_application_id is non-null when attached; both NULL = orphan
+// pending the 48 h cron sweep)
+// ============================================
+
+model JobAttachment {
+  id                 BigInt   @id @default(autoincrement())
+  uploaded_by_id     BigInt
+  job_post_id        BigInt?
+  job_application_id BigInt?
+  file_url           String   @db.VarChar(500)
+  original_name      String   @db.VarChar(255)
+  mime_type          String   @db.VarChar(100)
+  size_bytes         Int
+  created_at         DateTime @default(now()) @db.Timestamptz()
+
+  uploader        ClientProfile   @relation(fields: [uploaded_by_id], references: [id], onDelete: Cascade)
+  job_post        JobPost?        @relation(fields: [job_post_id], references: [id], onDelete: Cascade)
+  job_application JobApplication? @relation(fields: [job_application_id], references: [id], onDelete: Cascade)
+
+  @@index([uploaded_by_id])
+  @@index([job_post_id])
+  @@index([job_application_id])
+  @@index([created_at])
+  @@map("job_attachment")
 }
 
 // ============================================

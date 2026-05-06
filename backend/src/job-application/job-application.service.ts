@@ -13,6 +13,7 @@ import type { ApplyJobDto } from './dto/apply-job.dto';
 const applicationInclude = {
   job_post: { include: { employer: { include: { client_profile: true } } } },
   worker_profile: { include: { client_profile: true } },
+  attachments: { orderBy: { created_at: 'asc' } },
 } satisfies Prisma.JobApplicationInclude;
 
 const collaborationInclude = {
@@ -51,7 +52,7 @@ export class JobApplicationService {
       });
     }
 
-    return this.prisma.jobApplication.create({
+    const created = await this.prisma.jobApplication.create({
       data: {
         job_post_id: jobPostId,
         worker_id: workerId,
@@ -64,6 +65,21 @@ export class JobApplicationService {
       },
       include: applicationInclude,
     });
+
+    if (dto.attachment_ids && dto.attachment_ids.length > 0) {
+      await attachOrphansToJobApplication(
+        this.prisma,
+        dto.attachment_ids,
+        created.id,
+        workerId,
+      );
+      return this.prisma.jobApplication.findUniqueOrThrow({
+        where: { id: created.id },
+        include: applicationInclude,
+      });
+    }
+
+    return created;
   }
 
   async invite(
@@ -273,6 +289,38 @@ export class JobApplicationService {
         job_post_id: application.job_post_id,
       },
       include: collaborationInclude,
+    });
+  }
+}
+
+/**
+ * Wire orphan attachments to a job application. The worker must own each row;
+ * each row must currently be unattached. Mismatch → NOT_OWNER.
+ */
+export async function attachOrphansToJobApplication(
+  tx: Prisma.TransactionClient,
+  attachmentIds: number[],
+  jobApplicationId: bigint,
+  workerId: bigint,
+): Promise<void> {
+  if (attachmentIds.length === 0) return;
+  const ids = attachmentIds.map(BigInt);
+
+  const result = await tx.jobAttachment.updateMany({
+    where: {
+      id: { in: ids },
+      uploaded_by_id: workerId,
+      job_post_id: null,
+      job_application_id: null,
+    },
+    data: { job_application_id: jobApplicationId },
+  });
+
+  if (result.count !== ids.length) {
+    throw new ForbiddenException({
+      code: 'NOT_OWNER',
+      message:
+        'One or more attachments could not be wired (not owned by you, or already attached elsewhere).',
     });
   }
 }

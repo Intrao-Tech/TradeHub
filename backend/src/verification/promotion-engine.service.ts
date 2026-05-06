@@ -1,10 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import {
-  CERT_DOC_TYPES,
-  type VerificationLevel,
-} from './constants';
+import { CERT_DOC_TYPES, type VerificationLevel } from './constants';
 
 type EvaluationContext = {
   isWorker: boolean;
@@ -16,7 +13,10 @@ type EvaluationContext = {
   hasCompanyHouseVerified: boolean;
 };
 
-type PromotionResult = { from: VerificationLevel; to: VerificationLevel } | null;
+type PromotionResult = {
+  from: VerificationLevel;
+  to: VerificationLevel;
+} | null;
 
 /**
  * Decides the target `verification_level` for a client profile from the
@@ -96,7 +96,10 @@ export class PromotionEngine {
       return null;
     }
 
-    const ctx = await this.gatherEvidence(clientProfileId, !!profile.worker_profile);
+    const ctx = await this.gatherEvidence(
+      clientProfileId,
+      !!profile.worker_profile,
+    );
     const newLevel = this.evaluate(ctx);
     const currentLevel = (profile.verification_level ??
       'UNVERIFIED') as VerificationLevel;

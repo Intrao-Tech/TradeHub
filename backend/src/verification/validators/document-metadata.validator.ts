@@ -28,22 +28,33 @@ export function validateDocumentMetadata(
 ): ValidatedMetadata {
   switch (docType) {
     case 'RIGHT_TO_WORK_SHARE_CODE': {
-      const meta = requireObject(raw, 'METADATA_REQUIRED', 'Right-to-Work share-code submission requires a share code.');
+      const meta = requireObject(
+        raw,
+        'METADATA_REQUIRED',
+        'Right-to-Work share-code submission requires a share code.',
+      );
       const code = requireString(meta, 'share_code', 'INVALID_SHARE_CODE');
       const normalised = code.toUpperCase().trim();
       if (!SHARE_CODE_REGEX.test(normalised)) {
         throw new BadRequestException({
           code: 'INVALID_SHARE_CODE',
-          message: 'Share code must be 9 alphanumeric characters in three groups of 3 separated by spaces, e.g. "W12 ABC 345".',
+          message:
+            'Share code must be 9 alphanumeric characters in three groups of 3 separated by spaces, e.g. "W12 ABC 345".',
         });
       }
       return { share_code: normalised };
     }
 
     case 'HMRC_CIS_DOCUMENT': {
-      const meta = requireObject(raw, 'METADATA_REQUIRED', 'HMRC CIS submission requires UTR and NI number.');
+      const meta = requireObject(
+        raw,
+        'METADATA_REQUIRED',
+        'HMRC CIS submission requires UTR and NI number.',
+      );
       const utr = requireString(meta, 'utr', 'INVALID_UTR').trim();
-      const ni = requireString(meta, 'ni_number', 'INVALID_NI').toUpperCase().replace(/\s+/g, '');
+      const ni = requireString(meta, 'ni_number', 'INVALID_NI')
+        .toUpperCase()
+        .replace(/\s+/g, '');
       if (!UTR_REGEX.test(utr)) {
         throw new BadRequestException({
           code: 'INVALID_UTR',
@@ -65,7 +76,9 @@ export function validateDocumentMetadata(
     case 'NICEIC_CERT':
     case 'FIRAS_CERT':
     case 'INSURANCE':
-      return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
+      return raw && typeof raw === 'object'
+        ? (raw as Record<string, unknown>)
+        : null;
 
     case 'OTHER': {
       // Free-form documents must carry a user-supplied title so staff and
@@ -91,17 +104,28 @@ export function validateDocumentMetadata(
   }
 }
 
-function requireObject(raw: unknown, code: string, message: string): Record<string, unknown> {
+function requireObject(
+  raw: unknown,
+  code: string,
+  message: string,
+): Record<string, unknown> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new BadRequestException({ code, message });
   }
   return raw as Record<string, unknown>;
 }
 
-function requireString(obj: Record<string, unknown>, key: string, code: string): string {
+function requireString(
+  obj: Record<string, unknown>,
+  key: string,
+  code: string,
+): string {
   const value = obj[key];
   if (typeof value !== 'string' || value.length === 0) {
-    throw new BadRequestException({ code, message: `Missing or invalid \`${key}\`.` });
+    throw new BadRequestException({
+      code,
+      message: `Missing or invalid \`${key}\`.`,
+    });
   }
   return value;
 }

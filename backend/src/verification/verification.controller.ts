@@ -65,9 +65,7 @@ export class VerificationController {
     summary:
       'Public read of a profile verification level (badge-only). Returns 404 for deactivated accounts.',
   })
-  getLevel(
-    @Param('clientProfileId', ParseBigIntPipe) clientProfileId: bigint,
-  ) {
+  getLevel(@Param('clientProfileId', ParseBigIntPipe) clientProfileId: bigint) {
     return this.verificationService.getPublicLevel(clientProfileId);
   }
 
@@ -113,7 +111,7 @@ export class VerificationController {
   @ApiBearerAuth()
   @ApiOperation({
     summary:
-      "Most-recent Stripe Identity session status for the current user (diagnostic polling).",
+      'Most-recent Stripe Identity session status for the current user (diagnostic polling).',
   })
   getIdentityStatus(@CurrentUser() user: CurrentUserPayload) {
     if (user.clientProfileId == null) {

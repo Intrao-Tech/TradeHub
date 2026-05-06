@@ -19,10 +19,6 @@ import { QueueService } from './queue.service';
     CompaniesHouseService,
     QueueService,
   ],
-  exports: [
-    VerificationService,
-    PromotionEngine,
-    DocumentAssignmentService,
-  ],
+  exports: [VerificationService, PromotionEngine, DocumentAssignmentService],
 })
 export class VerificationModule {}

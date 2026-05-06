@@ -9,11 +9,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
 type AssignReason =
-  | 'auto'           // new upload, system picks the next on-duty staff
-  | 'duty_off'       // staff toggling off-duty re-routes their work
-  | 'manual'         // admin manual assignment
+  | 'auto' // new upload, system picks the next on-duty staff
+  | 'duty_off' // staff toggling off-duty re-routes their work
+  | 'manual' // admin manual assignment
   | 'admin_reassign' // admin reassigns away from someone
-  | 'claim';         // staff claims an unassigned doc
+  | 'claim'; // staff claims an unassigned doc
 
 /**
  * Workload-balanced document assignment.
