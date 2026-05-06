@@ -13,6 +13,8 @@ import {
   Star,
 } from 'lucide-react';
 import { api, parseApiError } from '@/api';
+import { useChatSocket } from '@/components/chat/useChatSocket';
+import type { InboxResponse } from '@/components/chat/types';
 import { useAccountMe } from '@/hooks/useAccountMe';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -384,7 +386,7 @@ export default function CollaborationDetailPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <EscrowSummaryCard escrow={escrow} collaborationId={String(detail.id)} />
-        <ChatSummaryCard />
+        <ChatSummaryCard collaborationId={String(detail.id)} />
       </div>
 
       <ReviewsSummaryCard
@@ -586,7 +588,75 @@ function AmountRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ChatSummaryCard() {
+type ChatSummary =
+  | {
+      kind: 'loading';
+    }
+  | { kind: 'none' }
+  | {
+      kind: 'ready';
+      conversationId: string;
+      unread: number;
+      lastMessageAt: string | null;
+    };
+
+function useCollaborationChatSummary(collaborationId: string): {
+  summary: ChatSummary;
+  refetch: () => void;
+} {
+  const [summary, setSummary] = useState<ChatSummary>({ kind: 'loading' });
+  const { on, connected } = useChatSocket();
+
+  const load = useCallback(async () => {
+    try {
+      const res = await api<InboxResponse>('/conversations?page=1&limit=100');
+      const match = res.items.find(
+        (row) =>
+          row.collaboration?.id != null &&
+          String(row.collaboration.id) === collaborationId,
+      );
+      if (!match) {
+        setSummary({ kind: 'none' });
+      } else {
+        setSummary({
+          kind: 'ready',
+          conversationId: String(match.conversation.id),
+          unread: match.unread_count ?? 0,
+          lastMessageAt:
+            match.conversation.last_message_at ??
+            match.last_message?.created_at ??
+            null,
+        });
+      }
+    } catch {
+      setSummary({ kind: 'none' });
+    }
+  }, [collaborationId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!connected) return;
+    const off1 = on('new_message', () => void load());
+    const off2 = on('message_read', () => void load());
+    const off3 = on('conversation_created', () => void load());
+    return () => {
+      off1();
+      off2();
+      off3();
+    };
+  }, [connected, on, load]);
+
+  return { summary, refetch: load };
+}
+
+function ChatSummaryCard({ collaborationId }: { collaborationId: string }) {
+  const { summary } = useCollaborationChatSummary(collaborationId);
+  const ready = summary.kind === 'ready' ? summary : null;
+  const lastDate = ready?.lastMessageAt ? new Date(ready.lastMessageAt) : null;
+
   return (
     <Card>
       <CardHeader>
@@ -595,22 +665,51 @@ function ChatSummaryCard() {
           Conversation
         </CardTitle>
         <CardDescription>
-          Per-collaboration messaging is coming soon. Use the inbox in the
-          meantime.
+          {ready
+            ? 'Send messages, share files, and keep the project log here.'
+            : 'A chat thread is created automatically when this collaboration is confirmed.'}
         </CardDescription>
       </CardHeader>
-      <CardContent className="text-sm text-fg-muted">
-        <p>
-          Messages between you and the other party will surface here once chat
-          ships.
-        </p>
+      <CardContent className="space-y-2 text-sm">
+        {summary.kind === 'loading' ? (
+          <p className="text-fg-muted">Loading…</p>
+        ) : ready ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {ready.unread > 0 ? (
+              <Badge variant="default">
+                {ready.unread > 99 ? '99+' : ready.unread} unread
+              </Badge>
+            ) : (
+              <Badge variant="outline">No unread</Badge>
+            )}
+            {lastDate ? (
+              <span className="text-xs text-fg-muted">
+                Last message: {lastDate.toLocaleString('en-GB', {
+                  day: 'numeric',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-fg-muted">No conversation yet.</p>
+        )}
       </CardContent>
       <CardFooter className="border-t border-border-default pt-4">
         <Button asChild variant="link" size="sm" className="px-0">
-          <Link to="/inbox">
-            Open inbox
-            <Inbox />
-          </Link>
+          {ready ? (
+            <Link to={`/inbox/${ready.conversationId}`}>
+              Open chat
+              <ArrowRight />
+            </Link>
+          ) : (
+            <Link to="/inbox">
+              Open inbox
+              <Inbox />
+            </Link>
+          )}
         </Button>
       </CardFooter>
     </Card>
