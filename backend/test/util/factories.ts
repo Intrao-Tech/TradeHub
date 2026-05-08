@@ -1012,6 +1012,123 @@ export async function seedEscrowTransaction(
   });
 }
 
+// ── TEST-REVIEW-002: Reviews factory extension ───────────────────
+//
+// `seedReview` commits through Prisma so the review e2e specs can exercise
+// the listing / publish endpoints against real rows. When `isPublished:
+// true`, mirrors the recalculation the production `publish()` path runs
+// (`backend/src/review/review.service.ts:171-234`) by updating the affected
+// `WorkerProfile.rating_avg / rating_count` or `EmployerProfile.*`. Mirrors
+// the math so the seed step does not depend on importing the service.
+
+export type SeedReviewOpts = {
+  collaborationId: bigint;
+  reviewerRole: 'WORKER' | 'EMPLOYER';
+  overallRating?: number;
+  qualityRating?: number | null;
+  reliabilityRating?: number | null;
+  communicationRating?: number | null;
+  paymentRating?: number | null;
+  safetyRating?: number | null;
+  comment?: string | null;
+  isPublished?: boolean;
+  publishedAt?: Date | null;
+  createdAt?: Date | null;
+};
+
+export async function seedReview(
+  prisma: PrismaService,
+  opts: SeedReviewOpts,
+) {
+  const { Prisma } =
+    require('@prisma/client') as typeof import('@prisma/client');
+  const isPublished = opts.isPublished ?? false;
+  const publishedAt =
+    opts.publishedAt ?? (isPublished ? new Date() : null);
+
+  const data: Record<string, unknown> = {
+    collaboration_id: opts.collaborationId,
+    reviewer_role: opts.reviewerRole,
+    overall_rating: opts.overallRating ?? 5,
+    quality_rating: opts.qualityRating ?? null,
+    reliability_rating: opts.reliabilityRating ?? null,
+    communication_rating: opts.communicationRating ?? null,
+    payment_rating: opts.paymentRating ?? null,
+    safety_rating: opts.safetyRating ?? null,
+    comment: opts.comment ?? null,
+    is_published: isPublished,
+    published_at: publishedAt,
+  };
+  if (opts.createdAt) data.created_at = opts.createdAt;
+
+  const review = await prisma.review.create({
+    data: data as Parameters<typeof prisma.review.create>[0]['data'],
+  });
+
+  if (isPublished) {
+    // Mirror `recalculateRatings()` so the seeded rating aggregates match
+    // what production would produce after a `publish()` call.
+    const collab = await prisma.collaboration.findUniqueOrThrow({
+      where: { id: opts.collaborationId },
+    });
+    if (opts.reviewerRole === 'EMPLOYER') {
+      const workerId = collab.worker_id;
+      const [agg, count] = await Promise.all([
+        prisma.review.aggregate({
+          where: {
+            is_published: true,
+            reviewer_role: 'EMPLOYER',
+            collaboration: { worker_id: workerId },
+          },
+          _avg: { overall_rating: true },
+        }),
+        prisma.review.count({
+          where: {
+            is_published: true,
+            reviewer_role: 'EMPLOYER',
+            collaboration: { worker_id: workerId },
+          },
+        }),
+      ]);
+      await prisma.workerProfile.update({
+        where: { id: workerId },
+        data: {
+          rating_avg: new Prisma.Decimal(agg._avg.overall_rating ?? 0),
+          rating_count: count,
+        },
+      });
+    } else {
+      const employerId = collab.employer_id;
+      const [agg, count] = await Promise.all([
+        prisma.review.aggregate({
+          where: {
+            is_published: true,
+            reviewer_role: 'WORKER',
+            collaboration: { employer_id: employerId },
+          },
+          _avg: { overall_rating: true },
+        }),
+        prisma.review.count({
+          where: {
+            is_published: true,
+            reviewer_role: 'WORKER',
+            collaboration: { employer_id: employerId },
+          },
+        }),
+      ]);
+      await prisma.employerProfile.update({
+        where: { id: employerId },
+        data: {
+          rating_avg: new Prisma.Decimal(agg._avg.overall_rating ?? 0),
+          rating_count: count,
+        },
+      });
+    }
+  }
+
+  return review;
+}
+
 // ── TEST-CHAT-003: Chat factory extensions ────────────────────────
 //
 // `seedConversation` / `seedMessage` / `seedMessageAttachment` commit

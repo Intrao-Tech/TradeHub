@@ -10,6 +10,7 @@ import {
 import { api, getToken, parseApiError } from '../api';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
 import { EmptyState } from '../components/EmptyState';
+import { ReviewsTab } from '@/components/reviews/ReviewsTab';
 import { languageName } from '../lib/iso-639-1';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -265,10 +266,10 @@ export default function WorkerDetailPage() {
         </TabsContent>
 
         <TabsContent value="reviews" className="space-y-4">
-          <EmptyState
-            icon={Star}
-            title="Reviews coming soon"
-            description="Two-way verified reviews will appear here once collaborations complete."
+          <ReviewsTab
+            subjectId={worker.id}
+            subjectKind="worker"
+            subjectName={displayName}
           />
         </TabsContent>
       </Tabs>

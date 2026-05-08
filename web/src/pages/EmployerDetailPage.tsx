@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Briefcase, Building2, Star, Users } from 'lucide-react';
+import { Briefcase, Building2, Users } from 'lucide-react';
 import { api, getToken, parseApiError } from '../api';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
 import { EmptyState } from '../components/EmptyState';
+import { ReviewsTab } from '@/components/reviews/ReviewsTab';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -152,10 +153,10 @@ export default function EmployerDetailPage() {
         </TabsContent>
 
         <TabsContent value="reviews" className="space-y-4">
-          <EmptyState
-            icon={Star}
-            title="Reviews coming soon"
-            description="Two-way verified reviews will appear here once collaborations complete."
+          <ReviewsTab
+            subjectId={employer.id}
+            subjectKind="employer"
+            subjectName={displayName}
           />
         </TabsContent>
       </Tabs>

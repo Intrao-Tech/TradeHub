@@ -9,6 +9,7 @@ import { verificationHandlers } from './handlers/verification';
 import { collaborationsHandlers } from './handlers/collaborations';
 import { conversationsHandlers } from './handlers/conversations';
 import { escrowHandlers } from './handlers/escrow';
+import { reviewsHandlers } from './handlers/reviews';
 
 const API = 'http://localhost:8081/api';
 
@@ -18,6 +19,7 @@ export const handlers = [
   ...collaborationsHandlers,
   ...conversationsHandlers,
   ...escrowHandlers,
+  ...reviewsHandlers,
   // ── Discovery ───────────────────────────────────────────────
   http.get(`${API}/auth/providers`, () => HttpResponse.json({ google: true })),
 

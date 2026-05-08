@@ -38,7 +38,7 @@ const CollaborationsPage = lazy(() => import('./pages/CollaborationsPage'));
 const CollaborationDetailPage = lazy(() => import('./pages/CollaborationDetailPage'));
 const EscrowPlaceholderPage = lazy(() => import('./pages/EscrowPlaceholderPage'));
 const ReferralsPage = lazy(() => import('./pages/ReferralsPage'));
-const ReviewsPage = lazy(() => import('./pages/ReviewsPage'));
+const ReviewDetailPage = lazy(() => import('./pages/ReviewDetailPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const JobBoardPage = lazy(() => import('./pages/JobBoardPage'));
@@ -55,7 +55,6 @@ const PUBLIC_NAV: NavItem[] = [
   { to: '/jobs', label: 'Jobs' },
   { to: '/workers', label: 'Workers' },
   { to: '/employers', label: 'Employers' },
-  { to: '/reviews', label: 'Reviews' },
 ];
 
 const PRIVATE_NAV: NavItem[] = [
@@ -211,7 +210,16 @@ function MarketplaceRouter() {
           <Route path="/employers/:id" element={<EmployerDetailPage />} />
           <Route path="/clients" element={<ClientDirectoryPage />} />
           <Route path="/clients/:slug" element={<ClientPublicProfilePage />} />
-          <Route path="/reviews" element={<ReviewsPage />} />
+          <Route
+            path="/reviews"
+            element={
+              <Navigate
+                to={loggedIn ? '/collaborations?from=reviews' : '/login'}
+                replace
+              />
+            }
+          />
+          <Route path="/reviews/:id" element={<ReviewDetailPage />} />
 
           {/* Private */}
           <Route path="/dashboard" element={<Protected loggedIn={loggedIn}><DashboardPage /></Protected>} />
