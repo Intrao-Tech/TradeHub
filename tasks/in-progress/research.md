@@ -38,20 +38,6 @@
 
 ---
 
-## 7. REVIEWS
-
-### Бекенд готов, фронтенд не использует
-- `POST /reviews/collaboration/:id` — создать отзыв (только для COMPLETED), is_published=false по умолчанию
-- `GET /reviews/collaboration/:id` — нет UI
-- `GET /reviews/:id` — нет UI (детальный отзыв)
-- `PATCH /reviews/:id/publish` (staff) — нет UI (AdminPage не имеет «непроверенные отзывы» секции) → **отзывы создаются, но без staff-publish не попадают в публичный листинг → пользователь не видит свой отзыв**
-
-### Фронтенд черновой (ReviewsPage)
-- `<pre>{JSON.stringify(workerReviews)}</pre>` + `employerReviews` + `createResult` — все три листинга и результат создания как сырой JSON (`:263, 300, 377`)
-- Поиск по `worker_id` / `employer_id` как ручной `Input` — нет автокомплита
-
----
-
 ## 8. TAGS
 
 ### Бекенд готов
