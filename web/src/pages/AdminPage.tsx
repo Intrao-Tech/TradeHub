@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../api';
+import { ReviewsPublishQueueTab } from '@/components/admin/ReviewsPublishQueueTab';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,7 +9,6 @@ import { Badge } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -102,7 +103,24 @@ type ModerationQueueRow = {
   document_id?: string | number | null;
 };
 
+const ADMIN_TABS = [
+  'moderation',
+  'staff',
+  'documents',
+  'reviews',
+  'plans',
+  'specialisations',
+  'audit',
+] as const;
+
 export default function AdminPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeTab =
+    tabParam && (ADMIN_TABS as readonly string[]).includes(tabParam)
+      ? tabParam
+      : 'moderation';
+
   /* Moderation */
   const [queueType, setQueueType] = useState<string>(QUEUE_TYPES[0]);
   const [queueStatus, setQueueStatus] = useState<string>('');
@@ -120,11 +138,6 @@ export default function AdminPage() {
   const [actionErr, setActionErr] = useState('');
 
   /* Document */
-
-  /* Review publish */
-  const [reviewId, setReviewId] = useState('');
-  const [publishRes, setPublishRes] = useState<unknown>(null);
-  const [publishErr, setPublishErr] = useState('');
 
   /* Plans */
   const [plansData, setPlansData] = useState<unknown>(null);
@@ -210,26 +223,6 @@ export default function AdminPage() {
       setActionData(data);
     } catch (e) {
       setActionErr(errMsg(e));
-    }
-  }
-
-  async function publishReview(e: FormEvent) {
-    e.preventDefault();
-    setPublishErr('');
-    setPublishRes(null);
-    const id = reviewId.trim();
-    if (!id) {
-      setPublishErr('review_id required');
-      return;
-    }
-    try {
-      const data = await api<unknown>(
-        `/reviews/${encodeURIComponent(id)}/publish`,
-        { method: 'PATCH' },
-      );
-      setPublishRes(data);
-    } catch (e) {
-      setPublishErr(errMsg(e));
     }
   }
 
@@ -386,7 +379,11 @@ export default function AdminPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="moderation" className="space-y-4">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setSearchParams({ tab: v })}
+        className="space-y-4"
+      >
         <TabsList className="flex flex-wrap gap-1 h-auto">
           <TabsTrigger value="moderation">Moderation</TabsTrigger>
           <TabsTrigger value="staff">Members</TabsTrigger>
@@ -604,29 +601,7 @@ export default function AdminPage() {
         </TabsContent>
 
         <TabsContent value="reviews" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Review publishing</CardTitle>
-              <CardDescription>Publish a review by ID.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <ErrorBox message={publishErr} />
-              <form onSubmit={publishReview} className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="review-id">Review ID</Label>
-                  <Input
-                    id="review-id"
-                    type="number"
-                    value={reviewId}
-                    onChange={(e) => setReviewId(e.target.value)}
-                    required
-                  />
-                </div>
-                <Button type="submit">Publish review</Button>
-              </form>
-              <JsonBlock data={publishRes} />
-            </CardContent>
-          </Card>
+          <ReviewsPublishQueueTab />
         </TabsContent>
 
         <TabsContent value="plans" className="space-y-4">

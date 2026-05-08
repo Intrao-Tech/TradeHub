@@ -673,14 +673,31 @@ export type MockCollaborationParty = {
   };
 };
 
+export type MockReviewCollaboration = {
+  id: string;
+  worker_id: string;
+  employer_id: string;
+  project_type: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  status?: string;
+};
+
 export type MockReview = {
   id: string;
   collaboration_id: string;
   reviewer_role: 'WORKER' | 'EMPLOYER';
   overall_rating: number;
+  quality_rating?: number | null;
+  reliability_rating?: number | null;
+  communication_rating?: number | null;
+  payment_rating?: number | null;
+  safety_rating?: number | null;
+  comment?: string | null;
   is_published: boolean;
   published_at: string | null;
   created_at: string;
+  collaboration?: MockReviewCollaboration;
 };
 
 export type MockEscrowTransaction = {
@@ -1055,6 +1072,79 @@ export function mockInboxItem(
         ? mockMessage({ conversation_id: overrides.conversation?.id ?? '6001' })
         : overrides.last_message,
     unread_count: overrides.unread_count ?? 0,
+  };
+}
+
+// ── TEST-REVIEW-003: Reviews factory shapes ─────────────────────
+//
+// Match the backend `Review` row + the paginated envelope returned by the
+// six existing endpoints plus the new `GET /reviews/unpublished`. Ids
+// stringify so component code (which uses `String(review.id)` keys) lines
+// up with the bigint serialisation interceptor on the wire. Type
+// declarations live alongside `MockCollaboration` above; this block only
+// adds the construction helpers.
+
+export function mockReview(
+  overrides: Partial<MockReview> & {
+    collaboration?: Partial<MockReviewCollaboration>;
+  } = {},
+): MockReview {
+  const now = new Date().toISOString();
+  const isPublished = overrides.is_published ?? true;
+  const { collaboration: collabOverrides, ...rest } = overrides;
+  const collaboration: MockReviewCollaboration = {
+    id: '7000',
+    worker_id: '300',
+    employer_id: '400',
+    project_type: 'Kitchen refit',
+    started_at: now,
+    ended_at: now,
+    status: 'COMPLETED',
+    ...collabOverrides,
+  };
+  return {
+    id: '500',
+    collaboration_id: collaboration.id,
+    reviewer_role: 'EMPLOYER',
+    overall_rating: 5,
+    quality_rating: null,
+    reliability_rating: null,
+    communication_rating: null,
+    payment_rating: null,
+    safety_rating: null,
+    comment: 'Great work, would hire again.',
+    is_published: isPublished,
+    published_at: isPublished ? now : null,
+    created_at: now,
+    ...rest,
+    collaboration,
+  };
+}
+
+export function mockReviewDraft(
+  overrides: Partial<MockReview> & {
+    collaboration?: Partial<MockReviewCollaboration>;
+  } = {},
+): MockReview {
+  return mockReview({
+    is_published: false,
+    published_at: null,
+    ...overrides,
+  });
+}
+
+export function mockReviewListResponse(
+  items: MockReview[],
+  overrides: { total?: number; page?: number; limit?: number } = {},
+) {
+  const limit = overrides.limit ?? 10;
+  const total = overrides.total ?? items.length;
+  return {
+    items,
+    total,
+    page: overrides.page ?? 1,
+    limit,
+    totalPages: Math.ceil(total / limit) || 0,
   };
 }
 

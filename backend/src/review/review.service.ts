@@ -111,6 +111,33 @@ export class ReviewService {
     };
   }
 
+  async getUnpublished(query: ReviewQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const where = { is_published: false };
+
+    const [items, total] = await Promise.all([
+      this.prisma.review.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { created_at: 'desc' },
+        include: { collaboration: true },
+      }),
+      this.prisma.review.count({ where }),
+    ]);
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 0,
+    };
+  }
+
   async publish(reviewId: bigint) {
     const review = await this.prisma.review.findUnique({
       where: { id: reviewId },

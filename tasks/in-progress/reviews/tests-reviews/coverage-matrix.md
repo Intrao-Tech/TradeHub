@@ -103,4 +103,12 @@ Legend: **U** = backend unit (`backend/src/**/*.spec.ts`), **E2E-B** = backend e
 
 ## Drift / followups
 
-(Empty at folder creation. Items the suite surfaces during implementation get filed in `tasks/in-progress/reviews/followups.md`; closed entries are listed here at ship time, mirroring `tests-collaborations-polish/coverage-matrix.md`.)
+No production bugs were surfaced by the suite as of 2026-05-08; `tasks/in-progress/reviews/followups.md` was not created.
+
+The Playwright suite leaves five `.fixme` scenarios documented inline in `web/e2e/reviews.scenarios.spec.ts`. Each is gated on a harness-only gap (no production behaviour change required):
+
+- **TEST-REVIEW-201** — employer leave-review happy path. Unblock by copying the body of TEST-REVIEW-200 and swapping `registerWorker` → `registerEmployer` + asserting on the Employer-row CTA. No new helper needed.
+- **TEST-REVIEW-202** — public visitor permalink + back-link. Unblock once the public worker-search UI exposes a deterministic `worker_id → /workers/:id` mapping (today the route uses the slug; the seed helper returns the bigint id).
+- **TEST-REVIEW-203** — staff publish flow. Unblock by adding a `loginAsStaffViaApi` helper to `web/e2e/util.ts` so the staff-host `/auth/staff/login` redirect chain is bypassed (today the e2e harness only covers marketplace auth).
+- **TEST-REVIEW-204** — draft autosave persists across sheet close. Unblock by adding a deterministic Sheet-X selector or programmatic close hook (Radix Sheet's close button selector varies by skin).
+- **TEST-REVIEW-207** — mobile 375 px smoke. Unblock when the Playwright config exposes a 375 px mobile project (today the only project is desktop 1280×720).

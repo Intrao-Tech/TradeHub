@@ -39,6 +39,7 @@ import {
 } from '@/components/collaborations/CounterpartyChip';
 import { FlagCollaborationDialog } from '@/components/collaborations/FlagCollaborationDialog';
 import { patchCollaborationStatus } from '@/components/collaborations/api';
+import { LeaveReviewSheet } from '@/components/reviews/LeaveReviewSheet';
 
 type EscrowStatus =
   | 'CREATED'
@@ -172,7 +173,12 @@ function escrowTimestamp(escrow: EscrowTransaction): { label: string; value: str
 export default function CollaborationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { clientProfile, isStaff, loading: accountLoading } = useAccountMe();
+  const {
+    account,
+    clientProfile,
+    isStaff,
+    loading: accountLoading,
+  } = useAccountMe();
 
   const [detail, setDetail] = useState<Collaboration | null>(null);
   const [error, setError] = useState<{ status: number; message: string } | null>(null);
@@ -181,6 +187,7 @@ export default function CollaborationDetailPage() {
   const [submittingStatus, setSubmittingStatus] = useState<string | null>(null);
   const [flagOpen, setFlagOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [reviewSheetOpen, setReviewSheetOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -392,6 +399,10 @@ export default function CollaborationDetailPage() {
       <ReviewsSummaryCard
         workerReview={workerReview}
         employerReview={employerReview}
+        myRole={role}
+        canLeaveReview={status === 'COMPLETED' && isParticipant}
+        accountActive={account?.status === 'ACTIVE'}
+        onLeaveReview={() => setReviewSheetOpen(true)}
       />
 
       <AuditTimeline detail={detail} />
@@ -402,6 +413,16 @@ export default function CollaborationDetailPage() {
         collaborationId={String(detail.id)}
         onFlagged={() => setRefreshKey((k) => k + 1)}
       />
+
+      {clientProfile?.id != null ? (
+        <LeaveReviewSheet
+          collaborationId={String(detail.id)}
+          clientProfileId={clientProfile.id}
+          open={reviewSheetOpen}
+          onOpenChange={setReviewSheetOpen}
+          onSubmitted={() => setRefreshKey((k) => k + 1)}
+        />
+      ) : null}
     </article>
   );
 }
@@ -719,11 +740,18 @@ function ChatSummaryCard({ collaborationId }: { collaborationId: string }) {
 function ReviewsSummaryCard({
   workerReview,
   employerReview,
+  myRole,
+  canLeaveReview,
+  accountActive,
+  onLeaveReview,
 }: {
   workerReview: Review | undefined;
   employerReview: Review | undefined;
+  myRole: 'WORKER' | 'EMPLOYER' | null;
+  canLeaveReview: boolean;
+  accountActive: boolean;
+  onLeaveReview: () => void;
 }) {
-  const empty = !workerReview && !employerReview;
   return (
     <Card>
       <CardHeader>
@@ -733,22 +761,63 @@ function ReviewsSummaryCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
-        {empty ? (
-          <p className="text-fg-muted">No reviews yet.</p>
-        ) : (
-          <ul className="space-y-1">
-            <li className="flex items-center justify-between gap-3">
-              <span className="text-fg-muted">Worker review</span>
-              <ReviewBadge review={workerReview} />
-            </li>
-            <li className="flex items-center justify-between gap-3">
-              <span className="text-fg-muted">Employer review</span>
-              <ReviewBadge review={employerReview} />
-            </li>
-          </ul>
-        )}
+        <ul className="space-y-2">
+          <ReviewRow
+            label="Worker review"
+            review={workerReview}
+            showCta={canLeaveReview && myRole === 'WORKER' && !workerReview}
+            accountActive={accountActive}
+            onLeaveReview={onLeaveReview}
+          />
+          <ReviewRow
+            label="Employer review"
+            review={employerReview}
+            showCta={canLeaveReview && myRole === 'EMPLOYER' && !employerReview}
+            accountActive={accountActive}
+            onLeaveReview={onLeaveReview}
+          />
+        </ul>
       </CardContent>
     </Card>
+  );
+}
+
+function ReviewRow({
+  label,
+  review,
+  showCta,
+  accountActive,
+  onLeaveReview,
+}: {
+  label: string;
+  review: Review | undefined;
+  showCta: boolean;
+  accountActive: boolean;
+  onLeaveReview: () => void;
+}) {
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-2">
+      <span className="text-fg-muted">{label}</span>
+      <div className="flex items-center gap-2">
+        <ReviewBadge review={review} />
+        {showCta ? (
+          accountActive ? (
+            <Button type="button" size="sm" onClick={onLeaveReview}>
+              Leave a review
+            </Button>
+          ) : (
+            <Button asChild size="sm" variant="outline">
+              <Link
+                to="/settings/security"
+                title="Verify your email to leave reviews"
+              >
+                Verify email to review
+              </Link>
+            </Button>
+          )
+        ) : null}
+      </div>
+    </li>
   );
 }
 

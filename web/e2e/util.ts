@@ -189,6 +189,38 @@ export async function seedCollabConversationViaApi(
 }
 
 /**
+ * Plant a Review (and optionally its parent COMPLETED Collaboration) via
+ * the test-only `POST /test/seed/review` endpoint. Used by the Reviews e2e
+ * suite (TEST-REVIEW-202..205) to drive the read / permalink / staff-
+ * publish flows without first walking the full collaboration-lifecycle UI.
+ */
+export async function seedReviewViaApi(
+  request: APIRequestContext,
+  opts: {
+    workerEmail: string;
+    employerEmail: string;
+    reviewerRole?: 'WORKER' | 'EMPLOYER';
+    overallRating?: number;
+    comment?: string | null;
+    isPublished?: boolean;
+    collaborationId?: string;
+  },
+): Promise<{
+  reviewId: string;
+  collaborationId: string;
+  workerAccountId: string;
+  employerAccountId: string;
+}> {
+  const res = await request.post(`${API}/test/seed/review`, { data: opts });
+  if (!res.ok()) {
+    throw new Error(
+      `seed-review failed: ${res.status()} ${await res.text()}`,
+    );
+  }
+  return res.json();
+}
+
+/**
  * Wipes localStorage on the active page. Use before re-attempting a login
  * after the previous session was invalidated server-side — otherwise api.ts
  * sees the stale access_token, hits 401, fails the refresh, and redirects

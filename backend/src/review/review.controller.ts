@@ -64,6 +64,15 @@ export class ReviewController {
     return this.reviewService.getByCollaboration(collaborationId);
   }
 
+  @Get('unpublished')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STAFF')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List unpublished reviews (staff publish queue)' })
+  getUnpublished(@Query() query: ReviewQueryDto) {
+    return this.reviewService.getUnpublished(query);
+  }
+
   @Get('worker/:workerId')
   @ApiOperation({
     summary: 'Published reviews about a worker (from employers)',

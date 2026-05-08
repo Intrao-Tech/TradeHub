@@ -1,13 +1,24 @@
 # Status
 
-- State: product
+- State: in-progress
 - Owner: Igor (PM); implementing engineer TBA
 - Created: 2026-05-08
-- Started: —
-- Last Updated: 2026-05-08
+- Started: 2026-05-08
+- Last Updated: 2026-05-08 (implementation landed)
 - Shipped: —
 
 ## Notes
+
+### Implementation notes (2026-05-08)
+
+- Backend: added `GET /reviews/unpublished` endpoint (REVIEW-046) — staff-only, paginated, newest-first, includes `collaboration`. No schema migration. Backend `npm run build` and `npm run lint` clean.
+- Frontend new files: `web/src/components/reviews/{api.ts,LeaveReviewSheet.tsx,ReviewCard.tsx,ReviewsTab.tsx}`, `web/src/components/admin/ReviewsPublishQueueTab.tsx`, `web/src/pages/ReviewDetailPage.tsx`.
+- Frontend changes: `web/src/App.tsx` (deleted nav item, deleted lazy import for ReviewsPage, added `/reviews` redirect, registered `/reviews/:id`); `web/src/pages/ReviewsPage.tsx` deleted; `web/src/pages/CollaborationDetailPage.tsx` (extended ReviewsSummaryCard with `Leave a review` CTA + verify-email fallback + `<LeaveReviewSheet>` mount); `web/src/pages/{WorkerDetailPage,EmployerDetailPage}.tsx` (Reviews tab → `<ReviewsTab>`); `web/src/pages/AdminPage.tsx` (Reviews tab → `<ReviewsPublishQueueTab>`, Tabs now controlled by `?tab=` so REVIEW-033 back-link to `/admin?tab=reviews` opens the right tab).
+- Touched test: `src/pages/CollaborationDetailPage.test.tsx` TEST-COLLAB-115 — the two cases that asserted the previous "no reviews yet" sentinel and the absence of any write-review CTA were updated to match the new Reviews-extended shape (per REVIEW-010 the card now always shows two badge rows; the absence-of-CTA check was rewritten to assert `Leave a review` is hidden until `status === 'COMPLETED'` + participant + no existing review).
+- Tests still green: `web` 285 passed / 7 skipped; `lint:tokens` clean; `vite build` clean; backend `npm run build` + `npm run lint` clean.
+- Tests counterpart (`tasks/in-progress/reviews/tests-reviews/`) is unchanged and still owns the REVIEW-070 / REVIEW-071 acceptance set; that session is the next step.
+
+### Scope context
 
 - Scope locked 2026-05-08: this feature fully closes the Reviews loop end-to-end **without** an escrow dependency — eligibility is `Collaboration.status === 'COMPLETED'`, the same rule the backend already enforces (`backend/src/review/review.service.ts:26`). Escrow is being delivered separately and is explicitly not on this surface's critical path.
 - The Reviews backend (`backend/src/review/{review.controller.ts,review.service.ts,dto/}`) is consumed as-is for the existing six endpoints. **One backend addition is in scope:** the staff-only `GET /reviews/unpublished` endpoint specified in `REVIEW-046` (resolves spec Q1, locked 2026-05-08); backend tests in `REVIEW-047`.

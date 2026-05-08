@@ -467,11 +467,15 @@ describe('TEST-COLLAB-115 — COLLAB-024 reviews summary', () => {
     };
   }
 
-  test('TEST-COLLAB-115 / COLLAB-024 — empty reviews → "No reviews yet"', async () => {
+  test('TEST-COLLAB-115 / COLLAB-024 — empty reviews → both rows show Not submitted', async () => {
     withCollaboration({ reviews: [] });
     const account = await asWorker();
     renderWithProfile(withRoute(), { route: '/collaborations/42', account });
-    expect(await screen.findByText(/no reviews yet/i)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText(/worker review/i)).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/employer review/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/not submitted/i).length).toBeGreaterThanOrEqual(2);
   });
 
   test('TEST-COLLAB-115 / COLLAB-024 — published worker review labelled Published; missing employer side labelled Not submitted', async () => {
@@ -500,19 +504,170 @@ describe('TEST-COLLAB-115 — COLLAB-024 reviews summary', () => {
     expect(screen.getByText(/Draft/i)).toBeInTheDocument();
   });
 
-  test('TEST-COLLAB-115 / COLLAB-024 — no Write-review CTA in this feature', async () => {
+  test('TEST-COLLAB-115 / COLLAB-024 — non-COMPLETED collaboration shows no Leave-review CTA', async () => {
     withCollaboration({});
     const account = await asWorker();
     renderWithProfile(withRoute(), { route: '/collaborations/42', account });
     await waitFor(() =>
-      expect(screen.getByText(/no reviews yet/i)).toBeInTheDocument(),
+      expect(screen.getByText(/worker review/i)).toBeInTheDocument(),
     );
     expect(
-      screen.queryByRole('button', { name: /write a review/i }),
+      screen.queryByRole('button', { name: /leave a review/i }),
     ).toBeNull();
     expect(
-      screen.queryByRole('link', { name: /write a review/i }),
+      screen.queryByRole('link', { name: /leave a review/i }),
     ).toBeNull();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// TEST-REVIEW-120..122 — REVIEW-010..016 ReviewsSummaryCard CTA
+// ════════════════════════════════════════════════════════════════════
+
+describe('TEST-REVIEW-120 — REVIEW-010 button-visibility matrix', () => {
+  function makeReview(
+    role: 'WORKER' | 'EMPLOYER',
+    isPublished: boolean,
+  ): MockReview {
+    return {
+      id: role === 'WORKER' ? '5001' : '5002',
+      collaboration_id: '42',
+      reviewer_role: role,
+      overall_rating: 5,
+      is_published: isPublished,
+      published_at: isPublished ? new Date().toISOString() : null,
+      created_at: new Date().toISOString(),
+    };
+  }
+
+  test('TEST-REVIEW-120 / REVIEW-010 — COMPLETED × worker viewer × no worker review → Leave a review visible', async () => {
+    withCollaboration({ status: 'COMPLETED', reviews: [] });
+    const account = await asWorker();
+    renderWithProfile(withRoute(), { route: '/collaborations/42', account });
+    await waitFor(() =>
+      expect(screen.getByText(/worker review/i)).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole('button', { name: /Leave a review/i }),
+    ).toBeInTheDocument();
+  });
+
+  test('TEST-REVIEW-120 / REVIEW-010 — COMPLETED × worker viewer × worker review exists → button hidden, badge shown', async () => {
+    withCollaboration({
+      status: 'COMPLETED',
+      reviews: [makeReview('WORKER', false)],
+    });
+    const account = await asWorker();
+    renderWithProfile(withRoute(), { route: '/collaborations/42', account });
+    await waitFor(() =>
+      expect(screen.getAllByText(/draft/i).length).toBeGreaterThan(0),
+    );
+    expect(
+      screen.queryByRole('button', { name: /Leave a review/i }),
+    ).toBeNull();
+  });
+
+  test('TEST-REVIEW-120 / REVIEW-010 — COMPLETED × employer viewer × no employer review → button visible', async () => {
+    withCollaboration({
+      status: 'COMPLETED',
+      employer_id: MY_ID,
+      worker_id: '900',
+      reviews: [],
+    });
+    const account = await asEmployer();
+    renderWithProfile(withRoute(), { route: '/collaborations/42', account });
+    await waitFor(() =>
+      expect(screen.getByText(/employer review/i)).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole('button', { name: /Leave a review/i }),
+    ).toBeInTheDocument();
+  });
+
+  test('TEST-REVIEW-120 / REVIEW-010 — COMPLETED × employer viewer × employer review exists → button hidden', async () => {
+    withCollaboration({
+      status: 'COMPLETED',
+      employer_id: MY_ID,
+      worker_id: '900',
+      reviews: [makeReview('EMPLOYER', true)],
+    });
+    const account = await asEmployer();
+    renderWithProfile(withRoute(), { route: '/collaborations/42', account });
+    await waitFor(() =>
+      expect(screen.getByText(/employer review/i)).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByRole('button', { name: /Leave a review/i }),
+    ).toBeNull();
+  });
+
+  test.each(['IN_PROGRESS', 'PENDING', 'CONFIRMED', 'REJECTED', 'DISPUTED'] as const)(
+    'TEST-REVIEW-120 / REVIEW-010 — %s × any viewer → no button',
+    async (status) => {
+      withCollaboration({ status, reviews: [] });
+      const account = await asWorker();
+      renderWithProfile(withRoute(), { route: '/collaborations/42', account });
+      await waitFor(() =>
+        expect(screen.getByText(/worker review/i)).toBeInTheDocument(),
+      );
+      expect(
+        screen.queryByRole('button', { name: /Leave a review/i }),
+      ).toBeNull();
+    },
+  );
+
+  test('TEST-REVIEW-120 / REVIEW-010 — staff viewer × COMPLETED → no Leave-review button (staff publishes; staff does not author)', async () => {
+    withCollaboration({ status: 'COMPLETED', reviews: [] });
+    const account = await asStaff();
+    renderWithProfile(withRoute(), { route: '/collaborations/42', account });
+    await waitFor(() =>
+      expect(screen.getByText(/worker review/i)).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByRole('button', { name: /Leave a review/i }),
+    ).toBeNull();
+  });
+});
+
+describe('TEST-REVIEW-121 — REVIEW-015 account-state gating', () => {
+  test('TEST-REVIEW-121 / REVIEW-015 — non-ACTIVE viewer renders the verify-email CTA in place of Leave a review', async () => {
+    withCollaboration({ status: 'COMPLETED', reviews: [] });
+    const { setTokens } = await import('@/api');
+    setTokens('t', 'r');
+    const account = mockAccountMe({
+      status: 'PENDING_EMAIL_VERIFICATION',
+      clientProfile: mockClientProfile({
+        id: MY_ID,
+        worker_profile: mockWorkerProfile({ id: MY_ID }),
+        employer_profile: null,
+      }),
+    });
+    renderWithProfile(withRoute(), { route: '/collaborations/42', account });
+    await waitFor(() =>
+      expect(screen.getByText(/worker review/i)).toBeInTheDocument(),
+    );
+    const verifyLink = await screen.findByRole('link', {
+      name: /Verify email to review/i,
+    });
+    expect(verifyLink).toHaveAttribute('href', '/settings/security');
+    expect(
+      screen.queryByRole('button', { name: /^Leave a review$/i }),
+    ).toBeNull();
+  });
+});
+
+describe('TEST-REVIEW-122 — REVIEW-011 click → <LeaveReviewSheet> opens with correct collaborationId', () => {
+  test('TEST-REVIEW-122 / REVIEW-011 — clicking Leave a review reveals the sheet', async () => {
+    withCollaboration({ status: 'COMPLETED', reviews: [] });
+    const account = await asWorker();
+    renderWithProfile(withRoute(), { route: '/collaborations/42', account });
+    const cta = await screen.findByRole('button', { name: /Leave a review/i });
+    const user = userEvent.setup();
+    await user.click(cta);
+    // Sheet header / description renders.
+    await waitFor(() =>
+      expect(screen.getByText(/Rate this collaboration/i)).toBeInTheDocument(),
+    );
   });
 });
 
