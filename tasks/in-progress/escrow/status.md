@@ -1,0 +1,61 @@
+# Status
+
+- State: in-progress (spec + contract drafted, implementation pending)
+- Owner: Igor (PM); implementing engineer TBA
+- Created: 2026-05-09 (folder moved from product/ via scope.md → spec drafting)
+- Started: 2026-05-09
+- Last Updated: 2026-05-09
+- Shipped: —
+
+## Notes
+
+- **2026-05-09** — Folder moved `product/` → `in-progress/`. `scope.md` from product phase migrated into `brief.md` framing + `notes.md` references. Full SDD set drafted: `brief.md`, `spec.md` (101 ESCROW-NNN requirements with Decisions Log), `notes.md` (Upwork research + Stripe Connect patterns), `contract.md` (sealed schema + endpoints + slice plan + audit events). Sibling `tests-escrow/` scaffolded with `brief.md`, `spec.md` placeholder, `coverage-matrix.md` skeleton, `status.md`.
+- **Headline architectural decisions** (full Decisions Log in `spec.md`):
+  - **Money flow**: Stripe Connect Express. Separate Charges and Transfers pattern (charge lands on platform, then platform makes independent transfers to worker + referrer). Supports 3-way split.
+  - **Multiple milestones from start** (Upwork pattern). Lockstep funding — one funded-but-unreleased milestone at a time per contract.
+  - **Manual release** with **7-day auto-release** safety valve if employer goes silent post-submission.
+  - **Stripe fee passthrough = `EMPLOYER_PAYS`** by default (Upwork-style: client absorbs processing fee in their charge).
+  - **Admin-controlled fees** from `/admin/settings`: client marketplace fee %, freelancer service fee %, referral commission %, Stripe fee passthrough mode. ADMIN-only (not moderator).
+  - **Worker onboarding gate at first-fund time** — workers without Connect can apply, accept collabs; blocked only when employer tries to fund.
+  - **Per-milestone disputes block subsequent funding** (Upwork verified pattern). Resolution via moderator decision; no binding arbitration in MVP (CIArb extensibility via `EscrowDispute.arbitration_required` schema slot).
+  - **Explicit "End contract" required** to close — releasing the last milestone does NOT auto-close. Either party clicks "End contract" → 7-day silent contest window → COMPLETED → reviews window opens.
+  - **`Collaboration.agreed_amount` becomes derived** = sum of milestone amounts. Frozen snapshot at first-fund for audit.
+  - **System chat messages on every escrow event** (overrides scope.md "do not post system messages" rule per explicit owner request).
+  - **Removed mock endpoints** from existing `escrow.controller.ts` — webhook is now source-of-truth for all state transitions.
+- **Slice plan**: 6 slices over ~3 weeks of dev. A — schema + Connect onboarding; B — milestones + fund; C — submit + release + auto-release; D — refund + dispute + cancel; E — wallet + admin settings + system chat msgs; F — audit + cleanup + provider flag.
+- **Tests counterpart**: `tests-escrow/` opens parallel to Slice A; coverage drives `TEST-ESCROW-NNN` 1:1 against `ESCROW-NNN`. Real Stripe API never used in tests — `stripe-mock` Docker container or in-memory mock.
+- **Webhook setup verified 2026-05-09**: `stripe listen --forward-to ... --forward-connect-to ...` running, both `STRIPE_WEBHOOK_SECRET` and `STRIPE_CONNECT_WEBHOOK_SECRET` set in `.env`, `payment_intent.succeeded` test trigger returned `[200]` from local backend. Connect activated in Stripe sandbox via Marketplace business model. Test connected account auto-created (acct_1TVGTqEJxf4yoGty).
+
+## Source inputs available to the implementing AI
+
+- Spec phase output (this folder): `brief.md`, `spec.md`, `notes.md`, `contract.md`, `status.md` (current file).
+- Product doc: `docs/TradeHub_UK_Technical_Specification_v2.docx` (§7 Payments and Escrow, §10 Operational requirements).
+- Product workflow doc: `PROMPTS.md` at repo root — the canonical prompt patterns.
+- Existing backend code: `backend/src/escrow/{escrow.controller.ts, escrow.service.ts, escrow.module.ts, dto/}`. Mock-mode methods will be removed in Slice F per ESCROW-158.
+- Existing schema: `backend/prisma/schema.prisma:550-572` — `EscrowTransaction` (will get `milestones[]` relation), `:801-841` — `Conversation` (system messages added), `Collaboration:488-518` (existing).
+- Webhook entry: `backend/src/webhooks/stripe.service.ts` — already verified for both platform + Connect signatures, just adds new event handlers.
+- Stripe SDK: `backend/src/stripe/stripe.module.ts` exposes `STRIPE_CLIENT` token (Stripe Node SDK).
+- Adjacent shipped specs (consumed via `contract.md`): `tasks/done/auth-flow/`, `tasks/done/profiles/`, `tasks/done/jobs-applications/`, `tasks/done/collaborations-polish/`, `tasks/done/chat/`, `tasks/done/reviews/`, `tasks/done/verification/`.
+- Frontend touchpoints: `web/src/pages/EscrowPlaceholderPage.tsx` (replace body), `web/src/pages/CollaborationDetailPage.tsx` (extend summary card), `web/src/pages/AdminPage.tsx` (add escrow disputes + settings tabs).
+
+## Move-to-done checklist
+
+Before this folder moves to `tasks/done/`:
+
+- [ ] All `ESCROW-NNN (Must)` requirements implemented and passing tests
+- [ ] Slice A through F all merged to develop
+- [ ] `tests-escrow/` is shipped with TEST-ESCROW-NNN coverage matrix at >90% green
+- [ ] Manual smoke test passed (full flow: onboarding → fund → submit → approve → end contract; dispute flow: fund → submit → dispute → moderator resolves)
+- [ ] `npm run lint` clean both backend and frontend
+- [ ] `tsc --noEmit` clean both
+- [ ] `vite build` clean
+- [ ] Stripe-mock CI tests green
+- [ ] No `console.log` of PaymentIntent payloads in shipped code
+- [ ] All audit events from ESCROW-153 emitted in expected scenarios
+- [ ] Webhook signature verification mandatory (CI fails if env missing)
+- [ ] Idempotency keys present on every Stripe write call (manual review)
+- [ ] Test mode locked: CI fails loud if `STRIPE_SECRET_KEY` starts with `sk_live_` in non-prod
+- [ ] OpenAPI docs accessible at `/api/docs`
+- [ ] PRs merged in slice order (A → F); each commit message follows `feat(escrow):` / `fix(escrow):` / `chore(escrow):` convention
+- [ ] Followups documented in `followups.md` (open production bugs surfaced but not blocking ship)
+- [ ] `status.md` updated: State `done`, Shipped date filled
