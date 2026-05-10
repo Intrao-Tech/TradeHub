@@ -19,6 +19,10 @@ import { checkPasswordPolicy } from '../common/validators/password-policy';
 import type { AccountStatus } from '../common/decorators/current-user.decorator';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import {
+  generateReferralCode,
+  REFERRAL_AUDIT_EVENTS,
+} from '../referral/referral.constants';
 
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1h
@@ -123,6 +127,22 @@ export class AuthService {
     }
 
     const slug = this.generateSlug(displayName);
+    const referralCode = await this.allocateReferralCode();
+
+    // Account-referral attribution: read cookie once, validate the referrer
+    // exists and is not self. Locked at signup forever — never re-attributed.
+    const refByCode = (dto as { referred_by_code?: string | null })
+      .referred_by_code;
+    let referredById: bigint | null = null;
+    if (refByCode) {
+      const referrer = await this.prisma.account.findUnique({
+        where: { referral_code: refByCode.toUpperCase() },
+        select: { id: true, email: true },
+      });
+      if (referrer && referrer.email !== dto.email) {
+        referredById = referrer.id;
+      }
+    }
 
     const account = await this.prisma.account.create({
       data: {
@@ -130,6 +150,9 @@ export class AuthService {
         password_hash: passwordHash,
         phone: dto.phone,
         status: 'PENDING_EMAIL_VERIFICATION',
+        referral_code: referralCode,
+        referred_by_id: referredById,
+        referred_at: referredById ? new Date() : null,
         client_profile: {
           create: {
             display_name: displayName,
@@ -145,6 +168,40 @@ export class AuthService {
         },
       },
     });
+
+    if (referredById) {
+      await this.audit.log(
+        account.id,
+        REFERRAL_AUDIT_EVENTS.ACCOUNT_ATTRIBUTED,
+        'account',
+        account.id,
+        { referrer_id: String(referredById), code: refByCode },
+        ip,
+      );
+      // Best-effort: notify the referrer that someone signed up via their link.
+      void (async () => {
+        try {
+          const referrer = await this.prisma.account.findUnique({
+            where: { id: referredById },
+            include: {
+              client_profile: { select: { display_name: true } },
+            },
+          });
+          if (referrer) {
+            await this.mail.sendReferralAccountAttributed(
+              referrer.email,
+              referrer.client_profile?.display_name ?? referrer.email,
+              displayName,
+              account.email,
+            );
+          }
+        } catch (err) {
+          this.logger.warn(
+            `Failed to send account-referral notification: ${(err as Error).message}`,
+          );
+        }
+      })();
+    }
 
     await this.audit.log(
       account.id,
@@ -678,12 +735,14 @@ export class AuthService {
     // Brand-new Google signup
     const slug = this.generateSlug(profile.displayName);
     const trustedVerified = profile.emailVerified === true;
+    const referralCode = await this.allocateReferralCode();
     const created = await this.prisma.account.create({
       data: {
         email: profile.email,
         google_id: profile.googleId,
         status: trustedVerified ? 'ACTIVE' : 'PENDING_EMAIL_VERIFICATION',
         email_verified_at: trustedVerified ? new Date() : null,
+        referral_code: referralCode,
         client_profile: {
           create: {
             display_name: profile.displayName,
@@ -1049,6 +1108,19 @@ export class AuthService {
 
   private hashToken(raw: string): string {
     return crypto.createHash('sha256').update(raw).digest('hex');
+  }
+
+  private async allocateReferralCode(): Promise<string> {
+    // Retry up to 5x on the (extremely unlikely) collision; 31^8 codespace.
+    for (let i = 0; i < 5; i++) {
+      const code = generateReferralCode();
+      const taken = await this.prisma.account.findUnique({
+        where: { referral_code: code },
+        select: { id: true },
+      });
+      if (!taken) return code;
+    }
+    throw new Error('Could not allocate a unique referral code after 5 tries');
   }
 
   private frontendBase(): string {

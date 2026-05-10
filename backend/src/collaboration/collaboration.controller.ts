@@ -4,7 +4,6 @@ import {
   Controller,
   Get,
   Param,
-  Patch,
   Post,
   Query,
   UseGuards,
@@ -25,8 +24,6 @@ import { CollaborationService } from './collaboration.service';
 import {
   CollaborationQueryDto,
   CreateCollaborationDto,
-  FlagCollaborationDto,
-  UpdateCollaborationStatusDto,
 } from './dto/collaboration.dto';
 
 @ApiTags('Collaborations')
@@ -39,7 +36,9 @@ export class CollaborationController {
   @Roles('WORKER', 'EMPLOYER')
   @RequiresVerifiedEmail()
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a collaboration' })
+  @ApiOperation({
+    summary: 'Create-or-find relationship and propose first Contract under it',
+  })
   create(
     @CurrentUser() user: CurrentUserPayload,
     @Body() dto: CreateCollaborationDto,
@@ -84,7 +83,7 @@ export class CollaborationController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List collaborations for the current user' })
+  @ApiOperation({ summary: 'List relationships for the current user' })
   listMine(
     @CurrentUser() user: CurrentUserPayload,
     @Query() query: CollaborationQueryDto,
@@ -95,47 +94,41 @@ export class CollaborationController {
     return this.collaborationService.getByUser(user.clientProfileId, query);
   }
 
+  @Get('find')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Find the relationship between a worker_id + employer_id pair. Returns 404 if none exists. Used by post-accept UI to deep-link.',
+  })
+  async find(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query('worker_id') workerId?: string,
+    @Query('employer_id') employerId?: string,
+  ) {
+    if (!workerId || !employerId) {
+      throw new BadRequestException(
+        'worker_id and employer_id are both required',
+      );
+    }
+    const found = await this.collaborationService.findByPair(
+      BigInt(workerId),
+      BigInt(employerId),
+      user,
+    );
+    return found;
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get collaboration by id (participant or staff)' })
+  @ApiOperation({
+    summary: 'Get relationship by id with contract list (participant or staff)',
+  })
   getById(
     @Param('id', ParseBigIntPipe) id: bigint,
     @CurrentUser() user: CurrentUserPayload,
   ) {
     return this.collaborationService.getByIdForUser(id, user);
-  }
-
-  @Patch(':id/status')
-  @UseGuards(JwtAuthGuard, AccountStateGuard)
-  @RequiresVerifiedEmail()
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update collaboration status' })
-  updateStatus(
-    @Param('id', ParseBigIntPipe) id: bigint,
-    @CurrentUser() user: CurrentUserPayload,
-    @Body() dto: UpdateCollaborationStatusDto,
-  ) {
-    if (user.clientProfileId == null) {
-      throw new BadRequestException('No client profile for this account');
-    }
-    return this.collaborationService.updateStatus(
-      id,
-      dto.status,
-      user.clientProfileId,
-    );
-  }
-
-  @Post(':id/flag')
-  @UseGuards(JwtAuthGuard, AccountStateGuard)
-  @RequiresVerifiedEmail()
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Flag a collaboration' })
-  flag(
-    @Param('id', ParseBigIntPipe) id: bigint,
-    @CurrentUser() user: CurrentUserPayload,
-    @Body() dto: FlagCollaborationDto,
-  ) {
-    return this.collaborationService.flag(id, dto.reason, user);
   }
 }

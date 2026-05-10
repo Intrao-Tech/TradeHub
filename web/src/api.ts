@@ -88,20 +88,29 @@ export async function api<T = unknown>(
     headers['Content-Type'] = 'application/json';
   }
 
-  const res = await fetch(`${API}${path}`, { ...options, headers });
+  const res = await fetch(`${API}${path}`, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
 
   if (res.status === 401 && refreshToken) {
     const refreshRes = await fetch(`${API}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),
+      credentials: 'include',
     });
 
     if (refreshRes.ok) {
       const data = await refreshRes.json();
       setTokens(data.access_token, data.refresh_token);
       headers['Authorization'] = `Bearer ${data.access_token}`;
-      const retry = await fetch(`${API}${path}`, { ...options, headers });
+      const retry = await fetch(`${API}${path}`, {
+        ...options,
+        headers,
+        credentials: 'include',
+      });
       if (!retry.ok) {
         await throwFromResponse(retry);
       }

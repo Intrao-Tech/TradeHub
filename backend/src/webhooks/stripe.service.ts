@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { STRIPE_CLIENT } from '../stripe/stripe.module';
 import { MailService } from '../mail/mail.service';
 import { VerificationService } from '../verification/verification.service';
+import { EscrowService } from '../escrow/escrow.service';
 
 @Injectable()
 export class StripeWebhookService {
@@ -18,6 +19,7 @@ export class StripeWebhookService {
     @Inject(STRIPE_CLIENT) private readonly stripe: Stripe | null,
     private readonly mail: MailService,
     private readonly verification: VerificationService,
+    private readonly escrow: EscrowService,
   ) {
     this.platformSecret =
       this.config.get<string>('STRIPE_WEBHOOK_SECRET') || '';
@@ -79,10 +81,13 @@ export class StripeWebhookService {
 
       case 'transfer.created':
         await this.onTransferCreated(event.data.object);
+        // Also let escrow record confirmation if metadata has milestone_id
+        await this.escrow.handleTransferPaid(event.data.object);
         break;
 
       case 'transfer.reversed':
         this.logger.warn(`Transfer reversed: ${event.data.object.id}`);
+        await this.escrow.handleTransferFailed(event.data.object);
         break;
 
       case 'checkout.session.completed':
@@ -95,12 +100,28 @@ export class StripeWebhookService {
         break;
 
       case 'account.updated':
-      case 'account.application.authorized':
-      case 'account.application.deauthorized':
       case 'capability.updated':
         this.logger.log(
           `Connect lifecycle :: ${event.type} on account ${event.account ?? '—'}`,
         );
+        await this.escrow.handleAccountUpdated(
+          event.data.object as Stripe.Account,
+        );
+        break;
+
+      case 'account.application.authorized':
+        this.logger.log(
+          `Connect application authorized on account ${event.account ?? '—'}`,
+        );
+        break;
+
+      case 'account.application.deauthorized':
+        this.logger.warn(
+          `Connect deauthorized on account ${event.account ?? '—'}`,
+        );
+        if (event.account) {
+          await this.escrow.handleAccountDeauthorizedById(event.account);
+        }
         break;
 
       case 'identity.verification_session.verified':
@@ -118,6 +139,13 @@ export class StripeWebhookService {
   private async onPaymentIntentSucceeded(
     pi: Stripe.PaymentIntent,
   ): Promise<void> {
+    // New milestone-based path (Slice B+) — preferred when metadata has milestone_id.
+    if (pi.metadata?.milestone_id) {
+      await this.escrow.handleMilestonePaymentSucceeded(pi);
+      return;
+    }
+
+    // Legacy contract-level escrow path (kept until Slice F removes mock endpoints).
     const escrowId = this.extractEscrowId(pi.metadata);
     const latestCharge =
       typeof pi.latest_charge === 'string'
@@ -147,13 +175,21 @@ export class StripeWebhookService {
       const full = await this.prisma.escrowTransaction.findUnique({
         where: { id: escrow.id },
         include: {
-          collaboration: {
+          contract: {
             include: {
-              worker: {
-                include: { client_profile: { include: { account: true } } },
-              },
-              employer: {
-                include: { client_profile: { include: { account: true } } },
+              collaboration: {
+                include: {
+                  worker: {
+                    include: {
+                      client_profile: { include: { account: true } },
+                    },
+                  },
+                  employer: {
+                    include: {
+                      client_profile: { include: { account: true } },
+                    },
+                  },
+                },
               },
             },
           },
@@ -162,13 +198,13 @@ export class StripeWebhookService {
       if (full) {
         const amountGbp = full.job_amount.toString();
         const workerEmail =
-          full.collaboration.worker.client_profile.account.email;
+          full.contract.collaboration.worker.client_profile.account.email;
         const workerName =
-          full.collaboration.worker.client_profile.display_name;
+          full.contract.collaboration.worker.client_profile.display_name;
         const employerEmail =
-          full.collaboration.employer.client_profile.account.email;
+          full.contract.collaboration.employer.client_profile.account.email;
         const employerName =
-          full.collaboration.employer.client_profile.display_name;
+          full.contract.collaboration.employer.client_profile.display_name;
         void this.mail.sendEscrowFunded(
           employerEmail,
           employerName,

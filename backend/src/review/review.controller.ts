@@ -42,7 +42,7 @@ export class ReviewController {
     if (user.clientProfileId == null) {
       throw new BadRequestException('No client profile for this account');
     }
-    return this.reviewService.create(
+    return this.reviewService.createForCollaboration(
       collaborationId,
       user.clientProfileId,
       dto,

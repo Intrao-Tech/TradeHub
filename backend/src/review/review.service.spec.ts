@@ -144,9 +144,8 @@ describe('TEST-REVIEW-010 ReviewService.create() — REVIEW-013 role derivation'
     // employer side. This is a compile-time assertion via type access; the
     // expression below is the canary.
     type DtoKeys = keyof import('./dto/create-review.dto').CreateReviewDto;
-    type AssertNoReviewerRole = Extract<DtoKeys, 'reviewer_role'> extends never
-      ? true
-      : false;
+    type AssertNoReviewerRole =
+      Extract<DtoKeys, 'reviewer_role'> extends never ? true : false;
     const ok: AssertNoReviewerRole = true;
     expect(ok).toBe(true);
   });
@@ -334,10 +333,7 @@ describe('TEST-REVIEW-014 ReviewService.getById() — REVIEW-032 visibility bran
       }) as never,
     );
     await expect(
-      service.getById(
-        REVIEW_ID,
-        userPayload({ clientProfileId: OUTSIDER_ID }),
-      ),
+      service.getById(REVIEW_ID, userPayload({ clientProfileId: OUTSIDER_ID })),
     ).resolves.toBeDefined();
   });
 
@@ -408,10 +404,7 @@ describe('TEST-REVIEW-014 ReviewService.getById() — REVIEW-032 visibility bran
       }) as never,
     );
     await expect(
-      service.getById(
-        REVIEW_ID,
-        userPayload({ clientProfileId: OUTSIDER_ID }),
-      ),
+      service.getById(REVIEW_ID, userPayload({ clientProfileId: OUTSIDER_ID })),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
@@ -471,11 +464,7 @@ describe('TEST-REVIEW-015 ReviewService.getBySubject() — REVIEW-020 filter', (
     prisma.review.findMany.mockResolvedValue([] as never);
     prisma.review.count.mockResolvedValue(0);
 
-    await service.getBySubject(
-      EMPLOYER_ID,
-      { page: 1, limit: 10 },
-      'EMPLOYER',
-    );
+    await service.getBySubject(EMPLOYER_ID, { page: 1, limit: 10 }, 'EMPLOYER');
 
     const findArgs = prisma.review.findMany.mock.calls[0][0] as {
       where: Record<string, unknown>;
@@ -587,10 +576,7 @@ describe('TEST-REVIEW-016 ReviewService.publish() — REVIEW-042', () => {
 // ════════════════════════════════════════════════════════════════════
 
 describe('TEST-REVIEW-017 ReviewService.recalculateRatings() — EMPLOYER side updates WorkerProfile', () => {
-  function setupPublish(opts: {
-    avg: number | null;
-    count: number;
-  }) {
+  function setupPublish(opts: { avg: number | null; count: number }) {
     const { service, prisma } = build();
     prisma.review.findUnique.mockResolvedValue(
       fakeReview({ is_published: false, reviewer_role: 'EMPLOYER' }) as never,
@@ -773,7 +759,9 @@ describe('TEST-REVIEW-019 ReviewService.getUnpublished() — REVIEW-046', () => 
       limit: 20,
       totalPages: 3,
     });
-    const findArgs = prisma.review.findMany.mock.calls[0][0] as { skip: number };
+    const findArgs = prisma.review.findMany.mock.calls[0][0] as {
+      skip: number;
+    };
     expect(findArgs.skip).toBe(40);
   });
 
@@ -782,9 +770,15 @@ describe('TEST-REVIEW-019 ReviewService.getUnpublished() — REVIEW-046', () => 
     prisma.review.findMany.mockResolvedValue([] as never);
     prisma.review.count.mockResolvedValue(0);
 
-    await expect(service.getUnpublished({ page: 1, limit: 20 })).resolves.toEqual(
-      { items: [], total: 0, page: 1, limit: 20, totalPages: 0 },
-    );
+    await expect(
+      service.getUnpublished({ page: 1, limit: 20 }),
+    ).resolves.toEqual({
+      items: [],
+      total: 0,
+      page: 1,
+      limit: 20,
+      totalPages: 0,
+    });
   });
 });
 

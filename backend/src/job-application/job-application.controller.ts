@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -42,6 +43,7 @@ export class JobApplicationController {
     @Param('jobPostId', ParseBigIntPipe) jobPostId: bigint,
     @CurrentUser() user: CurrentUserPayload,
     @Body() dto: ApplyJobDto,
+    @Headers('cookie') cookieHeader?: string,
   ) {
     if (user.clientProfileId == null) {
       throw new BadRequestException('No client profile for this account');
@@ -50,6 +52,7 @@ export class JobApplicationController {
       jobPostId,
       user.clientProfileId,
       dto,
+      cookieHeader,
     );
   }
 

@@ -2,11 +2,19 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
+import { AuditService } from '../audit/audit.service';
+import { readProjectRefCookie } from '../referral/referral-cookie';
+import { REFERRAL_AUDIT_EVENTS } from '../referral/referral.constants';
+import { ConversationService } from '../conversation/conversation.service';
 import type { ApplicationQueryDto } from './dto/application-query.dto';
 import type { ApplyJobDto } from './dto/apply-job.dto';
 
@@ -19,16 +27,28 @@ const applicationInclude = {
 const collaborationInclude = {
   worker: { include: { client_profile: true } },
   employer: { include: { client_profile: true } },
-  reviews: true,
-  escrow_transaction: true,
-  referral: true,
+  contracts: { orderBy: { position: 'asc' } },
+  conversation: { select: { id: true } },
 } satisfies Prisma.CollaborationInclude;
 
 @Injectable()
 export class JobApplicationService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(JobApplicationService.name);
 
-  async apply(jobPostId: bigint, workerId: bigint, dto: ApplyJobDto) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailService,
+    private readonly audit: AuditService,
+    @Inject(forwardRef(() => ConversationService))
+    private readonly conversations: ConversationService,
+  ) {}
+
+  async apply(
+    jobPostId: bigint,
+    workerId: bigint,
+    dto: ApplyJobDto,
+    cookieHeader?: string,
+  ) {
     const jobPost = await this.prisma.jobPost.findUnique({
       where: { id: jobPostId },
     });
@@ -52,6 +72,38 @@ export class JobApplicationService {
       });
     }
 
+    // Project-ref attribution: read cookie + validate target_id matches
+    // this jobPostId AND target_role=WORKER AND referrer != applicant.
+    let projectReferrerId: bigint | null = null;
+    let projectReferrerRole: 'WORKER' | 'EMPLOYER' | null = null;
+    let referrerForNotify: {
+      id: bigint;
+      email: string;
+      display_name: string;
+    } | null = null;
+    const refCookie = readProjectRefCookie(cookieHeader);
+    if (
+      refCookie &&
+      refCookie.target_role === 'WORKER' &&
+      String(refCookie.target_id) === String(jobPostId)
+    ) {
+      const referrer = await this.prisma.account.findUnique({
+        where: { referral_code: refCookie.code.toUpperCase() },
+        include: {
+          client_profile: { select: { display_name: true } },
+        },
+      });
+      if (referrer && referrer.id !== workerId) {
+        projectReferrerId = referrer.id;
+        projectReferrerRole = 'WORKER';
+        referrerForNotify = {
+          id: referrer.id,
+          email: referrer.email,
+          display_name: referrer.client_profile?.display_name ?? referrer.email,
+        };
+      }
+    }
+
     const created = await this.prisma.jobApplication.create({
       data: {
         job_post_id: jobPostId,
@@ -62,9 +114,45 @@ export class JobApplicationService {
           dto.proposed_rate != null
             ? new Prisma.Decimal(dto.proposed_rate)
             : null,
+        project_referrer_id: projectReferrerId,
+        project_referrer_role: projectReferrerRole,
       },
       include: applicationInclude,
     });
+
+    if (referrerForNotify) {
+      await this.audit.log(
+        workerId,
+        REFERRAL_AUDIT_EVENTS.PROJECT_ATTRIBUTED,
+        'job_application',
+        created.id,
+        {
+          referrer_id: String(referrerForNotify.id),
+          job_post_id: String(jobPostId),
+          target_role: 'WORKER',
+        },
+      );
+      // Best-effort: tell the referrer that someone used their job link.
+      void (async () => {
+        try {
+          const applicant = await this.prisma.clientProfile.findUnique({
+            where: { id: workerId },
+            select: { display_name: true },
+          });
+          await this.mail.sendReferralProjectAttributed(
+            referrerForNotify.email,
+            referrerForNotify.display_name,
+            jobPost.title,
+            'JOB',
+            applicant?.display_name ?? 'A worker',
+          );
+        } catch (err) {
+          this.logger.warn(
+            `Failed to send project-referral notification: ${(err as Error).message}`,
+          );
+        }
+      })();
+    }
 
     if (dto.attachment_ids && dto.attachment_ids.length > 0) {
       await attachOrphansToJobApplication(
@@ -257,10 +345,84 @@ export class JobApplicationService {
       data,
     });
 
+    // ACCEPTED: spin up just the working relationship + persistent chat.
+    // The employer creates Contract(s) later from the Collaboration page,
+    // each tied to a specific JobPost they pick (Upwork-style workroom).
+    if (status === 'ACCEPTED') {
+      await this.spinUpRelationshipAndChat(application);
+    }
+
     return this.prisma.jobApplication.findUniqueOrThrow({
       where: { id },
       include: applicationInclude,
     });
+  }
+
+  /**
+   * Find-or-create the worker↔employer Collaboration + ensure the persistent
+   * chat conversation exists. Posts a system message referencing the job
+   * that triggered the acceptance so participants have context. Idempotent.
+   */
+  private async spinUpRelationshipAndChat(application: {
+    id: bigint;
+    worker_id: bigint;
+    job_post: {
+      id: bigint;
+      employer_id: bigint;
+      title: string;
+      postcode_area: string | null;
+      fixed_price: Prisma.Decimal | null;
+    };
+  }) {
+    const workerId = application.worker_id;
+    const employerId = application.job_post.employer_id;
+
+    let collab = await this.prisma.collaboration.findFirst({
+      where: { worker_id: workerId, employer_id: employerId },
+    });
+    let isNewCollab = false;
+    if (!collab) {
+      collab = await this.prisma.collaboration.create({
+        data: { worker_id: workerId, employer_id: employerId },
+      });
+      isNewCollab = true;
+    }
+
+    let convId: bigint | null = null;
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        convId = await this.conversations.ensureCollaborationConversation(
+          tx,
+          collab!.id,
+          workerId,
+          employerId,
+          employerId,
+        );
+      });
+      if (convId !== null) {
+        this.conversations.announceConversationCreated(convId, [
+          workerId,
+          employerId,
+        ]);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Failed to ensure conversation for collab=${collab.id}: ${(err as Error).message}`,
+      );
+    }
+
+    // Post a context system message so the chat opens with the job linked.
+    if (isNewCollab || convId !== null) {
+      try {
+        await this.conversations.postSystemMessageForCollaboration(
+          collab.id,
+          `Job accepted: "${application.job_post.title}". Discuss scope here, then the employer can create a contract from this conversation.`,
+          employerId,
+        );
+      } catch {
+        // Non-fatal.
+      }
+    }
   }
 
   async toCollaboration(id: bigint, userId: bigint) {
@@ -281,12 +443,24 @@ export class JobApplicationService {
       );
     }
 
+    // Create-or-find relationship; first-contract creation belongs to
+    // ContractService and the new collaboration POST handler. Returning
+    // just the relationship here so existing callers keep working —
+    // they used to read `referral_id`/`status` etc., now those live on
+    // Contract and require a separate fetch.
+    const existing = await this.prisma.collaboration.findFirst({
+      where: {
+        worker_id: application.worker_id,
+        employer_id: application.job_post.employer_id,
+      },
+      include: collaborationInclude,
+    });
+    if (existing) return existing;
+
     return this.prisma.collaboration.create({
       data: {
         worker_id: application.worker_id,
         employer_id: application.job_post.employer_id,
-        initiated_by: application.initiated_by,
-        job_post_id: application.job_post_id,
       },
       include: collaborationInclude,
     });

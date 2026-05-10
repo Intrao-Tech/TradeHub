@@ -29,7 +29,6 @@ const conversationWithParticipantsAndLastMessage =
       collaboration: {
         select: {
           id: true,
-          status: true,
           worker_id: true,
           employer_id: true,
         },
@@ -261,6 +260,66 @@ export class ConversationService {
     this.chatGateway.emitConversationCreated(conversationId, accountIds);
   }
 
+  /**
+   * Post a SYSTEM message into an existing conversation linked to a
+   * collaboration. Used by escrow / verification etc. to announce
+   * lifecycle events ("Milestone funded", "Worker submitted work", etc.).
+   *
+   * No-op (returns null) if the collab has no conversation yet.
+   * `sender_id` must be one of the conversation participants — schema
+   * doesn't allow null. Caller passes the actor for auditability;
+   * `message_type=SYSTEM` is what marks the row as platform-issued.
+   * If actor is null (e.g. auto-release cron), falls back to the first
+   * participant — message_type still flags it as SYSTEM in the UI.
+   */
+  async postSystemMessageForCollaboration(
+    collaborationId: bigint,
+    content: string,
+    actorAccountId?: bigint | null,
+  ): Promise<bigint | null> {
+    const conv = await this.prisma.conversation.findUnique({
+      where: { collaboration_id: collaborationId },
+      select: { id: true, participants: { select: { account_id: true } } },
+    });
+    if (!conv) return null;
+    if (conv.participants.length === 0) return null;
+
+    const participantIds = conv.participants.map((p) => p.account_id);
+    const senderId =
+      actorAccountId != null &&
+      participantIds.some((id) => id === actorAccountId)
+        ? actorAccountId
+        : participantIds[0];
+
+    const message = await this.prisma.message.create({
+      data: {
+        conversation_id: conv.id,
+        sender_id: senderId,
+        content,
+        message_type: SYSTEM_MESSAGE_TYPE,
+      },
+    });
+    await this.prisma.conversation.update({
+      where: { id: conv.id },
+      data: { last_message_at: message.created_at },
+    });
+
+    // Best-effort broadcast — gateway may not be available in tests.
+    try {
+      this.chatGateway.emitNewMessage(conv.id, {
+        id: message.id,
+        conversation_id: conv.id,
+        sender_id: senderId,
+        content,
+        message_type: SYSTEM_MESSAGE_TYPE,
+        created_at: message.created_at,
+      });
+    } catch {
+      // ignore — broadcast is non-critical for escrow correctness
+    }
+    return message.id;
+  }
+
   private async unreadCountForParticipant(
     conversationId: bigint,
     lastReadAt: Date | null,
@@ -302,7 +361,6 @@ export class ConversationService {
               collaboration: {
                 select: {
                   id: true,
-                  status: true,
                   worker_id: true,
                   employer_id: true,
                 },
@@ -422,18 +480,9 @@ export class ConversationService {
 
     await this.assertParticipant(conversationId, senderId);
 
-    // Block sends if the linked collaboration is REJECTED — read-only state
-    // per the Edge Cases entry on rejected collabs.
-    const conv = await this.prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: { collaboration: { select: { status: true } } },
-    });
-    if (conv?.collaboration?.status === 'REJECTED') {
-      throw new ForbiddenException({
-        code: 'COLLABORATION_REJECTED',
-        message: 'This collaboration was rejected — messages are read-only.',
-      });
-    }
+    // Note: post-Contracts refactor, chat persists at relationship level
+    // and is never read-only — even after a Contract ends, parties keep
+    // talking (Upwork model). Read-only gating moved into Contract status.
 
     const now = new Date();
     const messageType = dto.message_type ?? 'TEXT';

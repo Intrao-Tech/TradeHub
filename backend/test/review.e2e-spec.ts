@@ -441,8 +441,8 @@ describe('TEST-REVIEW-072 GET /reviews/worker/:id (REVIEW-020)', () => {
     expect(res.body.totalPages).toBe(3);
     // newest first ordering by published_at desc — earlier indexes have a
     // newer published_at, so items 6-10 are at indexes 5..9.
-    const dates = res.body.items.map(
-      (r: { published_at: string }) => new Date(r.published_at).getTime(),
+    const dates = res.body.items.map((r: { published_at: string }) =>
+      new Date(r.published_at).getTime(),
     );
     for (let i = 1; i < dates.length; i += 1) {
       expect(dates[i]).toBeLessThanOrEqual(dates[i - 1]);
@@ -886,8 +886,8 @@ describe('TEST-REVIEW-076 GET /reviews/unpublished (REVIEW-046)', () => {
     expect(res.body.total).toBe(4);
     expect(res.body.totalPages).toBe(2);
     // newest first
-    const dates = res.body.items.map(
-      (r: { created_at: string }) => new Date(r.created_at).getTime(),
+    const dates = res.body.items.map((r: { created_at: string }) =>
+      new Date(r.created_at).getTime(),
     );
     expect(dates[0]).toBeGreaterThanOrEqual(dates[1]);
   });

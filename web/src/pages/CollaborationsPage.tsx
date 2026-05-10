@@ -1,42 +1,55 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Briefcase, Handshake, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Briefcase, Handshake, MessageCircle } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '@/hooks/useAccountMe';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/EmptyState';
-import {
-  CollaborationStatusBadge,
-  type CollaborationStatus,
-} from '@/components/collaborations/CollaborationStatusBadge';
-import {
-  CounterpartyChip,
-  type CounterpartyParty,
-} from '@/components/collaborations/CounterpartyChip';
-import {
-  NewCollaborationSheet,
-  type NewCollaborationRole,
-} from '@/components/collaborations/NewCollaborationSheet';
+
+type ContractRow = {
+  id: string | number;
+  position: number;
+  status: 'DRAFT' | 'PROPOSED' | 'ACTIVE' | 'ENDED';
+  end_reason?: string | null;
+  agreed_amount?: string | number | null;
+  project_type?: string | null;
+  site_postcode?: string | null;
+  started_at?: string | null;
+  ended_at?: string | null;
+};
+
+type CounterpartyParty = {
+  id: string | number;
+  client_profile?: {
+    display_name?: string | null;
+    avatar_url?: string | null;
+    city?: string | null;
+    postcode_area?: string | null;
+  } | null;
+};
 
 type CollaborationRow = {
   id: string | number;
   worker_id: string | number;
   employer_id: string | number;
-  initiated_by: 'WORKER' | 'EMPLOYER' | string;
-  status: string;
-  project_type?: string | null;
-  site_postcode?: string | null;
-  agreed_amount?: string | number | null;
-  flagged?: boolean;
-  started_at?: string | null;
-  ended_at?: string | null;
+  first_contracted_at?: string | null;
+  last_contract_id?: string | number | null;
   created_at?: string | null;
   worker?: CounterpartyParty | null;
   employer?: CounterpartyParty | null;
+  contracts?: ContractRow[];
+  conversation?: { id: string | number } | null;
 };
 
 type ListResponse = {
@@ -46,55 +59,69 @@ type ListResponse = {
   limit: number;
 };
 
-type StatusTab = 'ALL' | CollaborationStatus;
+type StatusTab = 'ALL' | 'CHAT_ONLY' | 'PROPOSED' | 'ACTIVE' | 'ENDED';
+type RoleTab = 'WORKER' | 'EMPLOYER';
 
 const STATUS_TABS: StatusTab[] = [
   'ALL',
-  'PENDING',
-  'CONFIRMED',
-  'IN_PROGRESS',
-  'COMPLETED',
-  'DISPUTED',
-  'REJECTED',
+  'CHAT_ONLY',
+  'PROPOSED',
+  'ACTIVE',
+  'ENDED',
 ];
-
 const STATUS_LABEL: Record<StatusTab, string> = {
   ALL: 'All',
-  PENDING: 'Pending',
-  CONFIRMED: 'Confirmed',
-  IN_PROGRESS: 'In progress',
-  COMPLETED: 'Completed',
-  DISPUTED: 'Disputed',
-  REJECTED: 'Rejected',
+  CHAT_ONLY: 'Chat only',
+  PROPOSED: 'Proposed',
+  ACTIVE: 'Active',
+  ENDED: 'Ended',
 };
 
-type RoleTab = 'WORKER' | 'EMPLOYER';
+function pickRowState(row: CollaborationRow): StatusTab {
+  const contracts = row.contracts ?? [];
+  if (contracts.length === 0) return 'CHAT_ONLY';
+  const inFlight = contracts.find((c) =>
+    ['DRAFT', 'PROPOSED', 'ACTIVE'].includes(c.status),
+  );
+  if (inFlight) return inFlight.status === 'PROPOSED' ? 'PROPOSED' : 'ACTIVE';
+  return 'ENDED';
+}
 
-function formatGbp(value?: string | number | null): string {
+function fmtGbp(value?: string | number | null) {
   if (value == null || value === '') return '—';
   const n = Number(value);
   if (!Number.isFinite(n)) return String(value);
   return new Intl.NumberFormat('en-GB', {
     style: 'currency',
     currency: 'GBP',
-    maximumFractionDigits: 2,
   }).format(n);
 }
 
-function formatDate(value?: string | null): string {
+function fmtDate(value?: string | null) {
   if (!value) return '—';
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  return Number.isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
 }
 
+const stateBadgeVariant: Record<
+  StatusTab,
+  'info' | 'warning' | 'success' | 'secondary' | 'outline'
+> = {
+  ALL: 'outline',
+  CHAT_ONLY: 'outline',
+  PROPOSED: 'warning',
+  ACTIVE: 'success',
+  ENDED: 'secondary',
+};
+
 export default function CollaborationsPage() {
-  const navigate = useNavigate();
-  const { clientProfile, isWorker, isEmployer, loading: accountLoading } =
+  const { account, isWorker, isEmployer, loading: accountLoading } =
     useAccountMe();
 
   const [data, setData] = useState<CollaborationRow[]>([]);
@@ -102,20 +129,21 @@ export default function CollaborationsPage() {
   const [loading, setLoading] = useState(true);
   const [statusTab, setStatusTab] = useState<StatusTab>('ALL');
   const [roleTab, setRoleTab] = useState<RoleTab | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [sheetRole, setSheetRole] = useState<NewCollaborationRole>('WORKER');
 
-  const myClientProfileId =
-    clientProfile?.id != null ? String(clientProfile.id) : null;
+  const myAccountId = account?.id != null ? String(account.id) : null;
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await api<ListResponse>('/collaborations/me?page=1&limit=100');
+      const res = await api<ListResponse>(
+        '/collaborations/me?page=1&limit=100',
+      );
       setData(res.items ?? []);
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Could not load your collaborations.');
+      setError(
+        parseApiError(err)?.message ?? 'Could not load your collaborations.',
+      );
       setData([]);
     } finally {
       setLoading(false);
@@ -127,18 +155,16 @@ export default function CollaborationsPage() {
     void load();
   }, [accountLoading, load]);
 
-  // Derive which role tabs are present based on the rows (Decision Q1).
   const availableRoles = useMemo<RoleTab[]>(() => {
-    if (!myClientProfileId) return [];
+    if (!myAccountId) return [];
     const roles = new Set<RoleTab>();
     for (const row of data) {
-      if (String(row.worker_id) === myClientProfileId) roles.add('WORKER');
-      if (String(row.employer_id) === myClientProfileId) roles.add('EMPLOYER');
+      if (String(row.worker_id) === myAccountId) roles.add('WORKER');
+      if (String(row.employer_id) === myAccountId) roles.add('EMPLOYER');
     }
     return Array.from(roles);
-  }, [data, myClientProfileId]);
+  }, [data, myAccountId]);
 
-  // Set a sensible default role tab once we know what roles the user has rows for.
   useEffect(() => {
     if (availableRoles.length < 2) {
       if (roleTab !== null) setRoleTab(null);
@@ -150,69 +176,43 @@ export default function CollaborationsPage() {
   }, [availableRoles, roleTab, isWorker]);
 
   const filteredByRole = useMemo(() => {
-    if (!myClientProfileId || roleTab == null) return data;
+    if (!myAccountId || roleTab == null) return data;
     return data.filter((row) =>
       roleTab === 'WORKER'
-        ? String(row.worker_id) === myClientProfileId
-        : String(row.employer_id) === myClientProfileId,
+        ? String(row.worker_id) === myAccountId
+        : String(row.employer_id) === myAccountId,
     );
-  }, [data, myClientProfileId, roleTab]);
+  }, [data, myAccountId, roleTab]);
 
   const counts = useMemo(() => {
     const c: Record<StatusTab, number> = {
-      ALL: 0,
-      PENDING: 0,
-      CONFIRMED: 0,
-      IN_PROGRESS: 0,
-      COMPLETED: 0,
-      DISPUTED: 0,
-      REJECTED: 0,
+      ALL: filteredByRole.length,
+      CHAT_ONLY: 0,
+      PROPOSED: 0,
+      ACTIVE: 0,
+      ENDED: 0,
     };
-    for (const row of filteredByRole) {
-      c.ALL += 1;
-      const k = (row.status ?? '').toUpperCase() as StatusTab;
-      if (k in c) c[k] += 1;
-    }
+    for (const row of filteredByRole) c[pickRowState(row)] += 1;
     return c;
   }, [filteredByRole]);
 
-  const visible = useMemo(() => {
+  const filtered = useMemo(() => {
     if (statusTab === 'ALL') return filteredByRole;
-    return filteredByRole.filter(
-      (r) => (r.status ?? '').toUpperCase() === statusTab,
-    );
+    return filteredByRole.filter((row) => pickRowState(row) === statusTab);
   }, [filteredByRole, statusTab]);
-
-  function openSheet(role: NewCollaborationRole) {
-    setSheetRole(role);
-    setSheetOpen(true);
-  }
-
-  const canInitiate = isWorker || isEmployer;
-  const initiatorRole: NewCollaborationRole = isWorker ? 'WORKER' : 'EMPLOYER';
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-fg">
+          <h1 className="text-2xl font-semibold tracking-tight">
             Collaborations
           </h1>
           <p className="text-sm text-fg-muted">
-            Track engagements through pending, confirmed, in-progress, and
-            completed.
+            Each row is a long-running working relationship with one
+            counterparty. Contracts live inside.
           </p>
         </div>
-        {canInitiate ? (
-          <Button
-            type="button"
-            onClick={() => openSheet(initiatorRole)}
-            className="self-start sm:self-auto"
-          >
-            <Plus />
-            New collaboration
-          </Button>
-        ) : null}
       </div>
 
       {error ? (
@@ -224,25 +224,29 @@ export default function CollaborationsPage() {
         </div>
       ) : null}
 
-      {availableRoles.length >= 2 ? (
+      {availableRoles.length === 2 ? (
         <Tabs
           value={roleTab ?? 'WORKER'}
           onValueChange={(v) => setRoleTab(v as RoleTab)}
         >
-          <TabsList className="bg-subtle p-1">
-            <TabsTrigger value="WORKER">As worker</TabsTrigger>
-            <TabsTrigger value="EMPLOYER">As employer</TabsTrigger>
+          <TabsList>
+            <TabsTrigger value="WORKER">
+              <Briefcase className="h-4 w-4" /> As worker
+            </TabsTrigger>
+            <TabsTrigger value="EMPLOYER">
+              <Handshake className="h-4 w-4" /> As employer
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       ) : null}
 
       <Tabs value={statusTab} onValueChange={(v) => setStatusTab(v as StatusTab)}>
-        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-subtle p-1 sm:w-auto">
-          {STATUS_TABS.map((t) => (
-            <TabsTrigger key={t} value={t} className="gap-2">
-              {STATUS_LABEL[t]}
-              <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
-                {counts[t]}
+        <TabsList className="flex flex-wrap gap-1 h-auto">
+          {STATUS_TABS.map((s) => (
+            <TabsTrigger key={s} value={s}>
+              {STATUS_LABEL[s]}
+              <Badge variant="outline" className="ml-1 text-xs">
+                {counts[s]}
               </Badge>
             </TabsTrigger>
           ))}
@@ -251,140 +255,91 @@ export default function CollaborationsPage() {
 
       {loading ? (
         <div className="space-y-3">
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
         </div>
-      ) : visible.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState
           icon={Handshake}
-          title={
-            data.length === 0
-              ? 'No collaborations yet'
-              : 'No collaborations match these filters'
-          }
+          title="No collaborations here"
           description={
-            data.length === 0
-              ? 'Accept a job application to start one, or invite someone manually.'
-              : 'Try a different status or role filter.'
-          }
-          action={
-            data.length === 0 ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <Button asChild variant="outline">
-                  <Link to="/jobs">
-                    <Briefcase />
-                    Browse jobs
-                  </Link>
-                </Button>
-                {canInitiate ? (
-                  <Button onClick={() => openSheet(initiatorRole)}>
-                    <Plus />
-                    New collaboration
-                  </Button>
-                ) : null}
-              </div>
-            ) : null
+            isEmployer
+              ? 'Accept a worker on a job post to start a working relationship.'
+              : 'Apply for jobs and an employer accept will create a collaboration here.'
           }
         />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {visible.map((row) => (
-            <CollaborationRowCard
-              key={String(row.id)}
-              row={row}
-              myClientProfileId={myClientProfileId}
-            />
-          ))}
-        </div>
+        <ul className="space-y-3">
+          {filtered.map((row) => {
+            const meIsWorker = String(row.worker_id) === myAccountId;
+            const counterparty = meIsWorker ? row.employer : row.worker;
+            const cpName = counterparty?.client_profile?.display_name ?? '—';
+            const cpCity = counterparty?.client_profile?.city ?? '';
+            const state = pickRowState(row);
+            const contractsCount = row.contracts?.length ?? 0;
+            const lastContract =
+              row.contracts && row.contracts.length > 0
+                ? row.contracts[row.contracts.length - 1]
+                : null;
+            return (
+              <li key={String(row.id)}>
+                <Card>
+                  <CardHeader>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <CardTitle className="text-base">{cpName}</CardTitle>
+                        <CardDescription>
+                          {cpCity ? `${cpCity} · ` : ''}
+                          since {fmtDate(row.first_contracted_at ?? row.created_at)}
+                          {' · '}
+                          {contractsCount} contract
+                          {contractsCount === 1 ? '' : 's'}
+                        </CardDescription>
+                      </div>
+                      <Badge variant={stateBadgeVariant[state]}>
+                        {STATUS_LABEL[state]}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-1 text-sm">
+                    {lastContract ? (
+                      <p>
+                        Latest:{' '}
+                        <strong>
+                          {lastContract.project_type ?? 'Untitled'}
+                        </strong>{' '}
+                        · {fmtGbp(lastContract.agreed_amount)} ·{' '}
+                        <Badge variant="outline">{lastContract.status}</Badge>
+                      </p>
+                    ) : (
+                      <p className="text-fg-muted">
+                        No contracts yet — talk in chat then{' '}
+                        {meIsWorker
+                          ? 'wait for the employer to propose one'
+                          : 'create one tied to one of your job posts'}
+                        .
+                      </p>
+                    )}
+                  </CardContent>
+                  <CardFooter className="flex flex-wrap gap-2 border-t border-border-default pt-4">
+                    <Button asChild>
+                      <Link to={`/collaborations/${row.id}`}>Open</Link>
+                    </Button>
+                    {row.conversation?.id ? (
+                      <Button asChild variant="outline">
+                        <Link to={`/inbox/${row.conversation.id}`}>
+                          <MessageCircle className="h-4 w-4" />
+                          Chat
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </CardFooter>
+                </Card>
+              </li>
+            );
+          })}
+        </ul>
       )}
-
-      <NewCollaborationSheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        role={sheetRole}
-        onCreated={(created) => {
-          void load();
-          if (created.id != null) {
-            navigate(`/collaborations/${String(created.id)}`);
-          }
-        }}
-      />
-    </div>
-  );
-}
-
-function CollaborationRowCard({
-  row,
-  myClientProfileId,
-}: {
-  row: CollaborationRow;
-  myClientProfileId: string | null;
-}) {
-  const myRole: 'WORKER' | 'EMPLOYER' | null =
-    myClientProfileId == null
-      ? null
-      : String(row.worker_id) === myClientProfileId
-        ? 'WORKER'
-        : String(row.employer_id) === myClientProfileId
-          ? 'EMPLOYER'
-          : null;
-
-  // The counterparty is the *other* side from `myRole`.
-  const counterpartyRole: 'WORKER' | 'EMPLOYER' =
-    myRole === 'WORKER' ? 'EMPLOYER' : 'WORKER';
-  const counterparty =
-    counterpartyRole === 'WORKER' ? row.worker ?? null : row.employer ?? null;
-
-  const status = (row.status ?? '').toUpperCase() as CollaborationStatus;
-  const detailHref = `/collaborations/${String(row.id)}`;
-
-  return (
-    <Card className="flex flex-col">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-2">
-          <CounterpartyChip party={counterparty} role={counterpartyRole} />
-          <CollaborationStatusBadge status={row.status} />
-        </div>
-      </CardHeader>
-      <CardContent className="flex-1 space-y-3 text-sm">
-        <dl className="grid grid-cols-2 gap-3">
-          <Field label="Project type">{row.project_type ?? '—'}</Field>
-          <Field label="Agreed amount">{formatGbp(row.agreed_amount)}</Field>
-          <Field label="Started">{formatDate(row.started_at)}</Field>
-          <Field label="Ended">
-            {row.ended_at
-              ? formatDate(row.ended_at)
-              : status === 'IN_PROGRESS'
-                ? 'In progress'
-                : '—'}
-          </Field>
-        </dl>
-        {row.flagged ? (
-          <Badge variant="danger" className="gap-1">
-            Flagged for review
-          </Badge>
-        ) : null}
-      </CardContent>
-      <CardFooter className="border-t border-border-default pt-4">
-        <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
-          <Link to={detailHref}>View collaboration</Link>
-        </Button>
-      </CardFooter>
-    </Card>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-0.5">
-      <dt className="text-xs text-fg-muted">{label}</dt>
-      <dd className="text-fg">{children}</dd>
     </div>
   );
 }

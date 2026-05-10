@@ -65,4 +65,16 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  /**
+   * Account-referral attribution at signup. The frontend reads the
+   * `tradehub_ref` cookie (set by GET /r/:code) and forwards the code
+   * here. Invalid or self-referencing codes are silently ignored.
+   * Locked at signup — never reassigned.
+   */
+  @ApiProperty({ example: 'MIKE-A1B2', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  referred_by_code?: string;
 }

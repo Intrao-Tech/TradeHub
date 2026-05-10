@@ -1,8 +1,7 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsIn,
   IsInt,
-  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
@@ -11,23 +10,17 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import {
+  CONTRACT_STATUS,
+  type ContractStatus,
+} from '../../contract/contract.constants';
 
-const COLLAB_STATUSES = [
-  'PENDING',
-  'CONFIRMED',
-  'REJECTED',
-  'IN_PROGRESS',
-  'COMPLETED',
-  'DISPUTED',
-] as const;
-
-const UPDATE_STATUSES = [
-  'CONFIRMED',
-  'REJECTED',
-  'IN_PROGRESS',
-  'COMPLETED',
-  'DISPUTED',
-] as const;
+const CONTRACT_FILTER_STATUSES: ContractStatus[] = [
+  CONTRACT_STATUS.DRAFT,
+  CONTRACT_STATUS.PROPOSED,
+  CONTRACT_STATUS.ACTIVE,
+  CONTRACT_STATUS.ENDED,
+];
 
 export class CreateCollaborationDto {
   @ApiPropertyOptional({ description: 'Required when employer initiates' })
@@ -59,27 +52,6 @@ export class CreateCollaborationDto {
   @Type(() => Number)
   @IsNumber()
   agreed_amount?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  referral_id?: number;
-}
-
-export class UpdateCollaborationStatusDto {
-  @ApiProperty({ enum: UPDATE_STATUSES })
-  @IsString()
-  @IsIn([...UPDATE_STATUSES])
-  status: string;
-}
-
-export class FlagCollaborationDto {
-  @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(300)
-  reason: string;
 }
 
 export class CollaborationQueryDto {
@@ -98,9 +70,12 @@ export class CollaborationQueryDto {
   @Max(100)
   limit?: number;
 
-  @ApiPropertyOptional({ enum: COLLAB_STATUSES })
+  @ApiPropertyOptional({
+    description: 'Filter by latest contract status under the relationship',
+    enum: CONTRACT_FILTER_STATUSES,
+  })
   @IsOptional()
   @IsString()
-  @IsIn([...COLLAB_STATUSES])
-  status?: string;
+  @IsIn(CONTRACT_FILTER_STATUSES)
+  status?: ContractStatus;
 }

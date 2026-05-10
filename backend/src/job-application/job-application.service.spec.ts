@@ -20,7 +20,25 @@ function build(): {
   prisma: DeepMockProxy<PrismaService>;
 } {
   const prisma = mockDeep<PrismaService>();
-  const service = new JobApplicationService(prisma);
+  // Stub MailService + AuditService — these are fire-and-forget side
+  // effects from the apply() flow; tests assert behaviour, not the calls.
+  const mail = {
+    sendReferralProjectAttributed: jest.fn().mockResolvedValue(undefined),
+  } as unknown as ConstructorParameters<typeof JobApplicationService>[1];
+  const audit = {
+    log: jest.fn().mockResolvedValue(undefined),
+  } as unknown as ConstructorParameters<typeof JobApplicationService>[2];
+  const conversations = {
+    ensureCollaborationConversation: jest.fn().mockResolvedValue(null),
+    announceConversationCreated: jest.fn(),
+    postSystemMessageForCollaboration: jest.fn().mockResolvedValue(null),
+  } as unknown as ConstructorParameters<typeof JobApplicationService>[3];
+  const service = new JobApplicationService(
+    prisma,
+    mail,
+    audit,
+    conversations,
+  );
   return { service, prisma };
 }
 

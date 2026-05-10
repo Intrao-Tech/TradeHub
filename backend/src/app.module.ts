@@ -15,6 +15,7 @@ import { TagModule } from './tag/tag.module';
 import { DocumentModule } from './document/document.module';
 import { ReviewModule } from './review/review.module';
 import { ReferralModule } from './referral/referral.module';
+import { ContractModule } from './contract/contract.module';
 import { EscrowModule } from './escrow/escrow.module';
 import { ModerationModule } from './moderation/moderation.module';
 import { NotificationModule } from './notification/notification.module';
@@ -57,6 +58,7 @@ const baseImports = [
   ReviewModule,
   ReferralModule,
   EscrowModule,
+  ContractModule,
   CollaborationModule,
   PortfolioModule,
   ModerationModule,

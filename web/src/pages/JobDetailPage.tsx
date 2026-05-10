@@ -17,6 +17,8 @@ import { AttachmentList } from '@/components/jobs/AttachmentList';
 import { formatPay } from '@/components/jobs/PayLine';
 import { formatRelative } from '@/lib/relative-time';
 import { toast } from '@/components/ui/toast';
+import { ShareForCommissionButton } from '@/components/referral/ShareForCommissionButton';
+import { useRefAttribution } from '@/components/referral/useRefAttribution';
 
 type Specialisation = { id?: number; name?: string };
 type Tag = { id?: number; name?: string };
@@ -72,6 +74,7 @@ export default function JobDetailPage() {
   const navigate = useNavigate();
   const loggedIn = !!getToken();
   const { isWorker, isEmployer, clientProfile, verificationState } = useAccountMe();
+  useRefAttribution({ targetId: id ?? null, targetRole: 'WORKER' });
 
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [error, setError] = useState<{ status: number; message: string } | null>(null);
@@ -192,13 +195,20 @@ export default function JobDetailPage() {
 
   return (
     <article className="space-y-6">
-      <div>
+      <div className="flex items-center justify-between">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/jobs">
             <ArrowLeft />
             Back to jobs
           </Link>
         </Button>
+        {loggedIn && isWorker && id ? (
+          <ShareForCommissionButton
+            kind="JOB"
+            targetId={id}
+            targetTitle={detail.title}
+          />
+        ) : null}
       </div>
 
       {isClosed ? (
