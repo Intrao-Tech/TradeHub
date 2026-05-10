@@ -533,15 +533,22 @@ export function retryReferralPendingPayouts() {
   );
 }
 
-export function trackProjectClick(body: {
+/**
+ * Record a server-side referral intent for the current user. Replaces the
+ * old cookie-based attribution: the click is persisted in the DB keyed by
+ * (actor, target), so later actions on different pages can resolve the
+ * referrer without any client state.
+ */
+export function recordProjectIntent(body: {
   code: string;
   target_id: number;
   target_role: 'WORKER' | 'EMPLOYER';
 }) {
   return api<{
     referrer_display_name: string | null;
-    target: { type: 'JOB' | 'WORKER'; id: string; title: string };
-  }>('/referral/track-click', {
+    target?: { type: 'JOB' | 'WORKER'; id: string; title: string };
+    recorded: boolean;
+  }>('/referral/intent', {
     method: 'POST',
     body: JSON.stringify(body),
   });

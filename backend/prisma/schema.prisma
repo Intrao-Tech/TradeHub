@@ -39,11 +39,40 @@ model Account {
   referred_accounts     Account[]        @relation("AccountReferrer")
   job_application_refs  JobApplication[] @relation("ApplicationProjectReferrer")
   contract_project_refs Contract[]       @relation("ContractProjectReferrer")
+  referral_intents_actor    ReferralIntent[] @relation("ReferralIntentActor")
+  referral_intents_referrer ReferralIntent[] @relation("ReferralIntentReferrer")
 
   @@index([status])
   @@index([referral_code])
   @@index([referred_by_id])
   @@map("account")
+}
+
+// ============================================
+// 2C. REFERRAL INTENT (server-side click record)
+// Replaces the old cookie-based attribution. When a logged-in user clicks
+// a project ref link (`/jobs/X?ref=` or `/workers/X?ref=`), the frontend
+// posts an intent row keyed by (actor, target). Later, when that user
+// performs a qualifying action (apply, hire), the backend looks up the
+// matching intent and copies attribution onto the durable row
+// (JobApplication.project_referrer_id, Contract.project_referrer_id).
+// Intents expire after 30 days; latest non-expired wins on lookup.
+// ============================================
+
+model ReferralIntent {
+  id                  BigInt   @id @default(autoincrement())
+  actor_account_id    BigInt
+  referrer_account_id BigInt
+  target_role         String   @db.VarChar(10) // 'WORKER' (job link, W2W) | 'EMPLOYER' (worker link, E2E)
+  target_id           BigInt   // job_post_id or worker client_profile_id
+  expires_at          DateTime @db.Timestamptz()
+  created_at          DateTime @default(now()) @db.Timestamptz()
+
+  actor    Account @relation("ReferralIntentActor", fields: [actor_account_id], references: [id], onDelete: Cascade)
+  referrer Account @relation("ReferralIntentReferrer", fields: [referrer_account_id], references: [id], onDelete: Cascade)
+
+  @@index([actor_account_id, target_role, target_id, expires_at])
+  @@map("referral_intent")
 }
 
 // ============================================

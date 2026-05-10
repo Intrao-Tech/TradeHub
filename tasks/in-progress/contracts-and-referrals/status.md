@@ -1,15 +1,17 @@
 # Status
 
-- State: product (spec drafted, ready to move to in-progress)
+- State: in-progress (schema, backend, frontend implemented; refactor revision applied)
 - Owner: Igor (PM); implementing engineer: Claude session
 - Created: 2026-05-10
-- Started: —
+- Started: 2026-05-10
 - Last Updated: 2026-05-10
 - Shipped: —
 
 ## Notes
 
-- **2026-05-10** — Spec drafted in single session after 4 rounds of clarification with PM. Two coupled changes: (1) Collaboration→Contract refactor (Upwork model, 1:N relationship→contracts, persistent chat at relationship level); (2) full referral system rewrite (Account ref + Project ref W→W and E→E, attribution via cookies, payouts from platform_fee with 100% cap). Old `Referral`/`ReferralOffer` "subcontract" feature dropped entirely (no archive — owner accepted).
+- **2026-05-10** — Spec drafted in single session after 4 rounds of clarification with PM. Two coupled changes: (1) Collaboration→Contract refactor (Upwork model, 1:N relationship→contracts, persistent chat at relationship level); (2) full referral system rewrite (Account ref + Project ref W→W and E→E, payouts from platform_fee with 100% cap). Old `Referral`/`ReferralOffer` "subcontract" feature dropped entirely (no archive — owner accepted).
+- **2026-05-10 (afternoon revision)** — Architecture pivot on referrals: cookies → server-side `ReferralIntent` table. Cookie attribution turned out to be broken in real testing (cross-origin `Set-Cookie` dropped because `fetch` lacked `credentials:'include'`; Safari ITP would have capped to 7d anyway). New model: account-ref via pure URL (`/r/:code` → `/register?ref=`), project-ref via DB intent row keyed by logged-in actor. Anonymous viewers of project-ref links intentionally not attributed. Migration `referral_intent` added; cookie middleware + helpers + `POST /referral/track-click` deleted. See updated spec §3 (Referral domain) and the 2026-05-10 (revision) entries in Decisions Log.
+- **2026-05-10 (afternoon revision)** — Contract creation gains W2W backfill (CR-038 step 2): when contract is created from a `job_post_id`, backend reads `JobApplication.project_referrer_id` from the matching application and copies it onto the contract. Without this the W2W chain (worker shares link → applicant captured → employer hires) was broken at the hire step.
 - **Headline decisions** (full Decisions Log in `spec.md`):
   - Single migration `contracts_and_referrals_refactor` + new seed regenerates all dev data
   - Project ref only credits already-registered users; new-signup-via-project-link gets only Account ref

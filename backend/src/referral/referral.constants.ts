@@ -12,13 +12,6 @@ export const REFERRAL_TARGET_ROLE = {
 export type ReferralTargetRole =
   (typeof REFERRAL_TARGET_ROLE)[keyof typeof REFERRAL_TARGET_ROLE];
 
-export const REF_COOKIE_NAMES = {
-  ACCOUNT: 'tradehub_ref',
-  PROJECT: 'tradehub_ref_project',
-} as const;
-
-export const REF_COOKIE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
 // Excludes ambiguous chars (0/O/1/I/L) for human-typed clarity.
 export const REFERRAL_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const REFERRAL_CODE_REGEX =

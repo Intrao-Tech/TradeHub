@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { ArrowLeft, Hammer, HardHat } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { AuthShell } from '@/components/AppShell';
@@ -26,6 +26,9 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
 
 export default function RegisterPage({ onRegister: _onRegister }: Props) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const refCode = searchParams.get('ref')?.toUpperCase().trim() || null;
+  const [referrerName, setReferrerName] = useState<string | null>(null);
   const [role, setRole] = useState<Role | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -63,6 +66,30 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
       cancelled = true;
     };
   }, []);
+
+  // Resolve referrer display name for the "You were referred by X" banner.
+  useEffect(() => {
+    if (!refCode) {
+      setReferrerName(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE}/referral/who-referred?code=${encodeURIComponent(refCode)}`,
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as { display_name: string | null };
+        if (!cancelled) setReferrerName(data.display_name);
+      } catch {
+        /* ignore — invalid code is silently dropped on signup anyway */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refCode]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -114,6 +141,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
       }
       const fullPhone = combinePhone(phoneCountry, phoneLocal);
       if (fullPhone) body.phone = fullPhone;
+      if (refCode) body.referred_by_code = refCode;
 
       await api<RegisterResponse>('/auth/register', {
         method: 'POST',
@@ -233,6 +261,13 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {referrerName ? (
+            <AuthBanner variant="info" title={`Referred by ${referrerName}`}>
+              They'll get a small commission on your first projects — no cost
+              to you.
+            </AuthBanner>
+          ) : null}
+
           {error ? (
             <AuthBanner
               variant="danger"

@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   Param,
   Patch,
   Post,
@@ -35,11 +34,9 @@ export class ContractController {
     @CurrentUser() user: CurrentUserPayload,
     @Param('id', ParseBigIntPipe) collabId: bigint,
     @Body() dto: CreateContractDto,
-    @Headers('cookie') cookieHeader?: string,
   ) {
     return this.service.createContract(user.accountId, collabId, dto, {
       propose: true,
-      cookieHeader,
     });
   }
 
@@ -53,11 +50,9 @@ export class ContractController {
     @CurrentUser() user: CurrentUserPayload,
     @Param('id', ParseBigIntPipe) collabId: bigint,
     @Body() dto: CreateContractDto,
-    @Headers('cookie') cookieHeader?: string,
   ) {
     return this.service.createContract(user.accountId, collabId, dto, {
       propose: true,
-      cookieHeader,
     });
   }
 

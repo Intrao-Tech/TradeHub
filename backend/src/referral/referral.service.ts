@@ -609,8 +609,18 @@ export class ReferralService {
     return referrer;
   }
 
-  async attributeProjectClick(input: {
+  /**
+   * Record a click intent for a logged-in user. Replaces cookie-based
+   * attribution: the click is persisted server-side, keyed by the actor
+   * account, so later actions on a different page (or after a refresh,
+   * or in a different tab) can still resolve the referrer.
+   *
+   * No-op if the actor IS the referrer (self-ref) or the referrer/target
+   * doesn't exist. Returns the referrer's display name for UI confirmation.
+   */
+  async recordProjectIntent(input: {
     code: string;
+    actor_account_id: bigint;
     target_id: bigint;
     target_role: 'WORKER' | 'EMPLOYER';
   }) {
@@ -618,32 +628,75 @@ export class ReferralService {
     if (!referrer) {
       throw new NotFoundException('Referral code not found');
     }
+    if (referrer.id === input.actor_account_id) {
+      return { referrer_display_name: null, recorded: false };
+    }
+
     // Validate target exists and matches role.
+    let targetTitle = '';
     if (input.target_role === 'WORKER') {
-      // Job_post that the link points to.
       const jp = await this.prisma.jobPost.findUnique({
         where: { id: input.target_id },
         select: { id: true, title: true },
       });
       if (!jp) throw new BadRequestException('Job not found');
-      return {
-        referrer_display_name: referrer.client_profile?.display_name ?? null,
-        target: { type: 'JOB', id: String(jp.id), title: jp.title },
-      };
+      targetTitle = jp.title;
     } else {
       const wp = await this.prisma.workerProfile.findUnique({
         where: { id: input.target_id },
         include: { client_profile: { select: { display_name: true } } },
       });
       if (!wp) throw new BadRequestException('Worker not found');
-      return {
-        referrer_display_name: referrer.client_profile?.display_name ?? null,
-        target: {
-          type: 'WORKER',
-          id: String(wp.id),
-          title: wp.client_profile?.display_name ?? 'Worker',
-        },
-      };
+      targetTitle = wp.client_profile?.display_name ?? 'Worker';
     }
+
+    // 30-day intent window matches the prior cookie TTL.
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    await this.prisma.referralIntent.create({
+      data: {
+        actor_account_id: input.actor_account_id,
+        referrer_account_id: referrer.id,
+        target_role: input.target_role,
+        target_id: input.target_id,
+        expires_at: expiresAt,
+      },
+    });
+
+    return {
+      referrer_display_name: referrer.client_profile?.display_name ?? null,
+      target: {
+        type: input.target_role === 'WORKER' ? 'JOB' : 'WORKER',
+        id: String(input.target_id),
+        title: targetTitle,
+      },
+      recorded: true,
+    };
+  }
+
+  /**
+   * Look up the latest non-expired intent for (actor, target). Used at
+   * apply / hire time to copy attribution onto the durable row. Does NOT
+   * delete the intent — multiple actions on the same target (e.g. apply,
+   * then later contract from the same job) can each consume it.
+   */
+  async findActiveIntent(
+    actorAccountId: bigint,
+    targetRole: 'WORKER' | 'EMPLOYER',
+    targetId: bigint,
+  ) {
+    return this.prisma.referralIntent.findFirst({
+      where: {
+        actor_account_id: actorAccountId,
+        target_role: targetRole,
+        target_id: targetId,
+        expires_at: { gt: new Date() },
+      },
+      orderBy: { created_at: 'desc' },
+      include: {
+        referrer: {
+          include: { client_profile: { select: { display_name: true } } },
+        },
+      },
+    });
   }
 }

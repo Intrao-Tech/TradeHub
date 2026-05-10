@@ -19,9 +19,12 @@ high-risk:
 - **Self-ref / mismatch guards** (`CR-100..CR-105`) — these are silent
   no-ops by design; a regression that *enables* attribution where it shouldn't
   be is invisible to the user but lets people farm their own ref code.
-- **Cookie attribution flow** (`CR-031..CR-038`) — a regression that fails
-  to clear the cookie, swaps the wrong target_id, or mis-attributes during
-  signup races silently routes commissions to the wrong account.
+- **Intent attribution flow** (`CR-031..CR-038`) — a regression that picks
+  the wrong intent row (e.g. expired, wrong target_id, wrong actor),
+  fails the W2W backfill from JobApplication, or mis-attributes during
+  signup races silently routes commissions to the wrong account. The old
+  cookie-based draft of these requirements was replaced 2026-05-10 with
+  the server-side `ReferralIntent` model.
 - **Hire-again invariant** (`CR-024`) — must *refuse* if any in-flight
   contract exists. A regression that allows two ACTIVE contracts under one
   collab corrupts the lockstep escrow flow downstream.

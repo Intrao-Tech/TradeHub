@@ -1,5 +1,5 @@
 // TEST-CR-110..112 — useRefAttribution hook.
-// Verifies cookie attribution flow: ?ref= → POST /referral/track-click,
+// Verifies server-side intent flow: ?ref= → POST /referral/intent,
 // strip the param, no-op if absent, silent fail on invalid code.
 
 import { renderHook, waitFor } from '@testing-library/react';
@@ -32,7 +32,7 @@ describe('TEST-CR-110..112 useRefAttribution', () => {
   beforeEach(() => {
     // Default handler: succeeds with a referrer name.
     server.use(
-      http.post(`${API}/referral/track-click`, async ({ request }) => {
+      http.post(`${API}/referral/intent`, async ({ request }) => {
         const body = (await request.json()) as { code: string };
         if (body.code === 'BAD-BAD0') {
           return HttpResponse.json(
@@ -51,7 +51,7 @@ describe('TEST-CR-110..112 useRefAttribution', () => {
   test('TEST-CR-110 (CR-083) — ?ref=CODE present → fires POST + strips param', async () => {
     const trackSpy = vi.fn();
     server.use(
-      http.post(`${API}/referral/track-click`, async ({ request }) => {
+      http.post(`${API}/referral/intent`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>;
         trackSpy(body);
         return HttpResponse.json({
@@ -79,7 +79,7 @@ describe('TEST-CR-110..112 useRefAttribution', () => {
   test('TEST-CR-111 (CR-083) — no ?ref in URL → no-op', async () => {
     const trackSpy = vi.fn();
     server.use(
-      http.post(`${API}/referral/track-click`, async () => {
+      http.post(`${API}/referral/intent`, async () => {
         trackSpy();
         return HttpResponse.json({
           referrer_display_name: null,
@@ -101,7 +101,7 @@ describe('TEST-CR-110..112 useRefAttribution', () => {
   test('TEST-CR-112 (CR-083) — invalid code → silent fail (no throw)', async () => {
     const trackSpy = vi.fn();
     server.use(
-      http.post(`${API}/referral/track-click`, async ({ request }) => {
+      http.post(`${API}/referral/intent`, async ({ request }) => {
         const body = (await request.json()) as { code: string };
         trackSpy(body);
         return HttpResponse.json(
@@ -125,7 +125,7 @@ describe('TEST-CR-110..112 useRefAttribution', () => {
   test('TEST-CR-110 — targetId null → does NOT fire (waits for resolved id)', async () => {
     const trackSpy = vi.fn();
     server.use(
-      http.post(`${API}/referral/track-click`, async () => {
+      http.post(`${API}/referral/intent`, async () => {
         trackSpy();
         return HttpResponse.json({
           referrer_display_name: null,

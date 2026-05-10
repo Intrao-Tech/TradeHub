@@ -115,24 +115,42 @@ requirement, cited in the test description. Layer tags:
 
 ### 5. Referral attribution (E2E-B)
 
-- **TEST-CR-060 (Must, E2E-B)** — `GET /r/:code` with valid code sets
-  `tradehub_ref` cookie + 302 redirect to `/`. Maps `CR-032`.
-- **TEST-CR-061 (Must, E2E-B)** — Invalid `:code` redirects without
-  setting cookie. Maps `CR-032`.
-- **TEST-CR-062 (Must, E2E-B)** — `POST /referral/track-click` validates
-  `target_id` exists and matches `target_role`. WORKER role + invalid
-  job_post → 400; EMPLOYER role + invalid worker_profile → 400. Maps
-  `CR-035`.
-- **TEST-CR-063 (Must, E2E-B)** — `POST /referral/track-click` returns
-  `referrer_display_name` for valid code+target. Maps `CR-035`.
+> **Updated 2026-05-10:** referral attribution is server-side via the
+> `ReferralIntent` table. The cookie-based tests below were rewritten to
+> exercise the new endpoint shape (`POST /referral/intent`, auth required;
+> `GET /r/:code` is a pure 302 to `/register?ref=`).
+
+- **TEST-CR-060 (Must, E2E-B)** — `GET /r/:code` with valid code → 302 to
+  `${FRONTEND_URL}/register?ref=CODE`. No cookies set, no DB writes. Maps
+  `CR-033`.
+- **TEST-CR-061 (Must, E2E-B)** — `GET /r/:code` with malformed code → 302
+  to `${FRONTEND_URL}` with no `?ref=`. Maps `CR-033`.
+- **TEST-CR-062 (Must, E2E-B)** — `POST /referral/intent` (auth required)
+  validates `target_id` exists and matches `target_role`. WORKER role +
+  invalid job_post → 400; EMPLOYER role + invalid worker_profile → 400.
+  Anonymous call → 401. Maps `CR-031`/`CR-034`.
+- **TEST-CR-063 (Must, E2E-B)** — `POST /referral/intent` writes a
+  `ReferralIntent` row keyed by `(actor_account_id, target_role,
+  target_id)` and returns `{ recorded: true, referrer_display_name }`. Self-
+  ref (`actor == referrer`) returns `{ recorded: false }` with no row
+  written. Maps `CR-031`/`CR-034`.
 - **TEST-CR-064 (Must, E2E-B)** — Signup with `referred_by_code` sets
   `Account.referred_by_id` + `referred_at`; without code → both NULL. Maps
   `CR-036`.
 - **TEST-CR-065 (Must, E2E-B)** — Signup with code matching the new
   account's own email is silently ignored (referred_by_id stays NULL).
   Maps `CR-039`/`CR-100`.
-- **TEST-CR-066 (Should, E2E-B)** — Cookie strategy: cookie present AND new
-  account uses different email → attribution succeeds. Maps `CR-036`.
+- **TEST-CR-066 (Must, E2E-B)** — Apply consumes the latest non-expired
+  intent for `(worker, 'WORKER', job_post_id)` → `JobApplication.project_referrer_id`
+  is set. Last-click wins among multiple intents. Maps `CR-037`/`CR-105`.
+- **TEST-CR-067 (Must, E2E-B)** — Contract creation from a `job_post_id`
+  backfills `Contract.project_referrer_id` from the matching JobApplication
+  when no E→E intent exists. Maps `CR-038`.
+- **TEST-CR-068 (Must, E2E-B)** — Contract creation prefers an E→E intent
+  (`employer, 'EMPLOYER', worker_id`) over the JobApplication W2W backfill
+  when both exist. Maps `CR-038`.
+- **TEST-CR-069 (Must, E2E-B)** — Expired intent (`expires_at < now`) is
+  ignored at lookup time. Maps `CR-106`.
 
 ### 6. Commission credit on release (E2E-B)
 
@@ -188,23 +206,31 @@ requirement, cited in the test description. Layer tags:
 ### 9. Frontend hooks (F)
 
 - **TEST-CR-110 (Must, F)** — `useRefAttribution`: `?ref=ABCD-1234` in URL
-  fires `POST /referral/track-click` once on mount + strips param via
-  `replaceState`. Maps `CR-083`.
+  AND user is logged in → fires `POST /referral/intent` once on mount +
+  strips param via `setSearchParams({}, { replace: true })`. Maps `CR-083`.
 - **TEST-CR-111 (Must, F)** — Without `?ref` in URL, hook is no-op. Maps
   `CR-083`.
 - **TEST-CR-112 (Must, F)** — Invalid code → toast not shown, param still
   stripped (silent fail). Maps `CR-083`.
+- **TEST-CR-113 (Must, F)** — Anonymous user (no JWT) with `?ref=` in URL:
+  hook does NOT fire the intent POST; param is still stripped. Maps `CR-083`/`CR-035`.
+- **TEST-CR-114 (Must, F)** — `RefLandingPage` (`/r/:code`) redirects an
+  anonymous visitor to `/register?ref=CODE`; logged-in visitor to `/`.
+  Maps `CR-033`.
 
 ### 10. Anti-fraud guards (E2E-B)
 
-- **TEST-CR-120 (Must, E2E-B)** — Self-ref at signup: cookie code matches
-  new account's own email → `referred_by_id` stays NULL. Maps `CR-100`.
-- **TEST-CR-121 (Must, E2E-B)** — Self-ref at JobApplication: applicant ===
-  project_referrer → silent skip. Maps `CR-101`.
-- **TEST-CR-122 (Must, E2E-B)** — E→E target mismatch: cookie target_worker
-  ≠ Contract.worker_id → silent skip. Maps `CR-103`.
-- **TEST-CR-123 (Must, E2E-B)** — W→W target mismatch: cookie target_jobpost
-  ≠ JobApplication.job_post_id → silent skip. Maps `CR-104`.
+- **TEST-CR-120 (Must, E2E-B)** — Self-ref at signup: `referred_by_code`
+  matches the new account's own email → `referred_by_id` stays NULL. Maps `CR-100`.
+- **TEST-CR-121 (Must, E2E-B)** — Self-ref at intent record:
+  `actor_account_id == referrer_account_id` → no row written; endpoint
+  returns `{ recorded: false }`. Maps `CR-031`/`CR-101`.
+- **TEST-CR-122 (Must, E2E-B)** — E→E target mismatch: contract for worker
+  X with no intent for `(employer, 'EMPLOYER', X)` → silent skip even if
+  intents exist for other workers. Maps `CR-103`.
+- **TEST-CR-123 (Must, E2E-B)** — W→W target mismatch: application for job
+  Y with no intent for `(worker, 'WORKER', Y)` → silent skip even if
+  intents exist for other jobs. Maps `CR-104`.
 
 ## Open Questions
 

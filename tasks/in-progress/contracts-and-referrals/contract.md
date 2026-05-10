@@ -141,8 +141,8 @@ PATCH  /contracts/:id/respond                → { accept: bool } → ACTIVE/END
 POST   /contracts/:id/end                    → { end_reason } → ENDED
 GET    /escrow/by-contract/:contractId       → EscrowDetail (replaces by-collab in new code)
 
-GET    /r/:code                              → set cookie + 302 /
-POST   /referral/track-click                 → { code, target_id, target_role } → 200 { referrer_display_name }
+GET    /r/:code                              → 302 /register?ref=CODE (account-ref handoff, no cookies)
+POST   /referral/intent                      → { code, target_id, target_role } → 200 { recorded, referrer_display_name, target? } (auth required; writes ReferralIntent row keyed by req.user.accountId)
 GET    /referral/who-referred?code=CODE      → { display_name } (public, lightweight)
 
 GET    /referrals/code                       → { code, link }
@@ -183,13 +183,12 @@ backend/src/
 │       ├── create-contract.dto.ts
 │       ├── end-contract.dto.ts
 │       └── respond-contract.dto.ts
-├── referral/                  ← REWRITE FROM SCRATCH
+├── referral/                  ← REWRITE FROM SCRATCH (intent-based, no cookies)
 │   ├── referral.module.ts
-│   ├── referral.service.ts
+│   ├── referral.service.ts    (recordProjectIntent + findActiveIntent + commission math + payouts)
 │   ├── referral.controller.ts
-│   ├── referral-cookie.middleware.ts
 │   └── dto/
-│       └── track-click.dto.ts
+│       └── track-click.dto.ts (reused for POST /referral/intent body shape)
 ├── escrow/                    ← UPDATE: contract_id everywhere
 └── collaboration/             ← SLIM: relationship-only
 ```
@@ -223,15 +222,12 @@ export const REFERRAL_TYPE = {
   PROJECT_E2E: 'PROJECT_E2E',
 } as const;
 
-export const REF_COOKIE_NAMES = {
-  ACCOUNT: 'tradehub_ref',
-  PROJECT: 'tradehub_ref_project',
-} as const;
-
-export const REF_COOKIE_TTL_DAYS = 30;
+export const REFERRAL_INTENT_TTL_DAYS = 30;  // expires_at = created_at + this
 export const REFERRAL_CODE_REGEX = /^[A-HJ-KM-NP-Z2-9]{4}-[A-HJ-KM-NP-Z2-9]{4}$/;
 export const REFERRAL_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 ```
+
+> **2026-05-10 revision:** `REF_COOKIE_NAMES` + `REF_COOKIE_TTL_DAYS` removed; cookies are no longer used. The `ReferralIntent` table replaces them. See spec.md Decisions Log entry on the same date.
 
 ## Slice plan
 
@@ -252,10 +248,11 @@ Implementation broken into 4 slices. Commit one slice per logical group, but **d
 - Audit events for contract.* added
 
 ### Slice C: Referral domain backend
-- Rewrite `referral/` module from scratch
-- `referral-cookie.middleware.ts` global
-- All `/referral/*` and `/referrals/*` endpoints
-- Hook signup, JobApplication.create, Contract.create flows
+- Rewrite `referral/` module from scratch (intent-based; no cookie middleware)
+- New `ReferralIntent` model + migration
+- `recordProjectIntent` + `findActiveIntent` service methods
+- All `/referral/*` and `/referrals/*` endpoints (`/referral/intent` replaces the old `/referral/track-click`)
+- Hook signup (RegisterDto.referred_by_code), JobApplication.create (intent lookup), Contract.create (intent lookup + W2W backfill from JobApplication)
 - `computeMilestoneCommissions` + escrow.release integration
 - Audit events for referral.* added
 

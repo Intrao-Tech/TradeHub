@@ -17,11 +17,7 @@ import {
 } from '../common/decorators/current-user.decorator';
 import { ReferralService } from './referral.service';
 import { TrackClickDto } from './dto/track-click.dto';
-import {
-  REFERRAL_CODE_REGEX,
-  REF_COOKIE_NAMES,
-  REF_COOKIE_TTL_MS,
-} from './referral.constants';
+import { REFERRAL_CODE_REGEX } from './referral.constants';
 import { ConfigService } from '@nestjs/config';
 
 @Controller()
@@ -31,31 +27,19 @@ export class ReferralController {
     private readonly config: ConfigService,
   ) {}
 
-  // Public: hit by the share-link recipient. Sets cookie + redirects home.
+  /**
+   * Account-ref share link. Bounces the recipient to the register page
+   * with `?ref=CODE` so the form can persist `account.referred_by_id`
+   * directly on signup. Pure URL flow — no cookies.
+   */
   @Get('r/:code')
-  async hitRefLink(@Param('code') code: string, @Res() res: Response) {
-    if (REFERRAL_CODE_REGEX.test(code)) {
-      const referrer = await this.service.lookupReferrerByCode(code);
-      if (referrer) {
-        res.cookie(
-          REF_COOKIE_NAMES.ACCOUNT,
-          JSON.stringify({
-            code: referrer.referral_code,
-            type: 'ACCOUNT',
-            set_at: new Date().toISOString(),
-          }),
-          {
-            maxAge: REF_COOKIE_TTL_MS,
-            httpOnly: false,
-            sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production',
-          },
-        );
-      }
-    }
-    const home =
+  hitRefLink(@Param('code') code: string, @Res() res: Response) {
+    const base =
       this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-    return res.redirect(home);
+    if (REFERRAL_CODE_REGEX.test(code)) {
+      return res.redirect(`${base}/register?ref=${encodeURIComponent(code)}`);
+    }
+    return res.redirect(base);
   }
 
   // Public: lightweight name lookup for "you were referred by X" UI.
@@ -67,31 +51,24 @@ export class ReferralController {
     return { display_name: r.client_profile?.display_name ?? null };
   }
 
-  // Public: called by frontend on /jobs/:id?ref= and /workers/:id?ref= mounts.
-  @Post('referral/track-click')
-  async trackClick(@Body() dto: TrackClickDto, @Res() res: Response) {
-    const result = await this.service.attributeProjectClick({
+  /**
+   * Called by frontend on `/jobs/:id?ref=` and `/workers/:id?ref=` page
+   * mounts to record server-side click intent. Auth-required: anonymous
+   * traffic is ignored on these pages (anonymous users hit `/r/:code`
+   * for the account-ref flow instead).
+   */
+  @Post('referral/intent')
+  @UseGuards(JwtAuthGuard)
+  async recordIntent(
+    @Body() dto: TrackClickDto,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    return this.service.recordProjectIntent({
       code: dto.code.toUpperCase(),
+      actor_account_id: user.accountId,
       target_id: BigInt(dto.target_id),
       target_role: dto.target_role,
     });
-    res.cookie(
-      REF_COOKIE_NAMES.PROJECT,
-      JSON.stringify({
-        code: dto.code.toUpperCase(),
-        type: 'PROJECT',
-        target_id: String(dto.target_id),
-        target_role: dto.target_role,
-        set_at: new Date().toISOString(),
-      }),
-      {
-        maxAge: REF_COOKIE_TTL_MS,
-        httpOnly: false,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-      },
-    );
-    return res.json(result);
   }
 
   // Authed: own ref code + share link.

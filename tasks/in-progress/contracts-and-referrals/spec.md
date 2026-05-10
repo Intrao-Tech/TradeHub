@@ -47,29 +47,32 @@ See `brief.md`.
 ### Account referral flow
 
 1. Mike's `Account.referral_code = MIKE-A1B2`. He shares `/r/MIKE-A1B2` on Twitter.
-2. Sarah clicks → server sets `tradehub_ref` cookie `{code: MIKE-A1B2, type: ACCOUNT, set_at: ...}` (30-day TTL) → redirects to `/`.
-3. Sarah signs up → during account creation, server reads cookie, looks up Mike, sets `Account.referred_by_id = Mike.id`, `Account.referred_at = now()`. Cookie consumed.
-4. Sarah completes onboarding, becomes a worker. 60 days later she gets hired by ACME on Contract #88. ACME funds milestone #1 of £500. Eventually milestone releases.
-5. Release path: platform_fee = £25 (5%). `account_referral_pct = 10` from `PlatformSetting`. Mike's cut = £2.50. Transfer fires from platform balance to Mike's connected account (or PendingReferralPayout if Mike not onboarded).
-6. Mike's `/referrals` → "Account referrals" section shows: Sarah, signed up 2026-05-12, active, earned £2.50 to date.
+2. Sarah clicks → backend `GET /api/r/MIKE-A1B2` 302-redirects to `/register?ref=MIKE-A1B2` (frontend route). No cookies involved.
+3. Sarah lands on the register page. Form reads `?ref=` from URL, calls `GET /api/referral/who-referred?code=MIKE-A1B2` to render "Referred by Mike Thompson" banner, and forwards `referred_by_code: 'MIKE-A1B2'` in the signup POST body.
+4. Server validates code on signup, sets `Account.referred_by_id = Mike.id`, `Account.referred_at = now()`. Locked at signup forever — never re-attributed.
+5. Sarah completes onboarding, becomes a worker. 60 days later she gets hired by ACME on Contract #88. ACME funds milestone #1 of £500. Eventually milestone releases.
+6. Release path: platform_fee = £25 (5%). `account_referral_pct = 10` from `PlatformSetting`. Mike's cut = £2.50. Transfer fires from platform balance to Mike's connected account (or PendingReferralPayout if Mike not onboarded).
+7. Mike's `/referrals` → "Account referrals" section shows: Sarah, signed up 2026-05-12, active, earned £2.50 to date.
 
 ### Project referral W→W
 
 1. Mike on `/jobs/123` (already-registered worker). Sees "Share for commission" button → clicks → modal shows lifetime link `/jobs/123?ref=MIKE-A1B2`.
 2. Mike sends to Bob (already-registered worker).
-3. Bob clicks link → server sets `tradehub_ref_project` cookie `{code: MIKE-A1B2, type: PROJECT, role: WORKER, target_id: 123, set_at: ...}` (30-day TTL) → redirects to `/jobs/123`.
-4. Bob applies to job 123 → server reads cookie, sets `JobApplication.project_referrer_id = Mike.id`, `project_referrer_role = WORKER`. Cookie consumed (single-use).
-5. Bob wins → contract created with `Contract.project_referrer_id = Mike.id`, `Contract.project_referrer_role = WORKER`.
+3. Bob (logged in) opens `/jobs/123?ref=MIKE-A1B2`. Frontend `useRefAttribution` hook fires `POST /api/referral/intent` with `{code: 'MIKE-A1B2', target_id: 123, target_role: 'WORKER'}`. Backend writes a `ReferralIntent` row keyed by `(actor_account_id=Bob, target_role='WORKER', target_id=123)`, expires_at = now+30d. Frontend strips `?ref=` from URL.
+4. Bob applies to job 123 → backend looks up the latest active intent for `(Bob, WORKER, 123)`, copies referrer onto `JobApplication.project_referrer_id = Mike.id`, `project_referrer_role = WORKER`.
+5. Bob wins → contract created. Backend reads `JobApplication.project_referrer_id` from the matching application (W2W backfill — see CR-038) and copies onto `Contract.project_referrer_id = Mike.id`.
 6. On every released milestone of that contract: Mike gets `project_referral_w2w_pct` of `agreed_amount`, paid from platform_fee.
 
 ### Project referral E→E
 
 1. ACME (employer) on `/workers/456` profile. Sees "Share with another employer" → modal shows lifetime link `/workers/456?ref=ACME-Z9X8`.
 2. ACME sends to BravoBuild (already-registered employer).
-3. BravoBuild clicks → cookie set `{code: ACME-Z9X8, type: PROJECT, role: EMPLOYER, target_id: 456, set_at: ...}` → redirects to `/workers/456`.
-4. BravoBuild starts a contract with worker 456 (via direct invite or via job-post flow that ends in contract). Server checks cookie: target_id matches the worker_id of the new contract → `Contract.project_referrer_id = ACME.id`, `project_referrer_role = EMPLOYER`. Cookie consumed.
-5. If BravoBuild had hired worker 789 instead: cookie ignored, no attribution.
+3. BravoBuild (logged in) opens `/workers/456?ref=ACME-Z9X8`. Frontend hook fires `POST /api/referral/intent` with `target_role='EMPLOYER', target_id=456`. Backend writes a `ReferralIntent` row.
+4. BravoBuild later (could be days) creates a contract with worker 456 from an existing collaboration. Backend reads the latest active intent for `(BravoBuild, EMPLOYER, 456)` → `Contract.project_referrer_id = ACME.id`, `project_referrer_role = EMPLOYER`.
+5. If BravoBuild had hired worker 789 instead: no matching intent for that worker_id, no attribution.
 6. On every released milestone: ACME gets `project_referral_e2e_pct` of `agreed_amount`.
+
+> **Why server-side intent, not cookies?** Cookies break in too many ways: cross-origin requires `credentials:'include'` plus `SameSite=None;Secure`, Safari ITP caps client-set cookies to 7 days, GDPR adds banner overhead, and incognito/in-app browsers strip them. The intent table is one row per click keyed by the logged-in actor, debuggable via SQL, and survives device-switching for the same account. Anonymous viewers of `/jobs/:id?ref=` or `/workers/:id?ref=` are silently ignored — they can't perform a qualifying action without registering anyway, and the account-ref flow uses `/r/:code` → `/register?ref=` for that case.
 
 ## Requirements
 
@@ -89,6 +92,7 @@ See `brief.md`.
 - **CR-012 (Must).** Extend `PlatformSetting` with: `account_referral_pct` Decimal(5,2) default 10.00, `account_referral_window_months` Int NULL default 12 (NULL = lifetime), `project_referral_w2w_pct` Decimal(5,2) default 2.00, `project_referral_e2e_pct` Decimal(5,2) default 2.00. Drop the old `referral_commission_percent` column (replaced by the three new ones).
 - **CR-013 (Must).** Extend `PendingReferralPayout` with `type` VarChar(20) NOT NULL ('ACCOUNT' | 'PROJECT_W2W' | 'PROJECT_E2E'). Default no longer makes sense — every row must declare its type at insert.
 - **CR-014 (Must).** Migration name: `contracts_and_referrals_refactor`. Single migration to keep schema atomic. New seed regenerates all data.
+- **CR-015 (Must).** Add `ReferralIntent` model: `id` BigInt PK, `actor_account_id` BigInt FK Account ON DELETE CASCADE (the logged-in user who clicked the link), `referrer_account_id` BigInt FK Account ON DELETE CASCADE (the link owner), `target_role` VarChar(10) ('WORKER' for job links / 'EMPLOYER' for worker links), `target_id` BigInt (job_post_id or worker client_profile_id), `expires_at` Timestamptz NOT NULL, `created_at` default now(). Index `(actor_account_id, target_role, target_id, expires_at)`. Migration name: `referral_intent` (separate from `contracts_and_referrals_refactor` — added in a follow-up architecture revision documented in the Decisions Log on 2026-05-10). Replaces cookie-based attribution.
 
 ### 2. Backend — Contract domain
 
@@ -101,16 +105,21 @@ See `brief.md`.
 
 ### 3. Backend — Referral domain
 
-- **CR-030 (Must).** New module `backend/src/referral/` (replaces existing — old module deleted entirely). Files: `referral.module.ts`, `referral.service.ts`, `referral.controller.ts`, `referral-cookie.middleware.ts`, `dto/`.
-- **CR-031 (Must).** `referral-cookie.middleware.ts`: applied globally before auth. Reads `tradehub_ref` and `tradehub_ref_project` cookies, attaches `req.refCookie = { account?: {...}, project?: {...} }`. Cookies are httpOnly=false (frontend needs to read them to detect for "you were referred by X" UI), secure in prod, sameSite=lax, maxAge=30d.
-- **CR-032 (Must).** `GET /r/:code` (public) — sets `tradehub_ref` account cookie if code matches a real Account, redirects to `/`. If code missing/invalid → just redirect to `/`.
-- **CR-033 (Must).** `GET /jobs/:id?ref=:code` — handled in frontend, but backend exposes `POST /referral/track-click` (account+job). Sets `tradehub_ref_project` cookie. Frontend hits this on page load if `?ref=` param present.
-- **CR-034 (Must).** `GET /workers/:id?ref=:code` — same, `POST /referral/track-click` with `target_role=EMPLOYER`.
-- **CR-035 (Must).** `POST /referral/track-click` body: `{ code, target_id, target_role: 'WORKER' | 'EMPLOYER' }`. Validates code exists. For EMPLOYER target_role: target must be a worker_id. For WORKER target_role: target must be a job_post_id. Sets the cookie, returns `{ ok: true, referrer_display_name }` so frontend can show "Referred by ${name}".
-- **CR-036 (Must).** Signup flow extension: `auth.service.signup()` reads `req.refCookie?.account?.code`, looks up referrer Account, sets `Account.referred_by_id` + `referred_at` only if cookie present AND code valid AND not self-ref. Cookie cleared post-signup.
-- **CR-037 (Must).** JobApplication flow extension: `JobApplicationService.create()` reads `req.refCookie?.project` — if present AND `target_id == job_post_id` AND `target_role == 'WORKER'` AND applicant is already-registered (which they always are at this point — auth-gated) → set `JobApplication.project_referrer_id`. Cookie cleared.
-- **CR-038 (Must).** Contract creation flow extension: when a new Contract is created with a worker, server checks `req.refCookie?.project` — if `target_id == worker_id` AND `target_role == 'EMPLOYER'` AND employer != referrer → set `Contract.project_referrer_id`. Cookie cleared. Mismatch = silent ignore (no error to user).
-- **CR-039 (Must).** Self-referral guards (return 400 with `code: 'SELF_REFERRAL'` if violated): account ref where new account email == referrer email is silently ignored (already handled by signup flow); project ref where employer == referrer is silently ignored; project ref where worker applies to own ref-link silently ignored.
+> **Architecture revision 2026-05-10:** referral attribution is server-side, keyed by the logged-in actor account. The cookie middleware described in earlier drafts of CR-031..035 has been deleted. Cookies are no longer used at any point in the referral flow. See Decisions Log for rationale.
+
+- **CR-030 (Must).** New module `backend/src/referral/` (replaces existing — old module deleted entirely). Files: `referral.module.ts`, `referral.service.ts`, `referral.controller.ts`, `dto/`. (No cookie middleware.)
+- **CR-031 (Must).** `ReferralService.recordProjectIntent({ code, actor_account_id, target_id, target_role })`: validates the code maps to a real account, validates the target exists (job_post for `WORKER`, worker_profile for `EMPLOYER`), and inserts a `ReferralIntent` row with `expires_at = now + 30d`. Self-ref (`actor == referrer`) is a silent no-op returning `{ recorded: false, referrer_display_name: null }`.
+- **CR-032 (Must).** `ReferralService.findActiveIntent(actor_account_id, target_role, target_id)`: returns the latest non-expired intent for the tuple (last-click wins). Reads only — does NOT delete the row. Multiple downstream actions on the same target (apply, then later contract creation) can each consume it.
+- **CR-033 (Must).** `GET /r/:code` (public, no auth) — validates code shape against `REFERRAL_CODE_REGEX`, then 302-redirects to `${FRONTEND_URL}/register?ref=${code}`. Invalid shape → redirect to `${FRONTEND_URL}` with no param. No cookies set, no DB writes. Account-ref flow is pure URL.
+- **CR-034 (Must).** `POST /referral/intent` (auth required). Body: `{ code, target_id, target_role: 'WORKER' | 'EMPLOYER' }`. Calls `recordProjectIntent` with `actor_account_id = req.user.accountId`. Returns `{ recorded: bool, referrer_display_name: string | null, target?: { type: 'JOB' | 'WORKER', id, title } }`. Anonymous calls (no JWT) → 401 — anonymous viewers are intentionally not attributed; they hit `/r/:code` for the account-ref flow instead.
+- **CR-035 (Must).** Frontend `useRefAttribution` hook fires `POST /referral/intent` only when (a) `?ref=` is present in URL AND (b) user is logged in. After the call (success or failure), strips `?ref=` via `setSearchParams`. Anonymous viewers: hook just strips the param — no API call.
+- **CR-036 (Must).** Signup flow: `RegisterDto.referred_by_code` carries the URL `?ref=` value forwarded by the frontend register form. `auth.service.register` looks up the referrer by code, sets `Account.referred_by_id` + `referred_at` only if code valid AND not self-ref (referrer.email != new email). Locked at signup forever — never re-attributed.
+- **CR-037 (Must).** JobApplication flow: `JobApplicationService.apply(jobPostId, workerId, dto)` calls `ReferralService.findActiveIntent(workerId, 'WORKER', jobPostId)`. If a row exists AND `referrer != applicant` → set `JobApplication.project_referrer_id` + `project_referrer_role = 'WORKER'`. Audit + best-effort email notification to referrer. Mismatch / no intent = silent skip.
+- **CR-038 (Must).** Contract creation flow has TWO ordered attribution sources, first wins:
+  1. **E→E intent**: when employer initiates the contract, look up `findActiveIntent(employer_id, 'EMPLOYER', collab.worker_id)`. If found and `referrer != employer`, set `Contract.project_referrer_id` + `project_referrer_role = 'EMPLOYER'`.
+  2. **W→W backfill**: if no E→E intent and `dto.job_post_id` is set, look up the matching `JobApplication(job_post_id, worker_id=collab.worker_id)`. If it has `project_referrer_id` set with `role='WORKER'`, copy onto the contract. This carries the W2W chain across the apply → hire boundary, where URL state is gone but the durable JobApplication row persists the referrer.
+  - Mismatch / no source = silent skip. Audit + best-effort email notification to referrer fire only when one of the sources succeeded.
+- **CR-039 (Must).** Self-referral guards: account ref where new account email == referrer email is silently ignored (signup); project ref where actor == referrer is silently ignored at intent-record time (CR-031); contract attribution refuses `referrer == employer` and `referrer == worker`.
 - **CR-040 (Must).** `/referrals` endpoints (auth required, returns data for `req.user.account_id`):
   - `GET /referrals/code` — `{ code, link: "https://app/r/CODE" }`
   - `GET /referrals/account-stats` — `{ window_months, lifetime_signups, active_signups, expired_signups, total_earned_gbp }` + paginated list of referred accounts with `signed_up_at`, `window_ends_at`, `earned_to_date`.
@@ -156,8 +165,8 @@ See `brief.md`.
   6. **Pending payouts** — same as `/wallet`, just a duplicate scoped to referral payouts.
 - **CR-081 (Must).** "Share for commission" button on `web/src/pages/JobDetailPage.tsx` (or wherever individual job is rendered to a worker) → modal with copy-able `/jobs/:id?ref=YOURCODE` link + breakdown ("You earn ~£X if a hire results, paid from platform fee").
 - **CR-082 (Must).** "Share with another employer" button on worker profile page (employer view only) → modal with copy-able `/workers/:id?ref=YOURCODE` link + breakdown.
-- **CR-083 (Must).** Frontend ref-attribution: on `/jobs/:id` and `/workers/:id` page mount, if `?ref=CODE` in URL → call `POST /referral/track-click` with `code`, `target_id`, `target_role`. Show toast: "Referred by ${display_name}". Strip `?ref=` from URL via `history.replaceState`.
-- **CR-084 (Must).** Signup form: if `tradehub_ref` cookie present, fetch referrer display name via `GET /referral/who-referred?code=CODE` (public lookup) and show "You were referred by X" banner above signup form. Cookie consumed automatically on successful signup (server-side).
+- **CR-083 (Must).** Frontend `useRefAttribution` hook on `/jobs/:id` and `/workers/:id` page mount, if `?ref=CODE` in URL AND user is logged in → call `POST /referral/intent` with `code`, `target_id`, `target_role`. Show toast: "Referred by ${display_name}" if the response includes one (and `recorded === true`). Always strip `?ref=` from the URL via `setSearchParams({}, { replace: true })`. If user is anonymous, the hook just strips the param (no API call) — anonymous viewers cannot perform a qualifying action without registering, and account-ref flow uses `/r/:code` instead.
+- **CR-084 (Must).** Signup form reads `?ref=CODE` from the URL via `useSearchParams`. If present, fetches referrer display name via `GET /referral/who-referred?code=CODE` (public lookup) and shows "Referred by X" banner. The code is forwarded into the signup POST body as `referred_by_code`. The `/r/:code` backend endpoint redirects there with the param pre-populated, so a fresh visitor lands on the register page with everything ready.
 - **CR-085 (Must).** Toast notification when frontend detects ref code being applied (signup or apply or hire).
 
 ### 7. Admin
@@ -171,10 +180,10 @@ See `brief.md`.
 - **CR-100 (Must).** Self-ref guard at signup: `Account.referred_by_id` not set if referrer email == new email. Silent.
 - **CR-101 (Must).** Self-ref guard at JobApplication: if applicant Account.id == project_referrer Account.id → silent skip.
 - **CR-102 (Must).** Self-ref guard at Contract creation: if employer Account.id == project_referrer Account.id → silent skip.
-- **CR-103 (Must).** E→E target mismatch: if cookie's target_id ≠ contract.worker_id → silent skip (no attribution, no error to user).
-- **CR-104 (Must).** W→W target mismatch: if cookie's target_id ≠ application.job_post_id → silent skip.
-- **CR-105 (Must).** Multi-click attribution: last-click wins. Cookie overwrites previous on each new track-click.
-- **CR-106 (Must).** Cookie expires after 30 days. Backend reads cookie's `set_at` and ignores if older than 30d.
+- **CR-103 (Must).** E→E target mismatch: contract creation only consumes intents matching `(employer_account_id, 'EMPLOYER', collab.worker_id)`. Intent recorded against a different worker_id is left untouched (silent skip on contract creation).
+- **CR-104 (Must).** W→W target mismatch: application only consumes intents matching `(worker_account_id, 'WORKER', job_post_id)`. Intents for other jobs ignored.
+- **CR-105 (Must).** Multi-click attribution: last-click wins. `findActiveIntent` orders by `created_at desc` so the latest non-expired intent for the tuple is consumed first.
+- **CR-106 (Must).** Intent expires after 30 days (`expires_at` column). The lookup filters `expires_at > now`. Expired rows can be left in the DB and reaped lazily; they never resurface in attribution.
 - **CR-107 (Must).** Account ref window: 12 months default from signup, configurable. Releases past window do not credit referrer. PendingReferralPayout entries created within window are still paid out even after window closes (already-earned money).
 - **CR-108 (Must).** Project ref runs lifetime of contract — every milestone, no window.
 - **CR-109 (Should).** Click logging table (light-weight `referral_click_log`) for analytics — `code`, `target_id`, `target_role`, `clicker_account_id` (NULL if unauthenticated), `clicked_at`, `ip_hash`. For MVP: log but do not surface in UI.
@@ -210,9 +219,11 @@ See `brief.md`.
 - **2026-05-10** — Account ref window: default 12 months, admin-configurable, NULL = lifetime.
 - **2026-05-10** — E→E attribution requires target_worker_id match — if employer hires a different worker than the one shared, no commission. Anti-spam.
 - **2026-05-10** — All commission percentages admin-configurable from Settings tab. No hardcoded business defaults beyond seed values.
-- **2026-05-10** — Cookie strategy: separate `tradehub_ref` (account, persists till signup) and `tradehub_ref_project` (project, single-use on apply/hire), both 30-day TTL.
+- **2026-05-10** — Cookie strategy: separate `tradehub_ref` (account, persists till signup) and `tradehub_ref_project` (project, single-use on apply/hire), both 30-day TTL. **Superseded 2026-05-10 (afternoon) — see entry below.**
 - **2026-05-10** — Auto-generated 8-char ref codes (`XXXX-XXXX`), no vanity codes in MVP.
 - **2026-05-10** — Conversation persists at Collaboration level across all contracts.
 - **2026-05-10** — Reviews migrate from collab-scoped to contract-scoped — each contract gets its own review window.
 - **2026-05-10** — Hire-again reuses Collaboration row, just adds new Contract row. No duplicate relationship rows.
 - **2026-05-10** — Single-migration refactor (no incremental migration), seed regenerates all data. Dev DB only — owner accepted reset.
+- **2026-05-10 (revision)** — **Referral attribution moved from cookies to a server-side `ReferralIntent` table.** Cookie-based attribution turned out to be fragile in real testing: cross-origin `Set-Cookie` was dropped because the frontend `fetch` wrapper omitted `credentials:'include'`, Safari ITP caps client-set cookies to 7 days, GDPR adds banner overhead, and incognito/in-app browsers strip them. Outcome: anonymous traffic on `/jobs/:id?ref=` was never attributed even when everything "worked." Replaced with: (1) account-ref = pure URL param `/r/:code` → `/register?ref=CODE` → register form forwards `referred_by_code`; (2) project-ref = `ReferralIntent` row keyed by the logged-in actor account, written by `POST /referral/intent`, looked up at apply/hire time via `findActiveIntent`. Anonymous viewers of project-ref links are intentionally not attributed (they can't perform a qualifying action anyway). New migration `referral_intent` adds the table; old cookie middleware + helpers (`referral-cookie.ts`, `REF_COOKIE_NAMES`, `REF_COOKIE_TTL_MS`, `POST /referral/track-click`) deleted.
+- **2026-05-10 (revision)** — Contract creation gains a **W2W backfill** path (CR-038 step 2). When the contract is created from a `job_post_id`, backend reads `JobApplication.project_referrer_id` from the matching application and copies it onto the contract. Without this, the W2W chain (worker shares link → applicant captured → employer hires from JobPost) was broken at the hire step because the original ref-link URL is long gone by the time the employer creates the contract from `/collaborations/X` days later. The JobApplication row is the durable handoff between the apply event and the hire event.

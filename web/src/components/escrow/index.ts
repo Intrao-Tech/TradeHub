@@ -44,7 +44,7 @@ export {
   getIncomingAttribution,
   getReferralPendingPayouts,
   retryReferralPendingPayouts,
-  trackProjectClick,
+  recordProjectIntent,
   lookupReferrerByCode,
   type ContractRow,
   type ContractStatus,

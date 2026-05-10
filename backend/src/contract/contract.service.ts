@@ -10,7 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ConversationService } from '../conversation/conversation.service';
 import { MailService } from '../mail/mail.service';
-import { readProjectRefCookie } from '../referral/referral-cookie';
+import { ReferralService } from '../referral/referral.service';
 import { REFERRAL_AUDIT_EVENTS } from '../referral/referral.constants';
 import {
   CONTRACT_AUDIT_EVENTS,
@@ -29,6 +29,7 @@ export class ContractService {
     private readonly audit: AuditService,
     private readonly conversation: ConversationService,
     private readonly mail: MailService,
+    private readonly referrals: ReferralService,
   ) {}
 
   /**
@@ -42,7 +43,7 @@ export class ContractService {
     actorAccountId: bigint,
     collaborationId: bigint,
     dto: CreateContractDto,
-    opts: { propose?: boolean; cookieHeader?: string } = {},
+    opts: { propose?: boolean } = {},
   ) {
     const collab = await this.prisma.collaboration.findUnique({
       where: { id: collaborationId },
@@ -79,9 +80,9 @@ export class ContractService {
       ? CONTRACT_STATUS.PROPOSED
       : CONTRACT_STATUS.DRAFT;
 
-    // E→E project ref attribution: only when employer initiates the contract,
-    // cookie target_role=EMPLOYER, target_id matches this collab's worker_id,
-    // and referrer != employer (anti self-ref).
+    // E→E project ref attribution: only when employer initiates the contract.
+    // Looks up an active intent recorded when the employer clicked
+    // `/workers/:id?ref=` (target_role=EMPLOYER, target_id=worker_id).
     let projectReferrerId: bigint | null = null;
     let projectReferrerRole: 'WORKER' | 'EMPLOYER' | null = null;
     let referrerForNotify: {
@@ -89,35 +90,37 @@ export class ContractService {
       email: string;
       display_name: string;
     } | null = null;
-    const refCookie = readProjectRefCookie(opts.cookieHeader);
     if (
-      refCookie &&
-      refCookie.target_role === 'EMPLOYER' &&
-      String(refCookie.target_id) === String(collab.worker_id) &&
       dto.initiated_by === 'EMPLOYER' &&
       actorAccountId === collab.employer_id
     ) {
-      const referrer = await this.prisma.account.findUnique({
-        where: { referral_code: refCookie.code.toUpperCase() },
-        include: {
-          client_profile: { select: { display_name: true } },
-        },
-      });
-      if (referrer && referrer.id !== collab.employer_id) {
-        projectReferrerId = referrer.id;
+      const intent = await this.referrals.findActiveIntent(
+        collab.employer_id,
+        'EMPLOYER',
+        collab.worker_id,
+      );
+      if (intent && intent.referrer_account_id !== collab.employer_id) {
+        projectReferrerId = intent.referrer_account_id;
         projectReferrerRole = 'EMPLOYER';
-        referrerForNotify = {
-          id: referrer.id,
-          email: referrer.email,
-          display_name: referrer.client_profile?.display_name ?? referrer.email,
-        };
+        const referrerAcc = await this.prisma.account.findUnique({
+          where: { id: intent.referrer_account_id },
+          include: { client_profile: { select: { display_name: true } } },
+        });
+        if (referrerAcc) {
+          referrerForNotify = {
+            id: referrerAcc.id,
+            email: referrerAcc.email,
+            display_name:
+              referrerAcc.client_profile?.display_name ?? referrerAcc.email,
+          };
+        }
       }
     }
 
     // W→W project ref backfill: when contract is created from a JobPost the
     // worker applied to, copy any project_referrer_id captured on the matching
     // JobApplication. Otherwise the chain (link click → application → hire →
-    // commission) is broken at the hire step. E→E cookie above takes priority.
+    // commission) is broken at the hire step. E→E intent above takes priority.
     if (!projectReferrerId && dto.job_post_id) {
       const app = await this.prisma.jobApplication.findUnique({
         where: {

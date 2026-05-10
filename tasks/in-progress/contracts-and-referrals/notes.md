@@ -29,7 +29,7 @@ Conclusion: Upwork is the right primary model. The W→W and E→E project-refer
 ## Anti-fraud considerations (out of scope for MVP, but on the radar)
 
 - **Self-ref ring** — A creates ref, B signs up via A's link, B creates ref, A's alt account signs up via B → infinite mutual cuts. Mitigate via same-IP / same-payment-method dedup post-MVP.
-- **Click bombing** — referrer floods clicks to inflate "share" stats. Doesn't affect payouts (no per-click pay) but skews reporting. Add per-IP rate limit on `/referral/track-click` post-MVP.
+- **Click bombing** — referrer floods clicks to inflate "share" stats. Doesn't affect payouts (no per-click pay) but skews reporting. Add per-IP rate limit on `POST /referral/intent` post-MVP. With server-side intent (one row per click) the table can also grow large — per-actor cap or periodic cleanup of expired rows post-MVP.
 - **Refree gaming** — user signs up via ref code A, then later realises ref code B would pay them more (e.g. tiered), tries to switch. Mitigate: `referred_by_id` is immutable post-signup.
 
 ## Window semantics
@@ -39,14 +39,14 @@ Conclusion: Upwork is the right primary model. The W→W and E→E project-refer
 - If `account_referral_window_months` is NULL → lifetime, no check.
 - Edge: what if admin shortens window from 12 → 6 months mid-flight? Behavior: applies to NEW commissions immediately. Past commissions already paid are not clawed back. Document in admin tooltip.
 
-## Cookie security
+## Attribution security (server-side intent model — replaced cookies on 2026-05-10)
 
-- httpOnly=false intentionally — frontend needs to detect "you were referred by X" for UX.
-- Secure=true in prod.
-- SameSite=lax — survives top-level navigation from referrer's email link, but not cross-site CSRF.
-- 30-day TTL.
-- Cookie payload is JSON: `{ code: string, type: 'ACCOUNT' | 'PROJECT', target_id?: number, target_role?: 'WORKER' | 'EMPLOYER', set_at: ISO timestamp }`.
-- Backend always re-validates `code` exists on each consumption — never trusts client-side cookie data beyond opaque code.
+- **No cookies at all** for referral attribution. Cookies were brittle (cross-origin Set-Cookie dropped without `credentials:'include'`, Safari ITP caps client cookies to 7d, GDPR adds banner overhead, incognito strips them). Replaced with the `ReferralIntent` server-side table.
+- **Account-ref**: pure URL. `GET /r/:code` 302 → `/register?ref=CODE`; the register form forwards `referred_by_code` in the signup POST. Attribution locked at signup forever, validated server-side against `Account.referral_code`.
+- **Project-ref (W2W / E2E)**: requires the clicker to be logged in. Frontend `useRefAttribution` hook posts to `/referral/intent` only when `getToken()` is truthy AND `?ref=` is present. Backend writes a `ReferralIntent` row keyed by `(actor_account_id, target_role, target_id)`, expires_at = now + 30d. Anonymous clicks on project-ref links are intentionally not attributed — anonymous viewers cannot perform a qualifying action without registering anyway.
+- **Lookup at action time**: `findActiveIntent(actor, target_role, target_id)` returns the latest non-expired row; multiple actions on the same target (apply, then later contract creation from the same job) can each consume it independently.
+- **Re-validation**: backend always re-resolves `referrer_account_id` to a real Account at consumption time; the intent row only stores the FK, no opaque code.
+- **Self-ref guard**: enforced at intent-record time (`actor == referrer` is a silent no-op) and at consumption time (employer == referrer / worker == referrer rejected with silent skip).
 
 ## Cap math
 

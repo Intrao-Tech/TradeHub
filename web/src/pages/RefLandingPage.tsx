@@ -1,30 +1,30 @@
 import { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
+import { Navigate, useParams } from 'react-router-dom';
+import { getToken } from '@/api';
 
 /**
- * Landing page for `/r/:code` (referral share links).
+ * Landing page for `/r/:code` (account-referral share links).
  *
- * The backend already serves `GET /api/r/:code` which sets the account-ref
- * cookie and 302-redirects to FRONTEND_URL. We just bounce the browser there
- * via a top-level navigation — that way the cookie is set by the backend
- * origin without any CORS / credentials hassle.
+ * Forwards `:code` to `/register?ref=CODE` so the form persists
+ * `account.referred_by_id` directly on signup. Pure URL flow — no cookies,
+ * no server roundtrips needed.
+ *
+ * If the visitor is already logged in, the share is wasted (account-ref is
+ * locked at signup) — bounce them to the home page so they don't see a
+ * confusing register screen.
  */
 export default function RefLandingPage() {
   const { code } = useParams<{ code: string }>();
+  const loggedIn = !!getToken();
 
+  // Strip framing chrome while we redirect.
   useEffect(() => {
-    if (!code) {
-      window.location.replace('/');
-      return;
-    }
-    window.location.replace(`${API}/r/${encodeURIComponent(code)}`);
-  }, [code]);
+    document.title = 'Following referral link…';
+  }, []);
 
+  if (!code) return <Navigate to="/" replace />;
+  if (loggedIn) return <Navigate to="/" replace />;
   return (
-    <div className="flex items-center justify-center py-20 text-sm text-fg-muted">
-      Following referral link…
-    </div>
+    <Navigate to={`/register?ref=${encodeURIComponent(code)}`} replace />
   );
 }

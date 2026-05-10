@@ -1,10 +1,10 @@
 # Status
 
-- State: in-progress (spec + contract drafted, implementation pending)
-- Owner: Igor (PM); implementing engineer TBA
+- State: in-progress (core MVP shipped; milestone-detail features added 2026-05-10)
+- Owner: Igor (PM); implementing engineer: Claude session
 - Created: 2026-05-09 (folder moved from product/ via scope.md → spec drafting)
 - Started: 2026-05-09
-- Last Updated: 2026-05-09
+- Last Updated: 2026-05-10
 - Shipped: —
 
 ## Notes
@@ -25,6 +25,13 @@
 - **Slice plan**: 6 slices over ~3 weeks of dev. A — schema + Connect onboarding; B — milestones + fund; C — submit + release + auto-release; D — refund + dispute + cancel; E — wallet + admin settings + system chat msgs; F — audit + cleanup + provider flag.
 - **Tests counterpart**: `tests-escrow/` opens parallel to Slice A; coverage drives `TEST-ESCROW-NNN` 1:1 against `ESCROW-NNN`. Real Stripe API never used in tests — `stripe-mock` Docker container or in-memory mock.
 - **Webhook setup verified 2026-05-09**: `stripe listen --forward-to ... --forward-connect-to ...` running, both `STRIPE_WEBHOOK_SECRET` and `STRIPE_CONNECT_WEBHOOK_SECRET` set in `.env`, `payment_intent.succeeded` test trigger returned `[200]` from local backend. Connect activated in Stripe sandbox via Marketplace business model. Test connected account auto-created (acct_1TVGTqEJxf4yoGty).
+- **2026-05-10 milestone-detail features added** (migration `milestone_request_attachments_worker_payout`):
+  - REQUESTED + DECLINED milestone states (worker can request milestones; employer approves or declines, declined preserves the row).
+  - `description` field on milestones (≤2000 chars).
+  - `EscrowMilestoneAttachment` table — phase-aware (CREATION / SUBMISSION), max 3 per phase, PDF/JPEG/PNG/WebP ≤25MB, served from `/uploads/milestone-attachments/`.
+  - `PendingWorkerPayout` table + sweep on Connect onboarding — release fires even when worker is not Stripe-onboarded, money is held on platform balance, swept to worker on `account.updated → payouts_enabled=true`.
+  - Frontend: `MilestoneRow` shows REQUESTED/DECLINED badges, employer Approve/Decline buttons on REQUESTED, attachment list per phase with role-aware add/remove, "Held — connect Stripe" badge + wallet link when worker has held payout. `WalletPage` shows `pending_worker_payouts` as a "Held until you set up Stripe" section.
+  - Spec rows added: ESCROW-002 (status enum extended), ESCROW-030/031/032 (creator-aware perms), ESCROW-036/037 (approve/decline-request), ESCROW-038/039 (attachments), ESCROW-068/068b/068c/069 (held payouts + sweep).
 
 ## Source inputs available to the implementing AI
 

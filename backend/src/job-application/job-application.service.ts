@@ -12,7 +12,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { AuditService } from '../audit/audit.service';
-import { readProjectRefCookie } from '../referral/referral-cookie';
+import { ReferralService } from '../referral/referral.service';
 import { REFERRAL_AUDIT_EVENTS } from '../referral/referral.constants';
 import { ConversationService } from '../conversation/conversation.service';
 import type { ApplicationQueryDto } from './dto/application-query.dto';
@@ -39,16 +39,12 @@ export class JobApplicationService {
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly audit: AuditService,
+    private readonly referrals: ReferralService,
     @Inject(forwardRef(() => ConversationService))
     private readonly conversations: ConversationService,
   ) {}
 
-  async apply(
-    jobPostId: bigint,
-    workerId: bigint,
-    dto: ApplyJobDto,
-    cookieHeader?: string,
-  ) {
+  async apply(jobPostId: bigint, workerId: bigint, dto: ApplyJobDto) {
     const jobPost = await this.prisma.jobPost.findUnique({
       where: { id: jobPostId },
     });
@@ -72,8 +68,9 @@ export class JobApplicationService {
       });
     }
 
-    // Project-ref attribution: read cookie + validate target_id matches
-    // this jobPostId AND target_role=WORKER AND referrer != applicant.
+    // Project-ref attribution: look up the latest active intent recorded
+    // for (this worker, target_role=WORKER, target_id=jobPostId). Replaces
+    // the prior cookie-based attribution.
     let projectReferrerId: bigint | null = null;
     let projectReferrerRole: 'WORKER' | 'EMPLOYER' | null = null;
     let referrerForNotify: {
@@ -81,25 +78,24 @@ export class JobApplicationService {
       email: string;
       display_name: string;
     } | null = null;
-    const refCookie = readProjectRefCookie(cookieHeader);
-    if (
-      refCookie &&
-      refCookie.target_role === 'WORKER' &&
-      String(refCookie.target_id) === String(jobPostId)
-    ) {
-      const referrer = await this.prisma.account.findUnique({
-        where: { referral_code: refCookie.code.toUpperCase() },
-        include: {
-          client_profile: { select: { display_name: true } },
-        },
+    const intent = await this.referrals.findActiveIntent(
+      workerId,
+      'WORKER',
+      jobPostId,
+    );
+    if (intent && intent.referrer_account_id !== workerId) {
+      const referrerAcc = await this.prisma.account.findUnique({
+        where: { id: intent.referrer_account_id },
+        include: { client_profile: { select: { display_name: true } } },
       });
-      if (referrer && referrer.id !== workerId) {
-        projectReferrerId = referrer.id;
+      if (referrerAcc) {
+        projectReferrerId = referrerAcc.id;
         projectReferrerRole = 'WORKER';
         referrerForNotify = {
-          id: referrer.id,
-          email: referrer.email,
-          display_name: referrer.client_profile?.display_name ?? referrer.email,
+          id: referrerAcc.id,
+          email: referrerAcc.email,
+          display_name:
+            referrerAcc.client_profile?.display_name ?? referrerAcc.email,
         };
       }
     }

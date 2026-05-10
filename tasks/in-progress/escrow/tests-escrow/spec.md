@@ -50,10 +50,13 @@ Files (one per major flow):
 - `escrow-cancel.e2e-spec.ts`
 - `escrow-end-contract.e2e-spec.ts`
 - `pending-referral-payout.e2e-spec.ts`
+- `pending-worker-payout.e2e-spec.ts` — release fires when worker not Stripe-onboarded → `PendingWorkerPayout(PENDING)`; sweep on `account.updated → payouts_enabled=true` flips it to `PAID` with `stripe_transfer_id`. Maps `ESCROW-068`/`ESCROW-068b`/`ESCROW-069`.
+- `milestone-request.e2e-spec.ts` — worker creates milestone via `POST /escrow/:id/milestones` → row stored as `REQUESTED` with `created_by_role='WORKER'`; employer `approve-request` → `PENDING`; employer `decline-request` → `DECLINED` (row preserved). Worker can edit/delete own `REQUESTED`; employer cannot edit. Maps `ESCROW-030`/`ESCROW-036`/`ESCROW-037`.
+- `milestone-attachments.e2e-spec.ts` — `POST .../attachments?phase=CREATION|SUBMISSION` enforces phase × role × status windows + 3-per-phase cap + MIME/size whitelist. `DELETE` is uploader-only and only while in the same window. Maps `ESCROW-038`/`ESCROW-039`.
 - `wallet.e2e-spec.ts`
 - `platform-settings.e2e-spec.ts`
 
-~80 cases expected.
+~95 cases expected.
 
 ### E2E-WH — Webhook tests
 

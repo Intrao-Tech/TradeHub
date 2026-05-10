@@ -129,10 +129,10 @@ export class AuthService {
     const slug = this.generateSlug(displayName);
     const referralCode = await this.allocateReferralCode();
 
-    // Account-referral attribution: read cookie once, validate the referrer
-    // exists and is not self. Locked at signup forever — never re-attributed.
-    const refByCode = (dto as { referred_by_code?: string | null })
-      .referred_by_code;
+    // Account-referral attribution: takes the `ref` URL param the frontend
+    // forwarded into `referred_by_code`. Validates the referrer exists and
+    // is not self. Locked at signup forever — never re-attributed.
+    const refByCode = dto.referred_by_code;
     let referredById: bigint | null = null;
     if (refByCode) {
       const referrer = await this.prisma.account.findUnique({

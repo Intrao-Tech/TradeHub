@@ -20,6 +20,7 @@ Status legend: ⬜ pending · 🟡 in-progress · ✅ green
 | CR-012 | (covered by U cap math) | U | ⬜ |
 | CR-013 | TEST-CR-006 | E2E-B | ⬜ |
 | CR-014 | (migration applied) | n/a | ✅ |
+| CR-015 | TEST-CR-062..069 (`ReferralIntent` table — added 2026-05-10 cookie→intent revision) | E2E-B | ⬜ |
 
 ## Contract domain (CR-020..025)
 
@@ -37,12 +38,14 @@ Status legend: ⬜ pending · 🟡 in-progress · ✅ green
 | Spec ID | Test ID | Layer | Status |
 | ------- | ------- | ----- | ------ |
 | CR-030 | (module wired — verified by build) | n/a | ✅ |
-| CR-031 | (cookie middleware deferred to auth-on-signup) | n/a | ⬜ |
-| CR-032 | TEST-CR-060..061 | E2E-B | ⬜ |
-| CR-033..035 | TEST-CR-062..063 | E2E-B | ⬜ |
-| CR-036 | TEST-CR-064..066 | E2E-B | ⬜ |
-| CR-037 | (covered indirectly by TEST-CR-074) | E2E-B | ⬜ |
-| CR-038 | (covered indirectly by TEST-CR-074) | E2E-B | ⬜ |
+| CR-031 | TEST-CR-062..063 (intent record) | E2E-B | ⬜ |
+| CR-032 | TEST-CR-066, TEST-CR-067, TEST-CR-068, TEST-CR-069 (intent lookup) | E2E-B | ⬜ |
+| CR-033 | TEST-CR-060..061 (`/r/:code` redirect) | E2E-B | ⬜ |
+| CR-034 | TEST-CR-062..063 (`POST /referral/intent`) | E2E-B | ⬜ |
+| CR-035 | TEST-CR-110..114 (frontend hook gated on auth) | F | ⬜ |
+| CR-036 | TEST-CR-064..065 (signup with `referred_by_code`) | E2E-B | ⬜ |
+| CR-037 | TEST-CR-066 (apply consumes intent) | E2E-B | ⬜ |
+| CR-038 | TEST-CR-067..068 (E→E intent + W2W backfill) | E2E-B | ⬜ |
 | CR-039 | TEST-CR-065, TEST-CR-120..123 | E2E-B | ⬜ |
 | CR-040 | TEST-CR-100..103 | F | ⬜ |
 | CR-041 | TEST-CR-010..020, TEST-CR-070..076 | U + E2E-B | ⬜ |
@@ -88,8 +91,8 @@ Status legend: ⬜ pending · 🟡 in-progress · ✅ green
 | CR-102 | (covered by TEST-CR-122) | E2E-B | ⬜ |
 | CR-103 | TEST-CR-122 | E2E-B | ⬜ |
 | CR-104 | TEST-CR-123 | E2E-B | ⬜ |
-| CR-105 | (cookie last-click — covered by TEST-CR-066) | E2E-B | ⬜ |
-| CR-106 | (cookie TTL — out of scope, browser-side) | n/a | ⬜ |
+| CR-105 | TEST-CR-066 (latest intent wins on apply) | E2E-B | ⬜ |
+| CR-106 | TEST-CR-069 (expired intent ignored) | E2E-B | ⬜ |
 | CR-107 | TEST-CR-019..020 | U | ⬜ |
 | CR-108 | (covered by TEST-CR-074) | E2E-B | ⬜ |
 | CR-109..110 | (Should — out of scope MVP) | n/a | ⬜ |

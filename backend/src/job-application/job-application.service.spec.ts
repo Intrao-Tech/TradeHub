@@ -28,15 +28,19 @@ function build(): {
   const audit = {
     log: jest.fn().mockResolvedValue(undefined),
   } as unknown as ConstructorParameters<typeof JobApplicationService>[2];
+  const referrals = {
+    findActiveIntent: jest.fn().mockResolvedValue(null),
+  } as unknown as ConstructorParameters<typeof JobApplicationService>[3];
   const conversations = {
     ensureCollaborationConversation: jest.fn().mockResolvedValue(null),
     announceConversationCreated: jest.fn(),
     postSystemMessageForCollaboration: jest.fn().mockResolvedValue(null),
-  } as unknown as ConstructorParameters<typeof JobApplicationService>[3];
+  } as unknown as ConstructorParameters<typeof JobApplicationService>[4];
   const service = new JobApplicationService(
     prisma,
     mail,
     audit,
+    referrals,
     conversations,
   );
   return { service, prisma };

@@ -2,11 +2,12 @@ import { Module, forwardRef } from '@nestjs/common';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { AuditModule } from '../audit/audit.module';
 import { ConversationModule } from '../conversation/conversation.module';
+import { ReferralModule } from '../referral/referral.module';
 import { JobApplicationController } from './job-application.controller';
 import { JobApplicationService } from './job-application.service';
 
 @Module({
-  imports: [AuditModule, forwardRef(() => ConversationModule)],
+  imports: [AuditModule, ReferralModule, forwardRef(() => ConversationModule)],
   controllers: [JobApplicationController],
   providers: [JobApplicationService, RolesGuard],
 })

@@ -7,8 +7,10 @@ Two coupled changes that together replace the current `Collaboration` lifecycle 
 1. **Collaboration → Contract refactor** (Upwork-style relationship model). Collaboration becomes a stateless relationship binding (worker ↔ employer + persistent chat). Contract becomes the lifecycle entity holding agreed_amount, status, escrow, milestones. One Collaboration can have N Contracts ("Hire again"). Chat persists across contracts.
 
 2. **New referral system**, two referral types, both trackable on `/referrals`:
-   - **Account referral** (Upwork-style): personal code `MIKE-A1B2` → ref-link `/r/CODE` → cookie set → captured at signup → referrer earns % of platform_fee on every released milestone in any contract where referree is a party, for an admin-configurable window (default 12 months, lifetime option).
-   - **Project referral**: per-job link (worker→worker) and per-worker link (employer→employer). Cookie attribution on click → captured on JobApplication or Contract creation → referrer earns % of agreed_amount on every released milestone of that contract. Only credits already-registered users.
+   - **Account referral** (Upwork-style): personal code `MIKE-A1B2` → ref-link `/r/CODE` → 302 to `/register?ref=CODE` → register form forwards `referred_by_code` on signup → referrer earns % of platform_fee on every released milestone in any contract where referree is a party, for an admin-configurable window (default 12 months, lifetime option).
+   - **Project referral**: per-job link (worker→worker) and per-worker link (employer→employer). Logged-in click writes a server-side `ReferralIntent` row keyed by the actor account → consumed at JobApplication.create or Contract.create → referrer earns % of agreed_amount on every released milestone of that contract. Only credits already-registered users.
+
+> Cookie-based attribution was the original draft on both flows. Replaced 2026-05-10 with pure URL (account-ref) + server-side intent table (project-ref) after cookies proved fragile in cross-origin testing. See spec.md Decisions Log.
 
 Old `Referral`/`ReferralOffer` "subcontract" feature is dropped entirely.
 
