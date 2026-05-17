@@ -1,8 +1,8 @@
-// TEST-JOBS-100..103 — JobBoardPage (JOBS-001 / 002 / 003 / 005 / 006 / 048).
+// TEST-JOBS-100..104 — JobBoardPage dispatcher (JOBS-001 / 002 / 003 / 005 / 006 / 014 / 017).
 //
-// Covers the public job-board surface: the spec lock-down clauses (zero
-// JSON dumps), filter binding to URL state, empty state rendering, and
-// the role gate around the "Post a job" CTA.
+// JobBoardPage dispatches between PublicJobBoardPage (guest) and
+// AuthJobBoardPage (logged in) based on the auth token. Tests below cover both
+// surfaces through the dispatcher to match real user experience.
 
 import { describe, expect, test } from 'vitest';
 import { http, HttpResponse } from 'msw';
@@ -20,7 +20,7 @@ describe('TEST-JOBS-100 JobBoardPage zero JSON dumps (JOBS-001 / JOBS-048)', () 
       account: null,
     });
     await waitFor(() => {
-      expect(screen.getByText(/job board/i)).toBeInTheDocument();
+      expect(screen.getByText(/find your next trade job/i)).toBeInTheDocument();
     });
 
     expect(container.querySelectorAll('pre').length).toBe(0);
@@ -31,6 +31,9 @@ describe('TEST-JOBS-100 JobBoardPage zero JSON dumps (JOBS-001 / JOBS-048)', () 
 
 describe('TEST-JOBS-101 JobBoardPage filter inputs (JOBS-003)', () => {
   test('JOBS-003 — pre-fills inputs from URL params and submitting refetches with the new query', async () => {
+    const { setTokens } = await import('@/api');
+    setTokens('t', 'r');
+
     const urls: string[] = [];
     server.use(
       http.get(`${API}/job-posts`, ({ request }) => {
@@ -49,7 +52,9 @@ describe('TEST-JOBS-101 JobBoardPage filter inputs (JOBS-003)', () => {
 
     renderWithProfile(<JobBoardPage />, {
       route: '/jobs?search=plumber&postcode_area=SW19',
-      account: null,
+      account: mockAccountMe({
+        clientProfile: { worker_profile: undefined as never, employer_profile: null },
+      }),
     });
     await waitFor(() =>
       expect(screen.getByText(/job board/i)).toBeInTheDocument(),
@@ -113,6 +118,9 @@ describe('TEST-JOBS-101 JobBoardPage filter inputs (JOBS-003)', () => {
   });
 
   test('JOBS-005 — total > page size shows the prev/next paginator and Next advances ?page=', async () => {
+    const { setTokens } = await import('@/api');
+    setTokens('t', 'r');
+
     const urls: string[] = [];
     server.use(
       http.get(`${API}/job-posts`, ({ request }) => {
@@ -130,7 +138,12 @@ describe('TEST-JOBS-101 JobBoardPage filter inputs (JOBS-003)', () => {
 
     const userEvent = (await import('@testing-library/user-event')).default;
     const user = userEvent.setup();
-    renderWithProfile(<JobBoardPage />, { route: '/jobs', account: null });
+    renderWithProfile(<JobBoardPage />, {
+      route: '/jobs',
+      account: mockAccountMe({
+        clientProfile: { worker_profile: undefined as never, employer_profile: null },
+      }),
+    });
 
     const next = await screen.findByRole('button', { name: /next/i });
     expect(next).toBeEnabled();
@@ -141,6 +154,9 @@ describe('TEST-JOBS-101 JobBoardPage filter inputs (JOBS-003)', () => {
   });
 
   test('JOBS-003 — specialisation_id in URL pre-selects the chip filter', async () => {
+    const { setTokens } = await import('@/api');
+    setTokens('t', 'r');
+
     let lastUrl = '';
     server.use(
       http.get(`${API}/job-posts`, ({ request }) => {
@@ -155,7 +171,9 @@ describe('TEST-JOBS-101 JobBoardPage filter inputs (JOBS-003)', () => {
     );
     renderWithProfile(<JobBoardPage />, {
       route: '/jobs?specialisation_id=2',
-      account: null,
+      account: mockAccountMe({
+        clientProfile: { worker_profile: undefined as never, employer_profile: null },
+      }),
     });
     await waitFor(() => {
       expect(lastUrl).toContain('specialisation_id=2');
@@ -165,27 +183,26 @@ describe('TEST-JOBS-101 JobBoardPage filter inputs (JOBS-003)', () => {
   });
 });
 
-describe('TEST-JOBS-102 JobBoardPage empty state (JOBS-006)', () => {
-  test('JOBS-006 — no jobs → empty-state copy + guest banner CTA', async () => {
+describe('TEST-JOBS-102 PublicJobBoardPage empty state (JOBS-006)', () => {
+  test('JOBS-006 — guest with no jobs sees empty-state copy and hero CTAs', async () => {
     server.use(
       http.get(`${API}/job-posts`, () =>
-        HttpResponse.json({ items: [], total: 0, page: 1, limit: 50 }),
+        HttpResponse.json({ items: [], total: 0, page: 1, limit: 20 }),
       ),
     );
     renderWithProfile(<JobBoardPage />, { route: '/jobs', account: null });
 
     await waitFor(() =>
-      expect(screen.getByText(/no jobs found/i)).toBeInTheDocument(),
+      expect(screen.getByText(/no jobs yet/i)).toBeInTheDocument(),
     );
+    expect(screen.getByText(/check back soon/i)).toBeInTheDocument();
+    // Guest hero exposes the register-to-apply and register-to-post entry points.
     expect(
-      screen.getByText(/try adjusting your filters or come back later/i),
-    ).toBeInTheDocument();
-    // Anonymous viewer sees the guest banner with a sign-in link
-    expect(screen.getByText(/browsing as guest/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute(
-      'href',
-      '/login',
-    );
+      screen.getByRole('link', { name: /^apply$/i }),
+    ).toHaveAttribute('href', '/register?next=/jobs');
+    expect(
+      screen.getByRole('link', { name: /hiring\? post a job/i }),
+    ).toHaveAttribute('href', '/register?next=/my-jobs');
   });
 });
 
@@ -193,7 +210,7 @@ describe('TEST-JOBS-104 JobBoardPage Post-a-job role gate (JOBS-014 / 017)', () 
   test('JOBS-017 — anonymous user sees no "Post a job" CTA', async () => {
     renderWithProfile(<JobBoardPage />, { route: '/jobs', account: null });
     await waitFor(() =>
-      expect(screen.getByText(/job board/i)).toBeInTheDocument(),
+      expect(screen.getByText(/find your next trade job/i)).toBeInTheDocument(),
     );
     expect(screen.queryByRole('button', { name: /post a job/i })).toBeNull();
   });

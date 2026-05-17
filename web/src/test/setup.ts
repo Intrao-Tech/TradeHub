@@ -8,6 +8,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterAll, afterEach, beforeAll, vi } from 'vitest';
 import { cleanup, configure } from '@testing-library/react';
 import { server } from './msw-server';
+import { clearTokens } from '@/api';
 
 // Raise the async-util timeout used by `waitFor` / `findBy*`. The 1000ms
 // default flakes when ~56 test files contend for a loaded machine — a
@@ -77,8 +78,10 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => {
   cleanup();
   server.resetHandlers();
-  // Clear localStorage between tests so api.ts module-state doesn't leak
-  // tokens across cases.
+  // api.ts caches access/refresh in module-level `let` vars (initialised once
+  // from localStorage). Clearing localStorage alone doesn't reset those — call
+  // clearTokens() so the next test starts with a guest token state.
+  clearTokens();
   localStorage.clear();
   // Reset the useAccountMe module cache without touching production code —
   // the hook already listens for this event (App.tsx dispatches it on
