@@ -460,7 +460,6 @@ export function endContract(
 // ── Referral domain ────────────────────────────────────────────
 
 export type AccountReferralStats = {
-  window_months: number | null;
   lifetime_signups: number;
   total_earned_gbp: string;
   items: Array<{
@@ -468,7 +467,6 @@ export type AccountReferralStats = {
     email: string;
     display_name: string | null;
     referred_at: string | null;
-    window_ends_at: string | null;
   }>;
 };
 

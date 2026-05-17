@@ -84,19 +84,28 @@ export class JobApplicationService {
       jobPostId,
     );
     if (intent && intent.referrer_id !== workerId) {
-      const referrerAcc = await this.prisma.account.findUnique({
-        where: { id: intent.referrer_id },
-        include: { client_profile: { select: { display_name: true } } },
+      // W2W referral rewards introducing a NEW worker↔employer pairing. If
+      // the worker already collaborates with this job's employer, the
+      // referrer introduced nothing — skip the attribution.
+      const priorCollab = await this.prisma.collaboration.findFirst({
+        where: { worker_id: workerId, employer_id: jobPost.employer_id },
+        select: { id: true },
       });
-      if (referrerAcc) {
-        projectReferrerId = referrerAcc.id;
-        projectReferrerRole = 'WORKER';
-        referrerForNotify = {
-          id: referrerAcc.id,
-          email: referrerAcc.email,
-          display_name:
-            referrerAcc.client_profile?.display_name ?? referrerAcc.email,
-        };
+      if (!priorCollab) {
+        const referrerAcc = await this.prisma.account.findUnique({
+          where: { id: intent.referrer_id },
+          include: { client_profile: { select: { display_name: true } } },
+        });
+        if (referrerAcc) {
+          projectReferrerId = referrerAcc.id;
+          projectReferrerRole = 'WORKER';
+          referrerForNotify = {
+            id: referrerAcc.id,
+            email: referrerAcc.email,
+            display_name:
+              referrerAcc.client_profile?.display_name ?? referrerAcc.email,
+          };
+        }
       }
     }
 

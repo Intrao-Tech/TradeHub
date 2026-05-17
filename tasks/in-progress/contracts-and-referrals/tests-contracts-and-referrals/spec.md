@@ -55,17 +55,19 @@ requirement, cited in the test description. Layer tags:
 
 - **TEST-CR-010 (Must, U)** — no referrers anywhere → returns `[]`. Maps
   `CR-041`.
-- **TEST-CR-011 (Must, U)** — only worker has account ref within window →
-  returns 1 ACCOUNT line, gross = `platform_fee × account_referral_pct/100`,
-  cappedAmount == grossAmount (no cap hit). Maps `CR-041`.
-- **TEST-CR-012 (Must, U)** — only employer has account ref → 1 ACCOUNT
-  line for employer's referrer. Maps `CR-041`.
-- **TEST-CR-013 (Must, U)** — both worker AND employer have account refs →
-  2 ACCOUNT lines. Maps `CR-041`.
+- **TEST-CR-011 (Must, U)** — only worker has account ref, on the worker's
+  first revenue contract → returns 1 ACCOUNT line, gross = `platform_fee ×
+  account_referral_pct/100`, cappedAmount == grossAmount (no cap hit). Maps
+  `CR-041`.
+- **TEST-CR-012 (Must, U)** — only employer has account ref, on the
+  employer's first revenue contract → 1 ACCOUNT line for the employer's
+  referrer. Maps `CR-041`.
+- **TEST-CR-013 (Must, U)** — both worker AND employer have account refs,
+  both on their first revenue contract → 2 ACCOUNT lines. Maps `CR-041`.
 - **TEST-CR-014 (Must, U)** — project ref W2W → 1 PROJECT_W2W line, gross =
   `agreed_amount × project_referral_w2w_pct/100`. Maps `CR-041`.
-- **TEST-CR-015 (Must, U)** — project ref E2E → 1 PROJECT_E2E line, gross =
-  `agreed_amount × project_referral_e2e_pct/100`. Maps `CR-041`.
+- **TEST-CR-015 (Must, U)** — project ref EMPLOYER (E2E) → no commission
+  line; E2E is disabled. Maps `CR-041`/`CR-108`.
 - **TEST-CR-016 (Must, U)** — full stack (worker account + employer account
   + project_w2w) → 3 lines, all uncapped when sum ≤ platform_fee. Maps
   `CR-041`.
@@ -74,11 +76,14 @@ requirement, cited in the test description. Layer tags:
   (rounding allowed). Maps `CR-041` cap clause.
 - **TEST-CR-018 (Must, U)** — pence rounding loss accrues to platform
   (each capped amount rounded DOWN to 2dp). Maps `notes.md` worked example.
-- **TEST-CR-019 (Must, U)** — account ref window expired (referred_at >
-  N months ago, N from settings) → that ACCOUNT line excluded. Maps `CR-107`.
-- **TEST-CR-020 (Must, U)** — `account_referral_window_months = NULL`
-  (lifetime) → window check passes regardless of `referred_at`. Maps
-  `CR-107`.
+- **TEST-CR-019 (Must, U)** — account ref on a non-first-revenue contract
+  (an earlier, different contract already had a `RELEASED` milestone) →
+  that ACCOUNT line is excluded. Maps `CR-107`.
+- **TEST-CR-020 (Must, U)** — project W2W still pays on a non-first-revenue
+  contract — the project ref is not first-contract-gated. Maps `CR-108`.
+- **TEST-CR-021 (Must, U)** — account ref still pays on a later milestone of
+  the first revenue contract (an earlier milestone of the same contract was
+  already released) → ACCOUNT line present. Maps `CR-107`.
 
 ### 3. Contract lifecycle (E2E-B)
 

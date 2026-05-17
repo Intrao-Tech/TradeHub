@@ -34,6 +34,17 @@ import { ESCROW_AUDIT_EVENTS, grossUpForStripeFee } from './escrow.constants';
 export class EscrowService {
   private readonly logger = new Logger(EscrowService.name);
 
+  /**
+   * Suffix appended to every Stripe idempotency key. Our keys are derived
+   * from row ids; Stripe caches idempotency keys for 24h. After a dev-DB
+   * reset row ids restart at 1, so a new "milestone 4" reuses a key Stripe
+   * still holds against the *old* milestone 4 → `StripeIdempotencyError`.
+   * In test mode we append a per-process suffix so a fresh backend run never
+   * collides with a previous one. Empty in live mode — production keys must
+   * stay stable across restarts so genuine retries still de-duplicate.
+   */
+  private readonly idemSuffix: string;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
@@ -42,7 +53,12 @@ export class EscrowService {
     private readonly conversation: ConversationService,
     private readonly referrals: ReferralService,
     @Inject(STRIPE_CLIENT) private readonly stripe: Stripe | null,
-  ) {}
+  ) {
+    const secret = this.config.get<string>('STRIPE_SECRET_KEY') ?? '';
+    this.idemSuffix = secret.startsWith('sk_live_')
+      ? ''
+      : `_t${Date.now().toString(36)}`;
+  }
 
   /**
    * Helper: post a SYSTEM message into the collab's chat conversation.
@@ -343,7 +359,9 @@ export class EscrowService {
               kind: 'worker_payout_backfill',
             },
           },
-          { idempotencyKey: `worker_payout_backfill_${row.id}` },
+          {
+            idempotencyKey: `worker_payout_backfill_${row.id}${this.idemSuffix}`,
+          },
         );
         await this.prisma.payment.update({
           where: { id: row.id },
@@ -1142,7 +1160,9 @@ export class EscrowService {
         success_url: `${frontendUrl}/contracts/${contractId}/escrow?funded=${milestoneIdStr}`,
         cancel_url: `${frontendUrl}/contracts/${contractId}/escrow?canceled=${milestoneIdStr}`,
       },
-      { idempotencyKey: `escrow_milestone_${milestoneIdStr}_fund` },
+      {
+        idempotencyKey: `escrow_milestone_${milestoneIdStr}_fund${this.idemSuffix}`,
+      },
     );
 
     return {
@@ -1541,7 +1561,7 @@ export class EscrowService {
             metadata: { milestone_id: milestoneIdStr, kind: 'worker_payout' },
           },
           {
-            idempotencyKey: `escrow_milestone_${milestoneIdStr}_release_worker`,
+            idempotencyKey: `escrow_milestone_${milestoneIdStr}_release_worker${this.idemSuffix}`,
           },
         );
       } catch (err) {
@@ -1696,7 +1716,7 @@ export class EscrowService {
             },
           },
           {
-            idempotencyKey: `escrow_milestone_${String(milestoneId)}_${line.type}_${line.referrerClientProfileId}`,
+            idempotencyKey: `escrow_milestone_${String(milestoneId)}_${line.type}_${line.referrerClientProfileId}${this.idemSuffix}`,
           },
         );
       } catch (err) {
@@ -1904,7 +1924,9 @@ export class EscrowService {
               kind: 'referral_commission_backfill',
             },
           },
-          { idempotencyKey: `referral_payout_backfill_${row.id}` },
+          {
+            idempotencyKey: `referral_payout_backfill_${row.id}${this.idemSuffix}`,
+          },
         );
         await this.prisma.payment.update({
           where: { id: row.id },
@@ -1998,7 +2020,9 @@ export class EscrowService {
 
     const refund = await this.stripe.refunds.create(
       { payment_intent: charge.stripe_id },
-      { idempotencyKey: `escrow_milestone_${String(milestoneId)}_refund` },
+      {
+        idempotencyKey: `escrow_milestone_${String(milestoneId)}_refund${this.idemSuffix}`,
+      },
     );
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -2370,7 +2394,7 @@ export class EscrowService {
           },
         },
         {
-          idempotencyKey: `escrow_dispute_${String(disputeId)}_resolve_worker`,
+          idempotencyKey: `escrow_dispute_${String(disputeId)}_resolve_worker${this.idemSuffix}`,
         },
       );
     }
@@ -2384,7 +2408,7 @@ export class EscrowService {
           refund_application_fee: !platformKeptFee,
         },
         {
-          idempotencyKey: `escrow_dispute_${String(disputeId)}_resolve_employer`,
+          idempotencyKey: `escrow_dispute_${String(disputeId)}_resolve_employer${this.idemSuffix}`,
         },
       );
     }
@@ -2583,7 +2607,7 @@ export class EscrowService {
           const r = await this.stripe.refunds.create(
             { payment_intent: charge.stripe_id },
             {
-              idempotencyKey: `escrow_milestone_${String(m.id)}_decline_refund`,
+              idempotencyKey: `escrow_milestone_${String(m.id)}_decline_refund${this.idemSuffix}`,
             },
           );
           await this.prisma.$transaction(async (tx) => {

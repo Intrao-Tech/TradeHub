@@ -8,7 +8,7 @@ import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
 import * as React from 'react';
 import { server } from '../../test/msw-server';
-import { setTokens } from '@/api';
+import { setTokens, clearTokens } from '@/api';
 import { useRefAttribution } from './useRefAttribution';
 
 // Pin auth via setTokens so getToken() (read by the hook to gate the
@@ -143,6 +143,38 @@ describe('TEST-CR-110..112 useRefAttribution', () => {
 
     await new Promise((r) => setTimeout(r, 50));
     expect(trackSpy).not.toHaveBeenCalled();
+  });
+
+  test('TEST-CR-113 (CR-083) — logged out → stashes pending project-ref, no POST', async () => {
+    clearTokens();
+    const trackSpy = vi.fn();
+    server.use(
+      http.post(`${API}/referral/intent`, async () => {
+        trackSpy();
+        return HttpResponse.json({
+          referrer_display_name: null,
+          recorded: false,
+        });
+      }),
+    );
+
+    renderHook(
+      () => useRefAttribution({ targetId: 7, targetRole: 'WORKER' }),
+      { wrapper: wrap('/jobs/7?ref=ABCD-EFGH') },
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    // No server-side intent for an anonymous viewer …
+    expect(trackSpy).not.toHaveBeenCalled();
+    // … but the click is stashed for replay after login / registration.
+    const stored = JSON.parse(
+      localStorage.getItem('th.pendingProjectRef') ?? 'null',
+    );
+    expect(stored).toMatchObject({
+      code: 'ABCD-EFGH',
+      target_id: 7,
+      target_role: 'WORKER',
+    });
   });
 });
 

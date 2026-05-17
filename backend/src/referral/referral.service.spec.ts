@@ -1,9 +1,20 @@
-// TEST-CR-010..020 — ReferralService.computeMilestoneCommissions cap math.
+// TEST-CR-010..021 — ReferralService.computeMilestoneCommissions.
 // Pure-logic tests with deep-mocked Prisma; no DB, no Stripe calls.
-// Targets CR-041 (compute math + cap) and CR-107 (account ref window).
-// Post-2026-05 rework: commissions are computed against the client_profile
-// referral columns; the payment ledger + Stripe transfers moved to
-// EscrowService (fireCommissionsForRelease was removed from ReferralService).
+//
+// Rules under test:
+//  - account ref pays out on the referred user's FIRST REVENUE contract —
+//    the first contract on which a milestone was actually released (money
+//    moved + commission computed). There is no time window. It then pays on
+//    every milestone of that contract. Worker and employer sides are
+//    evaluated independently.
+//  - "first revenue contract" is resolved from escrow_milestone: the contract
+//    of the earliest RELEASED milestone under any of the user's
+//    collaborations. No prior release anywhere → the current contract IS the
+//    first revenue contract (so the very first release on a fresh contract
+//    still pays).
+//  - project ref is W2W only — E2E is disabled, so an EMPLOYER project ref
+//    produces no commission line.
+//  - the sum of all lines is capped at the milestone's platform_fee.
 
 import { mockDeep, type DeepMockProxy } from 'jest-mock-extended';
 import { Prisma } from '@prisma/client';
@@ -49,127 +60,78 @@ const PROJECT_REF = 500n;
 const MILESTONE_ID = 9001n;
 const CONTRACT_ID = 7001n;
 
-describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
-  test('TEST-CR-010 (CR-041) — no referrers anywhere → returns []', async () => {
+const baseInput = {
+  milestoneId: MILESTONE_ID,
+  contractId: CONTRACT_ID,
+  agreedAmount: D('1000'),
+  platformFee: D('50'),
+  workerClientProfileId: WORKER_ACC,
+  employerClientProfileId: EMPLOYER_ACC,
+  projectReferrerId: null as bigint | null,
+  projectReferrerRole: null as 'WORKER' | 'EMPLOYER' | null,
+};
+
+describe('TEST-CR-010..021 ReferralService.computeMilestoneCommissions', () => {
+  test('TEST-CR-010 — no referrers anywhere → returns []', async () => {
     const { service, prisma } = build();
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
     prisma.clientProfile.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never) // worker
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never); // employer
+      .mockResolvedValueOnce({ referred_by_id: null } as never)
+      .mockResolvedValueOnce({ referred_by_id: null } as never);
 
-    const lines = await service.computeMilestoneCommissions({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
-      agreedAmount: D('1000'),
-      platformFee: D('50'),
-      workerClientProfileId: WORKER_ACC,
-      employerClientProfileId: EMPLOYER_ACC,
-      projectReferrerId: null,
-      projectReferrerRole: null,
-    });
-
+    const lines = await service.computeMilestoneCommissions({ ...baseInput });
     expect(lines).toEqual([]);
   });
 
-  test('TEST-CR-011 (CR-041) — only worker has account ref within window → 1 ACCOUNT line', async () => {
+  test('TEST-CR-011 — worker account ref on the FIRST REVENUE contract → 1 ACCOUNT line', async () => {
     const { service, prisma } = build();
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
     prisma.clientProfile.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: REFERRER_W,
-        referred_at: new Date(), // fresh
-      } as never)
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never);
+      .mockResolvedValueOnce({ referred_by_id: REFERRER_W } as never)
+      .mockResolvedValueOnce({ referred_by_id: null } as never);
+    // No milestone has been released anywhere yet → this milestone's contract
+    // IS the worker's first revenue contract.
+    prisma.escrowMilestone.findFirst.mockResolvedValue(null as never);
 
-    const lines = await service.computeMilestoneCommissions({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
-      agreedAmount: D('1000'),
-      platformFee: D('50'),
-      workerClientProfileId: WORKER_ACC,
-      employerClientProfileId: EMPLOYER_ACC,
-      projectReferrerId: null,
-      projectReferrerRole: null,
-    });
-
+    const lines = await service.computeMilestoneCommissions({ ...baseInput });
     expect(lines).toHaveLength(1);
     expect(lines[0].referrerClientProfileId).toBe(REFERRER_W);
     expect(lines[0].type).toBe('REFERRAL_ACCOUNT');
-    // 50 * 10/100 = 5
-    expect(lines[0].grossAmount.toString()).toBe('5');
+    expect(lines[0].grossAmount.toString()).toBe('5'); // 50 * 10/100
     expect(lines[0].cappedAmount.toString()).toBe('5');
   });
 
-  test('TEST-CR-012 (CR-041) — only employer has account ref → 1 ACCOUNT line for employer ref', async () => {
+  test('TEST-CR-012 — employer account ref on the FIRST REVENUE contract → 1 ACCOUNT line', async () => {
     const { service, prisma } = build();
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
     prisma.clientProfile.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never)
-      .mockResolvedValueOnce({
-        referred_by_id: REFERRER_E,
-        referred_at: new Date(),
-      } as never);
+      .mockResolvedValueOnce({ referred_by_id: null } as never)
+      .mockResolvedValueOnce({ referred_by_id: REFERRER_E } as never);
+    prisma.escrowMilestone.findFirst.mockResolvedValue(null as never);
 
-    const lines = await service.computeMilestoneCommissions({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
-      agreedAmount: D('1000'),
-      platformFee: D('50'),
-      workerClientProfileId: WORKER_ACC,
-      employerClientProfileId: EMPLOYER_ACC,
-      projectReferrerId: null,
-      projectReferrerRole: null,
-    });
-
+    const lines = await service.computeMilestoneCommissions({ ...baseInput });
     expect(lines).toHaveLength(1);
     expect(lines[0].referrerClientProfileId).toBe(REFERRER_E);
     expect(lines[0].type).toBe('REFERRAL_ACCOUNT');
   });
 
-  test('TEST-CR-013 (CR-041) — both worker AND employer have account refs → 2 ACCOUNT lines', async () => {
+  test('TEST-CR-013 — both account refs, both on the first revenue contract → 2 ACCOUNT lines', async () => {
     const { service, prisma } = build();
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
     prisma.clientProfile.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: REFERRER_W,
-        referred_at: new Date(),
-      } as never)
-      .mockResolvedValueOnce({
-        referred_by_id: REFERRER_E,
-        referred_at: new Date(),
-      } as never);
+      .mockResolvedValueOnce({ referred_by_id: REFERRER_W } as never)
+      .mockResolvedValueOnce({ referred_by_id: REFERRER_E } as never);
+    prisma.escrowMilestone.findFirst.mockResolvedValue(null as never);
 
-    const lines = await service.computeMilestoneCommissions({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
-      agreedAmount: D('1000'),
-      platformFee: D('50'),
-      workerClientProfileId: WORKER_ACC,
-      employerClientProfileId: EMPLOYER_ACC,
-      projectReferrerId: null,
-      projectReferrerRole: null,
-    });
-
+    const lines = await service.computeMilestoneCommissions({ ...baseInput });
     expect(lines).toHaveLength(2);
     expect(lines.map((l) => l.referrerClientProfileId).sort()).toEqual(
       [REFERRER_W, REFERRER_E].sort(),
@@ -177,257 +139,171 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
     expect(lines.every((l) => l.type === 'REFERRAL_ACCOUNT')).toBe(true);
   });
 
-  test('TEST-CR-014 (CR-041) — project ref WORKER → 1 PROJECT_W2W line', async () => {
+  test('TEST-CR-014 — project ref WORKER → 1 REFERRAL_W2W line', async () => {
     const { service, prisma } = build();
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
     prisma.clientProfile.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never)
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never);
+      .mockResolvedValueOnce({ referred_by_id: null } as never)
+      .mockResolvedValueOnce({ referred_by_id: null } as never);
 
     const lines = await service.computeMilestoneCommissions({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
-      agreedAmount: D('1000'),
-      platformFee: D('50'),
-      workerClientProfileId: WORKER_ACC,
-      employerClientProfileId: EMPLOYER_ACC,
+      ...baseInput,
       projectReferrerId: PROJECT_REF,
       projectReferrerRole: 'WORKER',
     });
-
     expect(lines).toHaveLength(1);
     expect(lines[0].type).toBe('REFERRAL_W2W');
-    // 1000 * 2/100 = 20
-    expect(lines[0].grossAmount.toString()).toBe('20');
-    // 20 < 50 platform_fee, no cap
+    expect(lines[0].grossAmount.toString()).toBe('20'); // 1000 * 2/100
     expect(lines[0].cappedAmount.toString()).toBe('20');
   });
 
-  test('TEST-CR-015 (CR-041) — project ref EMPLOYER → 1 PROJECT_E2E line', async () => {
+  test('TEST-CR-015 — project ref EMPLOYER → no line (E2E disabled)', async () => {
     const { service, prisma } = build();
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
     prisma.clientProfile.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never)
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never);
+      .mockResolvedValueOnce({ referred_by_id: null } as never)
+      .mockResolvedValueOnce({ referred_by_id: null } as never);
 
     const lines = await service.computeMilestoneCommissions({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
-      agreedAmount: D('1000'),
-      platformFee: D('50'),
-      workerClientProfileId: WORKER_ACC,
-      employerClientProfileId: EMPLOYER_ACC,
+      ...baseInput,
       projectReferrerId: PROJECT_REF,
       projectReferrerRole: 'EMPLOYER',
     });
-
-    expect(lines).toHaveLength(1);
-    expect(lines[0].type).toBe('REFERRAL_E2E');
-    expect(lines[0].grossAmount.toString()).toBe('20');
+    expect(lines).toEqual([]);
   });
 
-  test('TEST-CR-016 (CR-041) — full stack, sum ≤ platform_fee → all lines uncapped', async () => {
+  test('TEST-CR-016 — full stack (worker acc + employer acc + project W2W) on first revenue contract → 3 lines, uncapped', async () => {
     const { service, prisma } = build();
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
     prisma.clientProfile.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: REFERRER_W,
-        referred_at: new Date(),
-      } as never)
-      .mockResolvedValueOnce({
-        referred_by_id: REFERRER_E,
-        referred_at: new Date(),
-      } as never);
+      .mockResolvedValueOnce({ referred_by_id: REFERRER_W } as never)
+      .mockResolvedValueOnce({ referred_by_id: REFERRER_E } as never);
+    prisma.escrowMilestone.findFirst.mockResolvedValue(null as never);
 
     const lines = await service.computeMilestoneCommissions({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
-      agreedAmount: D('1000'),
-      platformFee: D('50'),
-      workerClientProfileId: WORKER_ACC,
-      employerClientProfileId: EMPLOYER_ACC,
+      ...baseInput,
       projectReferrerId: PROJECT_REF,
       projectReferrerRole: 'WORKER',
     });
-
     expect(lines).toHaveLength(3);
-    // 5 + 5 + 20 = 30, < 50 → no cap
-    const totalCapped = lines.reduce(
-      (s, l) => s.add(l.cappedAmount),
-      new Prisma.Decimal(0),
-    );
-    expect(totalCapped.toString()).toBe('30');
-    // Each line uncapped → cappedAmount === grossAmount
+    const total = lines.reduce((s, l) => s.add(l.cappedAmount), D(0));
+    expect(total.toString()).toBe('30'); // 5 + 5 + 20, < 50 → no cap
     for (const l of lines) {
       expect(l.cappedAmount.toString()).toBe(l.grossAmount.toString());
     }
   });
 
-  test('TEST-CR-017 (CR-041 cap clause) — sum > platform_fee → scaled, total ≤ platform_fee', async () => {
+  test('TEST-CR-017 — sum > platform_fee → scaled, total ≤ platform_fee', async () => {
     const { service, prisma } = build();
-    // High account ref % that pushes total over platform_fee.
-    const highSetting = {
+    prisma.platformSetting.findUnique.mockResolvedValueOnce({
       ...DEFAULT_SETTING,
-      account_referral_pct: D('80'), // 80% of platform_fee per ACCOUNT line
-    };
-    prisma.platformSetting.findUnique.mockResolvedValueOnce(
-      highSetting as never,
-    );
+      account_referral_pct: D('80'),
+    } as never);
     prisma.clientProfile.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: REFERRER_W,
-        referred_at: new Date(),
-      } as never)
-      .mockResolvedValueOnce({
-        referred_by_id: REFERRER_E,
-        referred_at: new Date(),
-      } as never);
+      .mockResolvedValueOnce({ referred_by_id: REFERRER_W } as never)
+      .mockResolvedValueOnce({ referred_by_id: REFERRER_E } as never);
+    prisma.escrowMilestone.findFirst.mockResolvedValue(null as never);
 
     const lines = await service.computeMilestoneCommissions({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
-      agreedAmount: D('1000'),
-      platformFee: D('50'),
-      workerClientProfileId: WORKER_ACC,
-      employerClientProfileId: EMPLOYER_ACC,
+      ...baseInput,
       projectReferrerId: PROJECT_REF,
       projectReferrerRole: 'WORKER',
     });
-
-    // gross: 50*0.8 + 50*0.8 + 1000*0.02 = 40 + 40 + 20 = 100
-    // cap: scale by 50/100 = 0.5
-    // cappedAmount: 20 + 20 + 10 = 50
+    // gross 40 + 40 + 20 = 100 → factor 50/100 → capped total ≤ 50
     expect(lines).toHaveLength(3);
-    const totalCapped = lines.reduce(
-      (s, l) => s.add(l.cappedAmount),
-      new Prisma.Decimal(0),
-    );
-    expect(totalCapped.toNumber()).toBeLessThanOrEqual(50);
+    const total = lines.reduce((s, l) => s.add(l.cappedAmount), D(0));
+    expect(total.toNumber()).toBeLessThanOrEqual(50);
   });
 
-  test('TEST-CR-018 (notes.md cap math) — pence rounding accrues to platform (ROUND_DOWN)', async () => {
+  test('TEST-CR-018 — pence rounding accrues to the platform (ROUND_DOWN)', async () => {
     const { service, prisma } = build();
-    // Force a fractional cap so rounding is observable.
-    // platform_fee=£3, refs each gross=£2 → sum=£4, factor=3/4=0.75
-    // each capped: 2*0.75 = 1.5 → with the scale that's exact;
-    // try odd: account=£2.50 + project=£0.50 → sum=£3, no cap, no rounding
-    // odd: account=£1.999 → ROUND_DOWN to 1.99
-    const highSetting = {
+    prisma.platformSetting.findUnique.mockResolvedValueOnce({
       ...DEFAULT_SETTING,
       account_referral_pct: D('66.6'),
-    };
-    prisma.platformSetting.findUnique.mockResolvedValueOnce(
-      highSetting as never,
-    );
+    } as never);
     prisma.clientProfile.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: REFERRER_W,
-        referred_at: new Date(),
-      } as never)
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never);
+      .mockResolvedValueOnce({ referred_by_id: REFERRER_W } as never)
+      .mockResolvedValueOnce({ referred_by_id: null } as never);
+    prisma.escrowMilestone.findFirst.mockResolvedValue(null as never);
 
     const lines = await service.computeMilestoneCommissions({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
+      ...baseInput,
       agreedAmount: D('100'),
       platformFee: D('3'),
-      workerClientProfileId: WORKER_ACC,
-      employerClientProfileId: EMPLOYER_ACC,
-      projectReferrerId: null,
-      projectReferrerRole: null,
     });
-
-    // 3 * 66.6/100 = 1.998 → ROUND_DOWN to 1.99
+    // 3 * 66.6/100 = 1.998 → ROUND_DOWN → 1.99
     expect(lines).toHaveLength(1);
     expect(lines[0].cappedAmount.toString()).toBe('1.99');
   });
 
-  test('TEST-CR-019 (CR-107) — account ref window expired → ACCOUNT line excluded', async () => {
+  test('TEST-CR-019 — account ref on a NON-first-revenue contract → ACCOUNT line excluded', async () => {
     const { service, prisma } = build();
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
-      DEFAULT_SETTING as never, // 12-month window
+      DEFAULT_SETTING as never,
     );
-    // referred_at 18 months ago → outside window
-    const longAgo = new Date();
-    longAgo.setMonth(longAgo.getMonth() - 18);
     prisma.clientProfile.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: REFERRER_W,
-        referred_at: longAgo,
-      } as never)
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never);
+      .mockResolvedValueOnce({ referred_by_id: REFERRER_W } as never)
+      .mockResolvedValueOnce({ referred_by_id: null } as never);
+    // An earlier, different contract already had a released milestone — so
+    // this contract is NOT the worker's first revenue contract.
+    prisma.escrowMilestone.findFirst.mockResolvedValue({
+      contract_id: 6001n,
+    } as never);
 
-    const lines = await service.computeMilestoneCommissions({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
-      agreedAmount: D('1000'),
-      platformFee: D('50'),
-      workerClientProfileId: WORKER_ACC,
-      employerClientProfileId: EMPLOYER_ACC,
-      projectReferrerId: null,
-      projectReferrerRole: null,
-    });
-
+    const lines = await service.computeMilestoneCommissions({ ...baseInput });
     expect(lines).toEqual([]);
   });
 
-  test('TEST-CR-020 (CR-107) — window NULL = lifetime, ancient referred_at still credits', async () => {
+  test('TEST-CR-020 — project W2W still pays on a non-first-revenue contract (project ref is not first-gated)', async () => {
     const { service, prisma } = build();
-    const lifetimeSetting = {
-      ...DEFAULT_SETTING,
-      account_referral_window_months: null,
-    };
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
-      lifetimeSetting as never,
+      DEFAULT_SETTING as never,
     );
-    const ancient = new Date();
-    ancient.setFullYear(ancient.getFullYear() - 10);
     prisma.clientProfile.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: REFERRER_W,
-        referred_at: ancient,
-      } as never)
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never);
+      .mockResolvedValueOnce({ referred_by_id: REFERRER_W } as never)
+      .mockResolvedValueOnce({ referred_by_id: null } as never);
+    // An earlier contract already had a released milestone → account ref is
+    // excluded …
+    prisma.escrowMilestone.findFirst.mockResolvedValue({
+      contract_id: 6001n,
+    } as never);
 
     const lines = await service.computeMilestoneCommissions({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
-      agreedAmount: D('1000'),
-      platformFee: D('50'),
-      workerClientProfileId: WORKER_ACC,
-      employerClientProfileId: EMPLOYER_ACC,
-      projectReferrerId: null,
-      projectReferrerRole: null,
+      ...baseInput,
+      projectReferrerId: PROJECT_REF,
+      projectReferrerRole: 'WORKER',
     });
-
+    // … but the project W2W line is unaffected by the first-revenue rule.
     expect(lines).toHaveLength(1);
+    expect(lines[0].type).toBe('REFERRAL_W2W');
+    expect(lines[0].referrerClientProfileId).toBe(PROJECT_REF);
+  });
+
+  test('TEST-CR-021 — account ref still pays on a LATER milestone of the first revenue contract', async () => {
+    const { service, prisma } = build();
+    prisma.platformSetting.findUnique.mockResolvedValueOnce(
+      DEFAULT_SETTING as never,
+    );
+    prisma.clientProfile.findUnique
+      .mockResolvedValueOnce({ referred_by_id: REFERRER_W } as never)
+      .mockResolvedValueOnce({ referred_by_id: null } as never);
+    // An EARLIER milestone of THIS SAME contract was already released — the
+    // contract is still the worker's first revenue contract, so the ref keeps
+    // earning on each of its milestones.
+    prisma.escrowMilestone.findFirst.mockResolvedValue({
+      contract_id: CONTRACT_ID,
+    } as never);
+
+    const lines = await service.computeMilestoneCommissions({ ...baseInput });
+    expect(lines).toHaveLength(1);
+    expect(lines[0].type).toBe('REFERRAL_ACCOUNT');
     expect(lines[0].referrerClientProfileId).toBe(REFERRER_W);
+    expect(lines[0].grossAmount.toString()).toBe('5');
   });
 });

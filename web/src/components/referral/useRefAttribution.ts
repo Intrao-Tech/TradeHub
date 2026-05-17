@@ -3,15 +3,17 @@ import { useSearchParams } from 'react-router-dom';
 import { recordProjectIntent } from '@/components/escrow';
 import { getToken } from '@/api';
 import { toast } from '@/components/ui/toast';
+import { savePendingProjectRef } from './pendingProjectRef';
 
 /**
- * On mount, if `?ref=CODE` is present in the URL AND the user is logged in,
- * fire the project-intent record (server-side persistence keyed by the
- * actor account) and strip the param from the URL.
+ * On mount, if `?ref=CODE` is present in the URL on `/jobs/:id` or
+ * `/workers/:id`, attribute the project referral and strip the param.
  *
- * Anonymous users on `/jobs/:id?ref=` or `/workers/:id?ref=` are ignored
- * here — they can't perform a qualifying action (apply / hire) without
- * registering anyway, and the account-ref flow uses `/r/:code` instead.
+ * - Logged in  → record the project intent server-side immediately.
+ * - Logged out → stash the click (pendingProjectRef); it is materialised
+ *   once the visitor authenticates — replayed as a project intent if they
+ *   log in, or folded into `referred_by_code` (account referral) if they
+ *   register as a brand-new user.
  */
 export function useRefAttribution(opts: {
   targetId: string | number | null | undefined;
@@ -30,8 +32,13 @@ export function useRefAttribution(opts: {
     };
 
     if (!getToken()) {
-      // Anonymous viewer — nothing to attribute server-side. Strip param
-      // to keep the URL clean.
+      // Logged-out viewer — no actor account yet for a server-side intent.
+      // Stash the click; it is materialised on the next login / registration.
+      savePendingProjectRef({
+        code: ref.toUpperCase(),
+        target_id: Number(opts.targetId),
+        target_role: opts.targetRole,
+      });
       stripParam();
       return;
     }

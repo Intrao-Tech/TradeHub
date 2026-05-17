@@ -80,9 +80,9 @@ export class ContractService {
       ? CONTRACT_STATUS.PROPOSED
       : CONTRACT_STATUS.DRAFT;
 
-    // E→E project ref attribution: only when employer initiates the contract.
-    // Looks up an active intent recorded when the employer clicked
-    // `/workers/:id?ref=` (target_role=EMPLOYER, target_id=worker_id).
+    // Project-ref attribution. E2E (employer-to-employer) is disabled for now
+    // — project referrals pay out for the W2W flow only. The W→W referrer is
+    // backfilled below from the matching JobApplication.
     let projectReferrerId: bigint | null = null;
     let projectReferrerRole: 'WORKER' | 'EMPLOYER' | null = null;
     let referrerForNotify: {
@@ -90,32 +90,6 @@ export class ContractService {
       email: string;
       display_name: string;
     } | null = null;
-    if (
-      dto.initiated_by === 'EMPLOYER' &&
-      actorAccountId === collab.employer_id
-    ) {
-      const intent = await this.referrals.findActiveIntent(
-        collab.employer_id,
-        'EMPLOYER',
-        collab.worker_id,
-      );
-      if (intent && intent.referrer_id !== collab.employer_id) {
-        projectReferrerId = intent.referrer_id;
-        projectReferrerRole = 'EMPLOYER';
-        const referrerAcc = await this.prisma.account.findUnique({
-          where: { id: intent.referrer_id },
-          include: { client_profile: { select: { display_name: true } } },
-        });
-        if (referrerAcc) {
-          referrerForNotify = {
-            id: referrerAcc.id,
-            email: referrerAcc.email,
-            display_name:
-              referrerAcc.client_profile?.display_name ?? referrerAcc.email,
-          };
-        }
-      }
-    }
 
     // W→W project ref backfill: when contract is created from a JobPost the
     // worker applied to, copy any project_referrer_id captured on the matching

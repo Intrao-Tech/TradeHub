@@ -82,8 +82,9 @@ export default function ReferralsPage() {
         <p className="text-sm text-fg-muted">
           Earn commission when people you refer sign up, apply, or get hired.
           Two referral types: <strong>Account</strong> (signup link, paid as
-          % of platform fee on every contract) and <strong>Project</strong>{' '}
-          (per-job or per-worker link, paid as % of agreed amount).
+          % of platform fee on every milestone of their first contract) and{' '}
+          <strong>Project</strong> (per-job or per-worker link, paid as % of
+          agreed amount).
         </p>
       </div>
 
@@ -102,7 +103,7 @@ export default function ReferralsPage() {
           <CardTitle>Your referral code</CardTitle>
           <CardDescription>
             Share this link anywhere — when someone signs up via it, you'll
-            earn % of platform fees on their contracts.
+            earn % of the platform fee on their first contract.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -134,10 +135,8 @@ export default function ReferralsPage() {
             <div>
               <CardTitle>Account referrals</CardTitle>
               <CardDescription>
-                People who signed up via your code.
-                {stats?.window_months
-                  ? ` Earnings window: ${stats.window_months} months from signup.`
-                  : ' Earnings window: lifetime.'}
+                People who signed up via your code. You earn a share of the
+                platform fee on every milestone of their first contract.
               </CardDescription>
             </div>
             <Button type="button" variant="outline" onClick={() => void loadAll()}>
@@ -184,11 +183,6 @@ export default function ReferralsPage() {
                         {it.referred_at
                           ? new Date(it.referred_at).toLocaleDateString()
                           : '—'}
-                        {it.window_ends_at
-                          ? ` · window ends ${new Date(
-                              it.window_ends_at,
-                            ).toLocaleDateString()}`
-                          : ''}
                       </span>
                     </li>
                   ))}

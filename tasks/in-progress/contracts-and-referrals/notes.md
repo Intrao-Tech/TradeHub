@@ -32,12 +32,27 @@ Conclusion: Upwork is the right primary model. The W→W and E→E project-refer
 - **Click bombing** — referrer floods clicks to inflate "share" stats. Doesn't affect payouts (no per-click pay) but skews reporting. Add per-IP rate limit on `POST /referral/intent` post-MVP. With server-side intent (one row per click) the table can also grow large — per-actor cap or periodic cleanup of expired rows post-MVP.
 - **Refree gaming** — user signs up via ref code A, then later realises ref code B would pay them more (e.g. tiered), tries to switch. Mitigate: `referred_by_id` is immutable post-signup.
 
-## Window semantics
+## Account-ref scope — first-revenue-contract (revised 2026-05-17)
 
-- 12-month window starts at `Account.referred_at` (when ref recorded, == signup).
-- Window check at commission-compute time: `now() < referred_at + window_months months`.
-- If `account_referral_window_months` is NULL → lifetime, no check.
-- Edge: what if admin shortens window from 12 → 6 months mid-flight? Behavior: applies to NEW commissions immediately. Past commissions already paid are not clawed back. Document in admin tooltip.
+> The original 12-month `account_referral_window_months` window was dropped.
+> The column is retained in the schema but is no longer enforced. See the
+> spec Decisions Log entry dated 2026-05-17.
+
+- Account ref pays on the referred user's **first revenue contract** only —
+  the first contract on which an `escrow_milestone` reached `RELEASED` — and
+  on every milestone of that contract.
+- Resolved at release time: the earliest `RELEASED` milestone (ordered by
+  `released_at`, then `id`) under any collaboration where the user is the
+  worker or the employer → its `contract_id` is the first revenue contract.
+  If no milestone has been released anywhere yet, the milestone currently
+  being released belongs to the first revenue contract, so it qualifies.
+- Edge cases handled: DRAFT / PROPOSED / ABANDONED contracts never have a
+  `RELEASED` milestone, so they can't be the "first revenue contract" — a ref
+  is not burned on a contract that produced no money. Out-of-order releases
+  are handled by ordering on `released_at`. The worker side and the employer
+  side of a contract are evaluated independently. The lookup excludes the
+  milestone currently being released, so the result is the same whether or
+  not that milestone has already been flipped to `RELEASED`.
 
 ## Attribution security (server-side intent model — replaced cookies on 2026-05-10)
 
@@ -49,6 +64,13 @@ Conclusion: Upwork is the right primary model. The W→W and E→E project-refer
 - **Self-ref guard**: enforced at intent-record time (`actor == referrer` is a silent no-op) and at consumption time (employer == referrer / worker == referrer rejected with silent skip).
 
 ## Cap math
+
+> Note (2026-05-17): the worked examples below pre-date two rule changes —
+> account ref is now first-revenue-contract-gated (not windowed) and E2E
+> project lines are disabled. The proportional-cap algorithm itself is
+> unchanged and type-agnostic, so the arithmetic still illustrates it
+> faithfully; only the mix of line types in a real milestone differs (an
+> `EMPLOYER` project referrer no longer contributes a line).
 
 Worked example:
 - Milestone agreed_amount: £1000

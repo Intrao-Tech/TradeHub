@@ -121,11 +121,6 @@ export class ReferralService {
    * Lists every client this user has referred + earnings to date.
    */
   async getAccountStats(clientProfileId: bigint) {
-    const setting = await this.prisma.platformSetting.findUnique({
-      where: { id: 1 },
-    });
-    const windowMonths = setting?.account_referral_window_months ?? 12;
-
     const referred = await this.prisma.clientProfile.findMany({
       where: { referred_by_id: clientProfileId },
       orderBy: { referred_at: 'desc' },
@@ -144,7 +139,6 @@ export class ReferralService {
     });
 
     return {
-      window_months: windowMonths,
       lifetime_signups: referred.length,
       total_earned_gbp: totals._sum.amount?.toString() ?? '0',
       items: referred.map((r) => ({
@@ -152,14 +146,6 @@ export class ReferralService {
         email: r.account.email,
         display_name: r.display_name,
         referred_at: r.referred_at,
-        window_ends_at:
-          windowMonths != null && r.referred_at
-            ? new Date(
-                new Date(r.referred_at).setMonth(
-                  new Date(r.referred_at).getMonth() + windowMonths,
-                ),
-              )
-            : null,
       })),
     };
   }
@@ -227,10 +213,11 @@ export class ReferralService {
    * total capped at the milestone's platform_fee. Pure computation — the
    * caller (EscrowService release flow) turns each line into a `payment` row.
    *
-   * Three commission sources can stack:
-   *  - account ref on the worker (client_profile.referred_by_id within window)
-   *  - account ref on the employer (same)
-   *  - project ref on the contract (contract.project_referrer_id)
+   * Commission sources can stack:
+   *  - account ref on the worker   — paid only on the worker's FIRST REVENUE
+   *    contract (first contract with a released milestone), every milestone
+   *  - account ref on the employer — same rule, evaluated for the employer
+   *  - project ref on the contract — W2W only (E2E is disabled for now)
    */
   async computeMilestoneCommissions(
     input: CommissionInput,
@@ -242,21 +229,46 @@ export class ReferralService {
 
     const lines: Omit<CommissionLine, 'cappedAmount'>[] = [];
 
-    const within = (referredAt: Date | null) => {
-      if (!referredAt) return false;
-      const m = setting.account_referral_window_months;
-      if (m == null) return true; // lifetime
-      const ends = new Date(referredAt);
-      ends.setMonth(ends.getMonth() + m);
-      return new Date() < ends;
+    // Account ref pays out on the referred user's FIRST REVENUE contract
+    // only — the first contract on which a milestone was actually released
+    // (money moved + commission computed). Drafts / proposed / abandoned
+    // contracts that never had a released milestone do not count. Once that
+    // contract is fixed the ref is paid on every one of its milestones.
+    //
+    // The current milestone is excluded from the scan so the result does not
+    // depend on whether it has already been flipped to RELEASED. Collaboration
+    // `worker_id` / `employer_id` share the client_profile PK, so they match a
+    // client_profile id directly.
+    const isFirstRevenueContract = async (userId: bigint): Promise<boolean> => {
+      const earliestRelease = await this.prisma.escrowMilestone.findFirst({
+        where: {
+          status: 'RELEASED',
+          id: { not: input.milestoneId },
+          contract: {
+            collaboration: {
+              OR: [{ worker_id: userId }, { employer_id: userId }],
+            },
+          },
+        },
+        orderBy: [{ released_at: 'asc' }, { id: 'asc' }],
+        select: { contract_id: true },
+      });
+      // No prior release anywhere → this milestone's contract IS the user's
+      // first revenue contract. Otherwise it must equal the earliest one.
+      const firstRevenueContractId =
+        earliestRelease?.contract_id ?? input.contractId;
+      return firstRevenueContractId === input.contractId;
     };
 
-    // Account ref for the worker.
+    // Account ref for the worker — first contract only.
     const worker = await this.prisma.clientProfile.findUnique({
       where: { id: input.workerClientProfileId },
-      select: { referred_by_id: true, referred_at: true },
+      select: { referred_by_id: true },
     });
-    if (worker?.referred_by_id && within(worker.referred_at)) {
+    if (
+      worker?.referred_by_id &&
+      (await isFirstRevenueContract(input.workerClientProfileId))
+    ) {
       lines.push({
         referrerClientProfileId: worker.referred_by_id,
         type: 'REFERRAL_ACCOUNT',
@@ -266,12 +278,15 @@ export class ReferralService {
       });
     }
 
-    // Account ref for the employer.
+    // Account ref for the employer — first contract only.
     const employer = await this.prisma.clientProfile.findUnique({
       where: { id: input.employerClientProfileId },
-      select: { referred_by_id: true, referred_at: true },
+      select: { referred_by_id: true },
     });
-    if (employer?.referred_by_id && within(employer.referred_at)) {
+    if (
+      employer?.referred_by_id &&
+      (await isFirstRevenueContract(input.employerClientProfileId))
+    ) {
       lines.push({
         referrerClientProfileId: employer.referred_by_id,
         type: 'REFERRAL_ACCOUNT',
@@ -281,19 +296,15 @@ export class ReferralService {
       });
     }
 
-    // Project ref.
-    if (input.projectReferrerId && input.projectReferrerRole) {
-      const pct =
-        input.projectReferrerRole === 'WORKER'
-          ? setting.project_referral_w2w_pct
-          : setting.project_referral_e2e_pct;
+    // Project ref — W2W only. The W→W referrer is paid on every milestone of
+    // every contract tied to the referred job post. E2E is disabled for now.
+    if (input.projectReferrerId && input.projectReferrerRole === 'WORKER') {
       lines.push({
         referrerClientProfileId: input.projectReferrerId,
-        type:
-          input.projectReferrerRole === 'WORKER'
-            ? 'REFERRAL_W2W'
-            : 'REFERRAL_E2E',
-        grossAmount: input.agreedAmount.mul(pct).div(100),
+        type: 'REFERRAL_W2W',
+        grossAmount: input.agreedAmount
+          .mul(setting.project_referral_w2w_pct)
+          .div(100),
       });
     }
 

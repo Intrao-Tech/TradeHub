@@ -196,16 +196,24 @@ export class AuthController {
     @Query('role') role?: string,
     @Query('return_to') returnTo?: string,
     @Query('intent') intent?: string,
+    @Query('ref') ref?: string,
   ): { redirect_url: string } {
     const safeRole: 'WORKER' | 'EMPLOYER' =
       role === 'EMPLOYER' ? 'EMPLOYER' : 'WORKER';
     const safeReturnTo = this.isSafeNext(returnTo) ? returnTo : '/profile';
     const safeIntent: 'login' | 'register' =
       intent === 'register' ? 'register' : 'login';
+    // Account-referral code from a /r/:code share link — carried through the
+    // signed state so it survives the OAuth round trip (Google signup path).
+    const safeRef =
+      typeof ref === 'string' && ref.trim() !== ''
+        ? ref.trim().slice(0, 16)
+        : undefined;
     const state = this.buildSignedState({
       role: safeRole,
       return_to: safeReturnTo,
       intent: safeIntent,
+      ref: safeRef,
     });
 
     const clientId = this.config.get<string>('GOOGLE_CLIENT_ID') || '';
@@ -254,6 +262,7 @@ export class AuthController {
       let role: 'WORKER' | 'EMPLOYER' = 'WORKER';
       let returnTo = '/profile';
       let intent: 'login' | 'register' = 'login';
+      let referredByCode: string | undefined;
       try {
         const raw = req.query?.state;
         if (raw) {
@@ -263,6 +272,9 @@ export class AuthController {
             returnTo = parsed.return_to;
           }
           if (parsed.intent === 'register') intent = 'register';
+          if (typeof parsed.ref === 'string' && parsed.ref !== '') {
+            referredByCode = parsed.ref;
+          }
         }
       } catch {
         // Bad signature → fallthrough to defaults; security: don't honour state
@@ -276,6 +288,7 @@ export class AuthController {
           emailVerified: req.user.emailVerified === true,
           role,
           intent,
+          referredByCode,
         },
         ip,
       );
@@ -340,6 +353,7 @@ export class AuthController {
     role: 'WORKER' | 'EMPLOYER';
     return_to: string;
     intent: 'login' | 'register';
+    ref?: string;
   }): string {
     const body = Buffer.from(JSON.stringify(payload), 'utf8').toString(
       'base64url',
@@ -353,6 +367,7 @@ export class AuthController {
     role?: string;
     return_to?: string;
     intent?: string;
+    ref?: string;
   } {
     const [body, signature] = decodeURIComponent(raw).split('.');
     if (!body || !signature) throw new Error('malformed state');
@@ -371,6 +386,7 @@ export class AuthController {
       role?: string;
       return_to?: string;
       intent?: string;
+      ref?: string;
     };
   }
 

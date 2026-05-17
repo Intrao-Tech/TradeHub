@@ -129,20 +129,13 @@ export class AuthService {
     const slug = this.generateSlug(displayName);
     const referralCode = await this.allocateReferralCode();
 
-    // Account-referral attribution: takes the `ref` URL param the frontend
-    // forwarded into `referred_by_code`. Validates the referrer exists and
-    // is not self. Locked at signup forever — never re-attributed.
+    // Account-referral attribution: the `ref` URL param the frontend
+    // forwarded into `referred_by_code`. Locked at signup forever.
     const refByCode = dto.referred_by_code;
-    let referredById: bigint | null = null;
-    if (refByCode) {
-      const referrer = await this.prisma.clientProfile.findUnique({
-        where: { referral_code: refByCode.toUpperCase() },
-        select: { id: true, account: { select: { email: true } } },
-      });
-      if (referrer && referrer.account.email !== dto.email) {
-        referredById = referrer.id;
-      }
-    }
+    const referredById = await this.resolveReferrerIdByCode(
+      refByCode,
+      dto.email,
+    );
 
     const account = await this.prisma.account.create({
       data: {
@@ -169,38 +162,15 @@ export class AuthService {
       },
     });
 
-    if (referredById) {
-      await this.audit.log(
-        account.id,
-        REFERRAL_AUDIT_EVENTS.ACCOUNT_ATTRIBUTED,
-        'account',
-        account.id,
-        { referrer_id: String(referredById), code: refByCode },
+    if (referredById && refByCode) {
+      await this.announceAccountReferral({
+        newAccountId: account.id,
+        newDisplayName: displayName,
+        newEmail: account.email,
+        referredById,
+        refCode: refByCode,
         ip,
-      );
-      // Best-effort: notify the referrer that someone signed up via their link.
-      void (async () => {
-        try {
-          const referrer = await this.prisma.account.findUnique({
-            where: { id: referredById },
-            include: {
-              client_profile: { select: { display_name: true } },
-            },
-          });
-          if (referrer) {
-            await this.mail.sendReferralAccountAttributed(
-              referrer.email,
-              referrer.client_profile?.display_name ?? referrer.email,
-              displayName,
-              account.email,
-            );
-          }
-        } catch (err) {
-          this.logger.warn(
-            `Failed to send account-referral notification: ${(err as Error).message}`,
-          );
-        }
-      })();
+      });
     }
 
     await this.audit.log(
@@ -598,6 +568,69 @@ export class AuthService {
     return this.issueTokens(account);
   }
 
+  /**
+   * Resolve a referral code to the referrer's client_profile id for account
+   * attribution. Returns null when the code is absent, unknown, or self.
+   * Shared by the email and Google signup paths.
+   */
+  private async resolveReferrerIdByCode(
+    refCode: string | null | undefined,
+    signupEmail: string,
+  ): Promise<bigint | null> {
+    if (!refCode) return null;
+    const referrer = await this.prisma.clientProfile.findUnique({
+      where: { referral_code: refCode.toUpperCase() },
+      select: { id: true, account: { select: { email: true } } },
+    });
+    if (referrer && referrer.account.email !== signupEmail) {
+      return referrer.id;
+    }
+    return null;
+  }
+
+  /**
+   * Audit-log an account referral and best-effort notify the referrer.
+   * Shared by the email and Google signup paths.
+   */
+  private async announceAccountReferral(opts: {
+    newAccountId: bigint;
+    newDisplayName: string;
+    newEmail: string;
+    referredById: bigint;
+    refCode: string;
+    ip?: string;
+  }): Promise<void> {
+    await this.audit.log(
+      opts.newAccountId,
+      REFERRAL_AUDIT_EVENTS.ACCOUNT_ATTRIBUTED,
+      'account',
+      opts.newAccountId,
+      { referrer_id: String(opts.referredById), code: opts.refCode },
+      opts.ip,
+    );
+    // Best-effort: notify the referrer that someone signed up via their link.
+    void (async () => {
+      try {
+        const referrer = await this.prisma.account.findUnique({
+          where: { id: opts.referredById },
+          include: { client_profile: { select: { display_name: true } } },
+        });
+        if (referrer) {
+          await this.mail.sendReferralAccountAttributed(
+            referrer.email,
+            referrer.client_profile?.display_name ?? referrer.email,
+            opts.newDisplayName,
+            opts.newEmail,
+          );
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Failed to send account-referral notification: ${(err as Error).message}`,
+        );
+      }
+    })();
+  }
+
   // ─── Google OAuth ──────────────────────────────────────────────
 
   async handleGoogleLogin(
@@ -608,6 +641,7 @@ export class AuthService {
       role?: 'WORKER' | 'EMPLOYER';
       emailVerified?: boolean;
       intent?: 'login' | 'register';
+      referredByCode?: string;
     },
     ip?: string,
   ) {
@@ -736,6 +770,12 @@ export class AuthService {
     const slug = this.generateSlug(profile.displayName);
     const trustedVerified = profile.emailVerified === true;
     const referralCode = await this.allocateReferralCode();
+    // Account-referral attribution — the `ref` from the share link, threaded
+    // through the signed OAuth state. Mirrors the email signup path.
+    const referredById = await this.resolveReferrerIdByCode(
+      profile.referredByCode,
+      profile.email,
+    );
     const created = await this.prisma.account.create({
       data: {
         email: profile.email,
@@ -747,6 +787,8 @@ export class AuthService {
             display_name: profile.displayName,
             slug,
             referral_code: referralCode,
+            referred_by_id: referredById,
+            referred_at: referredById ? new Date() : null,
             ...(profile.role === 'EMPLOYER'
               ? { employer_profile: { create: {} } }
               : { worker_profile: { create: {} } }),
@@ -766,6 +808,17 @@ export class AuthService {
       },
       ip,
     );
+
+    if (referredById && profile.referredByCode) {
+      await this.announceAccountReferral({
+        newAccountId: created.id,
+        newDisplayName: profile.displayName,
+        newEmail: created.email,
+        referredById,
+        refCode: profile.referredByCode,
+        ip,
+      });
+    }
 
     if (!trustedVerified) {
       await this.issueVerificationEmail(

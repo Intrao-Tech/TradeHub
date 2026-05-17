@@ -12,6 +12,10 @@ import { Label } from '@/components/ui/label';
 import { PhoneInput, combinePhone } from '@/components/PhoneInput';
 import { PasswordRules } from '@/components/PasswordRules';
 import { checkPassword, describeReason, MIN_LENGTH } from '@/lib/password-policy';
+import {
+  readPendingProjectRef,
+  clearPendingProjectRef,
+} from '@/components/referral/pendingProjectRef';
 
 type RegisterResponse = {
   pending_verification: boolean;
@@ -28,6 +32,13 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const refCode = searchParams.get('ref')?.toUpperCase().trim() || null;
+  // A logged-out project-referral click (stashed by useRefAttribution) is
+  // applied here as an ACCOUNT referral — a brand-new user becomes the
+  // referrer's signup. An explicit /r/:code link (URL ?ref=) takes priority.
+  const effectiveRefCode = useMemo(
+    () => refCode ?? readPendingProjectRef()?.code ?? null,
+    [refCode],
+  );
   const [referrerName, setReferrerName] = useState<string | null>(null);
   const [role, setRole] = useState<Role | null>(null);
   const [email, setEmail] = useState('');
@@ -69,7 +80,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
 
   // Resolve referrer display name for the "You were referred by X" banner.
   useEffect(() => {
-    if (!refCode) {
+    if (!effectiveRefCode) {
       setReferrerName(null);
       return;
     }
@@ -77,7 +88,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
     (async () => {
       try {
         const res = await fetch(
-          `${API_BASE}/referral/who-referred?code=${encodeURIComponent(refCode)}`,
+          `${API_BASE}/referral/who-referred?code=${encodeURIComponent(effectiveRefCode)}`,
         );
         if (!res.ok) return;
         const data = (await res.json()) as { display_name: string | null };
@@ -89,7 +100,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [refCode]);
+  }, [effectiveRefCode]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -141,12 +152,15 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
       }
       const fullPhone = combinePhone(phoneCountry, phoneLocal);
       if (fullPhone) body.phone = fullPhone;
-      if (refCode) body.referred_by_code = refCode;
+      if (effectiveRefCode) body.referred_by_code = effectiveRefCode;
 
       await api<RegisterResponse>('/auth/register', {
         method: 'POST',
         body: JSON.stringify(body),
       });
+      // A project-ref (if any) is now consumed as an account referral — clear
+      // the stash so the post-verify login doesn't also replay a project intent.
+      clearPendingProjectRef();
       // No tokens issued. Send the user to /verify-email so they confirm.
       navigate(`/verify-email?email=${encodeURIComponent(email)}`, { replace: true });
     } catch (err) {
@@ -189,9 +203,13 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
         return_to: '/profile',
         intent: 'register',
       });
+      // Carry the referral code so Google signups attribute it too.
+      if (effectiveRefCode) params.set('ref', effectiveRefCode);
       const res = await fetch(`${API_BASE}/auth/google/start?${params.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { redirect_url: string };
+      // Consumed as an account referral via the OAuth flow — clear the stash.
+      clearPendingProjectRef();
       window.location.href = data.redirect_url;
     } catch {
       setError({

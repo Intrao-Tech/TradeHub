@@ -28,7 +28,6 @@ beforeEach(() => {
     ),
     http.get(`${API}/referrals/account-stats`, () =>
       HttpResponse.json({
-        window_months: 12,
         lifetime_signups: 0,
         total_earned_gbp: '0',
         items: [],
@@ -60,7 +59,6 @@ describe('TEST-CR-100..103 ReferralsPage', () => {
     server.use(
       http.get(`${API}/referrals/account-stats`, () =>
         HttpResponse.json({
-          window_months: 12,
           lifetime_signups: 2,
           total_earned_gbp: '12.50',
           items: [
@@ -69,14 +67,12 @@ describe('TEST-CR-100..103 ReferralsPage', () => {
               email: 'sarah@example.com',
               display_name: 'Sarah Jenkins',
               referred_at: '2025-12-01T00:00:00.000Z',
-              window_ends_at: '2026-12-01T00:00:00.000Z',
             },
             {
               account_id: '12',
               email: 'bob@example.com',
               display_name: null,
               referred_at: '2026-01-15T00:00:00.000Z',
-              window_ends_at: '2027-01-15T00:00:00.000Z',
             },
           ],
         }),

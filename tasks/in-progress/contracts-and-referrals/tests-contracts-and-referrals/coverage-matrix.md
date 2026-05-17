@@ -48,7 +48,7 @@ Status legend: ⬜ pending · 🟡 in-progress · ✅ green
 | CR-038 | TEST-CR-067..068 (E→E intent + W2W backfill) | E2E-B | ⬜ |
 | CR-039 | TEST-CR-065, TEST-CR-120..123 | E2E-B | ⬜ |
 | CR-040 | TEST-CR-100..103 | F | ⬜ |
-| CR-041 | TEST-CR-010..020, TEST-CR-070..076 | U + E2E-B | ⬜ |
+| CR-041 | TEST-CR-010..021, TEST-CR-070..076 | U + E2E-B | ⬜ |
 | CR-042 | TEST-CR-070..076 | E2E-B | ⬜ |
 | CR-043 | TEST-CR-077 | E2E-B | ⬜ |
 | CR-044 | (covered by TEST-CR-001) | E2E-B | ⬜ |
@@ -93,8 +93,8 @@ Status legend: ⬜ pending · 🟡 in-progress · ✅ green
 | CR-104 | TEST-CR-123 | E2E-B | ⬜ |
 | CR-105 | TEST-CR-066 (latest intent wins on apply) | E2E-B | ⬜ |
 | CR-106 | TEST-CR-069 (expired intent ignored) | E2E-B | ⬜ |
-| CR-107 | TEST-CR-019..020 | U | ⬜ |
-| CR-108 | (covered by TEST-CR-074) | E2E-B | ⬜ |
+| CR-107 | TEST-CR-011, TEST-CR-019, TEST-CR-021 (first-revenue-contract; window dropped 2026-05-17) | U | ⬜ |
+| CR-108 | TEST-CR-015, TEST-CR-020 (W2W not first-gated; E2E disabled 2026-05-17) | U | ⬜ |
 | CR-109..110 | (Should — out of scope MVP) | n/a | ⬜ |
 
 ## Migration / Cleanup (CR-120..124)
@@ -119,7 +119,7 @@ Status legend: ⬜ pending · 🟡 in-progress · ✅ green
 
 **Files to create when implementing:**
 
-- `backend/src/referral/referral.service.spec.ts` — TEST-CR-010..020, TEST-CR-080..083
+- `backend/src/referral/referral.service.spec.ts` — TEST-CR-010..021
 - `backend/src/contract/contract.service.spec.ts` — selected unit cases
 - `backend/test/cr.contract.e2e-spec.ts` — TEST-CR-030..052
 - `backend/test/cr.referral.e2e-spec.ts` — TEST-CR-060..066, TEST-CR-120..123

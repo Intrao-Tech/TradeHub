@@ -14,6 +14,7 @@ import {
 import { AppShell, type NavItem } from './components/AppShell';
 import { Skeleton } from './components/ui/skeleton';
 import { Toaster } from './components/ui/toast';
+import { replayPendingProjectRef } from './components/referral/pendingProjectRef';
 
 // ── Lazy pages ──────────────────────────────────────────────────────
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -159,6 +160,8 @@ function useAuthState() {
   const onAuthSuccess = () => {
     setLoggedIn(true);
     window.dispatchEvent(new Event('auth-changed'));
+    // Materialise a project-referral click made while logged out, if any.
+    void replayPendingProjectRef();
   };
 
   return { loggedIn, handleLogout, onAuthSuccess };
