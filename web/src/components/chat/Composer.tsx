@@ -174,10 +174,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(
             data-testid="chat-composer-send"
             aria-label="Send message"
             size="icon"
-            className="md:size-default md:px-4"
           >
             <Send className="h-4 w-4" />
-            <span className="hidden md:inline">Send</span>
           </Button>
         </div>
       </div>
