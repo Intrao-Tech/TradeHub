@@ -46,7 +46,7 @@ export function AppShell({ loggedIn, publicNav, privateNav, onLogout, children }
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            <ThemeToggle />
+            {/* <ThemeToggle /> */}
             {loggedIn ? (
               <Button size="sm" variant="outline" onClick={onLogout}>Logout</Button>
             ) : (
