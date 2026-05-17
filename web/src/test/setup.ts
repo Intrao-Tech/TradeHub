@@ -6,8 +6,47 @@
 
 import '@testing-library/jest-dom/vitest';
 import { afterAll, afterEach, beforeAll, vi } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { server } from './msw-server';
+
+// Raise the async-util timeout used by `waitFor` / `findBy*`. The 1000ms
+// default flakes when ~56 test files contend for a loaded machine — a
+// re-render that normally lands in <100ms can slip past 1s under load.
+configure({ asyncUtilTimeout: 5_000 });
+
+// Node 22+ ships a native `localStorage` (gated behind --localstorage-file),
+// which collides with jsdom's own. The conflict leaves a partial object
+// where `localStorage.clear` / `getItem` are undefined. Force-install a
+// reliable in-memory shim BEFORE any test code reads it.
+if (typeof globalThis !== 'undefined') {
+  const store = new Map<string, string>();
+  const shim: Storage = {
+    get length() {
+      return store.size;
+    },
+    key: (i: number): string | null => Array.from(store.keys())[i] ?? null,
+    getItem: (k: string): string | null => store.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      store.set(k, String(v));
+    },
+    removeItem: (k: string) => {
+      store.delete(k);
+    },
+    clear: () => store.clear(),
+  };
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: shim,
+    writable: true,
+    configurable: true,
+  });
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'localStorage', {
+      value: shim,
+      writable: true,
+      configurable: true,
+    });
+  }
+}
 
 // jsdom does not implement Pointer Events (needed by Radix Select / Dialog
 // since Radix v1.x). Polyfill the no-op shims so tests that interact with

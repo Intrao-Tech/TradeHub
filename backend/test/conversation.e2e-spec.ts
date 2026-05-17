@@ -1,12 +1,14 @@
-// TEST-CHAT-070..077 — Conversation REST e2e suite.
+// TEST-CHAT-070..074 — Conversation REST e2e suite.
 //
-// Drives the conversation REST surface end-to-end against the Postgres
-// Testcontainer harness. Covers participant access control, AccountState
-// guard on send paths, REST rate limit, pagination cursor semantics,
-// and the new attachment upload + binding paths (CHAT-040 / CHAT-041).
-// WS coverage lives in `chat.gateway.e2e-spec.ts`.
+// Drives the conversation REST surface against the Postgres Testcontainer
+// harness. Post-2026-05 a conversation is a strict 1:1 with a collaboration
+// (shared PK) — there is no `POST /conversations` start endpoint and no
+// participant table. Tests seed a collaboration + its conversation, then
+// exercise inbox / messages / read-state / send. WS coverage lives in
+// `chat.gateway.e2e-spec.ts`.
 
 import {
+  seedActiveEmployer,
   seedActiveWorker,
   seedConversation,
   seedDeactivatedWorker,
@@ -15,77 +17,97 @@ import {
 } from './util/factories';
 import { bearer, signAccessTokenFor } from './util/auth-helpers';
 import { createTestApp, type TestHarness } from './util/test-app';
-import { minimalPdf, nonImageZip } from './util/upload';
-import {
-  clearMessageAttachmentDir,
-  ensureMessageAttachmentDir,
-} from './util/storage-stub';
 
-describe('TEST-CHAT-070 happy-path direct conversation REST (CHAT-030 / CHAT-050 / CHAT-070)', () => {
+/**
+ * Seed a worker↔employer collaboration plus its conversation (shared PK).
+ * Returns the two parties and the conversation id (== collaboration id).
+ */
+async function seedCollabConvo(h: TestHarness) {
+  const worker = await seedActiveWorker(h.prisma);
+  const employer = await seedActiveEmployer(h.prisma);
+  const collab = await h.prisma.collaboration.create({
+    data: { worker_id: worker.id, employer_id: employer.id },
+  });
+  await seedConversation(h.prisma, {
+    participantAccountIds: [worker.id, employer.id],
+    collaborationId: collab.id,
+    lastMessageAt: new Date(),
+  });
+  return { worker, employer, conversationId: collab.id };
+}
+
+describe('TEST-CHAT-070 happy-path conversation REST (CHAT-030 / CHAT-050 / CHAT-070)', () => {
   let h: TestHarness;
   beforeAll(async () => {
     h = await createTestApp();
-    await ensureMessageAttachmentDir();
   });
   afterAll(async () => {
     await h.close();
   });
   beforeEach(async () => {
     await h.reset();
-    await clearMessageAttachmentDir();
   });
 
-  test('TEST-CHAT-070 / CHAT-030 — start → list → fetch messages → mark read → unread-count clears', async () => {
-    const a = await seedActiveWorker(h.prisma);
-    const b = await seedActiveWorker(h.prisma);
-    const ta = signAccessTokenFor(h, { accountId: a.id, email: a.email });
-    const tb = signAccessTokenFor(h, { accountId: b.id, email: b.email });
+  test('TEST-CHAT-070 / CHAT-030 — send → inbox unread → fetch messages → mark read → unread clears', async () => {
+    const { worker, employer, conversationId } = await seedCollabConvo(h);
+    const tw = signAccessTokenFor(h, {
+      accountId: worker.id,
+      email: worker.email,
+    });
+    const te = signAccessTokenFor(h, {
+      accountId: employer.id,
+      email: employer.email,
+    });
 
-    const created = await h
+    // Worker sends a message through the REST send endpoint.
+    await h
       .request()
-      .post('/api/conversations')
-      .set(...bearer(ta))
-      .send({ recipient_id: Number(b.id), message: 'hello b' })
+      .post(`/api/conversations/${conversationId}/messages`)
+      .set(...bearer(tw))
+      .send({ content: 'hello employer' })
       .expect(201);
-    const conversationId = created.body.id;
-    expect(conversationId).toBeDefined();
 
-    // A's inbox sees the row with B as the other participant.
-    const inboxA = await h
+    // Worker's inbox shows the employer as the other party.
+    const inboxW = await h
       .request()
       .get('/api/conversations')
-      .set(...bearer(ta))
+      .set(...bearer(tw))
       .expect(200);
-    expect(inboxA.body.items).toHaveLength(1);
-    expect(String(inboxA.body.items[0].other_participant.account_id)).toBe(
-      String(b.id),
+    expect(inboxW.body.items).toHaveLength(1);
+    expect(String(inboxW.body.items[0].other_participant.account_id)).toBe(
+      String(employer.id),
     );
 
-    // B sees the row from the other side, with unread = 1.
-    const inboxB = await h
+    // Employer's inbox shows unread = 1 (hasn't opened the thread yet).
+    const inboxE = await h
       .request()
       .get('/api/conversations')
-      .set(...bearer(tb))
+      .set(...bearer(te))
       .expect(200);
-    expect(inboxB.body.items[0].unread_count).toBe(1);
+    expect(inboxE.body.items[0].unread_count).toBe(1);
 
+    // Employer fetches the messages.
     const messages = await h
       .request()
       .get(`/api/conversations/${conversationId}/messages`)
-      .set(...bearer(ta))
+      .set(...bearer(te))
       .expect(200);
-    expect(messages.body.items).toHaveLength(1);
-    expect(messages.body.items[0].content).toBe('hello b');
+    expect(
+      messages.body.items.some(
+        (m: { content: string }) => m.content === 'hello employer',
+      ),
+    ).toBe(true);
 
+    // Mark read → unread total clears.
     await h
       .request()
       .patch(`/api/conversations/${conversationId}/read`)
-      .set(...bearer(tb))
+      .set(...bearer(te))
       .expect(200);
     const unreadAfter = await h
       .request()
       .get('/api/conversations/unread-count')
-      .set(...bearer(tb))
+      .set(...bearer(te))
       .expect(200);
     expect(unreadAfter.body.total).toBe(0);
   });
@@ -104,23 +126,21 @@ describe('TEST-CHAT-071 non-participant access (CHAT-020 REST mirror)', () => {
   });
 
   test('TEST-CHAT-071 — non-participant GET /:id/messages → 403', async () => {
-    const a = await seedActiveWorker(h.prisma);
-    const b = await seedActiveWorker(h.prisma);
-    const c = await seedActiveWorker(h.prisma);
-    const conv = await seedConversation(h.prisma, {
-      participantAccountIds: [a.id, b.id],
-      lastMessageAt: new Date(),
-    });
+    const { worker, conversationId } = await seedCollabConvo(h);
     await seedMessage(h.prisma, {
-      conversationId: conv.id,
-      senderId: a.id,
+      conversationId,
+      senderId: worker.id,
       content: 'private',
     });
-    const tc = signAccessTokenFor(h, { accountId: c.id, email: c.email });
+    const outsider = await seedActiveWorker(h.prisma);
+    const to = signAccessTokenFor(h, {
+      accountId: outsider.id,
+      email: outsider.email,
+    });
     await h
       .request()
-      .get(`/api/conversations/${conv.id}/messages`)
-      .set(...bearer(tc))
+      .get(`/api/conversations/${conversationId}/messages`)
+      .set(...bearer(to))
       .expect(403);
   });
 });
@@ -137,9 +157,16 @@ describe('TEST-CHAT-072 AccountStateGuard on send paths (CHAT-022 / CHAT-081)', 
     await h.reset();
   });
 
-  test('TEST-CHAT-072 / CHAT-081 — PENDING_EMAIL_VERIFICATION → 403 EMAIL_NOT_VERIFIED on POST /conversations', async () => {
+  test('TEST-CHAT-072 / CHAT-081 — PENDING_EMAIL_VERIFICATION → 403 EMAIL_NOT_VERIFIED on POST /:id/messages', async () => {
     const pending = await seedPendingWorker(h.prisma);
-    const recipient = await seedActiveWorker(h.prisma);
+    const employer = await seedActiveEmployer(h.prisma);
+    const collab = await h.prisma.collaboration.create({
+      data: { worker_id: pending.id, employer_id: employer.id },
+    });
+    await seedConversation(h.prisma, {
+      participantAccountIds: [pending.id, employer.id],
+      collaborationId: collab.id,
+    });
     const t = signAccessTokenFor(h, {
       accountId: pending.id,
       email: pending.email,
@@ -147,18 +174,22 @@ describe('TEST-CHAT-072 AccountStateGuard on send paths (CHAT-022 / CHAT-081)', 
     });
     const res = await h
       .request()
-      .post('/api/conversations')
+      .post(`/api/conversations/${collab.id}/messages`)
       .set(...bearer(t))
-      .send({ recipient_id: Number(recipient.id), message: 'x' })
+      .send({ content: 'x' })
       .expect(403);
     expect(res.body.code).toBe('EMAIL_NOT_VERIFIED');
   });
 
   test('TEST-CHAT-072 / CHAT-081 — DEACTIVATED → blocked on POST /:id/messages (401 or 403)', async () => {
     const deactivated = await seedDeactivatedWorker(h.prisma);
-    const peer = await seedActiveWorker(h.prisma);
-    const conv = await seedConversation(h.prisma, {
-      participantAccountIds: [deactivated.id, peer.id],
+    const employer = await seedActiveEmployer(h.prisma);
+    const collab = await h.prisma.collaboration.create({
+      data: { worker_id: deactivated.id, employer_id: employer.id },
+    });
+    await seedConversation(h.prisma, {
+      participantAccountIds: [deactivated.id, employer.id],
+      collaborationId: collab.id,
     });
     const t = signAccessTokenFor(h, {
       accountId: deactivated.id,
@@ -169,7 +200,7 @@ describe('TEST-CHAT-072 AccountStateGuard on send paths (CHAT-022 / CHAT-081)', 
     // AccountStateGuard does (403). Both are blocking outcomes.
     const res = await h
       .request()
-      .post(`/api/conversations/${conv.id}/messages`)
+      .post(`/api/conversations/${collab.id}/messages`)
       .set(...bearer(t))
       .send({ content: 'x' });
     expect([401, 403]).toContain(res.status);
@@ -191,24 +222,23 @@ describe('TEST-CHAT-073 REST rate limit (CHAT-021)', () => {
   });
 
   test('TEST-CHAT-073 / CHAT-021 — 11th message in 10 s → 429', async () => {
-    const a = await seedActiveWorker(h.prisma);
-    const b = await seedActiveWorker(h.prisma);
-    const conv = await seedConversation(h.prisma, {
-      participantAccountIds: [a.id, b.id],
+    const { worker, conversationId } = await seedCollabConvo(h);
+    const tw = signAccessTokenFor(h, {
+      accountId: worker.id,
+      email: worker.email,
     });
-    const ta = signAccessTokenFor(h, { accountId: a.id, email: a.email });
     for (let i = 0; i < 10; i++) {
       await h
         .request()
-        .post(`/api/conversations/${conv.id}/messages`)
-        .set(...bearer(ta))
+        .post(`/api/conversations/${conversationId}/messages`)
+        .set(...bearer(tw))
         .send({ content: `m${i}` })
         .expect(201);
     }
     await h
       .request()
-      .post(`/api/conversations/${conv.id}/messages`)
-      .set(...bearer(ta))
+      .post(`/api/conversations/${conversationId}/messages`)
+      .set(...bearer(tw))
       .send({ content: 'over' })
       .expect(429);
   });
@@ -227,38 +257,37 @@ describe('TEST-CHAT-074 pagination cursor (CHAT-061 Q4)', () => {
   });
 
   test('TEST-CHAT-074 — `before` returns only messages strictly older than cursor', async () => {
-    const a = await seedActiveWorker(h.prisma);
-    const b = await seedActiveWorker(h.prisma);
-    const conv = await seedConversation(h.prisma, {
-      participantAccountIds: [a.id, b.id],
-    });
+    const { worker, conversationId } = await seedCollabConvo(h);
     const t1 = new Date('2026-04-01T00:00:00Z');
     const t2 = new Date('2026-04-02T00:00:00Z');
     const t3 = new Date('2026-04-03T00:00:00Z');
     await seedMessage(h.prisma, {
-      conversationId: conv.id,
-      senderId: a.id,
+      conversationId,
+      senderId: worker.id,
       content: 'first',
       createdAt: t1,
     });
     await seedMessage(h.prisma, {
-      conversationId: conv.id,
-      senderId: a.id,
+      conversationId,
+      senderId: worker.id,
       content: 'second',
       createdAt: t2,
     });
     await seedMessage(h.prisma, {
-      conversationId: conv.id,
-      senderId: a.id,
+      conversationId,
+      senderId: worker.id,
       content: 'third',
       createdAt: t3,
     });
-    const ta = signAccessTokenFor(h, { accountId: a.id, email: a.email });
+    const tw = signAccessTokenFor(h, {
+      accountId: worker.id,
+      email: worker.email,
+    });
     const res = await h
       .request()
-      .get(`/api/conversations/${conv.id}/messages`)
+      .get(`/api/conversations/${conversationId}/messages`)
       .query({ before: t3.toISOString() })
-      .set(...bearer(ta))
+      .set(...bearer(tw))
       .expect(200);
     expect(res.body.items).toHaveLength(2);
     const contents = res.body.items.map((m: { content: string }) => m.content);
@@ -266,203 +295,25 @@ describe('TEST-CHAT-074 pagination cursor (CHAT-061 Q4)', () => {
   });
 
   test('TEST-CHAT-074 — page-based fallback works alongside cursor', async () => {
-    const a = await seedActiveWorker(h.prisma);
-    const b = await seedActiveWorker(h.prisma);
-    const conv = await seedConversation(h.prisma, {
-      participantAccountIds: [a.id, b.id],
-    });
+    const { worker, conversationId } = await seedCollabConvo(h);
     for (let i = 0; i < 5; i++) {
       await seedMessage(h.prisma, {
-        conversationId: conv.id,
-        senderId: a.id,
+        conversationId,
+        senderId: worker.id,
         content: `m${i}`,
       });
     }
-    const ta = signAccessTokenFor(h, { accountId: a.id, email: a.email });
+    const tw = signAccessTokenFor(h, {
+      accountId: worker.id,
+      email: worker.email,
+    });
     const page1 = await h
       .request()
-      .get(`/api/conversations/${conv.id}/messages`)
+      .get(`/api/conversations/${conversationId}/messages`)
       .query({ page: 1, limit: 2 })
-      .set(...bearer(ta))
+      .set(...bearer(tw))
       .expect(200);
     expect(page1.body.items).toHaveLength(2);
     expect(page1.body.total).toBe(5);
-  });
-});
-
-describe('TEST-CHAT-075 attachment upload validation (CHAT-040)', () => {
-  let h: TestHarness;
-  beforeAll(async () => {
-    h = await createTestApp();
-    await ensureMessageAttachmentDir();
-  });
-  afterAll(async () => {
-    await h.close();
-  });
-  beforeEach(async () => {
-    await h.reset();
-    await clearMessageAttachmentDir();
-  });
-
-  test('TEST-CHAT-075 / CHAT-040 — valid PDF persists row with message_id null', async () => {
-    const a = await seedActiveWorker(h.prisma);
-    const b = await seedActiveWorker(h.prisma);
-    const conv = await seedConversation(h.prisma, {
-      participantAccountIds: [a.id, b.id],
-    });
-    const ta = signAccessTokenFor(h, { accountId: a.id, email: a.email });
-    const fixture = minimalPdf();
-    const res = await h
-      .request()
-      .post(`/api/conversations/${conv.id}/attachments`)
-      .set(...bearer(ta))
-      .attach('file', fixture.buffer, {
-        filename: fixture.filename,
-        contentType: fixture.mimetype,
-      })
-      .expect(201);
-    expect(res.body.id).toMatch(/^\d+$/);
-    expect(res.body.message_id).toBeNull();
-    const row = await h.prisma.messageAttachment.findUnique({
-      where: { id: BigInt(res.body.id) },
-    });
-    expect(row?.message_id).toBeNull();
-  });
-
-  test('TEST-CHAT-075 / CHAT-040 — application/zip → 400 INVALID_MIME_TYPE', async () => {
-    const a = await seedActiveWorker(h.prisma);
-    const b = await seedActiveWorker(h.prisma);
-    const conv = await seedConversation(h.prisma, {
-      participantAccountIds: [a.id, b.id],
-    });
-    const ta = signAccessTokenFor(h, { accountId: a.id, email: a.email });
-    const evil = nonImageZip();
-    const res = await h
-      .request()
-      .post(`/api/conversations/${conv.id}/attachments`)
-      .set(...bearer(ta))
-      .attach('file', evil.buffer, {
-        filename: evil.filename,
-        contentType: evil.mimetype,
-      })
-      .expect(400);
-    expect(res.body.code).toBe('INVALID_MIME_TYPE');
-  });
-});
-
-describe('TEST-CHAT-076 / TEST-CHAT-077 attachment binding + retrieval (CHAT-041 / CHAT-043)', () => {
-  let h: TestHarness;
-  beforeAll(async () => {
-    h = await createTestApp();
-    await ensureMessageAttachmentDir();
-  });
-  afterAll(async () => {
-    await h.close();
-  });
-  beforeEach(async () => {
-    await h.reset();
-    await clearMessageAttachmentDir();
-  });
-
-  async function uploadOne(token: string, conversationId: bigint) {
-    const fixture = minimalPdf();
-    const res = await h
-      .request()
-      .post(`/api/conversations/${conversationId}/attachments`)
-      .set(...bearer(token))
-      .attach('file', fixture.buffer, {
-        filename: fixture.filename,
-        contentType: fixture.mimetype,
-      })
-      .expect(201);
-    return res.body as { id: string };
-  }
-
-  test('TEST-CHAT-076 / CHAT-041 — owner sends with attachment_ids → 201 + message_id wired', async () => {
-    const a = await seedActiveWorker(h.prisma);
-    const b = await seedActiveWorker(h.prisma);
-    const conv = await seedConversation(h.prisma, {
-      participantAccountIds: [a.id, b.id],
-    });
-    const ta = signAccessTokenFor(h, { accountId: a.id, email: a.email });
-    const att = await uploadOne(ta, conv.id);
-
-    await h
-      .request()
-      .post(`/api/conversations/${conv.id}/messages`)
-      .set(...bearer(ta))
-      .send({ content: 'see attached', attachment_ids: [Number(att.id)] })
-      .expect(201);
-    const wired = await h.prisma.messageAttachment.findUnique({
-      where: { id: BigInt(att.id) },
-    });
-    expect(wired?.message_id).not.toBeNull();
-  });
-
-  test('TEST-CHAT-076 / CHAT-041 — sending an attachment owned by another participant → 403 NOT_OWNER', async () => {
-    const a = await seedActiveWorker(h.prisma);
-    const b = await seedActiveWorker(h.prisma);
-    const conv = await seedConversation(h.prisma, {
-      participantAccountIds: [a.id, b.id],
-    });
-    const ta = signAccessTokenFor(h, { accountId: a.id, email: a.email });
-    const tb = signAccessTokenFor(h, { accountId: b.id, email: b.email });
-    const attB = await uploadOne(tb, conv.id);
-    const res = await h
-      .request()
-      .post(`/api/conversations/${conv.id}/messages`)
-      .set(...bearer(ta))
-      .send({ content: 'hijack', attachment_ids: [Number(attB.id)] })
-      .expect(403);
-    expect(res.body.code).toBe('NOT_OWNER');
-  });
-
-  test('TEST-CHAT-076 / CHAT-041 — already-used attachment_id → 403 NOT_OWNER (already wired)', async () => {
-    const a = await seedActiveWorker(h.prisma);
-    const b = await seedActiveWorker(h.prisma);
-    const conv = await seedConversation(h.prisma, {
-      participantAccountIds: [a.id, b.id],
-    });
-    const ta = signAccessTokenFor(h, { accountId: a.id, email: a.email });
-    const att = await uploadOne(ta, conv.id);
-    await h
-      .request()
-      .post(`/api/conversations/${conv.id}/messages`)
-      .set(...bearer(ta))
-      .send({ content: 'first', attachment_ids: [Number(att.id)] })
-      .expect(201);
-    await h
-      .request()
-      .post(`/api/conversations/${conv.id}/messages`)
-      .set(...bearer(ta))
-      .send({ content: 'reuse?', attachment_ids: [Number(att.id)] })
-      .expect(403);
-  });
-
-  test('TEST-CHAT-077 / CHAT-043 — GET /:id/messages eager-includes attachments[]', async () => {
-    const a = await seedActiveWorker(h.prisma);
-    const b = await seedActiveWorker(h.prisma);
-    const conv = await seedConversation(h.prisma, {
-      participantAccountIds: [a.id, b.id],
-    });
-    const ta = signAccessTokenFor(h, { accountId: a.id, email: a.email });
-    const att = await uploadOne(ta, conv.id);
-    await h
-      .request()
-      .post(`/api/conversations/${conv.id}/messages`)
-      .set(...bearer(ta))
-      .send({ content: 'with file', attachment_ids: [Number(att.id)] })
-      .expect(201);
-    const list = await h
-      .request()
-      .get(`/api/conversations/${conv.id}/messages`)
-      .set(...bearer(ta))
-      .expect(200);
-    const withAtt = list.body.items.find(
-      (m: { attachments: unknown[] }) =>
-        Array.isArray(m.attachments) && m.attachments.length > 0,
-    );
-    expect(withAtt).toBeDefined();
-    expect(withAtt.attachments[0].mime_type).toBe('application/pdf');
   });
 });

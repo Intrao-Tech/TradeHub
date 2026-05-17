@@ -332,16 +332,23 @@ describe('TEST-JOBS-084 invite-creates-conversation (JOBS-039)', () => {
       })
       .expect(201);
 
+    // Chat is collaboration-scoped now — the conversation shares the
+    // collaboration PK and its parties are the collab's worker + employer.
     const convos = await h.prisma.conversation.findMany({
-      include: { participants: true, messages: true },
+      include: { collaboration: true, messages: true },
     });
     expect(convos).toHaveLength(1);
-    const accountIds = convos[0].participants.map((p) => p.account_id);
-    expect(accountIds).toEqual(
+    const collab = convos[0].collaboration;
+    expect([collab.worker_id, collab.employer_id]).toEqual(
       expect.arrayContaining([employer.id, worker.id]),
     );
-    expect(convos[0].messages[0].message_type).toBe('JOB_INVITATION');
-    expect(convos[0].messages[0].content).toBe('Interested in this brief?');
+    // The conversation opens with a SYSTEM welcome message; the invite adds
+    // a JOB_INVITATION message after it.
+    const inviteMsg = convos[0].messages.find(
+      (m) => m.message_type === 'JOB_INVITATION',
+    );
+    expect(inviteMsg).toBeDefined();
+    expect(inviteMsg?.content).toBe('Interested in this brief?');
   });
 });
 

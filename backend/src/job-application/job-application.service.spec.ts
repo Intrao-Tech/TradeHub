@@ -20,7 +20,29 @@ function build(): {
   prisma: DeepMockProxy<PrismaService>;
 } {
   const prisma = mockDeep<PrismaService>();
-  const service = new JobApplicationService(prisma);
+  // Stub MailService + AuditService — these are fire-and-forget side
+  // effects from the apply() flow; tests assert behaviour, not the calls.
+  const mail = {
+    sendReferralProjectAttributed: jest.fn().mockResolvedValue(undefined),
+  } as unknown as ConstructorParameters<typeof JobApplicationService>[1];
+  const audit = {
+    log: jest.fn().mockResolvedValue(undefined),
+  } as unknown as ConstructorParameters<typeof JobApplicationService>[2];
+  const referrals = {
+    findActiveIntent: jest.fn().mockResolvedValue(null),
+  } as unknown as ConstructorParameters<typeof JobApplicationService>[3];
+  const conversations = {
+    ensureCollaborationConversation: jest.fn().mockResolvedValue(null),
+    announceConversationCreated: jest.fn(),
+    postSystemMessageForCollaboration: jest.fn().mockResolvedValue(null),
+  } as unknown as ConstructorParameters<typeof JobApplicationService>[4];
+  const service = new JobApplicationService(
+    prisma,
+    mail,
+    audit,
+    referrals,
+    conversations,
+  );
   return { service, prisma };
 }
 
@@ -125,21 +147,24 @@ describe('TEST-JOBS-020 JobApplicationService.apply() — JOBS-012 / BE-JOBS-2 /
 });
 
 describe('TEST-JOBS-021 JobApplicationService.invite() — JOBS-039', () => {
-  test('JOBS-039 — owner invite creates a PENDING/EMPLOYER application + a Conversation in a tx', async () => {
+  test('JOBS-039 — owner invite creates a PENDING/EMPLOYER application + posts a JOB_INVITATION message in a tx', async () => {
     const { service, prisma } = build();
     prisma.jobPost.findUnique.mockResolvedValueOnce({
       id: JOB_ID,
       employer_id: EMPLOYER_ID,
     } as never);
     prisma.jobApplication.findUnique.mockResolvedValueOnce(null as never);
+    // Chat is collaboration-scoped now — invite() finds-or-creates the
+    // worker<->employer collaboration; the message lands in its conversation.
+    prisma.collaboration.findFirst.mockResolvedValueOnce({
+      id: 50n,
+      worker_id: WORKER_ID,
+      employer_id: EMPLOYER_ID,
+    } as never);
     prisma.$transaction.mockImplementation(
       async (fn: (tx: PrismaService) => Promise<unknown>) =>
         fn(prisma as unknown as PrismaService),
     );
-    prisma.conversation.create.mockResolvedValueOnce({ id: 50n } as never);
-    prisma.conversationParticipant.createMany.mockResolvedValueOnce({
-      count: 2,
-    } as never);
     prisma.message.create.mockResolvedValueOnce({
       id: 1n,
       created_at: new Date(),
@@ -158,16 +183,10 @@ describe('TEST-JOBS-021 JobApplicationService.invite() — JOBS-039', () => {
       'come work',
     );
     expect(result).toMatchObject({ initiated_by: 'EMPLOYER' });
-    expect(prisma.conversation.create).toHaveBeenCalled();
-    expect(prisma.conversationParticipant.createMany).toHaveBeenCalledWith({
-      data: [
-        { conversation_id: 50n, account_id: EMPLOYER_ID },
-        { conversation_id: 50n, account_id: WORKER_ID },
-      ],
-    });
     const msgArgs = prisma.message.create.mock.calls[0][0] as {
-      data: { content: string; message_type: string };
+      data: { conversation_id: bigint; content: string; message_type: string };
     };
+    expect(msgArgs.data.conversation_id).toBe(50n);
     expect(msgArgs.data.content).toBe('come work');
     expect(msgArgs.data.message_type).toBe('JOB_INVITATION');
   });
@@ -191,14 +210,15 @@ describe('TEST-JOBS-021 JobApplicationService.invite() — JOBS-039', () => {
       employer_id: EMPLOYER_ID,
     } as never);
     prisma.jobApplication.findUnique.mockResolvedValueOnce(null as never);
+    prisma.collaboration.findFirst.mockResolvedValueOnce({
+      id: 50n,
+      worker_id: WORKER_ID,
+      employer_id: EMPLOYER_ID,
+    } as never);
     prisma.$transaction.mockImplementation(
       async (fn: (tx: PrismaService) => Promise<unknown>) =>
         fn(prisma as unknown as PrismaService),
     );
-    prisma.conversation.create.mockResolvedValueOnce({ id: 50n } as never);
-    prisma.conversationParticipant.createMany.mockResolvedValueOnce({
-      count: 2,
-    } as never);
     prisma.message.create.mockResolvedValueOnce({
       id: 1n,
       created_at: new Date(),

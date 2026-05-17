@@ -5,7 +5,13 @@
 
 import { describe, expect, test } from 'vitest';
 import { http, HttpResponse } from 'msw';
-import { renderWithRouter, screen, userEvent, waitFor } from '@/test/render';
+import {
+  renderWithRouter,
+  screen,
+  userEvent,
+  fireEvent,
+  waitFor,
+} from '@/test/render';
 import { server } from '@/test/msw-server';
 import RegisterPage from './RegisterPage';
 
@@ -41,10 +47,17 @@ describe('TEST-AUTH-076 RegisterPage', () => {
     const user = userEvent.setup();
     renderWithRouter(<RegisterPage onRegister={noop} />);
     await user.click(screen.getByText(/I'm a tradesperson/i));
-    await user.type(screen.getByLabelText(/^Password$/i), 'Tr@deHub1A');
-    await user.type(screen.getByLabelText(/Confirm password/i), 'Tr@deHub2X');
+    // fireEvent.change sets the whole value in one render — char-by-char
+    // userEvent.type re-renders the live-validating PasswordRules per
+    // keystroke and is too slow for jsdom here.
+    fireEvent.change(screen.getByLabelText(/^Password$/i), {
+      target: { value: 'Tr@deHub1A' },
+    });
+    fireEvent.change(screen.getByLabelText(/Confirm password/i), {
+      target: { value: 'Tr@deHub2X' },
+    });
     expect(await screen.findByText(/Passwords don't match/i)).toBeInTheDocument();
-  });
+  }, 20_000);
 
   test('AUTH-005 — when /auth/providers returns google: false, the Google CTA stays hidden', async () => {
     server.use(
@@ -70,24 +83,40 @@ describe('TEST-AUTH-076 RegisterPage', () => {
         );
       }),
     );
-    const user = userEvent.setup();
     renderWithRouter(<RegisterPage onRegister={noop} />);
-    await user.click(screen.getByText(/I'm a tradesperson/i));
+    // All-fireEvent — userEvent is too slow under full-suite load for this
+    // heaviest test (6 fields + submit), which flaked on the test timeout.
+    fireEvent.click(screen.getByText(/I'm a tradesperson/i));
 
-    await user.type(screen.getByLabelText(/Email/i), 'mike@example.com');
+    // fireEvent.change per field — one render each instead of per keystroke.
     const policyCompliant = 'Tr@deHub1A!';
-    await user.type(screen.getByLabelText(/^Password$/i), policyCompliant);
-    await user.type(screen.getByLabelText(/Confirm password/i), policyCompliant);
-    await user.type(screen.getByLabelText(/First name/i), 'Mike');
-    await user.type(screen.getByLabelText(/Surname/i), 'Builder');
-    await user.type(screen.getByLabelText(/Phone/i), '7700900123');
+    fireEvent.change(screen.getByLabelText(/Email/i), {
+      target: { value: 'mike@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/^Password$/i), {
+      target: { value: policyCompliant },
+    });
+    fireEvent.change(screen.getByLabelText(/Confirm password/i), {
+      target: { value: policyCompliant },
+    });
+    fireEvent.change(screen.getByLabelText(/First name/i), {
+      target: { value: 'Mike' },
+    });
+    fireEvent.change(screen.getByLabelText(/Surname/i), {
+      target: { value: 'Builder' },
+    });
+    fireEvent.change(screen.getByLabelText(/Phone/i), {
+      target: { value: '7700900123' },
+    });
 
-    await user.click(screen.getByRole('button', { name: /Create account/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Create account/i }));
     await waitFor(() => {
       expect(captured).not.toBeNull();
     });
     // GB default → +44 prefix
     expect(captured!.phone).toMatch(/^\+44/);
     expect(captured!.phone).toContain('7700900123');
-  });
+    // Generous timeout: the heaviest test in the file (6 fields + submit +
+    // POST) — slow under full-suite parallel load, though logically correct.
+  }, 40_000);
 });

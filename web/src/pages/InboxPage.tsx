@@ -5,7 +5,6 @@ import { ApiError, api, parseApiError } from '@/api';
 import { useAccountMe } from '@/hooks/useAccountMe';
 import { Button } from '@/components/ui/button';
 import { ConversationListItem } from '@/components/ConversationListItem';
-import { CollaborationStatusBadge } from '@/components/collaborations/CollaborationStatusBadge';
 import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useChatSocket } from '@/components/chat/useChatSocket';
@@ -19,12 +18,14 @@ import { cn } from '@/lib/utils';
 
 function previewLine(message: ChatMessage | null): string | null {
   if (!message) return null;
-  if (message.message_type === 'SYSTEM') return message.content;
   if (message.content && message.content.trim().length > 0) {
     return message.content;
   }
-  if (message.attachments && message.attachments.length > 0) {
-    return `${message.attachments.length === 1 ? 'Sent an attachment' : `Sent ${message.attachments.length} attachments`}`;
+  // A file message carries its file inline now.
+  if (message.file_url) {
+    return message.original_name
+      ? `Sent a file: ${message.original_name}`
+      : 'Sent a file';
   }
   return null;
 }
@@ -224,11 +225,6 @@ function InboxRow({ row, active, onSelect }: InboxRowProps) {
         active={active}
         onSelect={onSelect}
       />
-      {row.collaboration ? (
-        <div className="px-3" data-testid="inbox-row-collab-pill">
-          <CollaborationStatusBadge status={row.collaboration.status} />
-        </div>
-      ) : null}
     </div>
   );
 }

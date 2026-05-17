@@ -14,45 +14,48 @@ import { ReviewQueryDto } from './dto/review-query.dto';
 export class ReviewService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Reviews are now scoped to a Contract (post-CR-008). The HTTP path still
+   * accepts a contract_id; the legacy "by collaboration" surface forwards
+   * to the latest ENDED contract under that collab.
+   */
   async create(
-    collaborationId: bigint,
+    contractId: bigint,
     clientProfileId: bigint,
     dto: CreateReviewDto,
   ) {
-    const collaboration = await this.prisma.collaboration.findUnique({
-      where: { id: collaborationId },
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: contractId },
+      include: { collaboration: true },
     });
-    if (!collaboration) throw new NotFoundException('Collaboration not found');
-    if (collaboration.status !== 'COMPLETED') {
+    if (!contract) throw new NotFoundException('Contract not found');
+    if (contract.status !== 'ENDED') {
       throw new BadRequestException(
-        'Reviews can only be created for completed collaborations',
+        'Reviews can only be created for ended contracts',
       );
     }
 
     let reviewer_role: string;
-    if (collaboration.worker_id === clientProfileId) {
+    if (contract.collaboration.worker_id === clientProfileId) {
       reviewer_role = 'WORKER';
-    } else if (collaboration.employer_id === clientProfileId) {
+    } else if (contract.collaboration.employer_id === clientProfileId) {
       reviewer_role = 'EMPLOYER';
     } else {
-      throw new ForbiddenException('Not a participant in this collaboration');
+      throw new ForbiddenException('Not a participant in this contract');
     }
 
     const existing = await this.prisma.review.findFirst({
-      where: {
-        collaboration_id: collaborationId,
-        reviewer_role,
-      },
+      where: { contract_id: contractId, reviewer_role },
     });
     if (existing) {
       throw new BadRequestException(
-        `A ${reviewer_role} review already exists for this collaboration`,
+        `A ${reviewer_role} review already exists for this contract`,
       );
     }
 
     return this.prisma.review.create({
       data: {
-        collaboration_id: collaborationId,
+        contract_id: contractId,
         reviewer_role,
         overall_rating: dto.overall_rating,
         quality_rating: dto.quality_rating ?? null,
@@ -65,11 +68,41 @@ export class ReviewService {
     });
   }
 
-  async getByCollaboration(collaborationId: bigint) {
+  async getByContract(contractId: bigint) {
     return this.prisma.review.findMany({
-      where: { collaboration_id: collaborationId },
+      where: { contract_id: contractId },
       orderBy: { created_at: 'asc' },
     });
+  }
+
+  /** Back-compat alias — collab → all reviews across all contracts under it. */
+  async getByCollaboration(collaborationId: bigint) {
+    return this.prisma.review.findMany({
+      where: { contract: { collaboration_id: collaborationId } },
+      orderBy: { created_at: 'asc' },
+    });
+  }
+
+  /**
+   * Back-compat surface used by /reviews/collaboration/:id POST. Resolves
+   * the latest ENDED contract under the collab, then creates the review
+   * against that contract. Returns 400 if no ended contract exists.
+   */
+  async createForCollaboration(
+    collaborationId: bigint,
+    clientProfileId: bigint,
+    dto: CreateReviewDto,
+  ) {
+    const contract = await this.prisma.contract.findFirst({
+      where: { collaboration_id: collaborationId, status: 'ENDED' },
+      orderBy: { position: 'desc' },
+    });
+    if (!contract) {
+      throw new BadRequestException(
+        'No ended contract under this relationship — cannot review',
+      );
+    }
+    return this.create(contract.id, clientProfileId, dto);
   }
 
   async getBySubject(
@@ -88,8 +121,8 @@ export class ReviewService {
     const where = {
       is_published: true,
       reviewer_role,
-      collaboration: collaborationWhere,
-    };
+      contract: { collaboration: collaborationWhere },
+    } as Prisma.ReviewWhereInput;
 
     const [items, total] = await Promise.all([
       this.prisma.review.findMany({
@@ -97,7 +130,7 @@ export class ReviewService {
         skip,
         take: limit,
         orderBy: { published_at: 'desc' },
-        include: { collaboration: true },
+        include: { contract: { include: { collaboration: true } } },
       }),
       this.prisma.review.count({ where }),
     ]);
@@ -116,7 +149,7 @@ export class ReviewService {
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    const where = { is_published: false };
+    const where: Prisma.ReviewWhereInput = { is_published: false };
 
     const [items, total] = await Promise.all([
       this.prisma.review.findMany({
@@ -124,7 +157,7 @@ export class ReviewService {
         skip,
         take: limit,
         orderBy: { created_at: 'desc' },
-        include: { collaboration: true },
+        include: { contract: { include: { collaboration: true } } },
       }),
       this.prisma.review.count({ where }),
     ]);
@@ -141,6 +174,7 @@ export class ReviewService {
   async publish(reviewId: bigint) {
     const review = await this.prisma.review.findUnique({
       where: { id: reviewId },
+      include: { contract: { select: { collaboration_id: true } } },
     });
     if (!review) throw new NotFoundException('Review not found');
     if (review.is_published) {
@@ -156,8 +190,8 @@ export class ReviewService {
     });
 
     await this.recalculateRatings(
-      updated.collaboration_id,
-      updated.reviewer_role,
+      review.contract.collaboration_id,
+      review.reviewer_role,
     );
 
     return updated;
@@ -166,7 +200,7 @@ export class ReviewService {
   async getById(id: bigint, user?: CurrentUserPayload) {
     const review = await this.prisma.review.findUnique({
       where: { id },
-      include: { collaboration: true },
+      include: { contract: { include: { collaboration: true } } },
     });
     if (!review) throw new NotFoundException('Review not found');
 
@@ -183,7 +217,7 @@ export class ReviewService {
       throw new ForbiddenException('This review is not published');
     }
 
-    const { collaboration } = review;
+    const collaboration = review.contract.collaboration;
     const isReviewer =
       (review.reviewer_role === 'WORKER' && collaboration.worker_id === cp) ||
       (review.reviewer_role === 'EMPLOYER' && collaboration.employer_id === cp);
@@ -210,7 +244,7 @@ export class ReviewService {
           where: {
             is_published: true,
             reviewer_role: 'EMPLOYER',
-            collaboration: { worker_id: workerId },
+            contract: { collaboration: { worker_id: workerId } },
           },
           _avg: { overall_rating: true },
         }),
@@ -218,11 +252,11 @@ export class ReviewService {
           where: {
             is_published: true,
             reviewer_role: 'EMPLOYER',
-            collaboration: { worker_id: workerId },
+            contract: { collaboration: { worker_id: workerId } },
           },
         }),
       ]);
-      const avg = agg._avg.overall_rating;
+      const avg = agg._avg?.overall_rating ?? 0;
       await this.prisma.workerProfile.update({
         where: { id: workerId },
         data: {
@@ -237,7 +271,7 @@ export class ReviewService {
           where: {
             is_published: true,
             reviewer_role: 'WORKER',
-            collaboration: { employer_id: employerId },
+            contract: { collaboration: { employer_id: employerId } },
           },
           _avg: { overall_rating: true },
         }),
@@ -245,11 +279,11 @@ export class ReviewService {
           where: {
             is_published: true,
             reviewer_role: 'WORKER',
-            collaboration: { employer_id: employerId },
+            contract: { collaboration: { employer_id: employerId } },
           },
         }),
       ]);
-      const avg = agg._avg.overall_rating;
+      const avg = agg._avg?.overall_rating ?? 0;
       await this.prisma.employerProfile.update({
         where: { id: employerId },
         data: {
@@ -260,6 +294,27 @@ export class ReviewService {
     }
   }
 
+  async assertContractParticipant(
+    contractId: bigint,
+    user: CurrentUserPayload,
+  ) {
+    if (user.isStaff) return;
+    const cp = user.clientProfileId;
+    if (cp == null) throw new ForbiddenException('No client profile');
+    const c = await this.prisma.contract.findUnique({
+      where: { id: contractId },
+      include: { collaboration: true },
+    });
+    if (!c) throw new NotFoundException('Contract not found');
+    if (
+      c.collaboration.worker_id !== cp &&
+      c.collaboration.employer_id !== cp
+    ) {
+      throw new ForbiddenException('Not a participant in this contract');
+    }
+  }
+
+  /** Back-compat shim — old controllers may still call this name. */
   async assertCollaborationParticipant(
     collaborationId: bigint,
     user: CurrentUserPayload,

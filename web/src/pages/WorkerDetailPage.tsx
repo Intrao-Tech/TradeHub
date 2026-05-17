@@ -23,6 +23,9 @@ import {
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ShareForCommissionButton } from '@/components/referral/ShareForCommissionButton';
+import { useRefAttribution } from '@/components/referral/useRefAttribution';
+import { useAccountMe } from '@/hooks/useAccountMe';
 
 type Specialisation = {
   specialisation_id?: string | number;
@@ -77,6 +80,8 @@ function formatRate(
 
 export default function WorkerDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { isEmployer } = useAccountMe();
+  useRefAttribution({ targetId: id ?? null, targetRole: 'EMPLOYER' });
   const [worker, setWorker] = useState<WorkerDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -151,6 +156,16 @@ export default function WorkerDetailPage() {
         ratingCount={worker.rating_count}
         isAvailable={worker.is_available}
       />
+
+      {loggedIn && isEmployer && id ? (
+        <div className="flex justify-end">
+          <ShareForCommissionButton
+            kind="WORKER"
+            targetId={id}
+            targetTitle={displayName}
+          />
+        </div>
+      ) : null}
 
       {!loggedIn ? (
         <div className="rounded-md border border-info/40 bg-info-subtle px-3 py-2 text-sm text-info">

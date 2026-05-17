@@ -212,6 +212,156 @@ export class MailService implements OnModuleInit {
     await this.send(to, subject, html);
   }
 
+  async sendEscrowMilestoneFunded(
+    to: string,
+    displayName: string,
+    milestoneTitle: string,
+    amount: string,
+    payoutsEnabled: boolean,
+  ): Promise<void> {
+    const subject = payoutsEnabled
+      ? `Funds in escrow — start work on "${milestoneTitle}"`
+      : `Action needed — set up payouts to receive £${amount} for "${milestoneTitle}"`;
+    const onboardingBlock = payoutsEnabled
+      ? ''
+      : `
+        <div style="background: #fef3c7; padding: 12px; border-left: 3px solid #b45309; margin: 16px 0;">
+          <strong>You need to set up payouts before you can receive this money.</strong>
+          Stripe Connect onboarding takes ~3 minutes. Once you finish, we'll
+          automatically release any approved milestones to you.
+        </div>
+      `;
+    const ctaLabel = payoutsEnabled ? 'Open your wallet' : 'Set up payouts now';
+    const html = `
+      <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2 style="color: #0f766e;">Milestone funded 💷</h2>
+        <p>Hi ${escapeHtml(displayName)},</p>
+        <p>The employer has funded milestone <strong>"${escapeHtml(milestoneTitle)}"</strong> for <strong>£${escapeHtml(amount)}</strong>. Funds are now held in escrow.</p>
+        ${onboardingBlock}
+        <p>Start the work and submit it via the escrow page when done. Once submitted, the employer has 7 days to approve — auto-released after that.</p>
+        <p><a href="${this.frontendUrl}/wallet" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">${ctaLabel}</a></p>
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
+
+  async sendEscrowMilestoneSubmitted(
+    to: string,
+    displayName: string,
+    milestoneTitle: string,
+    amount: string,
+  ): Promise<void> {
+    const subject = `Worker submitted milestone "${milestoneTitle}" — review within 7 days`;
+    const html = `
+      <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2 style="color: #0f766e;">Work submitted for review 📩</h2>
+        <p>Hi ${escapeHtml(displayName)},</p>
+        <p>The worker has submitted milestone <strong>"${escapeHtml(milestoneTitle)}"</strong> (£${escapeHtml(amount)}) for your review.</p>
+        <p>You have <strong>7 days</strong> to approve or open a dispute. After that, funds auto-release to the worker.</p>
+        <p><a href="${this.frontendUrl}/collaborations" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">Review now</a></p>
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
+
+  async sendEscrowMilestoneReleased(
+    to: string,
+    displayName: string,
+    milestoneTitle: string,
+    amount: string,
+    autoReleased: boolean,
+  ): Promise<void> {
+    const subject = autoReleased
+      ? `Milestone "${milestoneTitle}" auto-released — £${amount} on its way`
+      : `£${amount} released — milestone "${milestoneTitle}" approved`;
+    const html = `
+      <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2 style="color: #0f766e;">Funds released ✅</h2>
+        <p>Hi ${escapeHtml(displayName)},</p>
+        <p><strong>£${escapeHtml(amount)}</strong> for milestone <strong>"${escapeHtml(milestoneTitle)}"</strong> has been released to your linked Stripe account${autoReleased ? ' (auto-released after 7 days of employer silence)' : ''}.</p>
+        <p>Stripe pays out to your bank on a standard 2-day rolling schedule for UK accounts.</p>
+        <p><a href="${this.frontendUrl}/wallet" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">View your wallet</a></p>
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
+
+  async sendEscrowMilestoneAutoReleased(
+    to: string,
+    displayName: string,
+    milestoneTitle: string,
+    amount: string,
+  ): Promise<void> {
+    const subject = `Milestone "${milestoneTitle}" auto-released after 7 days`;
+    const html = `
+      <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2 style="color: #b45309;">Auto-release fired</h2>
+        <p>Hi ${escapeHtml(displayName)},</p>
+        <p>You didn't approve milestone <strong>"${escapeHtml(milestoneTitle)}"</strong> (£${escapeHtml(amount)}) within 7 days, so funds were auto-released to the worker per our terms.</p>
+        <p>If you believe this was in error, you can still file a dispute via the escrow page. A TradeHub mediator will review.</p>
+        <p><a href="${this.frontendUrl}/collaborations" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">Review</a></p>
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
+
+  async sendEscrowMilestoneDisputed(
+    to: string,
+    displayName: string,
+    milestoneTitle: string,
+    reason: string,
+  ): Promise<void> {
+    const subject = `Dispute filed on milestone "${milestoneTitle}"`;
+    const html = `
+      <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2 style="color: #b45309;">Dispute filed ⚠️</h2>
+        <p>Hi ${escapeHtml(displayName)},</p>
+        <p>A dispute has been filed on milestone <strong>"${escapeHtml(milestoneTitle)}"</strong>.</p>
+        <p style="background: #fef3c7; padding: 12px; border-left: 3px solid #b45309;">
+          <strong>Reason:</strong> ${escapeHtml(reason)}
+        </p>
+        <p>You have 7 days to respond. If you and the other party can't agree, a TradeHub mediator will review the case and make a binding decision.</p>
+        <p><a href="${this.frontendUrl}/collaborations" style="display:inline-block;padding:10px 18px;background:#E07A3B;color:#fff;border-radius:6px;text-decoration:none;">Open dispute</a></p>
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
+
+  async sendEscrowMilestoneRefunded(
+    to: string,
+    displayName: string,
+    milestoneTitle: string,
+    amount: string,
+    reason: string,
+  ): Promise<void> {
+    const subject = `Milestone "${milestoneTitle}" refunded — £${amount}`;
+    const html = `
+      <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2 style="color: #0f766e;">Refund processed ↩️</h2>
+        <p>Hi ${escapeHtml(displayName)},</p>
+        <p>Milestone <strong>"${escapeHtml(milestoneTitle)}"</strong> has been refunded — £${escapeHtml(amount)} returned to the employer.</p>
+        <p style="background: #f1f5f9; padding: 12px; border-left: 3px solid #64748b;">
+          <strong>Reason:</strong> ${escapeHtml(reason)}
+        </p>
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
+
+  async sendPayoutsEnabled(to: string, displayName: string): Promise<void> {
+    const subject = 'You can now receive payouts on TradeHub';
+    const html = `
+      <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2 style="color: #0f766e;">Payouts enabled 💷</h2>
+        <p>Hi ${escapeHtml(displayName)},</p>
+        <p>Your Stripe Connect account is fully set up. When an employer funds a milestone for your work, the funds will be released straight to your bank when the milestone is approved.</p>
+        <p><a href="${this.frontendUrl}/wallet" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">Open your wallet</a></p>
+        <p style="color:#64748b;font-size:13px;">Stripe pays out to your bank on a standard 2-day rolling schedule for UK accounts.</p>
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
+
   async sendVerificationVerified(
     to: string,
     displayName: string,
@@ -246,6 +396,78 @@ export class MailService implements OnModuleInit {
         <p>Start a fresh attempt and double-check that your ID is in date and the photo is well-lit.</p>
         <p><a href="${this.frontendUrl}/profile?verification=retry" style="display:inline-block;padding:10px 18px;background:#E07A3B;color:#fff;border-radius:6px;text-decoration:none;">Try again</a></p>
         ${reasonLine}
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
+
+  async sendReferralAccountAttributed(
+    to: string,
+    referrerDisplayName: string,
+    newAccountDisplayName: string,
+    newAccountEmail: string,
+  ): Promise<void> {
+    const subject = `${newAccountDisplayName} signed up via your referral link`;
+    const html = `
+      <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2 style="color: #0f766e;">New referral signup 🎉</h2>
+        <p>Hi ${escapeHtml(referrerDisplayName)},</p>
+        <p><strong>${escapeHtml(newAccountDisplayName)}</strong> (${escapeHtml(newAccountEmail)}) just signed up to TradeHub via your referral link.</p>
+        <p>You'll earn a % of the platform fee on every milestone they're a party to (worker or employer side) — paid out automatically when each contract milestone releases.</p>
+        <p><a href="${this.frontendUrl}/referrals" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">View your referrals</a></p>
+        <p style="color:#64748b;font-size:13px;">Earnings only fire on released milestones. If they never get hired, no commission accrues.</p>
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
+
+  async sendReferralProjectAttributed(
+    to: string,
+    referrerDisplayName: string,
+    targetTitle: string,
+    targetKind: 'JOB' | 'WORKER',
+    actorDisplayName: string,
+  ): Promise<void> {
+    const noun = targetKind === 'JOB' ? 'job link' : 'worker link';
+    const subject = `Your ${noun} was used by ${actorDisplayName}`;
+    const html = `
+      <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2 style="color: #0f766e;">Project referral attributed</h2>
+        <p>Hi ${escapeHtml(referrerDisplayName)},</p>
+        <p><strong>${escapeHtml(actorDisplayName)}</strong> just acted on your shared ${noun} for <strong>${escapeHtml(targetTitle)}</strong>.</p>
+        <p>If a hire results from this, you'll earn the configured project-referral % on every released milestone — paid from platform fee.</p>
+        <p><a href="${this.frontendUrl}/referrals" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">View your referrals</a></p>
+        <p style="color:#64748b;font-size:13px;">Sharing for commission is anonymous — the recipient sees a normal page, not your name.</p>
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
+
+  async sendReferralCommissionPaid(
+    to: string,
+    referrerDisplayName: string,
+    amountGbp: string,
+    contractTitle: string,
+    refType: 'ACCOUNT' | 'PROJECT_W2W' | 'PROJECT_E2E',
+    paidLive: boolean,
+  ): Promise<void> {
+    const typeLabel =
+      refType === 'ACCOUNT'
+        ? 'account referral'
+        : refType === 'PROJECT_W2W'
+          ? 'project referral (worker→worker)'
+          : 'project referral (employer→employer)';
+    const subject = `You earned £${amountGbp} from ${contractTitle}`;
+    const liveCopy = paidLive
+      ? `<p style="background: #ecfdf5; padding: 12px; border-left: 3px solid #10b981;"><strong>Paid out</strong> to your Stripe Connect account just now.</p>`
+      : `<p style="background: #fef3c7; padding: 12px; border-left: 3px solid #f59e0b;"><strong>Held as pending</strong> — finish your Stripe Connect onboarding on <a href="${this.frontendUrl}/wallet">/wallet</a> to receive this and any other accumulated commissions automatically.</p>`;
+    const html = `
+      <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2 style="color: #0f766e;">Referral commission earned 💷</h2>
+        <p>Hi ${escapeHtml(referrerDisplayName)},</p>
+        <p>You earned <strong>£${escapeHtml(amountGbp)}</strong> from a milestone release on <strong>${escapeHtml(contractTitle)}</strong> (${escapeHtml(typeLabel)}).</p>
+        ${liveCopy}
+        <p><a href="${this.frontendUrl}/referrals" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">View your referrals</a></p>
       </div>
     `;
     await this.send(to, subject, html);

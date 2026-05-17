@@ -163,7 +163,7 @@ function ActionRow({
     return (
       <div className="flex flex-wrap gap-2 pt-1">
         <Button size="sm" disabled={pending} onClick={onConvert}>
-          Convert to collaboration
+          View collaboration
         </Button>
       </div>
     );

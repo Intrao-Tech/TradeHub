@@ -9,7 +9,7 @@ import {
   JobPostForm,
   type JobPostFormValues,
 } from '@/components/jobs/JobPostForm';
-import { valueFromReadAttachments } from '@/components/jobs/AttachmentsField';
+import { valueFromReadAttachments } from '@/components/jobs/attachmentValue';
 import { toast } from '@/components/ui/toast';
 
 type JobPostDetail = {

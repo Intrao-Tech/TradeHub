@@ -8,7 +8,11 @@
 
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
-import { MESSAGE_ATTACHMENT_UPLOAD_SUBDIR } from '../../src/message-attachment/message-attachment.constants';
+
+// The message-attachment module was removed in the 2026-05 schema rework
+// (files are inline on the message now). The upload-dir constant is inlined
+// here so the e2e harness helpers keep compiling.
+const MESSAGE_ATTACHMENT_UPLOAD_SUBDIR = 'uploads/message-attachments';
 
 const ROOT = process.cwd();
 

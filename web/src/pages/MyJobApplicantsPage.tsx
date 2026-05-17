@@ -167,17 +167,30 @@ export default function MyJobApplicantsPage() {
   }
 
   async function convert(application: ApplicantApplication) {
+    // Post-CR refactor: accepting a JobApp auto-creates the Collaboration +
+    // chat in the backend. This handler just resolves & navigates to it.
     const sid = String(application.id);
     setPendingIds((p) => new Set(p).add(sid));
     try {
-      const collab = await api<{ id: string | number }>(
-        `/job-applications/${application.id}/to-collaboration`,
-        { method: 'POST' },
+      const workerId = application.worker_profile?.id;
+      const employerId = post?.employer_id;
+      if (workerId == null || employerId == null) {
+        navigate('/collaborations');
+        return;
+      }
+      const found = await api<{ id: string | number }>(
+        `/collaborations/find?worker_id=${workerId}&employer_id=${employerId}`,
       );
-      toast.success('Collaboration created');
-      if (collab?.id != null) navigate(`/collaborations`);
+      navigate(`/collaborations/${found.id}`);
     } catch (err) {
-      toast.error(parseApiError(err)?.message ?? 'Could not convert.');
+      // 404 → relationship doesn't exist yet (race / stale UI). Fall back
+      // to the list so the user can still find their way.
+      const parsed = parseApiError(err);
+      if (parsed?.status === 404) {
+        navigate('/collaborations');
+        return;
+      }
+      toast.error(parsed?.message ?? 'Could not open collaboration.');
     } finally {
       setPendingIds((p) => {
         const next = new Set(p);

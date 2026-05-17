@@ -14,6 +14,7 @@ import {
 import { AppShell, type NavItem } from './components/AppShell';
 import { Skeleton } from './components/ui/skeleton';
 import { Toaster } from './components/ui/toast';
+import { replayPendingProjectRef } from './components/referral/pendingProjectRef';
 
 // ── Lazy pages ──────────────────────────────────────────────────────
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -37,6 +38,8 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const CollaborationsPage = lazy(() => import('./pages/CollaborationsPage'));
 const CollaborationDetailPage = lazy(() => import('./pages/CollaborationDetailPage'));
 const EscrowPlaceholderPage = lazy(() => import('./pages/EscrowPlaceholderPage'));
+const ContractDetailPage = lazy(() => import('./pages/ContractDetailPage'));
+const WalletPage = lazy(() => import('./pages/WalletPage'));
 const ReferralsPage = lazy(() => import('./pages/ReferralsPage'));
 const ReviewDetailPage = lazy(() => import('./pages/ReviewDetailPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
@@ -48,6 +51,7 @@ const MyJobApplicantsPage = lazy(() => import('./pages/MyJobApplicantsPage'));
 const EditJobPage = lazy(() => import('./pages/EditJobPage'));
 const MyApplicationsPage = lazy(() => import('./pages/MyApplicationsPage'));
 const InboxPage = lazy(() => import('./pages/InboxPage'));
+const RefLandingPage = lazy(() => import('./pages/RefLandingPage'));
 
 // ── Nav items ───────────────────────────────────────────────────────
 
@@ -63,6 +67,7 @@ const PRIVATE_NAV: NavItem[] = [
   { to: '/my-applications', label: 'Applications' },
   { to: '/my-jobs', label: 'Posted jobs' },
   { to: '/collaborations', label: 'Work' },
+  { to: '/wallet', label: 'Wallet' },
   { to: '/referrals', label: 'Referrals' },
   { to: '/inbox', label: 'Inbox' },
   { to: '/notifications', label: 'Alerts' },
@@ -155,6 +160,8 @@ function useAuthState() {
   const onAuthSuccess = () => {
     setLoggedIn(true);
     window.dispatchEvent(new Event('auth-changed'));
+    // Materialise a project-referral click made while logged out, if any.
+    void replayPendingProjectRef();
   };
 
   return { loggedIn, handleLogout, onAuthSuccess };
@@ -202,6 +209,7 @@ function MarketplaceRouter() {
       <Suspense fallback={<PageFallback />}>
         <Routes>
           {/* Public */}
+          <Route path="/r/:code" element={<RefLandingPage />} />
           <Route path="/jobs" element={<JobBoardPage />} />
           <Route path="/jobs/:id" element={<JobDetailPage />} />
           <Route path="/workers" element={<WorkerSearchPage />} />
@@ -227,6 +235,9 @@ function MarketplaceRouter() {
           <Route path="/collaborations" element={<Protected loggedIn={loggedIn}><CollaborationsPage /></Protected>} />
           <Route path="/collaborations/:id" element={<Protected loggedIn={loggedIn}><CollaborationDetailPage /></Protected>} />
           <Route path="/escrow/:id" element={<Protected loggedIn={loggedIn}><EscrowPlaceholderPage /></Protected>} />
+          <Route path="/contracts/:contractId" element={<Protected loggedIn={loggedIn}><ContractDetailPage /></Protected>} />
+          <Route path="/contracts/:contractId/escrow" element={<Protected loggedIn={loggedIn}><EscrowPlaceholderPage /></Protected>} />
+          <Route path="/wallet" element={<Protected loggedIn={loggedIn}><WalletPage /></Protected>} />
           <Route path="/referrals" element={<Protected loggedIn={loggedIn}><ReferralsPage /></Protected>} />
           <Route path="/notifications" element={<Protected loggedIn={loggedIn}><NotificationsPage /></Protected>} />
           <Route path="/my-applications" element={<Protected loggedIn={loggedIn}><MyApplicationsPage /></Protected>} />

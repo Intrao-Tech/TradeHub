@@ -1,5 +1,23 @@
 # Spec
 
+> ⚠️ **SCHEMA REVISED 2026-05-11 — this shipped feature's data model changed.**
+> Authoritative schema: `tasks/in-progress/DATA-MODEL.md` +
+> `backend/prisma/schema.prisma`. The chat code must be reworked to match:
+> - `conversation` is now **shared-PK 1:1 with `collaboration`**
+>   (`conversation.id = collaboration.id`) — `collaboration_id` is no longer a
+>   separate nullable column, and a conversation cannot exist without a
+>   collaboration (the "direct message" allowance below is dropped).
+> - **`conversation_participant` table dropped** — the two participants are
+>   always the collaboration's worker + employer; per-party read tracking is
+>   `conversation.worker_last_read_at` / `employer_last_read_at`.
+> - **`message_attachment` table dropped** — a file message carries its file
+>   columns inline on `message` (`file_url`, `original_name`, `mime_type`,
+>   `size_bytes`); `message_type` ∈ TEXT/IMAGE/FILE/SYSTEM discriminates;
+>   CHECK `content IS NOT NULL OR file_url IS NOT NULL`.
+> - `message.sender_id` → `client_profile` (NULL = SYSTEM message).
+> Requirements below describing nullable `collaboration_id`,
+> `ConversationParticipant`, `MessageAttachment` are superseded.
+
 ## Summary
 
 Production-ready **Chat** for TradeHub MVP. Replaces the engineer-only debug `web/src/pages/InboxPage.tsx` with a real inbox + thread page, links every `Conversation` to a `Collaboration` via a new nullable `Conversation.collaboration_id`, auto-creates a thread when a collaboration transitions to `CONFIRMED`, ships first-class attachments via a new `MessageAttachment` table, and closes a known authorization gap on the existing `/chat` Socket.IO gateway. The backend stays on the already-shipped `backend/src/conversation/` module; this feature extends it, it does not rewrite it. Stream / Sendbird / Ably / CometChat are explicitly **rejected** — see `Decisions Log` for the build-vs-buy rationale.

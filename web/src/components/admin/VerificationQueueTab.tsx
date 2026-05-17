@@ -304,7 +304,7 @@ export function VerificationQueueTab() {
                         <Button
                           type="button"
                           size="sm"
-                          variant="default"
+                          variant="primary"
                           onClick={() => approve(item.document.id)}
                           disabled={terminal || actionInFlight}
                         >
@@ -347,7 +347,7 @@ export function VerificationQueueTab() {
             <div className="flex gap-2">
               <Button
                 type="button"
-                variant="default"
+                variant="primary"
                 onClick={submitReject}
                 disabled={actionInFlight || rejecting.reason.trim().length < 10}
               >

@@ -125,9 +125,7 @@ export class TestSeedController implements OnModuleInit {
         data: {
           worker_id: worker.id,
           employer_id: employer.id,
-          initiated_by: 'EMPLOYER',
-          status,
-          confirmed_at: status === 'CONFIRMED' ? now : null,
+          first_contracted_at: status === 'CONFIRMED' ? now : null,
         },
       });
       if (status !== 'CONFIRMED') {
@@ -136,19 +134,17 @@ export class TestSeedController implements OnModuleInit {
           conversationId: null as bigint | null,
         };
       }
+      // conversation shares its PK with collaboration (strict 1:1).
       const conv = await tx.conversation.create({
         data: {
-          collaboration_id: collab.id,
+          id: collab.id,
           last_message_at: now,
-          participants: {
-            create: [{ account_id: worker.id }, { account_id: employer.id }],
-          },
         },
       });
       await tx.message.create({
         data: {
           conversation_id: conv.id,
-          sender_id: employer.id,
+          sender_id: null, // SYSTEM message has no sender
           content:
             body.welcomeContent ??
             'Collaboration confirmed. You can now message each other about the project.',
@@ -298,6 +294,7 @@ export class TestSeedController implements OnModuleInit {
     },
   ): Promise<{
     reviewId: string;
+    contractId: string;
     collaborationId: string;
     workerAccountId: string;
     employerAccountId: string;
@@ -335,27 +332,46 @@ export class TestSeedController implements OnModuleInit {
     const now = new Date();
 
     let collaborationId: bigint;
+    let contractId: bigint;
     if (body.collaborationId) {
       collaborationId = BigInt(body.collaborationId);
+      const c = await this.prisma.contract.findFirst({
+        where: { collaboration_id: collaborationId, status: 'ENDED' },
+        orderBy: { position: 'desc' },
+      });
+      if (!c) {
+        throw new BadRequestException(
+          'No ended contract under collaboration — cannot review',
+        );
+      }
+      contractId = c.id;
     } else {
       const collab = await this.prisma.collaboration.create({
         data: {
           worker_id: worker.id,
           employer_id: employer.id,
+          first_contracted_at: now,
+        },
+      });
+      const c = await this.prisma.contract.create({
+        data: {
+          collaboration_id: collab.id,
+          position: 1,
+          status: 'ENDED',
+          end_reason: 'COMPLETED',
           initiated_by: 'EMPLOYER',
-          status: 'COMPLETED',
-          confirmed_at: now,
           started_at: now,
           ended_at: now,
         },
       });
       collaborationId = collab.id;
+      contractId = c.id;
     }
 
     const isPublished = body.isPublished ?? false;
     const review = await this.prisma.review.create({
       data: {
-        collaboration_id: collaborationId,
+        contract_id: contractId,
         reviewer_role: reviewerRole,
         overall_rating: body.overallRating ?? 5,
         comment: body.comment ?? null,
@@ -365,14 +381,13 @@ export class TestSeedController implements OnModuleInit {
     });
 
     if (isPublished) {
-      // Mirror review.service.ts:171-234 recalc.
       if (reviewerRole === 'EMPLOYER') {
         const [agg, count] = await Promise.all([
           this.prisma.review.aggregate({
             where: {
               is_published: true,
               reviewer_role: 'EMPLOYER',
-              collaboration: { worker_id: worker.id },
+              contract: { collaboration: { worker_id: worker.id } },
             },
             _avg: { overall_rating: true },
           }),
@@ -380,14 +395,14 @@ export class TestSeedController implements OnModuleInit {
             where: {
               is_published: true,
               reviewer_role: 'EMPLOYER',
-              collaboration: { worker_id: worker.id },
+              contract: { collaboration: { worker_id: worker.id } },
             },
           }),
         ]);
         await this.prisma.workerProfile.update({
           where: { id: worker.id },
           data: {
-            rating_avg: new Prisma.Decimal(agg._avg.overall_rating ?? 0),
+            rating_avg: new Prisma.Decimal(agg._avg?.overall_rating ?? 0),
             rating_count: count,
           },
         });
@@ -397,7 +412,7 @@ export class TestSeedController implements OnModuleInit {
             where: {
               is_published: true,
               reviewer_role: 'WORKER',
-              collaboration: { employer_id: employer.id },
+              contract: { collaboration: { employer_id: employer.id } },
             },
             _avg: { overall_rating: true },
           }),
@@ -405,14 +420,14 @@ export class TestSeedController implements OnModuleInit {
             where: {
               is_published: true,
               reviewer_role: 'WORKER',
-              collaboration: { employer_id: employer.id },
+              contract: { collaboration: { employer_id: employer.id } },
             },
           }),
         ]);
         await this.prisma.employerProfile.update({
           where: { id: employer.id },
           data: {
-            rating_avg: new Prisma.Decimal(agg._avg.overall_rating ?? 0),
+            rating_avg: new Prisma.Decimal(agg._avg?.overall_rating ?? 0),
             rating_count: count,
           },
         });
@@ -421,6 +436,7 @@ export class TestSeedController implements OnModuleInit {
 
     return {
       reviewId: review.id.toString(),
+      contractId: contractId.toString(),
       collaborationId: collaborationId.toString(),
       workerAccountId: worker.id.toString(),
       employerAccountId: employer.id.toString(),

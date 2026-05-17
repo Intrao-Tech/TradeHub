@@ -14,6 +14,14 @@ function build(): {
   prisma: DeepMockProxy<PrismaService>;
 } {
   const prisma = mockDeep<PrismaService>();
+  // `update()` runs inside `$transaction(callback)` — make the mock invoke
+  // the callback with the same deep-mock acting as the transaction client.
+  (prisma.$transaction as unknown as jest.Mock).mockImplementation(
+    (arg: unknown) =>
+      typeof arg === 'function'
+        ? (arg as (tx: typeof prisma) => unknown)(prisma)
+        : Promise.all(arg as unknown[]),
+  );
   const service = new WorkerProfileService(prisma);
   return { service, prisma };
 }
@@ -130,14 +138,26 @@ describe('TEST-PROF-014 WorkerProfileService specialisation linkage (PROF-036, B
 });
 
 describe('TEST-PROF-015 WorkerProfileService languages (PROF-055, BE-PROF-6)', () => {
-  test('PROF-055 — persists ISO 639-1 array via Prisma `set`', async () => {
+  test('PROF-055 — replaces the worker_language junction rows', async () => {
     const { service, prisma } = build();
     prisma.workerProfile.update.mockResolvedValue({} as never);
+    prisma.workerLanguage.deleteMany.mockResolvedValue({ count: 0 } as never);
+    prisma.workerLanguage.createMany.mockResolvedValue({ count: 3 } as never);
+    prisma.workerProfile.findUniqueOrThrow.mockResolvedValue({} as never);
+
     await service.update(1n, { languages: ['en', 'pl', 'ro'] });
-    const call = prisma.workerProfile.update.mock.calls[0][0] as {
-      data: { languages: { set: string[] } };
+
+    expect(prisma.workerLanguage.deleteMany).toHaveBeenCalledWith({
+      where: { worker_id: 1n },
+    });
+    const createCall = prisma.workerLanguage.createMany.mock.calls[0][0] as {
+      data: Array<{ worker_id: bigint; language_code: string }>;
     };
-    expect(call.data.languages).toEqual({ set: ['en', 'pl', 'ro'] });
+    expect(createCall.data).toEqual([
+      { worker_id: 1n, language_code: 'en' },
+      { worker_id: 1n, language_code: 'pl' },
+      { worker_id: 1n, language_code: 'ro' },
+    ]);
   });
 
   // DTO regex `/^[a-z]{2}$/` rejects mixed-case + 3-letter codes;

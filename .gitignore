@@ -43,3 +43,6 @@ page_*.png
 *.docx
 *.pdf
 *.doc
+
+# Local dev / planning notes (not for the repo)
+.dev-notes/

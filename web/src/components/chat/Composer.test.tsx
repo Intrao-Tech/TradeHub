@@ -1,9 +1,9 @@
-// TEST-CHAT-113 / 114 / 116 / 140..143 — Composer component-level tests.
+// TEST-CHAT-113 / 116 / 140 / 142..143 — Composer component-level tests.
 //
-// Covers Enter/Shift+Enter behaviour, attachment validation, typing
-// indicator emit (300 ms debounce + 3 s stop / blur / send), and
-// auth-disabled states. Drives the Composer in isolation against a
-// stubbed `onSubmit` / `onAddFiles` / `onTypingStart`/`onTypingStop`.
+// Covers Enter/Shift+Enter behaviour, send-button gating, the typing
+// indicator emit (300 ms debounce + 3 s stop / blur / send), and the
+// auth-disabled banner. The Composer is text-only post-2026-05 — the
+// message_attachment table was dropped, so there is no attachment UI.
 
 import {
   describe,
@@ -16,44 +16,33 @@ import {
 } from 'vitest';
 import { useState } from 'react';
 import { renderWithProfile, screen, fireEvent, act } from '@/test/render';
-import userEvent from '@testing-library/user-event';
 import { Composer } from './Composer';
-import type { AttachmentDraft } from './types';
 
 type Handlers = {
   onSubmit: Mock;
-  onAddFiles: Mock;
   onTypingStart: Mock;
   onTypingStop: Mock;
 };
 
 function Harness({
   initialValue = '',
-  attachments = [],
   disabled = false,
   disabledReason,
   handlers,
 }: {
   initialValue?: string;
-  attachments?: AttachmentDraft[];
   disabled?: boolean;
   disabledReason?: string;
   handlers: Handlers;
 }) {
   const [value, setValue] = useState(initialValue);
-  const [atts, setAtts] = useState<AttachmentDraft[]>(attachments);
   return (
     <Composer
       value={value}
-      attachments={atts}
       disabled={disabled}
       disabledReason={disabledReason}
       onChange={setValue}
-      onSubmit={() => handlers.onSubmit(value, atts)}
-      onAddFiles={(files) => handlers.onAddFiles(files)}
-      onRemoveAttachment={(id) =>
-        setAtts((prev) => prev.filter((a) => a.client_id !== id))
-      }
+      onSubmit={() => handlers.onSubmit(value)}
       onTypingStart={handlers.onTypingStart}
       onTypingStop={handlers.onTypingStop}
     />
@@ -65,7 +54,6 @@ let h: Handlers;
 beforeEach(() => {
   h = {
     onSubmit: vi.fn(),
-    onAddFiles: vi.fn(),
     onTypingStart: vi.fn(),
     onTypingStop: vi.fn(),
   };
@@ -96,43 +84,21 @@ describe('TEST-CHAT-113 Composer Enter / Shift+Enter (CHAT-062)', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════
-// TEST-CHAT-140 / 141 — send-button enable / disable (CHAT-062)
+// TEST-CHAT-140 — send-button enable / disable (CHAT-062)
 // ════════════════════════════════════════════════════════════════════
 
-describe('TEST-CHAT-140 / 141 Composer send-button gating', () => {
-  test('TEST-CHAT-140 — send disabled when composer empty AND no attachments', () => {
+describe('TEST-CHAT-140 Composer send-button gating', () => {
+  test('TEST-CHAT-140 — send disabled when the composer is empty', () => {
     renderWithProfile(<Harness handlers={h} />);
-    const send = screen.getByTestId('chat-composer-send');
-    expect(send).toBeDisabled();
+    expect(screen.getByTestId('chat-composer-send')).toBeDisabled();
   });
 
-  test('TEST-CHAT-141 — send enabled with a ready attachment even with empty text', () => {
-    const att: AttachmentDraft = {
-      client_id: 'cid',
-      status: 'ready',
-      attachment_id: '1',
-      file: new File(['x'], 'x.png', { type: 'image/png' }),
-      mime_type: 'image/png',
-      original_name: 'x.png',
-      size_bytes: 100,
-    };
-    renderWithProfile(<Harness handlers={h} attachments={[att]} />);
-    const send = screen.getByTestId('chat-composer-send');
-    expect(send).toBeEnabled();
-  });
-
-  test('TEST-CHAT-140 — send remains disabled while an attachment is uploading', () => {
-    const att: AttachmentDraft = {
-      client_id: 'cid',
-      status: 'uploading',
-      file: new File(['x'], 'x.png', { type: 'image/png' }),
-      mime_type: 'image/png',
-      original_name: 'x.png',
-      size_bytes: 100,
-    };
-    renderWithProfile(<Harness handlers={h} attachments={[att]} />);
-    const send = screen.getByTestId('chat-composer-send');
-    expect(send).toBeDisabled();
+  test('TEST-CHAT-140 — send enabled once there is text', () => {
+    renderWithProfile(<Harness handlers={h} />);
+    fireEvent.change(screen.getByTestId('chat-composer-textarea'), {
+      target: { value: 'hi' },
+    });
+    expect(screen.getByTestId('chat-composer-send')).toBeEnabled();
   });
 });
 
@@ -159,27 +125,6 @@ describe('TEST-CHAT-142 / 143 Composer auth-disabled banner (CHAT-081)', () => {
       <Harness handlers={h} disabled disabledReason="Account is suspended." />,
     );
     expect(screen.getByText(/Account is suspended/i)).toBeInTheDocument();
-  });
-});
-
-// ════════════════════════════════════════════════════════════════════
-// TEST-CHAT-114 — attachment add (CHAT-062)
-// ════════════════════════════════════════════════════════════════════
-
-describe('TEST-CHAT-114 Composer attachments (CHAT-062)', () => {
-  test('TEST-CHAT-114 — paperclip click opens hidden file input; selecting a file calls onAddFiles', async () => {
-    const user = userEvent.setup();
-    const { container } = renderWithProfile(<Harness handlers={h} />);
-    const fileInput = container.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
-    expect(fileInput).not.toBeNull();
-    expect(fileInput.className).toContain('hidden');
-    const file = new File(['x'], 'x.png', { type: 'image/png' });
-    await user.upload(fileInput, file);
-    expect(h.onAddFiles).toHaveBeenCalledTimes(1);
-    const arg = h.onAddFiles.mock.calls[0][0] as File[];
-    expect(arg[0].name).toBe('x.png');
   });
 });
 

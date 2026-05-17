@@ -1,5 +1,15 @@
 # Spec — Verification
 
+> ⚠️ **SCHEMA REVISED 2026-05-11.** Authoritative schema:
+> `tasks/in-progress/DATA-MODEL.md` + `backend/prisma/schema.prisma`. The
+> verification pipeline's own tables (`document`, `verification_milestone`)
+> are **unchanged**. Note only: the generic `moderation_item` /
+> `moderation_action` tables were **dropped** — they were an unspec'd queue
+> that overlapped this feature. Document review is owned entirely by
+> verification (`document.status` / `assigned_to` / `reviewed_by` + the
+> verification queue service). If any code references `moderation_item`,
+> it should be removed.
+
 ## Summary
 
 Define the production-ready trust-verification pipeline for TradeHub MVP. This feature owns: the verification-level ladder (Unverified → Basic → Certified → Premium), the Stripe Identity automated path to Basic, the manual staff-document approval workflow that promotes users to Certified, the Right-to-Work submission path (worker only), the `VerificationMilestone` audit trail, and the `Document.rejection_reason` field that lets the user know what to fix.

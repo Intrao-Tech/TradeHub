@@ -15,6 +15,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StaffManagementCard } from '@/components/StaffManagementCard';
 import { VerificationQueueTab } from '@/components/admin/VerificationQueueTab';
+import { EscrowDisputesTab } from '@/components/admin/EscrowDisputesTab';
+import { PlatformSettingsTab } from '@/components/admin/PlatformSettingsTab';
 import {
   Select,
   SelectContent,
@@ -108,6 +110,8 @@ const ADMIN_TABS = [
   'staff',
   'documents',
   'reviews',
+  'escrow-disputes',
+  'platform-settings',
   'plans',
   'specialisations',
   'audit',
@@ -389,6 +393,8 @@ export default function AdminPage() {
           <TabsTrigger value="staff">Members</TabsTrigger>
           <TabsTrigger value="documents">Verification</TabsTrigger>
           <TabsTrigger value="reviews">Reviews</TabsTrigger>
+          <TabsTrigger value="escrow-disputes">Escrow disputes</TabsTrigger>
+          <TabsTrigger value="platform-settings">Settings</TabsTrigger>
           <TabsTrigger value="plans">Plans</TabsTrigger>
           <TabsTrigger value="specialisations">Specialisations</TabsTrigger>
           <TabsTrigger value="audit">Audit</TabsTrigger>
@@ -602,6 +608,14 @@ export default function AdminPage() {
 
         <TabsContent value="reviews" className="space-y-4">
           <ReviewsPublishQueueTab />
+        </TabsContent>
+
+        <TabsContent value="escrow-disputes" className="space-y-4">
+          <EscrowDisputesTab />
+        </TabsContent>
+
+        <TabsContent value="platform-settings" className="space-y-4">
+          <PlatformSettingsTab />
         </TabsContent>
 
         <TabsContent value="plans" className="space-y-4">

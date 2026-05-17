@@ -24,7 +24,6 @@ import { ConversationService } from './conversation.service';
 import { ConversationQueryDto } from './dto/conversation-query.dto';
 import { MessageQueryDto } from './dto/message-query.dto';
 import { SendMessageDto } from './dto/send-message.dto';
-import { StartConversationDto } from './dto/start-conversation.dto';
 
 @ApiTags('Conversations')
 @Controller('conversations')
@@ -32,16 +31,9 @@ import { StartConversationDto } from './dto/start-conversation.dto';
 export class ConversationController {
   constructor(private readonly conversationService: ConversationService) {}
 
-  @Post()
-  @RequiresVerifiedEmail()
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Start or continue a direct conversation' })
-  start(
-    @CurrentUser() user: CurrentUserPayload,
-    @Body() dto: StartConversationDto,
-  ) {
-    return this.conversationService.startConversation(user.accountId, dto);
-  }
+  // Conversations are no longer started ad-hoc — each is a strict 1:1 with a
+  // collaboration and is spun up automatically when the relationship forms
+  // (collaboration creation / accepted application / employer invite).
 
   @Get()
   @ApiBearerAuth()

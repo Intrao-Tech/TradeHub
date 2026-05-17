@@ -217,6 +217,8 @@ export class StaffService {
     const passwordHash = await bcrypt.hash(initialPassword, 12);
     const inviteExpiresAt = new Date(Date.now() + INVITE_TTL_MS);
 
+    // Staff have no client_profile, hence no referral_code — account is a
+    // pure auth root.
     const account = await this.prisma.account.create({
       data: {
         email: dto.email,

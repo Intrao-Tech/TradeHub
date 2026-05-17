@@ -13,11 +13,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ChipMultiSelect } from '@/components/ui/chip-multi-select';
+import { AttachmentsField } from '@/components/jobs/AttachmentsField';
 import {
-  AttachmentsField,
-  attachmentIdsFromValue,
+  pendingFilesFromValue,
+  savedIdsFromValue,
   type AttachedFile,
-} from '@/components/jobs/AttachmentsField';
+} from '@/components/jobs/attachmentValue';
+import {
+  deleteJobAttachment,
+  uploadJobPostAttachment,
+} from '@/components/jobs/attachmentApi';
 import { useSpecialisations } from '@/hooks/useSpecialisations';
 import { useTags } from '@/hooks/useTags';
 import {
@@ -196,7 +201,6 @@ export function JobPostForm({
       is_urgent: values.is_urgent,
       specialisation_ids: values.specialisation_ids,
       tag_ids: values.tag_ids,
-      attachment_ids: attachmentIdsFromValue(values.attachments),
     };
 
     if (values.pay_type === 'DAY_RATE') {
@@ -216,14 +220,38 @@ export function JobPostForm({
     try {
       const path = mode === 'create' ? '/job-posts' : `/job-posts/${jobPostId}`;
       const method = mode === 'create' ? 'POST' : 'PATCH';
-      const created = await api<{ id: string | number }>(path, {
-        method,
-        body: JSON.stringify(body),
-      });
-      onSuccess(created);
-    } catch (err) {
-      const parsed = parseApiError(err);
-      setErrors({ form: parsed?.message ?? 'Could not save the job.' });
+
+      let saved: { id: string | number };
+      try {
+        saved = await api<{ id: string | number }>(path, {
+          method,
+          body: JSON.stringify(body),
+        });
+      } catch (err) {
+        const parsed = parseApiError(err);
+        setErrors({ form: parsed?.message ?? 'Could not save the job.' });
+        return;
+      }
+
+      // Parent-first attachments: the post exists now, so sync files onto it.
+      // Best-effort — a failed file op must not block navigation or trigger a
+      // duplicate re-submit of the post itself.
+      if (mode === 'edit') {
+        const kept = savedIdsFromValue(values.attachments);
+        const removed = savedIdsFromValue(initial?.attachments ?? []).filter(
+          (id) => !kept.includes(id),
+        );
+        for (const id of removed) await deleteJobAttachment(id);
+      }
+      for (const file of pendingFilesFromValue(values.attachments)) {
+        try {
+          await uploadJobPostAttachment(saved.id, file);
+        } catch {
+          /* best-effort — the post is saved; the file can be re-added later */
+        }
+      }
+
+      onSuccess(saved);
     } finally {
       setSubmitting(false);
     }

@@ -47,7 +47,7 @@ describe('TEST-AUTH-046 AccountStateGuard end-to-end (AUTH-015-001)', () => {
     expect(res.body.code).toBe('EMAIL_NOT_VERIFIED');
   });
 
-  test('AUTH-015-001 — PENDING user POSTing /conversations is denied 403 EMAIL_NOT_VERIFIED', async () => {
+  test('AUTH-015-001 — PENDING user POSTing a chat message is denied 403 EMAIL_NOT_VERIFIED', async () => {
     const seed = await seedPendingWorker(h.prisma);
     const token = signAccessTokenFor(h, {
       accountId: seed.id,
@@ -55,16 +55,18 @@ describe('TEST-AUTH-046 AccountStateGuard end-to-end (AUTH-015-001)', () => {
       verificationState: 'PENDING_EMAIL_VERIFICATION',
     });
 
+    // AccountStateGuard + RequiresVerifiedEmail run before the handler, so
+    // the conversation id need not exist.
     const res = await h
       .request()
-      .post('/api/conversations')
+      .post('/api/conversations/1/messages')
       .set('Authorization', `Bearer ${token}`)
-      .send({})
+      .send({ content: 'x' })
       .expect(403);
     expect(res.body.code).toBe('EMAIL_NOT_VERIFIED');
   });
 
-  test('AUTH-015-001 — PENDING user POSTing /referrals is denied 403 EMAIL_NOT_VERIFIED', async () => {
+  test('AUTH-015-001 — PENDING user POSTing /collaborations is denied 403 EMAIL_NOT_VERIFIED', async () => {
     const seed = await seedPendingWorker(h.prisma);
     const token = signAccessTokenFor(h, {
       accountId: seed.id,
@@ -74,7 +76,7 @@ describe('TEST-AUTH-046 AccountStateGuard end-to-end (AUTH-015-001)', () => {
 
     const res = await h
       .request()
-      .post('/api/referrals')
+      .post('/api/collaborations')
       .set('Authorization', `Bearer ${token}`)
       .send({})
       .expect(403);
@@ -130,14 +132,14 @@ describe('TEST-AUTH-046 AccountStateGuard end-to-end (AUTH-015-001)', () => {
       email: seed.email,
       verificationState: 'ACTIVE',
     });
-    // Use /api/conversations because that route has no role gate — only
-    // AccountStateGuard. Any non-EMAIL_NOT_VERIFIED response proves the
-    // guard let an ACTIVE user through.
+    // The chat send route sits behind AccountStateGuard + RequiresVerifiedEmail.
+    // Any non-EMAIL_NOT_VERIFIED response proves the guard let an ACTIVE user
+    // through (the request then fails later for an unrelated reason).
     const res = await h
       .request()
-      .post('/api/conversations')
+      .post('/api/conversations/1/messages')
       .set('Authorization', `Bearer ${token}`)
-      .send({})
+      .send({ content: 'x' })
       .expect((r) => {
         if (r.status === 403 && r.body.code === 'EMAIL_NOT_VERIFIED') {
           throw new Error('AccountStateGuard blocked an ACTIVE user');

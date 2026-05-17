@@ -137,7 +137,12 @@ export async function createTestApp(
   void app.get(StaffHostMiddleware);
 
   const prisma = moduleRef.get(PrismaService);
-  const mail = moduleRef.get(MailService);
+  // We override MailService → TestMailService above; force the runtime type
+  // through (`overrideProvider` swaps the impl but the typed `.get()` still
+  // returns the original token type).
+  const mail: TestMailService = moduleRef.get<TestMailService>(
+    MailService as unknown as new (...args: never[]) => TestMailService,
+  );
 
   const harness: TestHarness = {
     app,

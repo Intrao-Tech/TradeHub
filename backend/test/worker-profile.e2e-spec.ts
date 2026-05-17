@@ -40,7 +40,7 @@ describe('TEST-PROF-071 PATCH /worker-profiles/me (PROF-012, PROF-015)', () => {
     expect(res.body.is_available).toBe(false);
   });
 
-  test('PROF-015 — languages array of ISO 639-1 codes persists', async () => {
+  test('PROF-015 — languages persist as worker_language junction rows', async () => {
     const seed = await seedActiveWorker(h.prisma);
     const token = signAccessTokenFor(h, {
       accountId: seed.id,
@@ -53,7 +53,14 @@ describe('TEST-PROF-071 PATCH /worker-profiles/me (PROF-012, PROF-015)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ languages: ['en', 'pl', 'ro'] })
       .expect(200);
-    expect(res.body.languages).toEqual(['en', 'pl', 'ro']);
+    // Languages are a worker_language junction now (ISO 639-1 codes),
+    // not an array column on worker_profile.
+    const codes = (
+      res.body.worker_languages as Array<{ language_code: string }>
+    )
+      .map((l) => l.language_code)
+      .sort();
+    expect(codes).toEqual(['en', 'pl', 'ro']);
   });
 
   test('PROF-015 — invalid language codes rejected by DTO regex (`^[a-z]{2}$`)', async () => {

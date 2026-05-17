@@ -100,6 +100,8 @@ describe('TEST-AUTH-049 Google OAuth callback', () => {
     // Manually create a PENDING account with a password and no google_id.
 
     const bcrypt = require('bcrypt') as typeof import('bcrypt');
+    const { generateReferralCode } =
+      require('../src/referral/referral.constants') as typeof import('../src/referral/referral.constants');
     const account = await h.prisma.account.create({
       data: {
         email: 'pending-link@example.com',
@@ -109,6 +111,7 @@ describe('TEST-AUTH-049 Google OAuth callback', () => {
           create: {
             display_name: 'Pending Link',
             slug: 'pending-link-x',
+            referral_code: generateReferralCode(),
             worker_profile: { create: {} },
           },
         },

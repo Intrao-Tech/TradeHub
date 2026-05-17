@@ -2,7 +2,6 @@ import type { JobAttachment } from '@prisma/client';
 
 export type SerialisedJobAttachment = {
   id: string;
-  uploaded_by_id: string;
   job_post_id: string | null;
   job_application_id: string | null;
   original_name: string;
@@ -17,7 +16,6 @@ export function serialiseJobAttachment(
 ): SerialisedJobAttachment {
   return {
     id: row.id.toString(),
-    uploaded_by_id: row.uploaded_by_id.toString(),
     job_post_id: row.job_post_id != null ? row.job_post_id.toString() : null,
     job_application_id:
       row.job_application_id != null ? row.job_application_id.toString() : null,

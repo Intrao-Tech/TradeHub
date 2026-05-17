@@ -1,20 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Banknote,
-  CheckCircle2,
-  CircleDashed,
-  Flag,
-  Handshake,
-  Inbox,
-  MessageCircle,
-  Star,
-} from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft, MessageCircle, RefreshCw } from 'lucide-react';
 import { api, parseApiError } from '@/api';
-import { useChatSocket } from '@/components/chat/useChatSocket';
-import type { InboxResponse } from '@/components/chat/types';
 import { useAccountMe } from '@/hooks/useAccountMe';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,183 +13,98 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { EmptyState } from '@/components/EmptyState';
-import { toast } from '@/components/ui/toast';
-import {
-  CollaborationStatusBadge,
-  type CollaborationStatus,
-} from '@/components/collaborations/CollaborationStatusBadge';
-import {
-  CounterpartyChip,
-  type CounterpartyParty,
-} from '@/components/collaborations/CounterpartyChip';
-import { FlagCollaborationDialog } from '@/components/collaborations/FlagCollaborationDialog';
-import { patchCollaborationStatus } from '@/components/collaborations/api';
-import { LeaveReviewSheet } from '@/components/reviews/LeaveReviewSheet';
+import { NewContractSheet } from '@/components/contracts/NewContractSheet';
 
-type EscrowStatus =
-  | 'CREATED'
-  | 'DEPOSIT_PENDING'
-  | 'HELD'
-  | 'RELEASED'
-  | 'REFUNDED'
-  | 'DISPUTED';
-
-type EscrowTransaction = {
+type CounterpartyParty = {
   id: string | number;
-  status: string;
-  job_amount?: string | number | null;
-  platform_fee?: string | number | null;
-  referral_commission?: string | number | null;
-  worker_payout?: string | number | null;
-  currency?: string | null;
-  deposit_confirmed_at?: string | null;
-  released_at?: string | null;
-  refunded_at?: string | null;
-  disputed_at?: string | null;
+  client_profile?: {
+    display_name?: string | null;
+    avatar_url?: string | null;
+    city?: string | null;
+    postcode_area?: string | null;
+  } | null;
 };
 
-type Review = {
+type ContractRow = {
   id: string | number;
-  reviewer_role: string;
-  is_published: boolean;
-};
-
-type Collaboration = {
-  id: string | number;
-  worker_id: string | number;
-  employer_id: string | number;
-  initiated_by: 'WORKER' | 'EMPLOYER' | string;
-  status: string;
+  position: number;
+  status: 'DRAFT' | 'PROPOSED' | 'ACTIVE' | 'ENDED';
+  end_reason?: string | null;
+  agreed_amount?: string | null;
   project_type?: string | null;
   site_postcode?: string | null;
-  agreed_amount?: string | number | null;
-  flagged: boolean;
-  flag_reason?: string | null;
-  confirmed_at?: string | null;
+  initiated_by?: 'WORKER' | 'EMPLOYER' | string;
   started_at?: string | null;
   ended_at?: string | null;
   created_at?: string;
-  worker?: CounterpartyParty | null;
-  employer?: CounterpartyParty | null;
-  reviews?: Review[];
-  escrow_transaction?: EscrowTransaction | null;
 };
 
-const TERMINAL_STATUSES = new Set(['COMPLETED', 'REJECTED']);
+type CollaborationData = {
+  id: string | number;
+  worker_id: string | number;
+  employer_id: string | number;
+  first_contracted_at?: string | null;
+  last_contract_id?: string | number | null;
+  created_at?: string;
+  worker?: CounterpartyParty | null;
+  employer?: CounterpartyParty | null;
+  contracts?: ContractRow[];
+  conversation?: { id: string | number } | null;
+};
 
-function formatGbp(value?: string | number | null): string {
+const fmtGbp = (value?: string | number | null) => {
   if (value == null || value === '') return '—';
   const n = Number(value);
   if (!Number.isFinite(n)) return String(value);
   return new Intl.NumberFormat('en-GB', {
     style: 'currency',
     currency: 'GBP',
-    maximumFractionDigits: 2,
   }).format(n);
-}
+};
 
-function formatDate(value?: string | null): string {
+const fmtDate = (value?: string | null) => {
   if (!value) return '—';
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
+  return Number.isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+};
 
-function escrowStatusVariant(
-  status?: string | null,
-): 'success' | 'warning' | 'danger' | 'info' | 'secondary' | 'outline' {
-  switch ((status ?? '').toUpperCase()) {
-    case 'HELD':
-      return 'info';
-    case 'RELEASED':
+const contractStatusVariant = (
+  status: ContractRow['status'],
+): 'info' | 'warning' | 'success' | 'secondary' | 'outline' => {
+  switch (status) {
+    case 'ACTIVE':
       return 'success';
-    case 'DEPOSIT_PENDING':
-    case 'CREATED':
+    case 'PROPOSED':
       return 'warning';
-    case 'REFUNDED':
+    case 'ENDED':
       return 'secondary';
-    case 'DISPUTED':
-      return 'danger';
     default:
       return 'outline';
   }
-}
-
-function escrowStatusLabel(status?: string | null): string {
-  switch ((status ?? '').toUpperCase()) {
-    case 'HELD':
-      return 'Held';
-    case 'RELEASED':
-      return 'Released';
-    case 'DEPOSIT_PENDING':
-      return 'Awaiting deposit';
-    case 'CREATED':
-      return 'Awaiting deposit';
-    case 'REFUNDED':
-      return 'Refunded';
-    case 'DISPUTED':
-      return 'Disputed';
-    default:
-      return status ?? 'Unknown';
-  }
-}
-
-function escrowTimestamp(escrow: EscrowTransaction): { label: string; value: string } | null {
-  const status = (escrow.status ?? '').toUpperCase() as EscrowStatus;
-  if (status === 'HELD' && escrow.deposit_confirmed_at) {
-    return { label: 'Deposit confirmed', value: formatDate(escrow.deposit_confirmed_at) };
-  }
-  if (status === 'RELEASED' && escrow.released_at) {
-    return { label: 'Released', value: formatDate(escrow.released_at) };
-  }
-  if (status === 'REFUNDED' && escrow.refunded_at) {
-    return { label: 'Refunded', value: formatDate(escrow.refunded_at) };
-  }
-  if (status === 'DISPUTED' && escrow.disputed_at) {
-    return { label: 'Disputed', value: formatDate(escrow.disputed_at) };
-  }
-  return null;
-}
+};
 
 export default function CollaborationDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const {
-    account,
-    clientProfile,
-    isStaff,
-    loading: accountLoading,
-  } = useAccountMe();
-
-  const [detail, setDetail] = useState<Collaboration | null>(null);
-  const [error, setError] = useState<{ status: number; message: string } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [actionError, setActionError] = useState('');
-  const [submittingStatus, setSubmittingStatus] = useState<string | null>(null);
-  const [flagOpen, setFlagOpen] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [reviewSheetOpen, setReviewSheetOpen] = useState(false);
+  const { account, isEmployer, clientProfile } = useAccountMe();
+  const [collab, setCollab] = useState<CollaborationData | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    setError(null);
+    setError('');
     try {
-      const data = await api<Collaboration>(`/collaborations/${id}`);
-      setDetail(data);
+      const res = await api<CollaborationData>(`/collaborations/${id}`);
+      setCollab(res);
     } catch (err) {
-      const parsed = parseApiError(err);
-      setError({
-        status: parsed?.status ?? 0,
-        message: parsed?.message ?? 'Could not load this collaboration.',
-      });
-      setDetail(null);
+      setError(parseApiError(err)?.message ?? 'Failed to load relationship');
     } finally {
       setLoading(false);
     }
@@ -210,657 +112,202 @@ export default function CollaborationDetailPage() {
 
   useEffect(() => {
     void load();
-  }, [load, refreshKey]);
-
-  const myClientProfileId = clientProfile?.id != null ? String(clientProfile.id) : null;
-
-  const role: 'WORKER' | 'EMPLOYER' | null = useMemo(() => {
-    if (!detail || !myClientProfileId) return null;
-    if (String(detail.worker_id) === myClientProfileId) return 'WORKER';
-    if (String(detail.employer_id) === myClientProfileId) return 'EMPLOYER';
-    return null;
-  }, [detail, myClientProfileId]);
-
-  const isParticipant = role != null;
-  const isResponder = useMemo(() => {
-    if (!detail || role == null) return false;
-    return detail.initiated_by !== role;
-  }, [detail, role]);
-
-  const status = (detail?.status ?? '').toUpperCase() as CollaborationStatus;
-  const isTerminal = TERMINAL_STATUSES.has(status);
-
-  async function patchStatus(nextStatus: string) {
-    if (!id) return;
-    setSubmittingStatus(nextStatus);
-    setActionError('');
-    try {
-      await patchCollaborationStatus(id, nextStatus);
-      toast.success('Status updated');
-      setRefreshKey((k) => k + 1);
-    } catch (err) {
-      const parsed = parseApiError(err);
-      setActionError(parsed?.message ?? 'Could not update status.');
-      // Refetch in case of conflict to surface latest state.
-      setRefreshKey((k) => k + 1);
-    } finally {
-      setSubmittingStatus(null);
-    }
-  }
-
-  if (accountLoading || loading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-1/3" />
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
-  }
-
-  if (error || !detail) {
-    const notFound = error?.status === 404 || error?.status === 403;
-    return notFound ? (
-      <div className="space-y-4">
-        <Button asChild variant="ghost" size="sm" className="-ml-2">
-          <Link to="/collaborations">
-            <ArrowLeft />
-            Back to collaborations
-          </Link>
-        </Button>
-        <EmptyState
-          icon={Handshake}
-          title="Collaboration not found"
-          description="It may have been removed, or you don't have access to it."
-          action={
-            <Button asChild variant="outline">
-              <Link to="/collaborations">Back to collaborations</Link>
-            </Button>
-          }
-        />
-      </div>
-    ) : (
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-          <ArrowLeft />
-          Back
-        </Button>
-        <div
-          role="alert"
-          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
-        >
-          {error?.message ?? 'Something went wrong loading this collaboration.'}
-        </div>
-        <Button onClick={() => setRefreshKey((k) => k + 1)} variant="outline">
-          Retry
-        </Button>
-      </div>
-    );
-  }
-
-  const escrow = detail.escrow_transaction ?? null;
-  const reviews = detail.reviews ?? [];
-  const workerReview = reviews.find((r) => r.reviewer_role === 'WORKER');
-  const employerReview = reviews.find((r) => r.reviewer_role === 'EMPLOYER');
-
-  return (
-    <article className="space-y-6">
-      <div>
-        <Button asChild variant="ghost" size="sm" className="-ml-2">
-          <Link to="/collaborations">
-            <ArrowLeft />
-            Back to collaborations
-          </Link>
-        </Button>
-      </div>
-
-      <header className="space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
-            Collaboration #{String(detail.id)}
-          </h1>
-          <CollaborationStatusBadge status={detail.status} />
-          {detail.flagged ? (
-            <Badge variant="danger" className="gap-1">
-              <Flag className="h-3 w-3" />
-              Flagged
-            </Badge>
-          ) : null}
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardDescription className="text-xs font-semibold uppercase tracking-wide">
-                Worker
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CounterpartyChip party={detail.worker ?? null} role="WORKER" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardDescription className="text-xs font-semibold uppercase tracking-wide">
-                Employer
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CounterpartyChip party={detail.employer ?? null} role="EMPLOYER" />
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardContent className="grid grid-cols-1 gap-4 pt-6 text-sm sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Project type">{detail.project_type ?? '—'}</Field>
-            <Field label="Site postcode">{detail.site_postcode ?? '—'}</Field>
-            <Field label="Agreed amount">{formatGbp(detail.agreed_amount)}</Field>
-            <Field label="Started">{formatDate(detail.started_at)}</Field>
-          </CardContent>
-        </Card>
-      </header>
-
-      {detail.flagged ? (
-        <div
-          role="status"
-          className="flex flex-wrap items-start gap-2 rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
-        >
-          <Flag className="mt-0.5 h-4 w-4 flex-shrink-0" />
-          <div className="space-y-0.5">
-            <p className="font-medium">Flagged for staff review</p>
-            <p className="text-xs">
-              {detail.flag_reason
-                ? detail.flag_reason
-                : 'Flagged — no reason recorded.'}
-            </p>
-          </div>
-        </div>
-      ) : null}
-
-      <ActionBar
-        status={status}
-        isParticipant={isParticipant}
-        isResponder={isResponder}
-        isStaff={isStaff}
-        isTerminal={isTerminal}
-        flagged={detail.flagged}
-        submittingStatus={submittingStatus}
-        actionError={actionError}
-        onPatchStatus={(s) => void patchStatus(s)}
-        onFlag={() => setFlagOpen(true)}
-      />
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <EscrowSummaryCard escrow={escrow} collaborationId={String(detail.id)} />
-        <ChatSummaryCard collaborationId={String(detail.id)} />
-      </div>
-
-      <ReviewsSummaryCard
-        workerReview={workerReview}
-        employerReview={employerReview}
-        myRole={role}
-        canLeaveReview={status === 'COMPLETED' && isParticipant}
-        accountActive={account?.status === 'ACTIVE'}
-        onLeaveReview={() => setReviewSheetOpen(true)}
-      />
-
-      <AuditTimeline detail={detail} />
-
-      <FlagCollaborationDialog
-        open={flagOpen}
-        onOpenChange={setFlagOpen}
-        collaborationId={String(detail.id)}
-        onFlagged={() => setRefreshKey((k) => k + 1)}
-      />
-
-      {clientProfile?.id != null ? (
-        <LeaveReviewSheet
-          collaborationId={String(detail.id)}
-          clientProfileId={clientProfile.id}
-          open={reviewSheetOpen}
-          onOpenChange={setReviewSheetOpen}
-          onSubmitted={() => setRefreshKey((k) => k + 1)}
-        />
-      ) : null}
-    </article>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-        {label}
-      </p>
-      <p className="text-fg">{children}</p>
-    </div>
-  );
-}
-
-type ActionBarProps = {
-  status: CollaborationStatus;
-  isParticipant: boolean;
-  isResponder: boolean;
-  isStaff: boolean;
-  isTerminal: boolean;
-  flagged: boolean;
-  submittingStatus: string | null;
-  actionError: string;
-  onPatchStatus: (next: string) => void;
-  onFlag: () => void;
-};
-
-function ActionBar({
-  status,
-  isParticipant,
-  isResponder,
-  isStaff,
-  isTerminal,
-  flagged,
-  submittingStatus,
-  actionError,
-  onPatchStatus,
-  onFlag,
-}: ActionBarProps) {
-  const transitions = useMemo(() => {
-    if (!isParticipant) return [] as Array<{ next: string; label: string }>;
-    if (status === 'PENDING' && isResponder) {
-      return [
-        { next: 'CONFIRMED', label: 'Confirm' },
-        { next: 'REJECTED', label: 'Reject' },
-      ];
-    }
-    if (status === 'CONFIRMED') return [{ next: 'IN_PROGRESS', label: 'Start work' }];
-    if (status === 'IN_PROGRESS') return [{ next: 'COMPLETED', label: 'Mark complete' }];
-    return [];
-  }, [status, isParticipant, isResponder]);
-
-  // Flag dispute is available on any non-terminal state for participants and staff.
-  const showFlag = !isTerminal && (isParticipant || isStaff);
-
-  if (!showFlag && transitions.length === 0 && !isStaff) {
-    return null;
-  }
-
-  return (
-    <section className="space-y-2">
-      {actionError ? (
-        <div
-          role="alert"
-          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
-        >
-          {actionError}
-        </div>
-      ) : null}
-      <div className="flex flex-wrap items-center gap-2 rounded-md border border-border-default bg-raised p-3">
-        {isStaff && !isParticipant ? (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled
-              title="Staff cannot transition status — use the staff-tools surface"
-            >
-              Lifecycle actions disabled
-            </Button>
-          </>
-        ) : null}
-        {transitions.map((t) => (
-          <Button
-            key={t.next}
-            type="button"
-            size="sm"
-            onClick={() => onPatchStatus(t.next)}
-            disabled={submittingStatus != null}
-          >
-            {submittingStatus === t.next ? 'Updating…' : t.label}
-          </Button>
-        ))}
-        {showFlag ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={onFlag}
-            disabled={submittingStatus != null}
-          >
-            <Flag />
-            {flagged ? 'Update flag' : 'Flag dispute'}
-          </Button>
-        ) : null}
-        {isParticipant && status === 'PENDING' && !isResponder ? (
-          <p className="text-xs text-fg-muted">
-            Waiting on the other party to confirm or reject.
-          </p>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
-function EscrowSummaryCard({
-  escrow,
-  collaborationId,
-}: {
-  escrow: EscrowTransaction | null;
-  collaborationId: string;
-}) {
-  const escrowHref = escrow?.id != null ? `/escrow/${String(escrow.id)}` : `/escrow/${collaborationId}`;
-  const timestamp = escrow ? escrowTimestamp(escrow) : null;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Banknote className="h-4 w-4" />
-          Escrow
-        </CardTitle>
-        <CardDescription>
-          Escrow protects funds from deposit through release.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        {!escrow ? (
-          <p className="text-fg-muted">No escrow yet.</p>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={escrowStatusVariant(escrow.status)}>
-                {escrowStatusLabel(escrow.status)}
-              </Badge>
-              {timestamp ? (
-                <span className="text-xs text-fg-muted">
-                  {timestamp.label}: {timestamp.value}
-                </span>
-              ) : null}
-            </div>
-            <dl className="grid grid-cols-2 gap-2">
-              <AmountRow label="Job amount" value={formatGbp(escrow.job_amount)} />
-              <AmountRow label="Platform fee" value={formatGbp(escrow.platform_fee)} />
-              <AmountRow
-                label="Referral commission"
-                value={formatGbp(escrow.referral_commission)}
-              />
-              <AmountRow label="Worker payout" value={formatGbp(escrow.worker_payout)} />
-            </dl>
-          </>
-        )}
-      </CardContent>
-      <CardFooter className="border-t border-border-default pt-4">
-        <Button asChild variant="link" size="sm" className="px-0">
-          <Link to={escrowHref}>
-            Manage payment
-            <ArrowRight />
-          </Link>
-        </Button>
-      </CardFooter>
-    </Card>
-  );
-}
-
-function AmountRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="space-y-0.5">
-      <dt className="text-xs text-fg-muted">{label}</dt>
-      <dd className="text-fg">{value}</dd>
-    </div>
-  );
-}
-
-type ChatSummary =
-  | {
-      kind: 'loading';
-    }
-  | { kind: 'none' }
-  | {
-      kind: 'ready';
-      conversationId: string;
-      unread: number;
-      lastMessageAt: string | null;
-    };
-
-function useCollaborationChatSummary(collaborationId: string): {
-  summary: ChatSummary;
-  refetch: () => void;
-} {
-  const [summary, setSummary] = useState<ChatSummary>({ kind: 'loading' });
-  const { on, connected } = useChatSocket();
-
-  const load = useCallback(async () => {
-    try {
-      const res = await api<InboxResponse>('/conversations?page=1&limit=100');
-      const match = res.items.find(
-        (row) =>
-          row.collaboration?.id != null &&
-          String(row.collaboration.id) === collaborationId,
-      );
-      if (!match) {
-        setSummary({ kind: 'none' });
-      } else {
-        setSummary({
-          kind: 'ready',
-          conversationId: String(match.conversation.id),
-          unread: match.unread_count ?? 0,
-          lastMessageAt:
-            match.conversation.last_message_at ??
-            match.last_message?.created_at ??
-            null,
-        });
-      }
-    } catch {
-      setSummary({ kind: 'none' });
-    }
-  }, [collaborationId]);
-
-  useEffect(() => {
-    void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!connected) return;
-    const off1 = on('new_message', () => void load());
-    const off2 = on('message_read', () => void load());
-    const off3 = on('conversation_created', () => void load());
-    return () => {
-      off1();
-      off2();
-      off3();
-    };
-  }, [connected, on, load]);
-
-  return { summary, refetch: load };
-}
-
-function ChatSummaryCard({ collaborationId }: { collaborationId: string }) {
-  const { summary } = useCollaborationChatSummary(collaborationId);
-  const ready = summary.kind === 'ready' ? summary : null;
-  const lastDate = ready?.lastMessageAt ? new Date(ready.lastMessageAt) : null;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <MessageCircle className="h-4 w-4" />
-          Conversation
-        </CardTitle>
-        <CardDescription>
-          {ready
-            ? 'Send messages, share files, and keep the project log here.'
-            : 'A chat thread is created automatically when this collaboration is confirmed.'}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2 text-sm">
-        {summary.kind === 'loading' ? (
-          <p className="text-fg-muted">Loading…</p>
-        ) : ready ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {ready.unread > 0 ? (
-              <Badge variant="default">
-                {ready.unread > 99 ? '99+' : ready.unread} unread
-              </Badge>
-            ) : (
-              <Badge variant="outline">No unread</Badge>
-            )}
-            {lastDate ? (
-              <span className="text-xs text-fg-muted">
-                Last message: {lastDate.toLocaleString('en-GB', {
-                  day: 'numeric',
-                  month: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </span>
-            ) : null}
-          </div>
-        ) : (
-          <p className="text-fg-muted">No conversation yet.</p>
-        )}
-      </CardContent>
-      <CardFooter className="border-t border-border-default pt-4">
-        <Button asChild variant="link" size="sm" className="px-0">
-          {ready ? (
-            <Link to={`/inbox/${ready.conversationId}`}>
-              Open chat
-              <ArrowRight />
-            </Link>
-          ) : (
-            <Link to="/inbox">
-              Open inbox
-              <Inbox />
-            </Link>
-          )}
-        </Button>
-      </CardFooter>
-    </Card>
+  const myAccountId = account ? String(account.id) : null;
+  const isParty =
+    myAccountId != null &&
+    collab != null &&
+    (String(collab.worker_id) === myAccountId ||
+      String(collab.employer_id) === myAccountId);
+  const employerSide =
+    myAccountId != null &&
+    collab != null &&
+    String(collab.employer_id) === myAccountId &&
+    isEmployer;
+  const inFlight = collab?.contracts?.find((c) =>
+    ['DRAFT', 'PROPOSED', 'ACTIVE'].includes(c.status),
   );
-}
+  const totalContracts = collab?.contracts?.length ?? 0;
+  const totalReleased = (collab?.contracts ?? [])
+    .filter((c) => c.status === 'ENDED' && c.end_reason === 'COMPLETED')
+    .reduce((s, c) => s + Number(c.agreed_amount ?? 0), 0);
 
-function ReviewsSummaryCard({
-  workerReview,
-  employerReview,
-  myRole,
-  canLeaveReview,
-  accountActive,
-  onLeaveReview,
-}: {
-  workerReview: Review | undefined;
-  employerReview: Review | undefined;
-  myRole: 'WORKER' | 'EMPLOYER' | null;
-  canLeaveReview: boolean;
-  accountActive: boolean;
-  onLeaveReview: () => void;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Star className="h-4 w-4" />
-          Reviews
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2 text-sm">
-        <ul className="space-y-2">
-          <ReviewRow
-            label="Worker review"
-            review={workerReview}
-            showCta={canLeaveReview && myRole === 'WORKER' && !workerReview}
-            accountActive={accountActive}
-            onLeaveReview={onLeaveReview}
-          />
-          <ReviewRow
-            label="Employer review"
-            review={employerReview}
-            showCta={canLeaveReview && myRole === 'EMPLOYER' && !employerReview}
-            accountActive={accountActive}
-            onLeaveReview={onLeaveReview}
-          />
-        </ul>
-      </CardContent>
-    </Card>
-  );
-}
+  const counterparty = (() => {
+    if (!collab || !myAccountId) return null;
+    const meIsWorker = String(collab.worker_id) === myAccountId;
+    return meIsWorker ? collab.employer : collab.worker;
+  })();
+  const counterpartyName =
+    counterparty?.client_profile?.display_name ?? 'Counterparty';
 
-function ReviewRow({
-  label,
-  review,
-  showCta,
-  accountActive,
-  onLeaveReview,
-}: {
-  label: string;
-  review: Review | undefined;
-  showCta: boolean;
-  accountActive: boolean;
-  onLeaveReview: () => void;
-}) {
   return (
-    <li className="flex flex-wrap items-center justify-between gap-2">
-      <span className="text-fg-muted">{label}</span>
+    <div className="space-y-6">
       <div className="flex items-center gap-2">
-        <ReviewBadge review={review} />
-        {showCta ? (
-          accountActive ? (
-            <Button type="button" size="sm" onClick={onLeaveReview}>
-              Leave a review
-            </Button>
-          ) : (
-            <Button asChild size="sm" variant="outline">
-              <Link
-                to="/settings/security"
-                title="Verify your email to leave reviews"
-              >
-                Verify email to review
-              </Link>
-            </Button>
-          )
+        <Link
+          to="/collaborations"
+          className="inline-flex items-center gap-1 text-sm text-fg-muted hover:text-fg"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to collaborations
+        </Link>
+      </div>
+
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {collab?.worker?.client_profile?.display_name ?? 'Worker'}{' '}
+          ↔{' '}
+          {collab?.employer?.client_profile?.display_name ?? 'Employer'}
+        </h1>
+        <p className="text-sm text-fg-muted">
+          Working relationship · since{' '}
+          {fmtDate(collab?.first_contracted_at ?? collab?.created_at)}
+          {totalContracts > 0
+            ? ` · ${totalContracts} contract${totalContracts === 1 ? '' : 's'}`
+            : ' · no contracts yet'}
+        </p>
+      </div>
+
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {error}
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" onClick={() => void load()}>
+          <RefreshCw />
+          Refresh
+        </Button>
+        {collab?.conversation?.id ? (
+          <Button asChild>
+            <Link to={`/inbox/${collab.conversation.id}`}>
+              <MessageCircle />
+              Open chat with {counterpartyName}
+            </Link>
+          </Button>
+        ) : null}
+        {employerSide && !inFlight ? (
+          <NewContractSheet
+            collabId={collab.id}
+            initiator="EMPLOYER"
+            onCreated={() => void load()}
+          />
         ) : null}
       </div>
-    </li>
-  );
-}
 
-function ReviewBadge({ review }: { review: Review | undefined }) {
-  if (!review) return <Badge variant="outline">Not submitted</Badge>;
-  return review.is_published ? (
-    <Badge variant="success">Published</Badge>
-  ) : (
-    <Badge variant="secondary">Draft</Badge>
-  );
-}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Counterparty</CardTitle>
+            <CardDescription>
+              {clientProfile ? 'Your collaborator on this relationship.' : ''}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="font-medium text-fg">
+              {counterparty?.client_profile?.display_name ?? '—'}
+            </div>
+            <div className="text-fg-muted">
+              {counterparty?.client_profile?.city ?? ''}
+              {counterparty?.client_profile?.postcode_area
+                ? ` · ${counterparty.client_profile.postcode_area}`
+                : ''}
+            </div>
+          </CardContent>
+        </Card>
 
-function AuditTimeline({ detail }: { detail: Collaboration }) {
-  const events: Array<{ label: string; value: string | null | undefined }> = [
-    { label: 'Created', value: detail.created_at },
-    { label: 'Confirmed', value: detail.confirmed_at },
-    { label: 'Started', value: detail.started_at },
-    { label: 'Ended', value: detail.ended_at },
-  ].filter((e) => Boolean(e.value)) as Array<{ label: string; value: string }>;
+        <Card>
+          <CardHeader>
+            <CardTitle>Activity</CardTitle>
+            <CardDescription>
+              Aggregate stats across every contract on this relationship.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <div>
+              Contracts: <strong>{totalContracts}</strong>
+            </div>
+            <div>
+              Total released: <strong>{fmtGbp(totalReleased)}</strong>
+            </div>
+            <div>
+              First contracted: {fmtDate(collab?.first_contracted_at)}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-  if (events.length === 0) return null;
+      <Card>
+        <CardHeader>
+          <CardTitle>Contracts</CardTitle>
+          <CardDescription>
+            Each contract is a paid engagement with its own escrow + milestones.
+            {employerSide
+              ? ' Use "New contract" above to propose a new one tied to one of your job posts.'
+              : ' Wait for the employer to propose a new contract here.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {!collab?.contracts?.length ? (
+            <p className="text-sm text-fg-muted">
+              No contracts yet.
+              {employerSide
+                ? ' Discuss scope in chat first, then click "New contract".'
+                : ''}
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {collab.contracts.map((c) => (
+                <li
+                  key={String(c.id)}
+                  className="rounded-md border border-border-default bg-raised px-3 py-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col">
+                      <span className="font-medium">
+                        Contract #{c.position} ·{' '}
+                        {c.project_type ?? 'Untitled'}
+                      </span>
+                      <span className="text-xs text-fg-muted">
+                        {fmtGbp(c.agreed_amount)}{' '}
+                        {c.site_postcode ? `· ${c.site_postcode}` : ''}{' '}
+                        {c.started_at
+                          ? `· started ${fmtDate(c.started_at)}`
+                          : ''}
+                        {c.ended_at ? `· ended ${fmtDate(c.ended_at)}` : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={contractStatusVariant(c.status)}>
+                        {c.status}
+                        {c.end_reason ? ` · ${c.end_reason}` : ''}
+                      </Badge>
+                      <Button asChild variant="outline" size="sm">
+                        <Link to={`/contracts/${c.id}`}>Open</Link>
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+        {loading ? (
+          <CardFooter>
+            <p className="text-xs text-fg-muted">Loading…</p>
+          </CardFooter>
+        ) : null}
+      </Card>
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <CircleDashed className="h-4 w-4" />
-          Timeline
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ol className="space-y-3 text-sm">
-          {events.map((e) => (
-            <li key={e.label} className="flex items-start gap-3">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-success" />
-              <div className="space-y-0.5">
-                <p className="font-medium text-fg">{e.label}</p>
-                <p className="text-xs text-fg-muted">{formatDate(e.value)}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </CardContent>
-    </Card>
+      {!isParty && collab ? (
+        <p className="text-xs text-fg-muted">
+          Read-only view (you are not a participant of this relationship).
+        </p>
+      ) : null}
+    </div>
   );
 }

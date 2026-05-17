@@ -1,11 +1,11 @@
 # Status
 
-- State: in-progress
-- Owner: Igor (PM); implementing engineer TBA
+- State: shipped
+- Owner: Igor
 - Created: 2026-05-08
 - Started: 2026-05-08
-- Last Updated: 2026-05-08 (implementation landed)
-- Shipped: —
+- Last Updated: 2026-05-08 (folder moved in-progress → done after implementation landed)
+- Shipped: 2026-05-08
 
 ## Notes
 

@@ -15,15 +15,14 @@ import { TagModule } from './tag/tag.module';
 import { DocumentModule } from './document/document.module';
 import { ReviewModule } from './review/review.module';
 import { ReferralModule } from './referral/referral.module';
+import { ContractModule } from './contract/contract.module';
 import { EscrowModule } from './escrow/escrow.module';
-import { ModerationModule } from './moderation/moderation.module';
 import { NotificationModule } from './notification/notification.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { AuditModule } from './audit/audit.module';
 import { JobPostModule } from './job-post/job-post.module';
 import { JobApplicationModule } from './job-application/job-application.module';
 import { JobAttachmentModule } from './job-attachment/job-attachment.module';
-import { MessageAttachmentModule } from './message-attachment/message-attachment.module';
 import { ConversationModule } from './conversation/conversation.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
@@ -57,16 +56,15 @@ const baseImports = [
   ReviewModule,
   ReferralModule,
   EscrowModule,
+  ContractModule,
   CollaborationModule,
   PortfolioModule,
-  ModerationModule,
   NotificationModule,
   SubscriptionModule,
   AuditModule,
   JobPostModule,
   JobApplicationModule,
   JobAttachmentModule,
-  MessageAttachmentModule,
   ConversationModule,
   VerificationModule,
   WebhooksModule,

@@ -13,6 +13,7 @@ import {
   seedActiveWorker,
   seedAdmin,
   seedCollaboration,
+  seedEndedContract,
   seedPendingWorker,
   seedReview,
 } from './util/factories';
@@ -43,6 +44,7 @@ describe('TEST-REVIEW-070 POST /reviews/collaboration/:id (REVIEW-013)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     const token = signAccessTokenFor(h, {
       accountId: worker.id,
       email: worker.email,
@@ -70,6 +72,7 @@ describe('TEST-REVIEW-070 POST /reviews/collaboration/:id (REVIEW-013)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     const token = signAccessTokenFor(h, {
       accountId: employer.id,
       email: employer.email,
@@ -92,6 +95,7 @@ describe('TEST-REVIEW-070 POST /reviews/collaboration/:id (REVIEW-013)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     await h
       .request()
       .post(`/api/reviews/collaboration/${collab.id}`)
@@ -107,6 +111,7 @@ describe('TEST-REVIEW-070 POST /reviews/collaboration/:id (REVIEW-013)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     const token = signAccessTokenFor(h, {
       accountId: worker.id,
       email: worker.email,
@@ -130,6 +135,7 @@ describe('TEST-REVIEW-070 POST /reviews/collaboration/:id (REVIEW-013)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     const token = signAccessTokenFor(h, {
       accountId: worker.id,
       email: worker.email,
@@ -151,7 +157,7 @@ describe('TEST-REVIEW-070 POST /reviews/collaboration/:id (REVIEW-013)', () => {
     expect(res.body.message).toContain('A WORKER review already exists');
   });
 
-  test('TEST-REVIEW-070 — submit on PENDING collab → 400 "Reviews can only be created for completed"', async () => {
+  test('TEST-REVIEW-070 — submit with no ENDED contract → 400 "No ended contract"', async () => {
     const worker = await seedActiveWorker(h.prisma);
     const employer = await seedActiveEmployer(h.prisma);
     const collab = await seedCollaboration(h.prisma, {
@@ -171,7 +177,7 @@ describe('TEST-REVIEW-070 POST /reviews/collaboration/:id (REVIEW-013)', () => {
       .send({ overall_rating: 5 })
       .expect(400);
     expect(res.body.message).toContain(
-      'Reviews can only be created for completed',
+      'No ended contract under this relationship',
     );
   });
 
@@ -184,6 +190,7 @@ describe('TEST-REVIEW-070 POST /reviews/collaboration/:id (REVIEW-013)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     const token = signAccessTokenFor(h, {
       accountId: outsider.id,
       email: outsider.email,
@@ -211,6 +218,7 @@ describe('TEST-REVIEW-070 POST /reviews/collaboration/:id (REVIEW-013)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     const token = signAccessTokenFor(h, {
       accountId: worker.id,
       email: worker.email,
@@ -258,6 +266,7 @@ describe('TEST-REVIEW-071 GET /reviews/collaboration/:id', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     await seedReview(h.prisma, {
       collaborationId: collab.id,
       reviewerRole: 'WORKER',
@@ -363,6 +372,7 @@ describe('TEST-REVIEW-072 GET /reviews/worker/:id (REVIEW-020)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     await seedReview(h.prisma, {
       collaborationId: collab.id,
       reviewerRole: 'EMPLOYER',
@@ -395,6 +405,7 @@ describe('TEST-REVIEW-072 GET /reviews/worker/:id (REVIEW-020)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     await seedReview(h.prisma, {
       collaborationId: collab.id,
       reviewerRole: 'EMPLOYER',
@@ -441,8 +452,8 @@ describe('TEST-REVIEW-072 GET /reviews/worker/:id (REVIEW-020)', () => {
     expect(res.body.totalPages).toBe(3);
     // newest first ordering by published_at desc — earlier indexes have a
     // newer published_at, so items 6-10 are at indexes 5..9.
-    const dates = res.body.items.map(
-      (r: { published_at: string }) => new Date(r.published_at).getTime(),
+    const dates = res.body.items.map((r: { published_at: string }) =>
+      new Date(r.published_at).getTime(),
     );
     for (let i = 1; i < dates.length; i += 1) {
       expect(dates[i]).toBeLessThanOrEqual(dates[i - 1]);
@@ -474,6 +485,7 @@ describe('TEST-REVIEW-073 GET /reviews/employer/:id (REVIEW-020)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     await seedReview(h.prisma, {
       collaborationId: collab.id,
       reviewerRole: 'WORKER',
@@ -503,6 +515,7 @@ describe('TEST-REVIEW-073 GET /reviews/employer/:id (REVIEW-020)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     await seedReview(h.prisma, {
       collaborationId: collab.id,
       reviewerRole: 'WORKER',
@@ -540,6 +553,7 @@ describe('TEST-REVIEW-074 GET /reviews/:id (REVIEW-032)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     const review = await seedReview(h.prisma, {
       collaborationId: collab.id,
       reviewerRole: 'EMPLOYER',
@@ -556,6 +570,7 @@ describe('TEST-REVIEW-074 GET /reviews/:id (REVIEW-032)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     const review = await seedReview(h.prisma, {
       collaborationId: collab.id,
       reviewerRole: 'EMPLOYER',
@@ -572,6 +587,7 @@ describe('TEST-REVIEW-074 GET /reviews/:id (REVIEW-032)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     const review = await seedReview(h.prisma, {
       collaborationId: collab.id,
       reviewerRole: 'EMPLOYER',
@@ -596,6 +612,7 @@ describe('TEST-REVIEW-074 GET /reviews/:id (REVIEW-032)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     const review = await seedReview(h.prisma, {
       collaborationId: collab.id,
       reviewerRole: 'EMPLOYER',
@@ -621,6 +638,7 @@ describe('TEST-REVIEW-074 GET /reviews/:id (REVIEW-032)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     const review = await seedReview(h.prisma, {
       collaborationId: collab.id,
       reviewerRole: 'EMPLOYER',
@@ -666,6 +684,7 @@ describe('TEST-REVIEW-075 PATCH /reviews/:id/publish (REVIEW-042)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     const review = await seedReview(h.prisma, {
       collaborationId: collab.id,
       reviewerRole: role,
@@ -799,6 +818,7 @@ describe('TEST-REVIEW-076 GET /reviews/unpublished (REVIEW-046)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     await seedReview(h.prisma, {
       collaborationId: collab.id,
       reviewerRole: 'WORKER',
@@ -837,6 +857,7 @@ describe('TEST-REVIEW-076 GET /reviews/unpublished (REVIEW-046)', () => {
       employerId: employer.id,
       status: 'COMPLETED',
     });
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
     await seedReview(h.prisma, {
       collaborationId: collab.id,
       reviewerRole: 'WORKER',
@@ -886,8 +907,8 @@ describe('TEST-REVIEW-076 GET /reviews/unpublished (REVIEW-046)', () => {
     expect(res.body.total).toBe(4);
     expect(res.body.totalPages).toBe(2);
     // newest first
-    const dates = res.body.items.map(
-      (r: { created_at: string }) => new Date(r.created_at).getTime(),
+    const dates = res.body.items.map((r: { created_at: string }) =>
+      new Date(r.created_at).getTime(),
     );
     expect(dates[0]).toBeGreaterThanOrEqual(dates[1]);
   });
@@ -929,7 +950,7 @@ describe('TEST-REVIEW-077 Cross-feature: COLLAB-021 COMPLETED handoff', () => {
     await h.reset();
   });
 
-  test('TEST-REVIEW-077 — collab transitions to COMPLETED → POST /reviews/collaboration/:id then works', async () => {
+  test('TEST-REVIEW-077 — review allowed only once a contract under the relationship has ENDED', async () => {
     const worker = await seedActiveWorker(h.prisma);
     const employer = await seedActiveEmployer(h.prisma);
     const collab = await seedCollaboration(h.prisma, {
@@ -943,7 +964,7 @@ describe('TEST-REVIEW-077 Cross-feature: COLLAB-021 COMPLETED handoff', () => {
       email: worker.email,
     });
 
-    // Pre-completion: review submission is rejected.
+    // No ENDED contract yet → review submission is rejected.
     await h
       .request()
       .post(`/api/reviews/collaboration/${collab.id}`)
@@ -951,13 +972,8 @@ describe('TEST-REVIEW-077 Cross-feature: COLLAB-021 COMPLETED handoff', () => {
       .send({ overall_rating: 5 })
       .expect(400);
 
-    // Worker marks complete (COLLAB-021).
-    await h
-      .request()
-      .patch(`/api/collaborations/${collab.id}/status`)
-      .set(...bearer(workerToken))
-      .send({ status: 'COMPLETED' })
-      .expect(200);
+    // A contract under the relationship ends (CR-021).
+    await seedEndedContract(h.prisma, { collaborationId: collab.id });
 
     // Now the review submission succeeds.
     const res = await h

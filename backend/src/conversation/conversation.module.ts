@@ -4,7 +4,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ConversationController } from './conversation.controller';
 import { ConversationService } from './conversation.service';
 import { ChatGateway } from './chat.gateway';
-import { MessageAttachmentModule } from '../message-attachment/message-attachment.module';
 
 @Module({
   imports: [
@@ -15,7 +14,6 @@ import { MessageAttachmentModule } from '../message-attachment/message-attachmen
         secret: config.get<string>('JWT_SECRET'),
       }),
     }),
-    MessageAttachmentModule,
   ],
   controllers: [ConversationController],
   providers: [ConversationService, ChatGateway],

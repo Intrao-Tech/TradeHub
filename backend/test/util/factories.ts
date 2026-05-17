@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import type { PrismaService } from '../../src/prisma/prisma.service';
+import { generateReferralCode } from '../../src/referral/referral.constants';
 
 export const TEST_PASSWORD = 'TestPass1!aZ#';
 export const TEST_PASSWORD_ALT = 'AltTestPass2@bY';
@@ -51,6 +52,7 @@ export function makeAccount(
     id,
     email: overrides.email ?? uniqueEmail('user'),
     password_hash: overrides.password_hash ?? 'bcrypt$placeholder',
+    referral_code: generateReferralCode(),
     google_id: overrides.google_id ?? null,
     phone: overrides.phone ?? null,
     phone_verified: false,
@@ -142,6 +144,7 @@ export async function seedActiveWorker(
         create: {
           display_name: displayName,
           slug: slug(displayName),
+          referral_code: generateReferralCode(),
           worker_profile: { create: {} },
         },
       },
@@ -181,6 +184,7 @@ export async function seedActiveEmployer(
         create: {
           display_name: displayName,
           slug: slug(displayName),
+          referral_code: generateReferralCode(),
           employer_profile: {
             create: { company_name: overrides.companyName ?? displayName },
           },
@@ -215,6 +219,7 @@ export async function seedPendingWorker(
         create: {
           display_name: displayName,
           slug: slug(displayName),
+          referral_code: generateReferralCode(),
           worker_profile: { create: {} },
         },
       },
@@ -247,6 +252,7 @@ export async function seedPendingEmployer(
         create: {
           display_name: displayName,
           slug: slug(displayName),
+          referral_code: generateReferralCode(),
           employer_profile: { create: { company_name: displayName } },
         },
       },
@@ -278,6 +284,7 @@ export async function seedDeactivatedWorker(
         create: {
           display_name: displayName,
           slug: slug(displayName),
+          referral_code: generateReferralCode(),
           worker_profile: { create: {} },
         },
       },
@@ -875,9 +882,8 @@ export async function seedMilestone(
 const collaborationInclude = {
   worker: { include: { client_profile: true } },
   employer: { include: { client_profile: true } },
-  reviews: true,
-  escrow_transaction: true,
-  referral: true,
+  contracts: { orderBy: { position: 'asc' } },
+  conversation: { select: { id: true } },
 } as const;
 
 export type SeedCollaborationOpts = {
@@ -913,8 +919,8 @@ export async function seedCollaboration(
   prisma: PrismaService,
   opts: SeedCollaborationOpts,
 ) {
-  const { Prisma } =
-    require('@prisma/client') as typeof import('@prisma/client');
+  // Prisma typings imported but not used here post-refactor; collab is now
+  // relationship-only and lifecycle fields moved to Contract.
   const status = opts.status ?? 'PENDING';
   const now = new Date();
   const confirmedAt =
@@ -925,32 +931,28 @@ export async function seedCollaboration(
     (['IN_PROGRESS', 'COMPLETED'].includes(status) ? now : null);
   const endedAt = opts.endedAt ?? (status === 'COMPLETED' ? now : null);
 
+  // Post-CR-003 refactor: Collaboration is relationship-only. The lifecycle
+  // fields (status, agreed_amount, etc) live on Contract now. Tests that
+  // need contract-level state should call seedContract() against the
+  // returned collab id.
+  void status;
+  void confirmedAt;
+  void startedAt;
+  void endedAt;
   return prisma.collaboration.create({
     data: {
       worker_id: opts.workerId,
       employer_id: opts.employerId,
-      initiated_by: opts.initiatedBy ?? 'EMPLOYER',
-      referral_id: opts.referralId ?? null,
-      job_post_id: opts.jobPostId ?? null,
-      status,
-      project_type: opts.projectType ?? null,
-      site_postcode: opts.sitePostcode ?? null,
-      agreed_amount:
-        opts.agreedAmount != null
-          ? new Prisma.Decimal(opts.agreedAmount)
-          : null,
-      flagged: opts.flagged ?? false,
-      flag_reason: opts.flagReason ?? null,
-      confirmed_at: confirmedAt,
-      started_at: startedAt,
-      ended_at: endedAt,
+      first_contracted_at: opts.confirmedAt ?? opts.startedAt ?? null,
     },
     include: collaborationInclude,
   });
 }
 
 export type SeedEscrowOpts = {
-  collaborationId: bigint;
+  /** @deprecated post-CR-006 — use contractId instead. Resolves to first contract. */
+  collaborationId?: bigint;
+  contractId?: bigint;
   status?:
     | 'CREATED'
     | 'DEPOSIT_PENDING'
@@ -970,9 +972,7 @@ export type SeedEscrowOpts = {
 };
 
 /**
- * Minimal escrow seed — Stripe identifier columns are intentionally left
- * null. The Collaborations test surface only reads escrow rows; mutation
- * coverage belongs to `tests-escrow/`.
+ * Minimal escrow seed for tests-escrow/ harness use only.
  */
 export async function seedEscrowTransaction(
   prisma: PrismaService,
@@ -988,20 +988,45 @@ export async function seedEscrowTransaction(
     opts.workerPayout ??
       Number(jobAmount) - Number(platformFee) - Number(referralCommission),
   );
-  return prisma.escrowTransaction.create({
+
+  let contractId = opts.contractId;
+  if (!contractId && opts.collaborationId) {
+    const c = await prisma.contract.findFirst({
+      where: { collaboration_id: opts.collaborationId },
+      orderBy: { position: 'asc' },
+    });
+    if (!c) {
+      throw new Error(
+        'seedEscrowTransaction: no contract under collaboration; pass contractId or seed a contract first',
+      );
+    }
+    contractId = c.id;
+  }
+  if (!contractId) {
+    throw new Error('seedEscrowTransaction: contractId is required');
+  }
+
+  // Post-2026-05 there is no `escrow_transaction` table — the escrow of a
+  // contract is its milestones. Seed a single milestone instead, mapping the
+  // legacy escrow status onto the milestone state machine.
+  void platformFee;
+  void referralCommission;
+  void workerPayout;
+  const STATUS_MAP: Record<string, string> = {
+    CREATED: 'PENDING',
+    DEPOSIT_PENDING: 'PENDING',
+    HELD: 'FUNDED',
+    RELEASED: 'RELEASED',
+    REFUNDED: 'REFUNDED',
+    DISPUTED: 'DISPUTED',
+  };
+  return prisma.escrowMilestone.create({
     data: {
-      collaboration_id: opts.collaborationId,
-      status,
-      job_amount: jobAmount,
-      platform_fee: platformFee,
-      referral_commission: referralCommission,
-      worker_payout: workerPayout,
-      currency: opts.currency ?? 'GBP',
-      deposit_confirmed_at:
-        opts.depositConfirmedAt ??
-        (['HELD', 'RELEASED', 'REFUNDED', 'DISPUTED'].includes(status)
-          ? new Date()
-          : null),
+      contract_id: contractId,
+      position: 1,
+      title: 'Seed milestone',
+      amount: jobAmount,
+      status: STATUS_MAP[status] ?? 'FUNDED',
       released_at:
         opts.releasedAt ?? (status === 'RELEASED' ? new Date() : null),
       refunded_at:
@@ -1036,18 +1061,50 @@ export type SeedReviewOpts = {
   createdAt?: Date | null;
 };
 
-export async function seedReview(
+/**
+ * Find-or-create an ENDED contract under a collaboration. Post-CR-008 a
+ * review is scoped to a Contract and can only exist for an ENDED one.
+ */
+export async function seedEndedContract(
   prisma: PrismaService,
-  opts: SeedReviewOpts,
+  opts: { collaborationId: bigint },
 ) {
+  const existing = await prisma.contract.findFirst({
+    where: { collaboration_id: opts.collaborationId, status: 'ENDED' },
+    orderBy: { position: 'desc' },
+  });
+  if (existing) return existing;
+  const last = await prisma.contract.findFirst({
+    where: { collaboration_id: opts.collaborationId },
+    orderBy: { position: 'desc' },
+    select: { position: true },
+  });
+  return prisma.contract.create({
+    data: {
+      collaboration_id: opts.collaborationId,
+      position: (last?.position ?? 0) + 1,
+      status: 'ENDED',
+      end_reason: 'COMPLETED',
+      initiated_by: 'EMPLOYER',
+      started_at: new Date(),
+      ended_at: new Date(),
+    },
+  });
+}
+
+export async function seedReview(prisma: PrismaService, opts: SeedReviewOpts) {
   const { Prisma } =
     require('@prisma/client') as typeof import('@prisma/client');
   const isPublished = opts.isPublished ?? false;
-  const publishedAt =
-    opts.publishedAt ?? (isPublished ? new Date() : null);
+  const publishedAt = opts.publishedAt ?? (isPublished ? new Date() : null);
+
+  // Reviews hang off a Contract now — ensure an ENDED contract exists.
+  const contract = await seedEndedContract(prisma, {
+    collaborationId: opts.collaborationId,
+  });
 
   const data: Record<string, unknown> = {
-    collaboration_id: opts.collaborationId,
+    contract_id: contract.id,
     reviewer_role: opts.reviewerRole,
     overall_rating: opts.overallRating ?? 5,
     quality_rating: opts.qualityRating ?? null,
@@ -1078,7 +1135,7 @@ export async function seedReview(
           where: {
             is_published: true,
             reviewer_role: 'EMPLOYER',
-            collaboration: { worker_id: workerId },
+            contract: { collaboration: { worker_id: workerId } },
           },
           _avg: { overall_rating: true },
         }),
@@ -1086,14 +1143,14 @@ export async function seedReview(
           where: {
             is_published: true,
             reviewer_role: 'EMPLOYER',
-            collaboration: { worker_id: workerId },
+            contract: { collaboration: { worker_id: workerId } },
           },
         }),
       ]);
       await prisma.workerProfile.update({
         where: { id: workerId },
         data: {
-          rating_avg: new Prisma.Decimal(agg._avg.overall_rating ?? 0),
+          rating_avg: new Prisma.Decimal(agg._avg?.overall_rating ?? 0),
           rating_count: count,
         },
       });
@@ -1104,7 +1161,7 @@ export async function seedReview(
           where: {
             is_published: true,
             reviewer_role: 'WORKER',
-            collaboration: { employer_id: employerId },
+            contract: { collaboration: { employer_id: employerId } },
           },
           _avg: { overall_rating: true },
         }),
@@ -1112,14 +1169,14 @@ export async function seedReview(
           where: {
             is_published: true,
             reviewer_role: 'WORKER',
-            collaboration: { employer_id: employerId },
+            contract: { collaboration: { employer_id: employerId } },
           },
         }),
       ]);
       await prisma.employerProfile.update({
         where: { id: employerId },
         data: {
-          rating_avg: new Prisma.Decimal(agg._avg.overall_rating ?? 0),
+          rating_avg: new Prisma.Decimal(agg._avg?.overall_rating ?? 0),
           rating_count: count,
         },
       });
@@ -1152,17 +1209,19 @@ export async function seedConversation(
       'seedConversation: exactly two participants required (group chat is out of scope)',
     );
   }
+  // Post-2026-05 a conversation is a strict 1:1 with a collaboration and
+  // shares its primary key — there is no participant table. The caller must
+  // supply the collaboration id; the participants are its worker + employer.
+  if (opts.collaborationId == null) {
+    throw new Error(
+      'seedConversation: collaborationId is required (conversation shares the collaboration PK)',
+    );
+  }
   return prisma.conversation.create({
     data: {
-      collaboration_id: opts.collaborationId ?? null,
+      id: opts.collaborationId,
       last_message_at: opts.lastMessageAt ?? null,
-      participants: {
-        create: opts.participantAccountIds.map((account_id) => ({
-          account_id,
-        })),
-      },
     },
-    include: { participants: true },
   });
 }
 
@@ -1197,28 +1256,34 @@ export async function seedMessage(
   });
 }
 
-export type SeedMessageAttachmentOpts = {
-  /** Pass `null` (or omit) for the orphan / "uploaded but unattached" path. */
-  messageId?: bigint | null;
+export type SeedFileMessageOpts = {
+  conversationId: bigint;
   /** ClientProfile.id == Account.id by the shared-PK pattern. */
-  uploadedById: bigint;
+  senderId: bigint;
   fileUrl?: string;
   mimeType?: string;
   sizeBytes?: number;
   originalName?: string;
+  content?: string;
 };
 
-export async function seedMessageAttachment(
+/**
+ * Seeds a FILE message. Post-2026-05 the `message_attachment` table was
+ * dropped — a file message carries its file columns inline on the message.
+ */
+export async function seedFileMessage(
   prisma: PrismaService,
-  opts: SeedMessageAttachmentOpts,
+  opts: SeedFileMessageOpts,
 ) {
-  return prisma.messageAttachment.create({
+  return prisma.message.create({
     data: {
-      message_id: opts.messageId ?? null,
-      uploaded_by_id: opts.uploadedById,
+      conversation_id: opts.conversationId,
+      sender_id: opts.senderId,
+      message_type: 'FILE',
+      content: opts.content ?? null,
       file_url:
         opts.fileUrl ??
-        `/uploads/message-attachments/seed-${crypto
+        `/uploads/message-files/seed-${crypto
           .randomBytes(3)
           .toString('hex')}.png`,
       mime_type: opts.mimeType ?? 'image/png',
@@ -1247,6 +1312,7 @@ export async function seedGoogleOnlyAccount(
         create: {
           display_name: displayName,
           slug: slug(displayName),
+          referral_code: generateReferralCode(),
           worker_profile: { create: {} },
         },
       },
