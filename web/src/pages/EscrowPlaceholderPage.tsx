@@ -39,11 +39,10 @@ const STATUS_VARIANT: Record<
   Escrow['status'],
   'outline' | 'info' | 'warning' | 'success' | 'danger'
 > = {
-  CREATED: 'outline',
+  DRAFT: 'outline',
+  PROPOSED: 'warning',
   ACTIVE: 'info',
-  DISPUTED: 'danger',
   ENDED: 'success',
-  CANCELED: 'outline',
 };
 
 type CollabSummary = {
@@ -116,11 +115,13 @@ export default function EscrowDetailPage() {
         );
         setCollab(collabRes);
         escrowRes = await getEscrowByCollaboration(collabIdParam!);
-        setResolvedContractId(escrowRes ? String(escrowRes.id) : null);
+        setResolvedContractId(
+          escrowRes ? String(escrowRes.contract_id) : null,
+        );
       }
       setEscrow(escrowRes);
       if (escrowRes) {
-        const ms = await listMilestones(escrowRes.id);
+        const ms = await listMilestones(escrowRes.contract_id);
         setMilestones(ms);
       } else {
         setMilestones([]);
@@ -209,6 +210,14 @@ export default function EscrowDetailPage() {
     milestones?.filter((m) => m.status === 'RELEASED').reduce((sum, m) => sum + Number(m.amount), 0) ?? 0;
   const totalRefunded =
     milestones?.filter((m) => m.status === 'REFUNDED').reduce((sum, m) => sum + Number(m.amount), 0) ?? 0;
+  // Once any milestone has been funded the contract can only be ended /
+  // disputed — not cancelled. Drives which contract-action card shows.
+  const everFunded =
+    milestones?.some((m) =>
+      ['FUNDED', 'SUBMITTED', 'RELEASED', 'DISPUTED', 'REFUNDED', 'RELEASE_FAILED'].includes(
+        m.status,
+      ),
+    ) ?? false;
 
   return (
     <div className="space-y-4">
@@ -295,7 +304,6 @@ export default function EscrowDetailPage() {
                     isEmployer={isEmployer}
                     isWorker={isWorker}
                     hasReferral={false}
-                    myClientProfileId={myClientProfileId}
                     fundLocked={locked}
                     fundLockReason={lockReason}
                     onChanged={reload}
@@ -306,13 +314,16 @@ export default function EscrowDetailPage() {
           ) : (
             <p className="text-sm text-fg-muted">No milestones yet.</p>
           )}
-          {escrow && escrow.status !== 'ENDED' && escrow.status !== 'CANCELED' ? (
+          {escrow && escrow.status !== 'ENDED' ? (
             <div className="pt-2">
               {isEmployer ? (
-                <AddMilestoneForm escrowId={escrow.id} onAdded={reload} />
+                <AddMilestoneForm
+                  contractId={escrow.contract_id}
+                  onAdded={reload}
+                />
               ) : isWorker ? (
                 <AddMilestoneForm
-                  escrowId={escrow.id}
+                  contractId={escrow.contract_id}
                   submitLabel="Request milestone"
                   onAdded={reload}
                 />
@@ -322,13 +333,12 @@ export default function EscrowDetailPage() {
         </CardContent>
       </Card>
 
-      {escrow && escrow.status === 'ACTIVE' ? (
+      {escrow && escrow.status === 'ACTIVE' && everFunded ? (
         <Card>
           <CardHeader>
             <CardTitle>Contract actions</CardTitle>
             <CardDescription>
-              Wrap up or back out of this contract. End contract opens a 7-day silent
-              window — if the other party doesn't contest, the contract auto-completes.
+              Wrap up or back out of this contract once work has started.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
@@ -336,9 +346,8 @@ export default function EscrowDetailPage() {
               type="button"
               variant="outline"
               onClick={() => setEndOpen(true)}
-              disabled={!!escrow.end_initiated_at}
             >
-              {escrow.end_initiated_at ? 'End in progress' : 'End contract'}
+              End contract
             </Button>
             {isWorker ? (
               <Button
@@ -353,7 +362,7 @@ export default function EscrowDetailPage() {
         </Card>
       ) : null}
 
-      {escrow && escrow.status === 'CREATED' ? (
+      {escrow && escrow.status === 'ACTIVE' && !everFunded ? (
         <Card>
           <CardHeader>
             <CardTitle>Cancel before funding</CardTitle>
@@ -371,13 +380,6 @@ export default function EscrowDetailPage() {
             </Button>
           </CardContent>
         </Card>
-      ) : null}
-
-      {escrow && escrow.end_initiated_at && escrow.status === 'ACTIVE' ? (
-        <div role="status" className="rounded-md border border-info/40 bg-info-subtle px-3 py-2 text-sm text-info">
-          Contract end initiated on {new Date(escrow.end_initiated_at).toLocaleDateString()}.
-          Auto-completes in 7 days unless contested.
-        </div>
       ) : null}
 
       <ReasonDialog

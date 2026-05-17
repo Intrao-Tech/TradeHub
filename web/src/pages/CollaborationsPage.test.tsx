@@ -1,4 +1,8 @@
-// TEST-COLLAB-100..106 — CollaborationsPage (COLLAB-010..015).
+// TEST-COLLAB-100..104 — CollaborationsPage (COLLAB-010..014).
+//
+// Post-CR-003: a Collaboration is a relationship-only binding; lifecycle
+// lives on Contract. The page derives a per-row state (Chat only / Proposed
+// / Active / Ended) from `row.contracts` — there is no collaboration status.
 
 import { describe, expect, test } from 'vitest';
 import { http, HttpResponse } from 'msw';
@@ -8,6 +12,7 @@ import { server } from '@/test/msw-server';
 import {
   mockAccountMe,
   mockCollaboration,
+  mockCollaborationContract,
   mockClientProfile,
   mockEmployerProfile,
   mockWorkerProfile,
@@ -67,31 +72,43 @@ describe('TEST-COLLAB-100 — COLLAB-001 zero JSON dumps on the list page', () =
       account,
     });
     await waitFor(() =>
-      expect(screen.getByText(/no collaborations yet/i)).toBeInTheDocument(),
+      expect(screen.getByText(/no collaborations here/i)).toBeInTheDocument(),
     );
     expect(screen.queryByText(/JSON/i)).toBeNull();
     expect(screen.queryByText(/Raw list JSON/i)).toBeNull();
     expect(screen.queryByText(/Last action response/i)).toBeNull();
-    expect(screen.queryByText(/Last mutation response/i)).toBeNull();
     expect(container.querySelectorAll('pre')).toHaveLength(0);
   });
 });
 
 describe('TEST-COLLAB-101 status tabs — COLLAB-011', () => {
-  test('TEST-COLLAB-101 / COLLAB-011 — all seven tabs render with counts derived from the list payload', async () => {
+  test('TEST-COLLAB-101 / COLLAB-011 — the five contract-derived tabs render; All is the default', async () => {
     server.use(
       http.get(`${API}/collaborations/me`, () =>
         HttpResponse.json({
           items: [
-            mockCollaboration({ id: '1', worker_id: MY_ID, status: 'PENDING' }),
-            mockCollaboration({ id: '2', worker_id: MY_ID, status: 'PENDING' }),
-            mockCollaboration({ id: '3', worker_id: MY_ID, status: 'CONFIRMED' }),
-            mockCollaboration({ id: '4', worker_id: MY_ID, status: 'IN_PROGRESS' }),
-            mockCollaboration({ id: '5', worker_id: MY_ID, status: 'COMPLETED' }),
-            mockCollaboration({ id: '6', worker_id: MY_ID, status: 'REJECTED' }),
-            mockCollaboration({ id: '7', worker_id: MY_ID, status: 'DISPUTED' }),
+            // No contract → "Chat only".
+            mockCollaboration({ id: '1', worker_id: MY_ID }),
+            // PROPOSED contract → "Proposed".
+            mockCollaboration({
+              id: '2',
+              worker_id: MY_ID,
+              contracts: [mockCollaborationContract({ status: 'PROPOSED' })],
+            }),
+            // ACTIVE contract → "Active".
+            mockCollaboration({
+              id: '3',
+              worker_id: MY_ID,
+              contracts: [mockCollaborationContract({ status: 'ACTIVE' })],
+            }),
+            // Only ENDED contracts → "Ended".
+            mockCollaboration({
+              id: '4',
+              worker_id: MY_ID,
+              contracts: [mockCollaborationContract({ status: 'ENDED' })],
+            }),
           ],
-          total: 7,
+          total: 4,
           page: 1,
           limit: 200,
         }),
@@ -103,33 +120,32 @@ describe('TEST-COLLAB-101 status tabs — COLLAB-011', () => {
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: /^All/ })).toBeInTheDocument(),
     );
-    for (const label of [
-      /^All/,
-      /Pending/,
-      /Confirmed/,
-      /In progress/,
-      /Completed/,
-      /Disputed/,
-      /Rejected/,
-    ]) {
+    for (const label of [/^All/, /Chat only/, /Proposed/, /Active/, /Ended/]) {
       expect(screen.getByRole('tab', { name: label })).toBeInTheDocument();
     }
-    // Default tab is `All`.
     expect(screen.getByRole('tab', { name: /^All/ })).toHaveAttribute(
       'aria-selected',
       'true',
     );
   });
 
-  test('TEST-COLLAB-101 / COLLAB-011 — switching to a status tab filters rows client-side without refetching', async () => {
+  test('TEST-COLLAB-101 / COLLAB-011 — switching to a tab filters rows client-side without refetching', async () => {
     let listCalls = 0;
     server.use(
       http.get(`${API}/collaborations/me`, () => {
         listCalls += 1;
         return HttpResponse.json({
           items: [
-            mockCollaboration({ id: '1', worker_id: MY_ID, status: 'PENDING' }),
-            mockCollaboration({ id: '2', worker_id: MY_ID, status: 'CONFIRMED' }),
+            mockCollaboration({
+              id: '1',
+              worker_id: MY_ID,
+              contracts: [mockCollaborationContract({ status: 'PROPOSED' })],
+            }),
+            mockCollaboration({
+              id: '2',
+              worker_id: MY_ID,
+              contracts: [mockCollaborationContract({ status: 'ACTIVE' })],
+            }),
           ],
           total: 2,
           page: 1,
@@ -142,13 +158,15 @@ describe('TEST-COLLAB-101 status tabs — COLLAB-011', () => {
     renderWithProfile(withRoute(), { route: '/collaborations', account });
 
     await waitFor(() =>
-      expect(screen.getAllByText(/Collaboration|View collaboration/).length).toBeGreaterThan(0),
+      expect(
+        screen.getAllByRole('link', { name: /open/i }).length,
+      ).toBeGreaterThan(0),
     );
     expect(listCalls).toBe(1);
 
-    await user.click(screen.getByRole('tab', { name: /Confirmed/ }));
-    expect(listCalls).toBe(1); // no refetch
-    expect(screen.getAllByRole('link', { name: /view collaboration/i })).toHaveLength(1);
+    await user.click(screen.getByRole('tab', { name: /Active/ }));
+    expect(listCalls).toBe(1); // no refetch — client-side filter
+    expect(screen.getAllByRole('link', { name: /open/i })).toHaveLength(1);
   });
 });
 
@@ -168,15 +186,13 @@ describe('TEST-COLLAB-102 role tab visibility — COLLAB-012', () => {
     renderWithProfile(withRoute(), { route: '/collaborations', account });
 
     await waitFor(() =>
-      expect(
-        screen.getByRole('link', { name: /view collaboration/i }),
-      ).toBeInTheDocument(),
+      expect(screen.getByRole('link', { name: /open/i })).toBeInTheDocument(),
     );
     expect(screen.queryByRole('tab', { name: /As worker/i })).toBeNull();
     expect(screen.queryByRole('tab', { name: /As employer/i })).toBeNull();
   });
 
-  test('TEST-COLLAB-102 / COLLAB-012 — rows on both sides render role tab and switching toggles the visible set', async () => {
+  test('TEST-COLLAB-102 / COLLAB-012 — rows on both sides render the role tab and switching filters', async () => {
     server.use(
       http.get(`${API}/collaborations/me`, () =>
         HttpResponse.json({
@@ -203,24 +219,28 @@ describe('TEST-COLLAB-102 role tab visibility — COLLAB-012', () => {
     renderWithProfile(withRoute(), { route: '/collaborations', account });
 
     await waitFor(() =>
-      expect(screen.getByRole('tab', { name: /As worker/i })).toBeInTheDocument(),
+      expect(
+        screen.getByRole('tab', { name: /As worker/i }),
+      ).toBeInTheDocument(),
     );
-    expect(screen.getByRole('tab', { name: /As employer/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('tab', { name: /As employer/i }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: /As employer/i }));
-    // Only rows where I am employer should remain.
-    expect(screen.getAllByRole('link', { name: /view collaboration/i })).toHaveLength(1);
+    // Only the row where I am the employer remains.
+    expect(screen.getAllByRole('link', { name: /open/i })).toHaveLength(1);
   });
 });
 
 describe('TEST-COLLAB-103 per-row primary action surface — COLLAB-010', () => {
-  test('TEST-COLLAB-103 / COLLAB-010 — every row exposes a "View collaboration" link to /collaborations/:id', async () => {
+  test('TEST-COLLAB-103 / COLLAB-010 — every row exposes an Open link to /collaborations/:id', async () => {
     server.use(
       http.get(`${API}/collaborations/me`, () =>
         HttpResponse.json({
           items: [
-            mockCollaboration({ id: '11', worker_id: MY_ID, status: 'PENDING' }),
-            mockCollaboration({ id: '12', worker_id: MY_ID, status: 'CONFIRMED' }),
+            mockCollaboration({ id: '11', worker_id: MY_ID }),
+            mockCollaboration({ id: '12', worker_id: MY_ID }),
           ],
           total: 2,
           page: 1,
@@ -232,12 +252,11 @@ describe('TEST-COLLAB-103 per-row primary action surface — COLLAB-010', () => 
     renderWithProfile(withRoute(), { route: '/collaborations', account });
 
     await waitFor(() =>
-      expect(
-        screen.getAllByRole('link', { name: /view collaboration/i }),
-      ).toHaveLength(2),
+      expect(screen.getAllByRole('link', { name: /open/i })).toHaveLength(2),
     );
-    const links = screen.getAllByRole('link', { name: /view collaboration/i });
-    const hrefs = links.map((l) => l.getAttribute('href'));
+    const hrefs = screen
+      .getAllByRole('link', { name: /open/i })
+      .map((l) => l.getAttribute('href'));
     expect(hrefs).toEqual(
       expect.arrayContaining(['/collaborations/11', '/collaborations/12']),
     );
@@ -245,7 +264,7 @@ describe('TEST-COLLAB-103 per-row primary action surface — COLLAB-010', () => 
 });
 
 describe('TEST-COLLAB-104 empty state — COLLAB-014', () => {
-  test('TEST-COLLAB-104 / COLLAB-014 — list with zero rows renders EmptyState + Browse jobs CTA', async () => {
+  test('TEST-COLLAB-104 / COLLAB-014 — list with zero rows renders the EmptyState', async () => {
     server.use(
       http.get(`${API}/collaborations/me`, () =>
         HttpResponse.json({ items: [], total: 0, page: 1, limit: 200 }),
@@ -254,42 +273,7 @@ describe('TEST-COLLAB-104 empty state — COLLAB-014', () => {
     const account = await asWorker();
     renderWithProfile(withRoute(), { route: '/collaborations', account });
     expect(
-      await screen.findByText(/no collaborations yet/i),
+      await screen.findByText(/no collaborations here/i),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: /browse jobs/i }),
-    ).toHaveAttribute('href', '/jobs');
-  });
-});
-
-describe('TEST-COLLAB-105 New collaboration trigger — COLLAB-013', () => {
-  test('TEST-COLLAB-105 / COLLAB-013 — accounts with at least one client role see the button', async () => {
-    server.use(
-      http.get(`${API}/collaborations/me`, () =>
-        HttpResponse.json({ items: [], total: 0, page: 1, limit: 200 }),
-      ),
-    );
-    const account = await asWorker();
-    renderWithProfile(withRoute(), { route: '/collaborations', account });
-    await waitFor(() =>
-      expect(
-        screen.getByRole('button', { name: /new collaboration/i }),
-      ).toBeInTheDocument(),
-    );
-  });
-
-  test('TEST-COLLAB-105 / COLLAB-013 — clicking the button opens the NewCollaborationSheet (Employer ID field appears)', async () => {
-    server.use(
-      http.get(`${API}/collaborations/me`, () =>
-        HttpResponse.json({ items: [], total: 0, page: 1, limit: 200 }),
-      ),
-    );
-    const user = userEvent.setup();
-    const account = await asWorker();
-    renderWithProfile(withRoute(), { route: '/collaborations', account });
-    await user.click(
-      await screen.findByRole('button', { name: /new collaboration/i }),
-    );
-    expect(await screen.findByLabelText(/employer id/i)).toBeInTheDocument();
   });
 });

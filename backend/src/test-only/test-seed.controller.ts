@@ -21,7 +21,6 @@ import { ApiExcludeController } from '@nestjs/swagger';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { generateInitialPassword } from '../common/validators/generate-initial-password';
-import { generateReferralCode } from '../referral/referral.constants';
 
 @ApiExcludeController()
 @Controller('test/seed')
@@ -51,7 +50,6 @@ export class TestSeedController implements OnModuleInit {
         status: 'ACTIVE',
         email_verified_at: new Date(),
         last_login_at: new Date(),
-        referral_code: generateReferralCode(),
         staff_member: {
           create: {
             display_name: 'PW Seed Admin',
@@ -136,19 +134,17 @@ export class TestSeedController implements OnModuleInit {
           conversationId: null as bigint | null,
         };
       }
+      // conversation shares its PK with collaboration (strict 1:1).
       const conv = await tx.conversation.create({
         data: {
-          collaboration_id: collab.id,
+          id: collab.id,
           last_message_at: now,
-          participants: {
-            create: [{ account_id: worker.id }, { account_id: employer.id }],
-          },
         },
       });
       await tx.message.create({
         data: {
           conversation_id: conv.id,
-          sender_id: employer.id,
+          sender_id: null, // SYSTEM message has no sender
           content:
             body.welcomeContent ??
             'Collaboration confirmed. You can now message each other about the project.',

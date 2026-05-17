@@ -12,11 +12,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { AttachmentsField } from '@/components/jobs/AttachmentsField';
 import {
-  AttachmentsField,
-  attachmentIdsFromValue,
+  pendingFilesFromValue,
   type AttachedFile,
-} from '@/components/jobs/AttachmentsField';
+} from '@/components/jobs/attachmentValue';
+import { uploadJobApplicationAttachment } from '@/components/jobs/attachmentApi';
 
 type ApplyJobSheetProps = {
   open: boolean;
@@ -64,29 +65,44 @@ export function ApplyJobSheet({
 
     setSubmitting(true);
     try {
-      const created = await api<{ id: string | number; status: string }>(
-        `/job-applications/jobs/${jobPostId}/apply`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            cover_message: coverMessage.trim() || undefined,
-            proposed_rate: proposedRate ? Number(proposedRate) : undefined,
-            attachment_ids: attachmentIdsFromValue(attachments),
-          }),
-        },
-      );
+      let created: { id: string | number; status: string };
+      try {
+        created = await api<{ id: string | number; status: string }>(
+          `/job-applications/jobs/${jobPostId}/apply`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              cover_message: coverMessage.trim() || undefined,
+              proposed_rate: proposedRate ? Number(proposedRate) : undefined,
+            }),
+          },
+        );
+      } catch (err) {
+        const parsed = parseApiError(err);
+        const handled = onApiError(parsed);
+        if (handled === 'unhandled') {
+          setError(parsed?.message ?? 'Could not submit application.');
+        } else {
+          onOpenChange(false);
+          reset();
+        }
+        return;
+      }
+
+      // Parent-first attachments: upload onto the new application. Best-effort
+      // — the application is already submitted, so a file failure must not
+      // block the success path.
+      for (const file of pendingFilesFromValue(attachments)) {
+        try {
+          await uploadJobApplicationAttachment(created.id, file);
+        } catch {
+          /* best-effort */
+        }
+      }
+
       onSuccess(created);
       onOpenChange(false);
       reset();
-    } catch (err) {
-      const parsed = parseApiError(err);
-      const handled = onApiError(parsed);
-      if (handled === 'unhandled') {
-        setError(parsed?.message ?? 'Could not submit application.');
-      } else {
-        onOpenChange(false);
-        reset();
-      }
     } finally {
       setSubmitting(false);
     }

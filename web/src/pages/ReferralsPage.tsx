@@ -6,12 +6,11 @@ import {
   getAccountReferralStats,
   getProjectShareStats,
   getIncomingAttribution,
-  getReferralPendingPayouts,
-  retryReferralPendingPayouts,
+  getReferralPayments,
   type AccountReferralStats,
   type ProjectShare,
+  type ReferralPayment,
 } from '../components/escrow';
-import { toast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/EmptyState';
@@ -41,17 +40,7 @@ export default function ReferralsPage() {
     referrer: { account_id: string; display_name: string | null } | null;
     total_paid_gbp: string;
   } | null>(null);
-  const [pending, setPending] = useState<
-    Array<{
-      id: string;
-      milestone_id: string;
-      contract_id: string | null;
-      type: string;
-      amount: string;
-      status: string;
-      created_at: string;
-    }>
-  >([]);
+  const [pending, setPending] = useState<ReferralPayment[]>([]);
   const [copied, setCopied] = useState(false);
 
   async function loadAll() {
@@ -62,7 +51,7 @@ export default function ReferralsPage() {
         getAccountReferralStats(),
         getProjectShareStats(),
         getIncomingAttribution(),
-        getReferralPendingPayouts(),
+        getReferralPayments(),
       ]);
       setCode(c.code);
       setLink(c.link);
@@ -309,48 +298,21 @@ export default function ReferralsPage() {
         </CardContent>
       </Card>
 
-      {/* 6. Pending payouts */}
+      {/* 6. Referral commission payments */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Pending payouts</CardTitle>
-              <CardDescription>
-                Commissions accumulated while your Stripe Connect was not yet
-                ready. The webhook normally fires these automatically when
-                you finish onboarding — use Retry if anything looks stuck.
-              </CardDescription>
-            </div>
-            {pending.length > 0 ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={async () => {
-                  try {
-                    const r = await retryReferralPendingPayouts();
-                    toast.success(
-                      `Retry: ${r.paid} paid, ${r.failed} failed`,
-                    );
-                    void loadAll();
-                  } catch (err) {
-                    toast.error(
-                      err instanceof Error
-                        ? err.message
-                        : 'Try again in a moment.',
-                    );
-                  }
-                }}
-              >
-                Retry payouts
-              </Button>
-            ) : null}
+          <div>
+            <CardTitle>Commission payments</CardTitle>
+            <CardDescription>
+              Referral commissions earned on milestone releases. Held
+              commissions (PENDING) are paid out automatically once you
+              finish Stripe Connect onboarding.
+            </CardDescription>
           </div>
         </CardHeader>
         <CardContent>
           {pending.length === 0 ? (
-            <p className="text-sm text-fg-muted">
-              No pending payouts.
-            </p>
+            <p className="text-sm text-fg-muted">No commission payments yet.</p>
           ) : (
             <ul className="space-y-2 text-sm">
               {pending.map((p) => (
@@ -362,7 +324,11 @@ export default function ReferralsPage() {
                     {p.type} · milestone #{p.milestone_id}
                   </span>
                   <span>
-                    <Badge variant="warning">{p.status}</Badge>{' '}
+                    <Badge
+                      variant={p.status === 'PAID' ? 'success' : 'warning'}
+                    >
+                      {p.status}
+                    </Badge>{' '}
                     <strong>{fmtGbp(p.amount)}</strong>
                   </span>
                 </li>

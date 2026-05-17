@@ -22,7 +22,11 @@ const collaborationInclude = {
   employer: { include: { client_profile: true } },
   contracts: {
     orderBy: { position: 'asc' },
-    include: { escrow_transaction: { select: { id: true, status: true } } },
+    // Escrow lives directly on the contract now (no escrow_transaction row).
+    // The contract's milestone statuses are what the collab summary needs.
+    include: {
+      milestones: { select: { id: true, status: true, amount: true } },
+    },
   },
   conversation: { select: { id: true } },
 } satisfies Prisma.CollaborationInclude;
@@ -98,9 +102,6 @@ export class CollaborationService {
         const id = await this.conversations!.ensureCollaborationConversation(
           tx,
           collab.id,
-          worker_id,
-          employer_id,
-          initiatorId,
         );
         if (id !== null) {
           this.conversations!.announceConversationCreated(id, [

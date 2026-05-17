@@ -8,12 +8,14 @@ import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
 import * as React from 'react';
 import { server } from '../../test/msw-server';
+import { setTokens } from '@/api';
 import { useRefAttribution } from './useRefAttribution';
 
-// Pin auth token so api() helper picks something out of localStorage —
-// trackProjectClick is public but api wrapper reads token at module load.
+// Pin auth via setTokens so getToken() (read by the hook to gate the
+// server-side intent call) returns a value — localStorage.setItem alone
+// does not update the api module's in-memory token.
 beforeEach(() => {
-  localStorage.setItem('access_token', 'test');
+  setTokens('test', 'test');
 });
 
 const API = 'http://localhost:8081/api';

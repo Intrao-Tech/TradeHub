@@ -90,7 +90,7 @@ describe('TEST-CHAT-101 InboxPage — no Recipient-id form (CHAT-052)', () => {
 });
 
 describe('TEST-CHAT-102 InboxPage — list rendering (CHAT-050)', () => {
-  test('TEST-CHAT-102 / CHAT-050 — renders one row per inbox item; collab row shows status pill, direct row does not', async () => {
+  test('TEST-CHAT-102 / CHAT-050 — renders one row per inbox item', async () => {
     server.use(
       http.get(`${API}/conversations`, () =>
         HttpResponse.json({
@@ -98,15 +98,9 @@ describe('TEST-CHAT-102 InboxPage — list rendering (CHAT-050)', () => {
             mockInboxItem({
               conversation: {
                 id: '1',
-                collaboration_id: '900',
+                collaboration_id: '1',
                 last_message_at: '2026-05-07T12:00:00Z',
                 created_at: '2026-05-07T12:00:00Z',
-              },
-              collaboration: {
-                id: '900',
-                status: 'CONFIRMED',
-                worker_id: '101',
-                employer_id: '202',
               },
               other_participant: {
                 account_id: '202',
@@ -120,21 +114,20 @@ describe('TEST-CHAT-102 InboxPage — list rendering (CHAT-050)', () => {
             mockInboxItem({
               conversation: {
                 id: '2',
-                collaboration_id: null,
+                collaboration_id: '2',
                 last_message_at: '2026-05-07T11:00:00Z',
                 created_at: '2026-05-07T11:00:00Z',
               },
-              collaboration: null,
               other_participant: {
                 account_id: '303',
                 client_profile_id: '303',
-                display_name: 'Direct DM',
+                display_name: 'Bob Worker',
                 avatar_url: null,
                 verification_level: null,
               },
               last_message: mockMessage({
                 conversation_id: '2',
-                content: 'hi from direct',
+                content: 'hi there',
               }),
               unread_count: 0,
             }),
@@ -149,10 +142,7 @@ describe('TEST-CHAT-102 InboxPage — list rendering (CHAT-050)', () => {
     await waitFor(() =>
       expect(screen.getByText('Acme Build')).toBeInTheDocument(),
     );
-    expect(screen.getByText('Direct DM')).toBeInTheDocument();
-    // Collab pill renders for the collab-bound row.
-    const pillNodes = screen.getAllByTestId('inbox-row-collab-pill');
-    expect(pillNodes).toHaveLength(1);
+    expect(screen.getByText('Bob Worker')).toBeInTheDocument();
   });
 });
 

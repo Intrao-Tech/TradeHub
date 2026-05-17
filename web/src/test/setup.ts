@@ -6,8 +6,13 @@
 
 import '@testing-library/jest-dom/vitest';
 import { afterAll, afterEach, beforeAll, vi } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { server } from './msw-server';
+
+// Raise the async-util timeout used by `waitFor` / `findBy*`. The 1000ms
+// default flakes when ~56 test files contend for a loaded machine — a
+// re-render that normally lands in <100ms can slip past 1s under load.
+configure({ asyncUtilTimeout: 5_000 });
 
 // Node 22+ ships a native `localStorage` (gated behind --localstorage-file),
 // which collides with jsdom's own. The conflict leaves a partial object

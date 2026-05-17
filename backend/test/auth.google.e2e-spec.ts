@@ -107,11 +107,11 @@ describe('TEST-AUTH-049 Google OAuth callback', () => {
         email: 'pending-link@example.com',
         password_hash: await bcrypt.hash(TEST_PASSWORD, 4),
         status: 'PENDING_EMAIL_VERIFICATION',
-        referral_code: generateReferralCode(),
         client_profile: {
           create: {
             display_name: 'Pending Link',
             slug: 'pending-link-x',
+            referral_code: generateReferralCode(),
             worker_profile: { create: {} },
           },
         },

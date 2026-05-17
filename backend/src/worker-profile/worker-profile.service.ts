@@ -65,16 +65,31 @@ export class WorkerProfileService {
     if (dto.available_from !== undefined)
       data.available_from = dto.available_from;
     if (dto.is_available !== undefined) data.is_available = dto.is_available;
-    if (dto.languages !== undefined) data.languages = { set: dto.languages };
 
     try {
-      return await this.prisma.workerProfile.update({
-        where: { id },
-        data,
-        include: {
-          worker_specialisations: { include: { specialisation: true } },
-          portfolio_items: true,
-        },
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.workerProfile.update({ where: { id }, data });
+        // Languages are a worker_language junction now — replace the set.
+        if (dto.languages !== undefined) {
+          await tx.workerLanguage.deleteMany({ where: { worker_id: id } });
+          if (dto.languages.length > 0) {
+            await tx.workerLanguage.createMany({
+              data: dto.languages.map((code) => ({
+                worker_id: id,
+                language_code: code,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        }
+        return tx.workerProfile.findUniqueOrThrow({
+          where: { id },
+          include: {
+            worker_specialisations: { include: { specialisation: true } },
+            worker_languages: true,
+            portfolio_items: true,
+          },
+        });
       });
     } catch {
       throw new NotFoundException('Worker profile not found');

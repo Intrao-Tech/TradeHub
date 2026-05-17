@@ -1,17 +1,10 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, MessageSquare } from 'lucide-react';
 import { ApiError, api, parseApiError } from '@/api';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AuthBanner } from '@/components/AuthBanner';
 import { Button } from '@/components/ui/button';
-import { CollaborationStatusBadge } from '@/components/collaborations/CollaborationStatusBadge';
 import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast';
@@ -20,9 +13,7 @@ import { Composer } from './Composer';
 import { MessageList } from './MessageList';
 import { TypingIndicator } from './TypingIndicator';
 import { useChatSocket } from './useChatSocket';
-import { validateAttachmentFile } from './helpers';
 import type {
-  AttachmentDraft,
   ChatMessage,
   ConversationDetail,
   InboxItem,
@@ -48,10 +39,6 @@ function uuid(): string {
   return `c_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
-function fileTypeId(mime: string): string {
-  return mime;
-}
-
 function initials(name?: string | null): string {
   if (!name) return '?';
   return name
@@ -75,7 +62,6 @@ export function ConversationPanel({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [optimistic, setOptimistic] = useState<OptimisticMessage[]>([]);
   const [composerValue, setComposerValue] = useState('');
-  const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<{
     code: string;
@@ -89,32 +75,41 @@ export function ConversationPanel({
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
 
-  const otherParticipant = useMemo(() => {
+  // A conversation is a strict 1:1 with a collaboration — the two parties are
+  // its worker + employer. Derive "the other party" from whichever side the
+  // current account is on.
+  const iAmWorker = useMemo(() => {
     if (!detail || myAccountId == null) return null;
-    return (
-      detail.participants.find((p) => String(p.account_id) !== String(myAccountId)) ??
-      null
-    );
+    return String(detail.collaboration.worker_id) === String(myAccountId);
   }, [detail, myAccountId]);
 
+  const otherParty = useMemo(() => {
+    if (!detail || iAmWorker == null) return null;
+    return iAmWorker
+      ? detail.collaboration.employer.client_profile
+      : detail.collaboration.worker.client_profile;
+  }, [detail, iAmWorker]);
+
   const otherDisplayName =
-    otherParticipant?.account.client_profile?.display_name ??
+    otherParty?.display_name ??
     inboxRow?.other_participant?.display_name ??
     'Counterparty';
   const otherAvatar =
-    otherParticipant?.account.client_profile?.avatar_url ??
-    inboxRow?.other_participant?.avatar_url ??
-    null;
+    otherParty?.avatar_url ?? inboxRow?.other_participant?.avatar_url ?? null;
   const otherVerification =
-    otherParticipant?.account.client_profile?.verification_level ??
+    otherParty?.verification_level ??
     inboxRow?.other_participant?.verification_level ??
     null;
-  const otherLastReadAt =
-    (otherParticipant?.last_read_at ?? null) as string | null;
+
+  // The other party's read cursor — for the "Seen" marker.
+  const otherLastReadAt = useMemo<string | null>(() => {
+    if (!detail || iAmWorker == null) return null;
+    return iAmWorker
+      ? detail.employer_last_read_at
+      : detail.worker_last_read_at;
+  }, [detail, iAmWorker]);
 
   const collaboration = detail?.collaboration ?? inboxRow?.collaboration ?? null;
-  const collabStatus = (collaboration?.status ?? '').toUpperCase();
-  const isReadOnly = collabStatus === 'REJECTED';
 
   // ── Load detail + messages ─────────────────────────────────────────
   const load = useCallback(async () => {
@@ -150,7 +145,8 @@ export function ConversationPanel({
         setAuthError({
           code: 'EMAIL_NOT_VERIFIED',
           message:
-            parsed.message ?? 'Verify your email to participate in this conversation.',
+            parsed.message ??
+            'Verify your email to participate in this conversation.',
         });
       } else if (parsed?.code === 'ACCOUNT_DEACTIVATED') {
         setAuthError({
@@ -187,8 +183,9 @@ export function ConversationPanel({
           return [...prev, msg];
         });
         // Reconcile optimistic by client_id (echoed back through metadata).
-        const clientId =
-          (msg.metadata as { client_id?: string } | null | undefined)?.client_id;
+        const clientId = (
+          msg.metadata as { client_id?: string } | null | undefined
+        )?.client_id;
         if (clientId) {
           setOptimistic((prev) => prev.filter((o) => o.client_id !== clientId));
         }
@@ -204,13 +201,16 @@ export function ConversationPanel({
       if (String(evt.conversation_id) !== conversationId) return;
       setDetail((prev) => {
         if (!prev) return prev;
+        const readerIsWorker =
+          String(evt.account_id) === String(prev.collaboration.worker_id);
         return {
           ...prev,
-          participants: prev.participants.map((p) =>
-            String(p.account_id) === String(evt.account_id)
-              ? { ...p, last_read_at: evt.last_read_at }
-              : p,
-          ),
+          worker_last_read_at: readerIsWorker
+            ? evt.last_read_at
+            : prev.worker_last_read_at,
+          employer_last_read_at: readerIsWorker
+            ? prev.employer_last_read_at
+            : evt.last_read_at,
         };
       });
     });
@@ -219,7 +219,8 @@ export function ConversationPanel({
       account_id: string | number;
     }>('typing:start', (evt) => {
       if (String(evt.conversation_id) !== conversationId) return;
-      if (myAccountId != null && String(evt.account_id) === String(myAccountId)) return;
+      if (myAccountId != null && String(evt.account_id) === String(myAccountId))
+        return;
       setOtherTyping(true);
       if (otherTypingTimer.current != null) {
         window.clearTimeout(otherTypingTimer.current);
@@ -233,38 +234,47 @@ export function ConversationPanel({
       account_id: string | number;
     }>('typing:stop', (evt) => {
       if (String(evt.conversation_id) !== conversationId) return;
-      if (myAccountId != null && String(evt.account_id) === String(myAccountId)) return;
+      if (myAccountId != null && String(evt.account_id) === String(myAccountId))
+        return;
       setOtherTyping(false);
       if (otherTypingTimer.current != null) {
         window.clearTimeout(otherTypingTimer.current);
         otherTypingTimer.current = null;
       }
     });
-    const offError = on<{ code?: string; message?: string; client_id?: string }>(
-      'error',
-      (evt) => {
-        if (evt.code === 'EMAIL_NOT_VERIFIED' || evt.code === 'ACCOUNT_NOT_ACTIVE') {
-          setAuthError({
-            code: evt.code,
-            message:
-              evt.message ??
-              'You can’t send messages in your current account state.',
-          });
-        }
-        if (evt.client_id) {
-          setOptimistic((prev) =>
-            prev.map((o) =>
-              o.client_id === evt.client_id
-                ? { ...o, status: 'failed' as const, retry_count: o.retry_count + 1 }
-                : o,
-            ),
-          );
-        }
-        if (evt.message) {
-          toast.error(evt.message);
-        }
-      },
-    );
+    const offError = on<{
+      code?: string;
+      message?: string;
+      client_id?: string;
+    }>('error', (evt) => {
+      if (
+        evt.code === 'EMAIL_NOT_VERIFIED' ||
+        evt.code === 'ACCOUNT_NOT_ACTIVE'
+      ) {
+        setAuthError({
+          code: evt.code,
+          message:
+            evt.message ??
+            'You can’t send messages in your current account state.',
+        });
+      }
+      if (evt.client_id) {
+        setOptimistic((prev) =>
+          prev.map((o) =>
+            o.client_id === evt.client_id
+              ? {
+                  ...o,
+                  status: 'failed' as const,
+                  retry_count: o.retry_count + 1,
+                }
+              : o,
+          ),
+        );
+      }
+      if (evt.message) {
+        toast.error(evt.message);
+      }
+    });
     return () => {
       offNew();
       offRead();
@@ -272,14 +282,17 @@ export function ConversationPanel({
       offTypingStop();
       offError();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, conversationId, myAccountId]);
 
   // ── Mark-read on visibility (CHAT-032/033) ─────────────────────────
   const fireMarkRead = useCallback(async () => {
     const now = Date.now();
     if (now - lastMarkReadAt.current < MARK_READ_THROTTLE_MS) return;
-    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+    if (
+      typeof document !== 'undefined' &&
+      document.visibilityState !== 'visible'
+    ) {
       return;
     }
     lastMarkReadAt.current = now;
@@ -302,7 +315,7 @@ export function ConversationPanel({
     if (!loading) {
       scheduleMarkRead();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
   useEffect(() => {
@@ -369,71 +382,12 @@ export function ConversationPanel({
     );
   }
 
-  async function uploadAttachment(draft: AttachmentDraft) {
-    try {
-      const fd = new FormData();
-      fd.append('file', draft.file);
-      const res = await api<{ id: string }>(
-        `/conversations/${conversationId}/attachments`,
-        { method: 'POST', body: fd },
-      );
-      setAttachments((prev) =>
-        prev.map((a) =>
-          a.client_id === draft.client_id
-            ? { ...a, status: 'ready' as const, attachment_id: res.id }
-            : a,
-        ),
-      );
-    } catch (err) {
-      const parsed = parseApiError(err);
-      setAttachments((prev) =>
-        prev.map((a) =>
-          a.client_id === draft.client_id
-            ? {
-                ...a,
-                status: 'failed' as const,
-                error: parsed?.message ?? 'Upload failed.',
-              }
-            : a,
-        ),
-      );
-      if (parsed?.message) toast.error(parsed.message);
-    }
-  }
-
-  function handleAddFiles(files: File[]) {
-    const drafts: AttachmentDraft[] = [];
-    for (const file of files) {
-      const error = validateAttachmentFile(file);
-      if (error) {
-        toast.error(`${file.name}: ${error}`);
-        continue;
-      }
-      drafts.push({
-        client_id: uuid(),
-        status: 'uploading',
-        file,
-        mime_type: fileTypeId(file.type),
-        original_name: file.name,
-        size_bytes: file.size,
-      });
-    }
-    if (drafts.length === 0) return;
-    setAttachments((prev) => [...prev, ...drafts]);
-    drafts.forEach((d) => void uploadAttachment(d));
-  }
-
-  function handleRemoveAttachment(clientId: string) {
-    setAttachments((prev) => prev.filter((a) => a.client_id !== clientId));
-  }
-
-  async function actuallySend(opt: OptimisticMessage, attachmentIds: number[]) {
+  async function actuallySend(opt: OptimisticMessage) {
     try {
       const wsOk = emit('send_message', {
         conversation_id: conversationId,
         content: opt.content,
         client_id: opt.client_id,
-        attachment_ids: attachmentIds,
       });
       if (wsOk) return; // server new_message event reconciles
       // REST fallback if WS is down.
@@ -442,15 +396,22 @@ export function ConversationPanel({
         body: JSON.stringify({
           content: opt.content,
           client_id: opt.client_id,
-          attachment_ids: attachmentIds,
         }),
       });
     } catch (err) {
       const parsed = parseApiError(err);
-      if (parsed?.code === 'EMAIL_NOT_VERIFIED' || parsed?.code === 'ACCOUNT_DEACTIVATED') {
+      if (
+        parsed?.code === 'EMAIL_NOT_VERIFIED' ||
+        parsed?.code === 'ACCOUNT_DEACTIVATED'
+      ) {
         setAuthError({
-          code: parsed.code === 'ACCOUNT_DEACTIVATED' ? 'ACCOUNT_NOT_ACTIVE' : 'EMAIL_NOT_VERIFIED',
-          message: parsed.message ?? 'You can’t send messages in your current account state.',
+          code:
+            parsed.code === 'ACCOUNT_DEACTIVATED'
+              ? 'ACCOUNT_NOT_ACTIVE'
+              : 'EMAIL_NOT_VERIFIED',
+          message:
+            parsed.message ??
+            'You can’t send messages in your current account state.',
         });
       }
       setOptimisticById(opt.client_id, (prev) => ({
@@ -464,50 +425,29 @@ export function ConversationPanel({
 
   function handleSubmit() {
     const trimmed = composerValue.trim();
-    const ready = attachments.filter((a) => a.status === 'ready');
-    if (!trimmed && ready.length === 0) return;
+    if (!trimmed) return;
 
     const clientId = uuid();
     const opt: OptimisticMessage = {
       client_id: clientId,
       id: `opt:${clientId}`,
-      sender_id: myAccountId ?? '',
+      sender_id: myAccountId ?? null,
       content: trimmed,
       created_at: new Date().toISOString(),
       message_type: 'TEXT',
       status: 'sending',
       retry_count: 0,
-      attachments: ready.map((a) => ({
-        id: a.attachment_id ?? `optatt:${a.client_id}`,
-        message_id: null,
-        uploaded_by_id: myAccountId ?? '',
-        original_name: a.original_name,
-        mime_type: a.mime_type,
-        size_bytes: a.size_bytes,
-      })),
     };
     setOptimistic((prev) => [...prev, opt]);
     setComposerValue('');
-    setAttachments([]);
-
-    void actuallySend(
-      opt,
-      ready
-        .map((a) => (a.attachment_id ? Number(a.attachment_id) : null))
-        .filter((id): id is number => id != null),
-    );
+    void actuallySend(opt);
   }
 
   function handleRetry(clientId: string) {
     const opt = optimistic.find((o) => o.client_id === clientId);
     if (!opt) return;
     setOptimisticById(clientId, (prev) => ({ ...prev, status: 'sending' }));
-    void actuallySend(
-      opt,
-      (opt.attachments ?? [])
-        .map((a) => (typeof a.id === 'string' && a.id.startsWith('optatt:') ? null : Number(a.id)))
-        .filter((id): id is number => id != null && Number.isFinite(id)),
-    );
+    void actuallySend(opt);
   }
 
   function handleDiscard(clientId: string) {
@@ -515,7 +455,6 @@ export function ConversationPanel({
   }
 
   function handleTypingStart() {
-    if (isReadOnly) return;
     emit('typing:start', { conversation_id: conversationId });
   }
   function handleTypingStop() {
@@ -549,9 +488,6 @@ export function ConversationPanel({
               {otherDisplayName}
             </span>
             <VerificationBadge state={verificationFromLevel(otherVerification)} />
-            {collaboration ? (
-              <CollaborationStatusBadge status={collaboration.status} />
-            ) : null}
           </div>
           <p className="truncate text-xs text-fg-muted">
             {collaboration ? (
@@ -563,7 +499,7 @@ export function ConversationPanel({
                 <ExternalLink className="h-3 w-3" />
               </Link>
             ) : (
-              'Direct message'
+              'Conversation'
             )}
           </p>
         </div>
@@ -594,26 +530,15 @@ export function ConversationPanel({
       )}
 
       <div className="px-3">
-        {otherTyping ? (
-          <TypingIndicator name={otherDisplayName} />
-        ) : null}
+        {otherTyping ? <TypingIndicator name={otherDisplayName} /> : null}
       </div>
 
       <Composer
         value={composerValue}
-        attachments={attachments}
-        disabled={Boolean(authError) || isReadOnly}
-        disabledReason={
-          authError
-            ? authError.message
-            : isReadOnly
-              ? 'This collaboration was rejected. Messages here are read-only.'
-              : undefined
-        }
+        disabled={Boolean(authError)}
+        disabledReason={authError ? authError.message : undefined}
         onChange={setComposerValue}
         onSubmit={handleSubmit}
-        onAddFiles={handleAddFiles}
-        onRemoveAttachment={handleRemoveAttachment}
         onTypingStart={handleTypingStart}
         onTypingStop={handleTypingStop}
       />

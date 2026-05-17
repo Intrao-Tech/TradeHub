@@ -48,7 +48,7 @@ export class ReferralController {
     if (!code) throw new BadRequestException('code required');
     const r = await this.service.lookupReferrerByCode(code);
     if (!r) return { display_name: null };
-    return { display_name: r.client_profile?.display_name ?? null };
+    return { display_name: r.display_name };
   }
 
   /**
@@ -65,7 +65,7 @@ export class ReferralController {
   ) {
     return this.service.recordProjectIntent({
       code: dto.code.toUpperCase(),
-      actor_account_id: user.accountId,
+      actor_client_profile_id: user.accountId,
       target_id: BigInt(dto.target_id),
       target_role: dto.target_role,
     });
@@ -99,20 +99,12 @@ export class ReferralController {
     return this.service.getIncomingAttribution(user.accountId);
   }
 
-  @Get('referrals/pending-payouts')
+  // Referral-commission payments for the current user (any status). Held
+  // commissions (status PENDING) are swept by the escrow `account.updated`
+  // handler when the referrer completes Stripe onboarding.
+  @Get('referrals/payments')
   @UseGuards(JwtAuthGuard)
-  async pendingPayouts(@CurrentUser() user: CurrentUserPayload) {
-    return this.service.getPendingPayouts(user.accountId);
-  }
-
-  /**
-   * Manual retry trigger for the current user's pending referral payouts.
-   * Useful when the webhook sweep didn't catch a payouts_enabled flip
-   * (e.g., dev tunnels offline at the moment the Stripe event fired).
-   */
-  @Post('referrals/pending-payouts/retry')
-  @UseGuards(JwtAuthGuard)
-  async retryPendingPayouts(@CurrentUser() user: CurrentUserPayload) {
-    return this.service.payPendingReferralPayouts(user.accountId);
+  async referralPayments(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getReferralPayments(user.accountId);
   }
 }

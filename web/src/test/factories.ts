@@ -255,7 +255,8 @@ export function mockAccountMe(overrides: {
       ? null
       : mockClientProfile(overrides.clientProfile ?? {});
   return {
-    id: '42',
+    // account.id === client_profile.id under the shared-PK model.
+    id: clientProfile?.id != null ? String(clientProfile.id) : '42',
     email: overrides.email ?? 'mike@example.com',
     email_verified_at:
       overrides.email_verified_at !== undefined
@@ -723,35 +724,30 @@ export type MockEscrowTransaction = {
   updated_at: string;
 };
 
+/**
+ * A contract row as the Collaborations list renders it. Post-CR-003 the
+ * lifecycle lives on Contract (DRAFT/PROPOSED/ACTIVE/ENDED) — Collaboration
+ * itself is a relationship-only binding.
+ */
+export type MockCollaborationContract = {
+  id: string;
+  position: number;
+  status: 'DRAFT' | 'PROPOSED' | 'ACTIVE' | 'ENDED';
+  project_type: string | null;
+  agreed_amount: string | null;
+};
+
 export type MockCollaboration = {
   id: string;
   worker_id: string;
   employer_id: string;
-  initiated_by: 'WORKER' | 'EMPLOYER';
-  status:
-    | 'PENDING'
-    | 'CONFIRMED'
-    | 'IN_PROGRESS'
-    | 'COMPLETED'
-    | 'REJECTED'
-    | 'DISPUTED';
-  project_type: string | null;
-  site_postcode: string | null;
-  agreed_amount: string | null;
-  referral_id: string | null;
-  job_post_id: string | null;
-  flagged: boolean;
-  flag_reason: string | null;
-  confirmed_at: string | null;
-  started_at: string | null;
-  ended_at: string | null;
+  first_contracted_at: string | null;
   created_at: string;
   updated_at: string;
   worker: MockCollaborationParty;
   employer: MockCollaborationParty;
-  reviews: MockReview[];
-  escrow_transaction: MockEscrowTransaction | null;
-  referral: null;
+  contracts: MockCollaborationContract[];
+  conversation: { id: string } | null;
 };
 
 function mockWorkerParty(
@@ -807,38 +803,40 @@ export function mockCollaboration(
   } = {},
 ): MockCollaboration {
   const now = new Date().toISOString();
-  const status = overrides.status ?? 'PENDING';
   const worker = mockWorkerParty(overrides.worker ?? {});
   const employer = mockEmployerParty(overrides.employer ?? {});
   const { worker: _w, employer: _e, ...rest } = overrides;
   void _w;
   void _e;
+  const id = overrides.id ?? '7000';
   return {
-    id: '7000',
+    id,
     worker_id: worker.id,
     employer_id: employer.id,
-    initiated_by: 'EMPLOYER',
-    status,
-    project_type: 'Kitchen refit',
-    site_postcode: 'NW1',
-    agreed_amount: '1500.00',
-    referral_id: null,
-    job_post_id: null,
-    flagged: false,
-    flag_reason: null,
-    confirmed_at:
-      ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'].includes(status) ? now : null,
-    started_at:
-      ['IN_PROGRESS', 'COMPLETED'].includes(status) ? now : null,
-    ended_at: status === 'COMPLETED' ? now : null,
+    first_contracted_at: null,
     created_at: now,
     updated_at: now,
-    reviews: [],
-    escrow_transaction: null,
-    referral: null,
+    contracts: [],
+    conversation: { id },
     ...rest,
     worker,
     employer,
+  };
+}
+
+/** A contract row for the Collaborations list. */
+export function mockCollaborationContract(
+  overrides: Partial<MockCollaborationContract> = {},
+): MockCollaborationContract {
+  return {
+    id: overrides.id ?? '8000',
+    position: overrides.position ?? 1,
+    status: overrides.status ?? 'PROPOSED',
+    project_type: overrides.project_type ?? 'Kitchen refit',
+    agreed_amount:
+      overrides.agreed_amount !== undefined
+        ? overrides.agreed_amount
+        : '1500.00',
   };
 }
 
@@ -901,45 +899,20 @@ export const mockEscrowDisputed = (
 // the new `MessageAttachment` row shipped by the parent feature. Override
 // pattern matches the rest of this file.
 
-export type MockMessageAttachment = {
-  id: string;
-  message_id: string | null;
-  uploaded_by_id: string;
-  file_url: string | null;
-  download_url: string | null;
-  original_name: string;
-  mime_type: string;
-  size_bytes: number;
-  created_at: string;
-};
-
-export function mockMessageAttachment(
-  overrides: Partial<MockMessageAttachment> = {},
-): MockMessageAttachment {
-  const id = overrides.id ?? '4001';
-  return {
-    id,
-    message_id: overrides.message_id ?? null,
-    uploaded_by_id: overrides.uploaded_by_id ?? '101',
-    file_url: overrides.file_url ?? `/uploads/message-attachments/${id}.png`,
-    download_url:
-      overrides.download_url ?? `/api/message-attachments/${id}/download`,
-    original_name: overrides.original_name ?? 'test.png',
-    mime_type: overrides.mime_type ?? 'image/png',
-    size_bytes: overrides.size_bytes ?? 12_345,
-    created_at: overrides.created_at ?? new Date().toISOString(),
-  };
-}
-
 export type MockChatMessage = {
   id: string;
   conversation_id: string;
-  sender_id: string;
-  content: string;
+  /** NULL for SYSTEM messages. */
+  sender_id: string | null;
+  content: string | null;
   message_type: string;
+  /** A file message carries its file inline — no separate attachment table. */
+  file_url: string | null;
+  original_name: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
   metadata: Record<string, unknown>;
   created_at: string;
-  attachments: MockMessageAttachment[];
 };
 
 export function mockMessage(
@@ -949,12 +922,15 @@ export function mockMessage(
   return {
     id: overrides.id ?? '5001',
     conversation_id: overrides.conversation_id ?? '6001',
-    sender_id: overrides.sender_id ?? '101',
-    content: overrides.content ?? 'hello',
+    sender_id: overrides.sender_id !== undefined ? overrides.sender_id : '101',
+    content: overrides.content !== undefined ? overrides.content : 'hello',
     message_type: overrides.message_type ?? 'TEXT',
+    file_url: overrides.file_url ?? null,
+    original_name: overrides.original_name ?? null,
+    mime_type: overrides.mime_type ?? null,
+    size_bytes: overrides.size_bytes ?? null,
     metadata: overrides.metadata ?? {},
     created_at: now,
-    attachments: overrides.attachments ?? [],
   };
 }
 
@@ -966,66 +942,80 @@ export type MockOtherParticipant = {
   verification_level: string | null;
 };
 
+/** Worker / employer profile inside the conversation payload. */
+type MockPartyProfile = {
+  client_profile: {
+    id: string;
+    display_name: string;
+    avatar_url: string | null;
+    verification_level: string;
+  };
+};
+
+/**
+ * `GET /conversations/:id` — post-2026-05 a conversation is a strict 1:1
+ * with its collaboration (shared PK); the two parties are the collab's
+ * worker + employer (no participant table).
+ */
 export type MockConversationDetail = {
   id: string;
-  collaboration_id: string | null;
+  last_message_at: string | null;
+  worker_last_read_at: string | null;
+  employer_last_read_at: string | null;
+  created_at: string;
   collaboration: {
     id: string;
-    status: string;
     worker_id: string;
     employer_id: string;
-  } | null;
-  participants: Array<{
-    account_id: string;
-    last_read_at?: string | null;
-    account: {
-      client_profile?: {
-        id?: string;
-        display_name?: string | null;
-        avatar_url?: string | null;
-        verification_level?: string | null;
-      } | null;
-    };
-  }>;
-  last_message_at: string | null;
+    worker: MockPartyProfile;
+    employer: MockPartyProfile;
+  };
+  messages: MockChatMessage[];
 };
 
 export function mockConversation(
-  overrides: Partial<MockConversationDetail> = {},
+  overrides: {
+    id?: string;
+    workerId?: string;
+    employerId?: string;
+    lastMessageAt?: string | null;
+    messages?: MockChatMessage[];
+  } = {},
 ): MockConversationDetail {
   const now = new Date().toISOString();
+  // conversation.id === collaboration.id (shared PK).
+  const id = overrides.id ?? '6001';
+  const workerId = overrides.workerId ?? '101';
+  const employerId = overrides.employerId ?? '202';
   return {
-    id: overrides.id ?? '6001',
-    collaboration_id: overrides.collaboration_id ?? null,
-    collaboration: overrides.collaboration ?? null,
-    participants:
-      overrides.participants ?? [
-        {
-          account_id: '101',
-          last_read_at: null,
-          account: {
-            client_profile: {
-              id: '101',
-              display_name: 'Mike Builder',
-              avatar_url: null,
-              verification_level: 'BASIC',
-            },
-          },
+    id,
+    last_message_at:
+      overrides.lastMessageAt !== undefined ? overrides.lastMessageAt : now,
+    worker_last_read_at: null,
+    employer_last_read_at: null,
+    created_at: now,
+    collaboration: {
+      id,
+      worker_id: workerId,
+      employer_id: employerId,
+      worker: {
+        client_profile: {
+          id: workerId,
+          display_name: 'Mike Builder',
+          avatar_url: null,
+          verification_level: 'BASIC',
         },
-        {
-          account_id: '202',
-          last_read_at: null,
-          account: {
-            client_profile: {
-              id: '202',
-              display_name: 'Acme Build',
-              avatar_url: null,
-              verification_level: 'BASIC',
-            },
-          },
+      },
+      employer: {
+        client_profile: {
+          id: employerId,
+          display_name: 'Acme Build',
+          avatar_url: null,
+          verification_level: 'BASIC',
         },
-      ],
-    last_message_at: overrides.last_message_at ?? now,
+      },
+    },
+    messages: overrides.messages ?? [],
   };
 }
 
@@ -1038,7 +1028,6 @@ export type MockInboxItem = {
   };
   collaboration: {
     id: string;
-    status: string;
     worker_id: string;
     employer_id: string;
   } | null;
@@ -1050,15 +1039,22 @@ export type MockInboxItem = {
 export function mockInboxItem(
   overrides: Partial<MockInboxItem> = {},
 ): MockInboxItem {
-  const now = overrides.conversation?.last_message_at ?? new Date().toISOString();
+  const now =
+    overrides.conversation?.last_message_at ?? new Date().toISOString();
+  const id = overrides.conversation?.id ?? '6001';
   return {
     conversation: {
-      id: overrides.conversation?.id ?? '6001',
-      collaboration_id: overrides.conversation?.collaboration_id ?? null,
+      id,
+      collaboration_id: overrides.conversation?.collaboration_id ?? id,
       last_message_at: now,
       created_at: overrides.conversation?.created_at ?? now,
     },
-    collaboration: overrides.collaboration ?? null,
+    collaboration:
+      overrides.collaboration ?? {
+        id,
+        worker_id: '101',
+        employer_id: '202',
+      },
     other_participant:
       overrides.other_participant ?? {
         account_id: '202',
@@ -1069,7 +1065,7 @@ export function mockInboxItem(
       },
     last_message:
       overrides.last_message === undefined
-        ? mockMessage({ conversation_id: overrides.conversation?.id ?? '6001' })
+        ? mockMessage({ conversation_id: id })
         : overrides.last_message,
     unread_count: overrides.unread_count ?? 0,
   };

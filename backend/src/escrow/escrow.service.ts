@@ -20,6 +20,16 @@ import { STRIPE_CLIENT } from '../stripe/stripe.module';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ESCROW_AUDIT_EVENTS, grossUpForStripeFee } from './escrow.constants';
 
+/**
+ * EscrowService — milestone escrow on top of Stripe Connect.
+ *
+ * Post-2026-05 schema rework: there is **no `escrow_transaction` table**.
+ * `escrow_milestone` hangs straight off `contract`; the "escrow" of a contract
+ * is simply its set of milestones. Every money movement (employer charge,
+ * worker payout, referral commission, refund) is one row in the append-only
+ * `payment` ledger — "pending / held" is just `payment.status = 'PENDING'`,
+ * not a separate table. Stripe object ids live on `payment.stripe_id`.
+ */
 @Injectable()
 export class EscrowService {
   private readonly logger = new Logger(EscrowService.name);
@@ -36,12 +46,10 @@ export class EscrowService {
 
   /**
    * Helper: post a SYSTEM message into the collab's chat conversation.
-   * Fire-and-forget — never blocks an escrow operation. Per Q21
-   * (overrides scope.md "do not post system messages" rule).
+   * Fire-and-forget — never blocks an escrow operation.
    *
-   * `actorAccountId` is the user who triggered the side-effect (employer
-   * who funded, worker who submitted, etc.). Account.id === ClientProfile.id
-   * by shared PK in this codebase, so callers can pass either.
+   * `actorAccountId` is the user who triggered the side-effect. SYSTEM
+   * messages carry a null sender now, so it is informational only.
    */
   private postChatSystemMessage(
     collaborationId: bigint,
@@ -65,12 +73,7 @@ export class EscrowService {
 
   /**
    * Start Stripe Connect Express onboarding for a worker. Creates the Connect
-   * account if one doesn't already exist, then returns a fresh AccountLink
-   * URL the user redirects to. Idempotent — re-calling for a user with an
-   * existing account just creates a new AccountLink (existing accounts can be
-   * re-onboarded if Stripe re-flags requirements).
-   *
-   * Returns: { account_id, onboarding_url, expires_at }
+   * account if one doesn't already exist, then returns a fresh AccountLink URL.
    */
   async startOnboarding(workerProfileId: bigint, ip?: string) {
     if (!this.stripe) {
@@ -149,9 +152,7 @@ export class EscrowService {
 
   /**
    * Read the current onboarding status. Pulls fresh capability flags from
-   * Stripe (so the user sees real state after returning from Stripe-hosted
-   * onboarding without waiting for the webhook). Updates our denormalised
-   * cache columns at the same time.
+   * Stripe and refreshes the denormalised cache columns on `client_profile`.
    */
   async getOnboardingStatus(workerProfileId: bigint) {
     const profile = await this.prisma.clientProfile.findUnique({
@@ -240,9 +241,8 @@ export class EscrowService {
 
   /**
    * Webhook handler — `account.updated` (Connect events).
-   * Updates the denormalised flags on `client_profile` and fires the
-   * "you can now receive payouts" email the FIRST time `payouts_enabled`
-   * flips to true (idempotent).
+   * Updates the denormalised flags on `client_profile` and, the FIRST time
+   * `payouts_enabled` flips true, sweeps any held payouts + commissions.
    */
   async handleAccountUpdated(
     account: Stripe.Account,
@@ -287,23 +287,23 @@ export class EscrowService {
         profile.account.email,
         profile.display_name,
       );
-      // Backfill any pending referral payouts now that payouts are live
+      // Settle any held referral commissions now that payouts are live.
       void this.backfillPendingReferralPayouts(profile.id);
-      // Retry releases that failed because this worker wasn't onboarded
+      // Retry releases that failed because this worker wasn't onboarded.
       void this.retryFailedReleasesForWorker(profile.id);
-      // Pay out any worker-side payouts that were held because the worker
+      // Pay out any WORKER_PAYOUT ledger rows held because the worker
       // wasn't onboarded at release time.
       void this.payPendingWorkerPayouts(profile.id);
     }
   }
 
   /**
-   * Sweep all PENDING PendingWorkerPayout rows for a worker who has just
-   * enabled Stripe payouts. Idempotent — already-PAID rows are skipped.
-   * Failures flip to FAILED with `failure_reason`.
+   * Sweep all PENDING `payment` rows of type WORKER_PAYOUT for a worker who
+   * just enabled Stripe payouts. Idempotent — already-PAID rows are skipped.
+   * Failures flip the row to FAILED with `failure_reason`.
    */
   private async payPendingWorkerPayouts(workerProfileId: bigint) {
-    if (!this.stripe) return;
+    if (!this.stripe) return { paid: 0, failed: 0 };
     const profile = await this.prisma.clientProfile.findUnique({
       where: { id: workerProfileId },
       select: {
@@ -315,12 +315,13 @@ export class EscrowService {
       !profile?.stripe_connect_account_id ||
       !profile.connect_payouts_enabled
     ) {
-      return;
+      return { paid: 0, failed: 0 };
     }
 
-    const pending = await this.prisma.pendingWorkerPayout.findMany({
+    const pending = await this.prisma.payment.findMany({
       where: {
-        worker_client_profile_id: workerProfileId,
+        client_profile_id: workerProfileId,
+        type: 'WORKER_PAYOUT',
         status: 'PENDING',
       },
     });
@@ -338,30 +339,24 @@ export class EscrowService {
             transfer_group: `escrow_${row.milestone_id}`,
             metadata: {
               milestone_id: String(row.milestone_id),
-              worker_client_profile_id: String(workerProfileId),
+              payment_id: String(row.id),
               kind: 'worker_payout_backfill',
             },
           },
           { idempotencyKey: `worker_payout_backfill_${row.id}` },
         );
-        await this.prisma.pendingWorkerPayout.update({
+        await this.prisma.payment.update({
           where: { id: row.id },
           data: {
             status: 'PAID',
-            stripe_transfer_id: tx.id,
-            paid_at: new Date(),
+            stripe_id: tx.id,
+            settled_at: new Date(),
             failure_reason: null,
           },
         });
-        // Also stamp the milestone with the transfer id so the wallet shows
-        // it correctly post-onboarding.
-        await this.prisma.escrowMilestone.update({
-          where: { id: row.milestone_id },
-          data: { stripe_transfer_id: tx.id },
-        });
         paid += 1;
       } catch (err) {
-        await this.prisma.pendingWorkerPayout.update({
+        await this.prisma.payment.update({
           where: { id: row.id },
           data: {
             status: 'FAILED',
@@ -380,21 +375,15 @@ export class EscrowService {
   }
 
   /**
-   * When a worker completes onboarding, scan for FUNDED/SUBMITTED milestones
-   * that have already passed the auto-release window OR are in RELEASE_FAILED
-   * state, and re-fire release. Plus catches DISPUTED → RESOLVED milestones
-   * that ended up RELEASE_FAILED on the resolution path.
-   *
-   * Called from handleAccountUpdated when payouts_enabled flips true.
+   * When a worker completes onboarding, re-fire release for milestones stuck
+   * in RELEASE_FAILED.
    */
   private async retryFailedReleasesForWorker(workerProfileId: bigint) {
     try {
       const failed = await this.prisma.escrowMilestone.findMany({
         where: {
           status: 'RELEASE_FAILED',
-          escrow: {
-            contract: { collaboration: { worker_id: workerProfileId } },
-          },
+          contract: { collaboration: { worker_id: workerProfileId } },
         },
         select: { id: true, title: true },
       });
@@ -419,9 +408,6 @@ export class EscrowService {
 
   /**
    * Webhook handler — `account.application.deauthorized`.
-   * Worker disconnected the platform from their Stripe account. The webhook
-   * payload's `data.object` is a Stripe Application, not an Account — the
-   * account id comes from `event.account`. Caller passes the id.
    */
   async handleAccountDeauthorizedById(
     accountId: string,
@@ -462,8 +448,7 @@ export class EscrowService {
 
   /**
    * Pure computation of payout breakdown for a given amount + settings.
-   * All math in pence to avoid floating-point drift; returns Decimal-style
-   * strings for display + Int pence for Stripe API calls.
+   * All math in pence to avoid floating-point drift.
    */
   computePayouts(
     amountPounds: string | number,
@@ -530,33 +515,46 @@ export class EscrowService {
 
   // ─── Milestones (Slice B) ──────────────────────────────────────
 
-  private async assertEmployerPartyOnEscrow(
-    escrowId: bigint,
+  /**
+   * Generalised party assertion — loads the contract behind a milestone set
+   * and returns the caller's role on it ('EMPLOYER' | 'WORKER'). Rejects an
+   * ENDED contract (milestones are immutable once the contract closes).
+   */
+  private async assertPartyOnContract(
+    contractId: bigint,
     clientProfileId: bigint,
-  ) {
-    const escrow = await this.prisma.escrowTransaction.findUnique({
-      where: { id: escrowId },
-      include: { contract: { include: { collaboration: true } } },
+  ): Promise<{
+    contract: Prisma.ContractGetPayload<{ include: { collaboration: true } }>;
+    role: 'EMPLOYER' | 'WORKER';
+  }> {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: contractId },
+      include: { collaboration: true },
     });
-    if (!escrow) throw new NotFoundException({ code: 'ESCROW_NOT_FOUND' });
-    if (escrow.contract.collaboration.employer_id !== clientProfileId) {
-      throw new ForbiddenException({
-        code: 'NOT_EMPLOYER',
-        message: 'Only the employer party can manage milestones.',
-      });
-    }
-    if (escrow.status === 'ENDED' || escrow.status === 'CANCELED') {
+    if (!contract) throw new NotFoundException({ code: 'CONTRACT_NOT_FOUND' });
+    if (contract.status === 'ENDED') {
       throw new BadRequestException({
         code: 'INVALID_STATE',
-        message: `Cannot edit milestones — escrow is ${escrow.status.toLowerCase()}.`,
+        message: 'Cannot edit milestones — the contract has ended.',
       });
     }
-    return escrow;
+    const collab = contract.collaboration;
+    if (collab.employer_id === clientProfileId) {
+      return { contract, role: 'EMPLOYER' };
+    }
+    if (collab.worker_id === clientProfileId) {
+      return { contract, role: 'WORKER' };
+    }
+    throw new ForbiddenException({
+      code: 'NOT_PARTY',
+      message: 'Only the worker or employer party can manage milestones.',
+    });
   }
 
-  async listMilestones(escrowId: bigint) {
+  /** List milestones on a contract, with held-payout flag for the SPA. */
+  async listMilestones(contractId: bigint) {
     const rows = await this.prisma.escrowMilestone.findMany({
-      where: { escrow_id: escrowId },
+      where: { contract_id: contractId },
       orderBy: { position: 'asc' },
       include: {
         attachments: {
@@ -568,69 +566,38 @@ export class EscrowService {
             original_name: true,
             mime_type: true,
             size_bytes: true,
-            uploaded_by_id: true,
             created_at: true,
           },
         },
-        pending_worker_payouts: {
-          where: { status: { in: ['PENDING', 'FAILED'] } },
-          select: { id: true, status: true, failure_reason: true },
-        },
       },
     });
-    // Surface a flat boolean for the frontend so MilestoneRow can show
-    // "Held until worker connects Stripe" without joining the wallet payload.
+    if (rows.length === 0) return [];
+
+    // A milestone's worker payout is "on hold" when its WORKER_PAYOUT ledger
+    // row is still PENDING/FAILED (worker hasn't completed Stripe onboarding).
+    const heldPayouts = await this.prisma.payment.findMany({
+      where: {
+        milestone_id: { in: rows.map((m) => m.id) },
+        type: 'WORKER_PAYOUT',
+        status: { in: ['PENDING', 'FAILED'] },
+      },
+      select: { milestone_id: true },
+    });
+    const heldSet = new Set(heldPayouts.map((p) => p.milestone_id));
+
     return rows.map((m) => ({
       ...m,
-      worker_payout_on_hold: m.pending_worker_payouts.length > 0,
+      worker_payout_on_hold: heldSet.has(m.id),
     }));
-  }
-
-  /**
-   * Generalised party assertion — returns the caller's role on this escrow
-   * ('EMPLOYER' | 'WORKER'). Used by both employer-only and worker-only
-   * milestone flows.
-   */
-  private async assertPartyOnEscrow(
-    escrowId: bigint,
-    clientProfileId: bigint,
-  ): Promise<{
-    escrow: Awaited<ReturnType<typeof this.prisma.escrowTransaction.findUnique>>;
-    role: 'EMPLOYER' | 'WORKER';
-  }> {
-    const escrow = await this.prisma.escrowTransaction.findUnique({
-      where: { id: escrowId },
-      include: { contract: { include: { collaboration: true } } },
-    });
-    if (!escrow) throw new NotFoundException({ code: 'ESCROW_NOT_FOUND' });
-    if (escrow.status === 'ENDED' || escrow.status === 'CANCELED') {
-      throw new BadRequestException({
-        code: 'INVALID_STATE',
-        message: `Cannot edit milestones — escrow is ${escrow.status.toLowerCase()}.`,
-      });
-    }
-    const collab = escrow.contract.collaboration;
-    if (collab.employer_id === clientProfileId) {
-      return { escrow, role: 'EMPLOYER' };
-    }
-    if (collab.worker_id === clientProfileId) {
-      return { escrow, role: 'WORKER' };
-    }
-    throw new ForbiddenException({
-      code: 'NOT_PARTY',
-      message: 'Only the worker or employer party can manage milestones.',
-    });
   }
 
   /**
    * Create a milestone. Status defaults to:
    *   - PENDING when employer creates (immediately fundable)
    *   - REQUESTED when worker creates (employer must approve before fund)
-   * Optional description (≤ 2000 chars). Attachments are added separately
-   * via `addMilestoneAttachment` (up to 3 per phase: CREATION / SUBMISSION).
    */
   async createMilestone(
-    escrowId: bigint,
+    contractId: bigint,
     callerClientProfileId: bigint,
     dto: {
       title: string;
@@ -640,8 +607,8 @@ export class EscrowService {
     },
     ip?: string,
   ) {
-    const { role } = await this.assertPartyOnEscrow(
-      escrowId,
+    const { role } = await this.assertPartyOnContract(
+      contractId,
       callerClientProfileId,
     );
     const amount = new Prisma.Decimal(dto.amount);
@@ -653,7 +620,7 @@ export class EscrowService {
     }
 
     const existing = await this.prisma.escrowMilestone.findMany({
-      where: { escrow_id: escrowId },
+      where: { contract_id: contractId },
       select: { position: true },
     });
     const usedPositions = new Set(existing.map((m) => m.position));
@@ -671,7 +638,7 @@ export class EscrowService {
 
     const created = await this.prisma.escrowMilestone.create({
       data: {
-        escrow_id: escrowId,
+        contract_id: contractId,
         position,
         title: dto.title.trim(),
         description: dto.description?.trim() || null,
@@ -687,7 +654,7 @@ export class EscrowService {
       'escrow_milestone',
       created.id,
       {
-        escrow_id: String(escrowId),
+        contract_id: String(contractId),
         title: created.title,
         amount: created.amount.toString(),
         position,
@@ -702,9 +669,8 @@ export class EscrowService {
   /**
    * Persist a milestone attachment (file already uploaded to disk by the
    * controller's multer interceptor). Cap: 3 per phase per milestone.
-   * - CREATION phase: allowed when milestone is REQUESTED or PENDING (and
-   *   only by the same role that created it — to avoid weird cross-edits).
-   * - SUBMISSION phase: worker only, when milestone is FUNDED or SUBMITTED.
+   * The uploader is NOT stored — it is derived (SUBMISSION → worker;
+   * CREATION → the milestone's `created_by_role` party).
    */
   async addMilestoneAttachment(
     milestoneId: bigint,
@@ -723,8 +689,8 @@ export class EscrowService {
     });
     if (!milestone)
       throw new NotFoundException({ code: 'MILESTONE_NOT_FOUND' });
-    const { role } = await this.assertPartyOnEscrow(
-      milestone.escrow_id,
+    const { role } = await this.assertPartyOnContract(
+      milestone.contract_id,
       uploaderClientProfileId,
     );
 
@@ -772,7 +738,6 @@ export class EscrowService {
     return this.prisma.escrowMilestoneAttachment.create({
       data: {
         milestone_id: milestoneId,
-        uploaded_by_id: uploaderClientProfileId,
         phase,
         file_url: `/uploads/milestone-attachments/${file.filename}`,
         original_name: file.originalname,
@@ -783,31 +748,51 @@ export class EscrowService {
   }
 
   /**
-   * Delete a milestone attachment. Only the uploader can remove their own
-   * file, and only if the milestone hasn't transitioned past the relevant
-   * phase yet (CREATION → still REQUESTED/PENDING; SUBMISSION → still
-   * FUNDED/SUBMITTED).
+   * Delete a milestone attachment. The uploader is derived (SUBMISSION →
+   * worker; CREATION → the milestone's `created_by_role` party); only that
+   * party may remove the file, and only before the milestone leaves the
+   * relevant phase.
    */
   async deleteMilestoneAttachment(
     attachmentId: bigint,
-    uploaderClientProfileId: bigint,
+    callerClientProfileId: bigint,
   ) {
     const att = await this.prisma.escrowMilestoneAttachment.findUnique({
       where: { id: attachmentId },
-      include: { milestone: true },
+      include: {
+        milestone: {
+          include: { contract: { include: { collaboration: true } } },
+        },
+      },
     });
     if (!att) throw new NotFoundException({ code: 'ATTACHMENT_NOT_FOUND' });
-    if (att.uploaded_by_id !== uploaderClientProfileId) {
+
+    const collab = att.milestone.contract.collaboration;
+    // Derive the uploader: SUBMISSION is always the worker; CREATION is
+    // whichever party created the milestone.
+    const uploaderRole =
+      att.phase === 'SUBMISSION' ? 'WORKER' : att.milestone.created_by_role;
+    const uploaderId =
+      uploaderRole === 'WORKER' ? collab.worker_id : collab.employer_id;
+    if (uploaderId !== callerClientProfileId) {
       throw new ForbiddenException({ code: 'NOT_OWNER' });
     }
+
     const status = att.milestone.status;
-    if (att.phase === 'CREATION' && !['REQUESTED', 'PENDING'].includes(status)) {
+    if (
+      att.phase === 'CREATION' &&
+      !['REQUESTED', 'PENDING'].includes(status)
+    ) {
       throw new ConflictException({
         code: 'INVALID_STATE',
-        message: 'Cannot remove a CREATION attachment after milestone is funded.',
+        message:
+          'Cannot remove a CREATION attachment after milestone is funded.',
       });
     }
-    if (att.phase === 'SUBMISSION' && !['FUNDED', 'SUBMITTED'].includes(status)) {
+    if (
+      att.phase === 'SUBMISSION' &&
+      !['FUNDED', 'SUBMITTED'].includes(status)
+    ) {
       throw new ConflictException({
         code: 'INVALID_STATE',
         message:
@@ -821,7 +806,6 @@ export class EscrowService {
 
   /**
    * Move REQUESTED → PENDING (employer approves a worker-requested milestone).
-   * After this the employer can fund it like any other PENDING milestone.
    */
   async approveMilestoneRequest(
     milestoneId: bigint,
@@ -833,8 +817,8 @@ export class EscrowService {
     });
     if (!milestone)
       throw new NotFoundException({ code: 'MILESTONE_NOT_FOUND' });
-    const { role } = await this.assertPartyOnEscrow(
-      milestone.escrow_id,
+    const { role } = await this.assertPartyOnContract(
+      milestone.contract_id,
       employerClientProfileId,
     );
     if (role !== 'EMPLOYER') {
@@ -858,14 +842,12 @@ export class EscrowService {
       { from: 'REQUESTED', to: 'PENDING' },
       ip,
     );
+    const contract = await this.prisma.contract.findUniqueOrThrow({
+      where: { id: milestone.contract_id },
+      select: { collaboration_id: true },
+    });
     this.postChatSystemMessage(
-      // collab id via escrow → contract → collab
-      (
-        await this.prisma.escrowTransaction.findUniqueOrThrow({
-          where: { id: milestone.escrow_id },
-          include: { contract: { select: { collaboration_id: true } } },
-        })
-      ).contract.collaboration_id,
+      contract.collaboration_id,
       `Milestone "${milestone.title}" approved — ready to fund.`,
       employerClientProfileId,
     );
@@ -873,9 +855,7 @@ export class EscrowService {
   }
 
   /**
-   * Decline a worker-requested milestone — flips status to DECLINED so the
-   * worker can see the outcome on their side. Worker may request again with
-   * different terms if they want (creates a new REQUESTED row).
+   * Decline a worker-requested milestone — flips status to DECLINED.
    */
   async declineMilestoneRequest(
     milestoneId: bigint,
@@ -887,8 +867,8 @@ export class EscrowService {
     });
     if (!milestone)
       throw new NotFoundException({ code: 'MILESTONE_NOT_FOUND' });
-    const { role } = await this.assertPartyOnEscrow(
-      milestone.escrow_id,
+    const { role } = await this.assertPartyOnContract(
+      milestone.contract_id,
       employerClientProfileId,
     );
     if (role !== 'EMPLOYER') {
@@ -918,7 +898,6 @@ export class EscrowService {
     return updated;
   }
 
-
   async updateMilestone(
     milestoneId: bigint,
     callerClientProfileId: bigint,
@@ -935,8 +914,8 @@ export class EscrowService {
     });
     if (!milestone)
       throw new NotFoundException({ code: 'MILESTONE_NOT_FOUND' });
-    const { role } = await this.assertPartyOnEscrow(
-      milestone.escrow_id,
+    const { role } = await this.assertPartyOnContract(
+      milestone.contract_id,
       callerClientProfileId,
     );
 
@@ -1001,14 +980,11 @@ export class EscrowService {
     });
     if (!milestone)
       throw new NotFoundException({ code: 'MILESTONE_NOT_FOUND' });
-    const { role } = await this.assertPartyOnEscrow(
-      milestone.escrow_id,
+    const { role } = await this.assertPartyOnContract(
+      milestone.contract_id,
       callerClientProfileId,
     );
 
-    // PENDING deletable by employer only. REQUESTED deletable by the worker
-    // who requested it (employer uses POST /decline-request instead — that
-    // emits a different audit event).
     if (milestone.status === 'PENDING') {
       if (role !== 'EMPLOYER') {
         throw new ForbiddenException({ code: 'NOT_EMPLOYER' });
@@ -1034,7 +1010,7 @@ export class EscrowService {
       'escrow_milestone',
       milestoneId,
       {
-        escrow_id: String(milestone.escrow_id),
+        contract_id: String(milestone.contract_id),
         title: milestone.title,
         by_role: role,
       },
@@ -1055,15 +1031,11 @@ export class EscrowService {
     const milestone = await this.prisma.escrowMilestone.findUnique({
       where: { id: milestoneId },
       include: {
-        escrow: {
+        contract: {
           include: {
-            contract: {
+            collaboration: {
               include: {
-                collaboration: {
-                  include: {
-                    worker: { include: { client_profile: true } },
-                  },
-                },
+                worker: { include: { client_profile: true } },
               },
             },
           },
@@ -1073,8 +1045,7 @@ export class EscrowService {
     if (!milestone)
       throw new NotFoundException({ code: 'MILESTONE_NOT_FOUND' });
     if (
-      milestone.escrow.contract.collaboration.employer_id !==
-      employerClientProfileId
+      milestone.contract.collaboration.employer_id !== employerClientProfileId
     ) {
       throw new ForbiddenException({ code: 'NOT_EMPLOYER' });
     }
@@ -1085,10 +1056,10 @@ export class EscrowService {
       });
     }
 
-    // Lockstep check 1: another in-flight milestone (FUNDED/SUBMITTED/DISPUTED/RELEASE_FAILED).
+    // Lockstep check 1: another in-flight milestone.
     const othersInFlight = await this.prisma.escrowMilestone.findMany({
       where: {
-        escrow_id: milestone.escrow_id,
+        contract_id: milestone.contract_id,
         id: { not: milestoneId },
         status: { in: ['FUNDED', 'SUBMITTED', 'DISPUTED', 'RELEASE_FAILED'] },
       },
@@ -1107,11 +1078,10 @@ export class EscrowService {
       });
     }
 
-    // Lockstep check 2: position order. Earlier-position PENDING milestones
-    // must be funded first — Upwork-style sequential funding.
+    // Lockstep check 2: position order — Upwork-style sequential funding.
     const earlierPending = await this.prisma.escrowMilestone.findFirst({
       where: {
-        escrow_id: milestone.escrow_id,
+        contract_id: milestone.contract_id,
         status: 'PENDING',
         position: { lt: milestone.position },
       },
@@ -1125,12 +1095,9 @@ export class EscrowService {
       });
     }
 
-    // Worker Connect onboarding is now an INFORMATIONAL flag, not a hard block.
-    // Employer can fund — money sits in escrow. Release will defer until the
-    // worker completes onboarding (handled in executeRelease + auto-retry on
-    // account.updated webhook flipping payouts_enabled to true).
+    // Worker Connect onboarding is an INFORMATIONAL flag, not a hard block.
     const workerProfile =
-      milestone.escrow.contract.collaboration.worker.client_profile;
+      milestone.contract.collaboration.worker.client_profile;
     const workerOnboardingPending = !workerProfile.connect_payouts_enabled;
 
     const settings = await this.getPlatformSetting();
@@ -1141,8 +1108,7 @@ export class EscrowService {
 
     const frontendUrl =
       this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-    const escrowId = String(milestone.escrow_id);
-    const contractId = String(milestone.escrow.contract_id);
+    const contractId = String(milestone.contract_id);
     const milestoneIdStr = String(milestoneId);
 
     const session = await this.stripe.checkout.sessions.create(
@@ -1163,14 +1129,12 @@ export class EscrowService {
           },
         ],
         metadata: {
-          escrow_id: escrowId,
           milestone_id: milestoneIdStr,
           contract_id: contractId,
         },
         payment_intent_data: {
           transfer_group: `escrow_${milestoneIdStr}`,
           metadata: {
-            escrow_id: escrowId,
             milestone_id: milestoneIdStr,
             contract_id: contractId,
           },
@@ -1191,7 +1155,8 @@ export class EscrowService {
 
   /**
    * Webhook handler for `payment_intent.succeeded` when metadata.milestone_id
-   * is set. Idempotent — returns no-op if already advanced.
+   * is set. Writes the inbound CHARGE ledger row + advances milestone to
+   * FUNDED with the frozen fee snapshot. Idempotent — no-op if not PENDING.
    */
   async handleMilestonePaymentSucceeded(pi: Stripe.PaymentIntent, ip?: string) {
     const milestoneIdStr = pi.metadata?.milestone_id;
@@ -1204,13 +1169,7 @@ export class EscrowService {
     }
     const milestone = await this.prisma.escrowMilestone.findUnique({
       where: { id: milestoneId },
-      include: {
-        escrow: {
-          include: {
-            contract: { include: { collaboration: true } },
-          },
-        },
-      },
+      include: { contract: { include: { collaboration: true } } },
     });
     if (!milestone) {
       this.logger.warn(
@@ -1225,25 +1184,21 @@ export class EscrowService {
       return;
     }
 
-    const latestCharge =
-      typeof pi.latest_charge === 'string'
-        ? pi.latest_charge
-        : pi.latest_charge?.id;
-
     // Freeze fee snapshot
     const settings = await this.getPlatformSetting();
     const breakdown = this.computePayouts(
       milestone.amount.toString(),
       settings,
     );
+    const chargedAmount = new Prisma.Decimal(
+      pi.amount_received ?? pi.amount ?? 0,
+    ).div(100);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.escrowMilestone.update({
         where: { id: milestoneId },
         data: {
           status: 'FUNDED',
-          stripe_pi_id: pi.id,
-          stripe_charge_id: latestCharge ?? null,
           frozen_client_fee_pct: settings.client_marketplace_fee_percent,
           frozen_freelancer_fee_pct: settings.freelancer_service_fee_percent,
           frozen_referral_fee_pct: new Prisma.Decimal(0),
@@ -1254,22 +1209,28 @@ export class EscrowService {
           frozen_platform_fee: new Prisma.Decimal(breakdown.platform_keep),
         },
       });
-      // Flip escrow CREATED → ACTIVE on first funded milestone
-      if (milestone.escrow.status === 'CREATED') {
-        await tx.escrowTransaction.update({
-          where: { id: milestone.escrow_id },
-          data: { status: 'ACTIVE', deposit_confirmed_at: new Date() },
-        });
-      }
+      // Inbound CHARGE row — the employer is the counterparty.
+      await tx.payment.create({
+        data: {
+          milestone_id: milestoneId,
+          client_profile_id: milestone.contract.collaboration.employer_id,
+          type: 'CHARGE',
+          amount: chargedAmount,
+          currency: (pi.currency ?? 'gbp').toUpperCase(),
+          status: 'PAID',
+          stripe_id: pi.id,
+          settled_at: new Date(),
+        },
+      });
     });
 
     await this.audit.log(
-      milestone.escrow.contract.collaboration.employer_id,
+      milestone.contract.collaboration.employer_id,
       ESCROW_AUDIT_EVENTS.MILESTONE_FUNDED,
       'escrow_milestone',
       milestoneId,
       {
-        escrow_id: String(milestone.escrow_id),
+        contract_id: String(milestone.contract_id),
         amount: milestone.amount.toString(),
         payment_intent_id: pi.id,
       },
@@ -1277,38 +1238,44 @@ export class EscrowService {
     );
 
     this.postChatSystemMessage(
-      milestone.escrow.contract_id,
+      milestone.contract.collaboration_id,
       `💷 Milestone "${milestone.title}" funded — £${milestone.amount.toFixed(2)} in escrow.`,
-      milestone.escrow.contract.collaboration.employer_id,
+      milestone.contract.collaboration.employer_id,
     );
 
-    // Email worker: "Funds in escrow — start work"
     void this.notifyMilestoneFunded(milestoneId);
   }
 
   /**
+   * Webhook handler for `payment_intent.payment_failed` / `.canceled` with a
+   * milestone_id. The Checkout never completed — the milestone stays PENDING
+   * so the employer can simply retry funding; no ledger row is written.
+   */
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async handleMilestonePaymentFailed(pi: Stripe.PaymentIntent): Promise<void> {
+    const milestoneIdStr = pi.metadata?.milestone_id;
+    if (!milestoneIdStr) return;
+    this.logger.warn(
+      `Milestone funding payment failed/canceled :: milestone=${milestoneIdStr} pi=${pi.id}`,
+    );
+  }
+
+  /**
    * Email notification helper — fired after a milestone is FUNDED.
-   * Looks up worker email + display name and sends. If worker hasn't
-   * completed Stripe Connect onboarding, the email asks them to do
-   * so — payment is waiting for them.
    */
   private async notifyMilestoneFunded(milestoneId: bigint) {
     try {
       const m = await this.prisma.escrowMilestone.findUnique({
         where: { id: milestoneId },
         include: {
-          escrow: {
+          contract: {
             include: {
-              contract: {
+              collaboration: {
                 include: {
-                  collaboration: {
+                  worker: {
                     include: {
-                      worker: {
-                        include: {
-                          client_profile: {
-                            include: { account: { select: { email: true } } },
-                          },
-                        },
+                      client_profile: {
+                        include: { account: { select: { email: true } } },
                       },
                     },
                   },
@@ -1319,7 +1286,7 @@ export class EscrowService {
         },
       });
       if (!m) return;
-      const worker = m.escrow.contract.collaboration.worker.client_profile;
+      const worker = m.contract.collaboration.worker.client_profile;
       void this.mail.sendEscrowMilestoneFunded(
         worker.account.email,
         worker.display_name,
@@ -1343,14 +1310,10 @@ export class EscrowService {
     const milestone = await this.prisma.escrowMilestone.findUnique({
       where: { id: milestoneId },
       include: {
-        escrow: {
+        contract: {
           include: {
-            contract: {
-              include: {
-                collaboration: {
-                  select: { worker_id: true, employer_id: true },
-                },
-              },
+            collaboration: {
+              select: { id: true, worker_id: true, employer_id: true },
             },
           },
         },
@@ -1358,10 +1321,7 @@ export class EscrowService {
     });
     if (!milestone)
       throw new NotFoundException({ code: 'MILESTONE_NOT_FOUND' });
-    if (
-      milestone.escrow.contract.collaboration.worker_id !==
-      workerClientProfileId
-    ) {
+    if (milestone.contract.collaboration.worker_id !== workerClientProfileId) {
       throw new ForbiddenException({ code: 'NOT_WORKER' });
     }
     if (milestone.status !== 'FUNDED') {
@@ -1379,18 +1339,18 @@ export class EscrowService {
       },
     });
     await this.audit.log(
-      milestone.escrow.contract.collaboration.employer_id, // subject = the user who needs to act
+      milestone.contract.collaboration.employer_id, // subject = the user who needs to act
       ESCROW_AUDIT_EVENTS.MILESTONE_SUBMITTED,
       'escrow_milestone',
       milestoneId,
       {
-        escrow_id: String(milestone.escrow_id),
+        contract_id: String(milestone.contract_id),
         submitted_by: String(workerClientProfileId),
       },
       ip,
     );
     this.postChatSystemMessage(
-      milestone.escrow.contract_id,
+      milestone.contract.collaboration_id,
       `📩 Worker submitted milestone "${milestone.title}" for review. Employer has 7 days to approve or dispute, otherwise auto-release fires.${message?.trim() ? `\n\n"${message.trim()}"` : ''}`,
       workerClientProfileId,
     );
@@ -1406,25 +1366,21 @@ export class EscrowService {
       const m = await this.prisma.escrowMilestone.findUnique({
         where: { id: milestoneId },
         include: {
-          escrow: {
+          contract: {
             include: {
-              contract: {
+              collaboration: {
                 include: {
-                  collaboration: {
+                  worker: {
                     include: {
-                      worker: {
-                        include: {
-                          client_profile: {
-                            include: { account: { select: { email: true } } },
-                          },
-                        },
+                      client_profile: {
+                        include: { account: { select: { email: true } } },
                       },
-                      employer: {
-                        include: {
-                          client_profile: {
-                            include: { account: { select: { email: true } } },
-                          },
-                        },
+                    },
+                  },
+                  employer: {
+                    include: {
+                      client_profile: {
+                        include: { account: { select: { email: true } } },
                       },
                     },
                   },
@@ -1435,7 +1391,7 @@ export class EscrowService {
         },
       });
       if (!m) return;
-      const worker = m.escrow.contract.collaboration.worker.client_profile;
+      const worker = m.contract.collaboration.worker.client_profile;
       const amount = (m.frozen_worker_payout ?? m.amount).toFixed(2);
       void this.mail.sendEscrowMilestoneReleased(
         worker.account.email,
@@ -1445,8 +1401,7 @@ export class EscrowService {
         actor === 'system',
       );
       if (actor === 'system') {
-        const employer =
-          m.escrow.contract.collaboration.employer.client_profile;
+        const employer = m.contract.collaboration.employer.client_profile;
         void this.mail.sendEscrowMilestoneAutoReleased(
           employer.account.email,
           employer.display_name,
@@ -1466,18 +1421,14 @@ export class EscrowService {
       const m = await this.prisma.escrowMilestone.findUnique({
         where: { id: milestoneId },
         include: {
-          escrow: {
+          contract: {
             include: {
-              contract: {
+              collaboration: {
                 include: {
-                  collaboration: {
+                  employer: {
                     include: {
-                      employer: {
-                        include: {
-                          client_profile: {
-                            include: { account: { select: { email: true } } },
-                          },
-                        },
+                      client_profile: {
+                        include: { account: { select: { email: true } } },
                       },
                     },
                   },
@@ -1488,7 +1439,7 @@ export class EscrowService {
         },
       });
       if (!m) return;
-      const employer = m.escrow.contract.collaboration.employer.client_profile;
+      const employer = m.contract.collaboration.employer.client_profile;
       void this.mail.sendEscrowMilestoneSubmitted(
         employer.account.email,
         employer.display_name,
@@ -1509,27 +1460,12 @@ export class EscrowService {
   ) {
     const milestone = await this.prisma.escrowMilestone.findUnique({
       where: { id: milestoneId },
-      include: {
-        escrow: {
-          include: {
-            contract: {
-              include: {
-                collaboration: {
-                  include: {
-                    worker: { include: { client_profile: true } },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+      include: { contract: { include: { collaboration: true } } },
     });
     if (!milestone)
       throw new NotFoundException({ code: 'MILESTONE_NOT_FOUND' });
     if (
-      milestone.escrow.contract.collaboration.employer_id !==
-      employerClientProfileId
+      milestone.contract.collaboration.employer_id !== employerClientProfileId
     ) {
       throw new ForbiddenException({ code: 'NOT_EMPLOYER' });
     }
@@ -1543,9 +1479,14 @@ export class EscrowService {
   }
 
   /**
-   * Pure release flow — used by both employer-approve and auto-release cron.
-   * Fires Stripe transfers (worker + referrer) and advances milestone to RELEASED.
-   * Idempotent via `Idempotency-Key` per transfer.
+   * Pure release flow — used by both employer-approve and the auto-release
+   * cron. Fires the Stripe worker transfer + referral commission transfers,
+   * writes the matching `payment` ledger rows, and advances milestone to
+   * RELEASED. Idempotent via per-transfer `Idempotency-Key`.
+   *
+   *  - worker onboarded → transfer immediately, WORKER_PAYOUT row = PAID.
+   *  - not onboarded / transfer rejected → WORKER_PAYOUT row = PENDING; the
+   *    `account.updated` sweep pays it once the worker finishes onboarding.
    */
   private async executeRelease(
     milestoneId: bigint,
@@ -1558,15 +1499,11 @@ export class EscrowService {
     const milestone = await this.prisma.escrowMilestone.findUnique({
       where: { id: milestoneId },
       include: {
-        escrow: {
+        contract: {
           include: {
-            contract: {
+            collaboration: {
               include: {
-                collaboration: {
-                  include: {
-                    worker: { include: { client_profile: true } },
-                  },
-                },
+                worker: { include: { client_profile: true } },
               },
             },
           },
@@ -1576,30 +1513,23 @@ export class EscrowService {
     if (!milestone)
       throw new NotFoundException({ code: 'MILESTONE_NOT_FOUND' });
 
-    const workerProfile =
-      milestone.escrow.contract.collaboration.worker.client_profile;
+    const contract = milestone.contract;
+    const collab = contract.collaboration;
+    const workerProfile = collab.worker.client_profile;
     const workerConnectId = workerProfile.stripe_connect_account_id;
     const workerOnboarded =
       !!workerConnectId && !!workerProfile.connect_payouts_enabled;
 
+    const workerPayoutAmount =
+      milestone.frozen_worker_payout ?? milestone.amount;
     const workerPayoutPence = Math.round(
-      (milestone.frozen_worker_payout?.toNumber() ??
-        milestone.amount.toNumber()) * 100,
+      workerPayoutAmount.mul(100).toNumber(),
     );
     const milestoneIdStr = String(milestoneId);
     const transferGroup = `escrow_${milestoneIdStr}`;
 
-    // Worker transfer.
-    //   • onboarded → fire transfer immediately
-    //   • not onboarded → write PendingWorkerPayout, milestone still RELEASED
-    //     (employer's POV: done; worker's POV: held until they finish onboarding,
-    //     then handleAccountUpdated sweep auto-pays).
-    //   • transfer rejected mid-flight → fall back to PendingWorkerPayout
-    //     instead of RELEASE_FAILED — money already left the employer; we
-    //     don't want to reverse it.
+    // ── Worker transfer ──────────────────────────────────────────
     let workerTransfer: Stripe.Transfer | null = null;
-    let workerPayoutPendingId: bigint | null = null;
-
     if (workerOnboarded) {
       try {
         workerTransfer = await this.stripe.transfers.create(
@@ -1617,10 +1547,10 @@ export class EscrowService {
       } catch (err) {
         const code = (err as { code?: string }).code ?? 'unknown';
         this.logger.warn(
-          `Live worker transfer rejected for milestone ${milestoneIdStr} (${code}); falling back to PendingWorkerPayout.`,
+          `Live worker transfer rejected for milestone ${milestoneIdStr} (${code}); writing a PENDING WORKER_PAYOUT row instead.`,
         );
         await this.audit.log(
-          milestone.escrow.contract.collaboration.worker_id,
+          collab.worker_id,
           ESCROW_AUDIT_EVENTS.MILESTONE_TRANSFER_FAILED,
           'escrow_milestone',
           milestoneId,
@@ -1635,47 +1565,49 @@ export class EscrowService {
       }
     }
 
-    if (!workerTransfer) {
-      // Either not onboarded OR live transfer rejected → write pending row.
-      const pending = await this.prisma.pendingWorkerPayout.create({
-        data: {
-          worker_client_profile_id:
-            milestone.escrow.contract.collaboration.worker_id,
-          milestone_id: milestoneId,
-          amount: new Prisma.Decimal(workerPayoutPence).div(100),
-          currency: 'GBP',
-          status: 'PENDING',
-        },
-      });
-      workerPayoutPendingId = pending.id;
-    }
+    // WORKER_PAYOUT ledger row — PAID if the transfer fired, else PENDING
+    // (held until the worker completes Stripe onboarding).
+    const workerPayoutRow = await this.prisma.payment.create({
+      data: {
+        milestone_id: milestoneId,
+        client_profile_id: collab.worker_id,
+        type: 'WORKER_PAYOUT',
+        amount: workerPayoutAmount,
+        currency: 'GBP',
+        status: workerTransfer ? 'PAID' : 'PENDING',
+        stripe_id: workerTransfer?.id ?? null,
+        settled_at: workerTransfer ? new Date() : null,
+      },
+    });
 
-    // Referrer commissions are computed via ReferralService (account + project
-    // refs, capped at 100% of platform_fee). Fired post-release as
-    // PendingReferralPayout rows; transfers are settled by the auto-release
-    // sweep against the platform balance once each referrer has onboarded.
-    const pendingReferralPayoutId: bigint | null = null;
+    // ── Referral commissions ─────────────────────────────────────
+    // Computed via ReferralService (account + project refs, capped at the
+    // milestone's platform_fee). Each line becomes a REFERRAL_* payment row,
+    // paid live if the referrer is onboarded, otherwise held PENDING.
     try {
-      await this.referrals?.fireCommissionsForRelease({
+      const lines = await this.referrals.computeMilestoneCommissions({
         milestoneId,
-        contractId: milestone.escrow.contract_id,
+        contractId: milestone.contract_id,
         agreedAmount: milestone.amount,
         platformFee: milestone.frozen_platform_fee ?? new Prisma.Decimal(0),
-        workerAccountId: milestone.escrow.contract.collaboration.worker_id,
-        employerAccountId: milestone.escrow.contract.collaboration.employer_id,
-        projectReferrerId: milestone.escrow.contract.project_referrer_id,
+        workerClientProfileId: collab.worker_id,
+        employerClientProfileId: collab.employer_id,
+        projectReferrerId: contract.project_referrer_id,
         projectReferrerRole:
-          (milestone.escrow.contract.project_referrer_role as
-            | 'WORKER'
-            | 'EMPLOYER'
-            | null) ?? null,
+          (contract.project_referrer_role as 'WORKER' | 'EMPLOYER' | null) ??
+          null,
       });
+      for (const line of lines) {
+        if (line.cappedAmount.lte(0)) continue;
+        await this.payReferralCommission(line, milestoneId, transferGroup);
+      }
     } catch (err) {
       this.logger.warn(
         `Referral commissions skipped for milestone=${milestoneIdStr}: ${(err as Error).message}`,
       );
     }
 
+    // ── Advance milestone ────────────────────────────────────────
     const now = new Date();
     await this.prisma.escrowMilestone.update({
       where: { id: milestoneId },
@@ -1683,26 +1615,21 @@ export class EscrowService {
         status: 'RELEASED',
         released_at: now,
         employer_approved_at: actor === 'employer' ? now : null,
-        stripe_transfer_id: workerTransfer?.id ?? null,
       },
     });
 
     await this.audit.log(
-      milestone.escrow.contract.collaboration.worker_id,
+      collab.worker_id,
       ESCROW_AUDIT_EVENTS.MILESTONE_RELEASED,
       'escrow_milestone',
       milestoneId,
       {
         actor,
-        worker_amount: (workerPayoutPence / 100).toFixed(2),
+        worker_amount: workerPayoutAmount.toFixed(2),
         platform_fee: milestone.frozen_platform_fee?.toString() ?? '0',
         worker_transfer_id: workerTransfer?.id ?? null,
-        worker_payout_pending_id: workerPayoutPendingId
-          ? String(workerPayoutPendingId)
-          : null,
-        pending_referral_payout_id: pendingReferralPayoutId
-          ? String(pendingReferralPayoutId)
-          : null,
+        worker_payout_payment_id: String(workerPayoutRow.id),
+        worker_payout_status: workerPayoutRow.status,
       },
       ip,
     );
@@ -1712,20 +1639,100 @@ export class EscrowService {
         ? `auto-released after 7 days of silence`
         : `released by employer`;
     const workerLabel = workerTransfer
-      ? `£${(workerPayoutPence / 100).toFixed(2)} sent to worker`
-      : `£${(workerPayoutPence / 100).toFixed(2)} held in escrow — paid out automatically when worker completes Stripe Connect onboarding`;
+      ? `£${workerPayoutAmount.toFixed(2)} sent to worker`
+      : `£${workerPayoutAmount.toFixed(2)} held in escrow — paid out automatically when worker completes Stripe Connect onboarding`;
     this.postChatSystemMessage(
-      milestone.escrow.contract_id,
+      collab.id,
       `✅ Milestone "${milestone.title}" ${releaseLabel}. ${workerLabel}.`,
-      actor === 'employer'
-        ? milestone.escrow.contract.collaboration.employer_id
-        : milestone.escrow.contract.collaboration.worker_id,
+      actor === 'employer' ? collab.employer_id : collab.worker_id,
     );
     void this.notifyMilestoneReleased(milestoneId, actor);
 
     return this.prisma.escrowMilestone.findUniqueOrThrow({
       where: { id: milestoneId },
     });
+  }
+
+  /**
+   * Create the REFERRAL_* `payment` row for one commission line and, if the
+   * referrer is Stripe-onboarded, fire the transfer immediately. Otherwise
+   * the row stays PENDING and is settled by `backfillPendingReferralPayouts`.
+   */
+  private async payReferralCommission(
+    line: {
+      referrerClientProfileId: bigint;
+      type: 'REFERRAL_ACCOUNT' | 'REFERRAL_W2W' | 'REFERRAL_E2E';
+      cappedAmount: Prisma.Decimal;
+    },
+    milestoneId: bigint,
+    transferGroup: string,
+  ) {
+    const referrer = await this.prisma.clientProfile.findUnique({
+      where: { id: line.referrerClientProfileId },
+      select: {
+        stripe_connect_account_id: true,
+        connect_payouts_enabled: true,
+      },
+    });
+    const canPayLive =
+      !!this.stripe &&
+      !!referrer?.stripe_connect_account_id &&
+      !!referrer.connect_payouts_enabled;
+
+    let transfer: Stripe.Transfer | null = null;
+    if (canPayLive && this.stripe) {
+      const amountPence = Math.round(line.cappedAmount.mul(100).toNumber());
+      try {
+        transfer = await this.stripe.transfers.create(
+          {
+            amount: amountPence,
+            currency: 'gbp',
+            destination: referrer.stripe_connect_account_id!,
+            transfer_group: transferGroup,
+            metadata: {
+              milestone_id: String(milestoneId),
+              kind: 'referral_commission',
+              referral_type: line.type,
+            },
+          },
+          {
+            idempotencyKey: `escrow_milestone_${String(milestoneId)}_${line.type}_${line.referrerClientProfileId}`,
+          },
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Referral commission transfer rejected for referrer=${line.referrerClientProfileId}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    const row = await this.prisma.payment.create({
+      data: {
+        milestone_id: milestoneId,
+        client_profile_id: line.referrerClientProfileId,
+        type: line.type,
+        amount: line.cappedAmount,
+        currency: 'GBP',
+        status: transfer ? 'PAID' : 'PENDING',
+        stripe_id: transfer?.id ?? null,
+        settled_at: transfer ? new Date() : null,
+      },
+    });
+
+    const contract = await this.prisma.escrowMilestone.findUnique({
+      where: { id: milestoneId },
+      select: { contract_id: true },
+    });
+    if (contract) {
+      this.referrals.notifyCommissionPaid(
+        line.referrerClientProfileId,
+        contract.contract_id,
+        line.cappedAmount,
+        line.type,
+        transfer != null,
+      );
+    }
+    return row;
   }
 
   async retryRelease(
@@ -1736,21 +1743,14 @@ export class EscrowService {
     const milestone = await this.prisma.escrowMilestone.findUnique({
       where: { id: milestoneId },
       include: {
-        escrow: {
-          include: {
-            contract: {
-              include: { collaboration: { select: { worker_id: true } } },
-            },
-          },
+        contract: {
+          include: { collaboration: { select: { worker_id: true } } },
         },
       },
     });
     if (!milestone)
       throw new NotFoundException({ code: 'MILESTONE_NOT_FOUND' });
-    if (
-      milestone.escrow.contract.collaboration.worker_id !==
-      workerClientProfileId
-    ) {
+    if (milestone.contract.collaboration.worker_id !== workerClientProfileId) {
       throw new ForbiddenException({ code: 'NOT_WORKER' });
     }
     if (milestone.status !== 'RELEASE_FAILED') {
@@ -1764,7 +1764,7 @@ export class EscrowService {
 
   /**
    * Auto-release scheduled job — runs hourly, finds SUBMITTED milestones
-   * older than 7 days where employer hasn't acted, fires release.
+   * older than the configured window where the employer hasn't acted.
    */
   async runAutoReleaseSweep() {
     const hours =
@@ -1795,38 +1795,45 @@ export class EscrowService {
   }
 
   /**
-   * Webhook handler — `transfer.paid`. Confirmation only; the milestone
-   * was already advanced to RELEASED inside executeRelease. Idempotent.
+   * Webhook handler — `transfer.created` / `transfer.paid`. Confirmation
+   * only; the WORKER_PAYOUT / REFERRAL_* row was written in executeRelease.
+   * Best-effort: stamp the matching payment row PAID by stripe_id.
    */
   async handleTransferPaid(transfer: Stripe.Transfer) {
     const milestoneIdStr = transfer.metadata?.milestone_id;
-    if (!milestoneIdStr) return;
-    const milestone = await this.prisma.escrowMilestone.findUnique({
-      where: { id: BigInt(milestoneIdStr) },
-    });
-    if (!milestone) return;
     this.logger.log(
-      `Transfer paid confirmation :: milestone=${milestoneIdStr} transfer=${transfer.id} kind=${transfer.metadata?.kind ?? '—'}`,
+      `Transfer paid confirmation :: milestone=${milestoneIdStr ?? '—'} transfer=${transfer.id} kind=${transfer.metadata?.kind ?? '—'}`,
     );
+    try {
+      await this.prisma.payment.updateMany({
+        where: { stripe_id: transfer.id, status: { not: 'PAID' } },
+        data: { status: 'PAID', settled_at: new Date() },
+      });
+    } catch (err) {
+      this.logger.warn(
+        `transfer.paid ledger sync failed: ${(err as Error).message}`,
+      );
+    }
   }
 
   /**
-   * Webhook handler — `transfer.failed`. Flips milestone to RELEASE_FAILED;
-   * worker can manually retry from /wallet once their Connect account is fixed.
+   * Webhook handler — `transfer.reversed`. Flips milestone to RELEASE_FAILED
+   * and the matching WORKER_PAYOUT row to FAILED; worker retries from /wallet.
    */
   async handleTransferFailed(transfer: Stripe.Transfer, ip?: string) {
     const milestoneIdStr = transfer.metadata?.milestone_id;
     if (!milestoneIdStr) return;
-    const milestoneId = BigInt(milestoneIdStr);
+    let milestoneId: bigint;
+    try {
+      milestoneId = BigInt(milestoneIdStr);
+    } catch {
+      return;
+    }
     const milestone = await this.prisma.escrowMilestone.findUnique({
       where: { id: milestoneId },
       include: {
-        escrow: {
-          include: {
-            contract: {
-              include: { collaboration: { select: { worker_id: true } } },
-            },
-          },
+        contract: {
+          include: { collaboration: { select: { worker_id: true } } },
         },
       },
     });
@@ -1835,8 +1842,15 @@ export class EscrowService {
       where: { id: milestoneId },
       data: { status: 'RELEASE_FAILED', release_attempts: { increment: 1 } },
     });
+    await this.prisma.payment.updateMany({
+      where: { stripe_id: transfer.id },
+      data: {
+        status: 'FAILED',
+        failure_reason: 'Stripe transfer reversed',
+      },
+    });
     await this.audit.log(
-      milestone.escrow.contract.collaboration.worker_id,
+      milestone.contract.collaboration.worker_id,
       ESCROW_AUDIT_EVENTS.MILESTONE_TRANSFER_FAILED,
       'escrow_milestone',
       milestoneId,
@@ -1846,20 +1860,93 @@ export class EscrowService {
   }
 
   /**
-   * Backfill pending referral payouts when a referrer completes onboarding.
-   * Delegates to ReferralService.payPendingReferralPayouts (canonical impl).
+   * Settle held referral commissions when a referrer completes onboarding —
+   * sweeps PENDING REFERRAL_* `payment` rows for that referrer.
    */
   private async backfillPendingReferralPayouts(referrerProfileId: bigint) {
-    const result =
-      await this.referrals.payPendingReferralPayouts(referrerProfileId);
-    if (result.paid > 0 || result.failed > 0) {
+    if (!this.stripe) return { paid: 0, failed: 0 };
+    const referrer = await this.prisma.clientProfile.findUnique({
+      where: { id: referrerProfileId },
+      select: {
+        stripe_connect_account_id: true,
+        connect_payouts_enabled: true,
+      },
+    });
+    if (
+      !referrer?.stripe_connect_account_id ||
+      !referrer.connect_payouts_enabled
+    ) {
+      return { paid: 0, failed: 0 };
+    }
+
+    const pending = await this.prisma.payment.findMany({
+      where: {
+        client_profile_id: referrerProfileId,
+        type: { in: ['REFERRAL_ACCOUNT', 'REFERRAL_W2W', 'REFERRAL_E2E'] },
+        status: 'PENDING',
+      },
+    });
+
+    let paid = 0;
+    let failed = 0;
+    for (const row of pending) {
+      const amountPence = Math.round(row.amount.mul(100).toNumber());
+      try {
+        const transfer = await this.stripe.transfers.create(
+          {
+            amount: amountPence,
+            currency: 'gbp',
+            destination: referrer.stripe_connect_account_id,
+            transfer_group: `escrow_${row.milestone_id}`,
+            metadata: {
+              milestone_id: String(row.milestone_id),
+              payment_id: String(row.id),
+              kind: 'referral_commission_backfill',
+            },
+          },
+          { idempotencyKey: `referral_payout_backfill_${row.id}` },
+        );
+        await this.prisma.payment.update({
+          where: { id: row.id },
+          data: {
+            status: 'PAID',
+            stripe_id: transfer.id,
+            settled_at: new Date(),
+            failure_reason: null,
+          },
+        });
+        paid += 1;
+      } catch (err) {
+        await this.prisma.payment.update({
+          where: { id: row.id },
+          data: {
+            status: 'FAILED',
+            failure_reason: (err as Error).message.slice(0, 500),
+          },
+        });
+        failed += 1;
+      }
+    }
+    if (paid > 0 || failed > 0) {
       this.logger.log(
-        `Pending referral payout backfill for referrer=${referrerProfileId}: paid=${result.paid} failed=${result.failed}`,
+        `Pending referral payout backfill for referrer=${referrerProfileId}: paid=${paid} failed=${failed}`,
       );
     }
+    return { paid, failed };
   }
 
   // ─── Refund + Dispute + Cancel (Slice D) ──────────────────────
+
+  /**
+   * Find the inbound CHARGE ledger row (the employer's PaymentIntent) for a
+   * milestone — needed to issue a Stripe refund.
+   */
+  private async findChargePayment(milestoneId: bigint) {
+    return this.prisma.payment.findFirst({
+      where: { milestone_id: milestoneId, type: 'CHARGE', status: 'PAID' },
+      orderBy: { created_at: 'desc' },
+    });
+  }
 
   async refundMilestone(
     milestoneId: bigint,
@@ -1872,14 +1959,10 @@ export class EscrowService {
     const milestone = await this.prisma.escrowMilestone.findUnique({
       where: { id: milestoneId },
       include: {
-        escrow: {
+        contract: {
           include: {
-            contract: {
-              include: {
-                collaboration: {
-                  select: { employer_id: true, worker_id: true },
-                },
-              },
+            collaboration: {
+              select: { id: true, employer_id: true, worker_id: true },
             },
           },
         },
@@ -1888,8 +1971,7 @@ export class EscrowService {
     if (!milestone)
       throw new NotFoundException({ code: 'MILESTONE_NOT_FOUND' });
     if (
-      milestone.escrow.contract.collaboration.employer_id !==
-      employerClientProfileId
+      milestone.contract.collaboration.employer_id !== employerClientProfileId
     ) {
       throw new ForbiddenException({ code: 'NOT_EMPLOYER' });
     }
@@ -1906,7 +1988,8 @@ export class EscrowService {
         message: `Cannot refund milestone in ${milestone.status} state.`,
       });
     }
-    if (!milestone.stripe_pi_id) {
+    const charge = await this.findChargePayment(milestoneId);
+    if (!charge?.stripe_id) {
       throw new ConflictException({
         code: 'NO_PAYMENT_INTENT',
         message: 'No payment to refund.',
@@ -1914,22 +1997,36 @@ export class EscrowService {
     }
 
     const refund = await this.stripe.refunds.create(
-      { payment_intent: milestone.stripe_pi_id },
+      { payment_intent: charge.stripe_id },
       { idempotencyKey: `escrow_milestone_${String(milestoneId)}_refund` },
     );
 
-    const updated = await this.prisma.escrowMilestone.update({
-      where: { id: milestoneId },
-      data: {
-        status: 'REFUNDED',
-        refunded_at: new Date(),
-        refund_reason: reason.trim(),
-        stripe_refund_id: refund.id,
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const m = await tx.escrowMilestone.update({
+        where: { id: milestoneId },
+        data: {
+          status: 'REFUNDED',
+          refunded_at: new Date(),
+          refund_reason: reason.trim(),
+        },
+      });
+      await tx.payment.create({
+        data: {
+          milestone_id: milestoneId,
+          client_profile_id: milestone.contract.collaboration.employer_id,
+          type: 'REFUND',
+          amount: new Prisma.Decimal(refund.amount).div(100),
+          currency: (refund.currency ?? 'gbp').toUpperCase(),
+          status: 'PAID',
+          stripe_id: refund.id,
+          settled_at: new Date(),
+        },
+      });
+      return m;
     });
 
     await this.audit.log(
-      milestone.escrow.contract.collaboration.worker_id, // subject = worker (not getting paid)
+      milestone.contract.collaboration.worker_id, // subject = worker (not getting paid)
       ESCROW_AUDIT_EVENTS.MILESTONE_REFUNDED,
       'escrow_milestone',
       milestoneId,
@@ -1942,7 +2039,7 @@ export class EscrowService {
       ip,
     );
     this.postChatSystemMessage(
-      milestone.escrow.contract_id,
+      milestone.contract.collaboration_id,
       `↩️ Milestone "${milestone.title}" refunded — £${milestone.amount.toFixed(2)} returned to employer.\n\nReason: ${reason}`,
       employerClientProfileId,
     );
@@ -1955,25 +2052,21 @@ export class EscrowService {
       const m = await this.prisma.escrowMilestone.findUnique({
         where: { id: milestoneId },
         include: {
-          escrow: {
+          contract: {
             include: {
-              contract: {
+              collaboration: {
                 include: {
-                  collaboration: {
+                  worker: {
                     include: {
-                      worker: {
-                        include: {
-                          client_profile: {
-                            include: { account: { select: { email: true } } },
-                          },
-                        },
+                      client_profile: {
+                        include: { account: { select: { email: true } } },
                       },
-                      employer: {
-                        include: {
-                          client_profile: {
-                            include: { account: { select: { email: true } } },
-                          },
-                        },
+                    },
+                  },
+                  employer: {
+                    include: {
+                      client_profile: {
+                        include: { account: { select: { email: true } } },
                       },
                     },
                   },
@@ -1984,8 +2077,8 @@ export class EscrowService {
         },
       });
       if (!m) return;
-      const worker = m.escrow.contract.collaboration.worker.client_profile;
-      const employer = m.escrow.contract.collaboration.employer.client_profile;
+      const worker = m.contract.collaboration.worker.client_profile;
+      const employer = m.contract.collaboration.employer.client_profile;
       void this.mail.sendEscrowMilestoneRefunded(
         worker.account.email,
         worker.display_name,
@@ -2014,14 +2107,10 @@ export class EscrowService {
     const milestone = await this.prisma.escrowMilestone.findUnique({
       where: { id: milestoneId },
       include: {
-        escrow: {
+        contract: {
           include: {
-            contract: {
-              include: {
-                collaboration: {
-                  select: { worker_id: true, employer_id: true },
-                },
-              },
+            collaboration: {
+              select: { id: true, worker_id: true, employer_id: true },
             },
           },
         },
@@ -2030,12 +2119,14 @@ export class EscrowService {
     });
     if (!milestone)
       throw new NotFoundException({ code: 'MILESTONE_NOT_FOUND' });
-    const isParty =
-      milestone.escrow.contract.collaboration.worker_id ===
-        filerClientProfileId ||
-      milestone.escrow.contract.collaboration.employer_id ===
-        filerClientProfileId;
-    if (!isParty) throw new ForbiddenException({ code: 'NOT_PARTY' });
+    const collab = milestone.contract.collaboration;
+    const filedByRole =
+      collab.worker_id === filerClientProfileId
+        ? 'WORKER'
+        : collab.employer_id === filerClientProfileId
+          ? 'EMPLOYER'
+          : null;
+    if (!filedByRole) throw new ForbiddenException({ code: 'NOT_PARTY' });
     if (milestone.status !== 'FUNDED' && milestone.status !== 'SUBMITTED') {
       throw new ConflictException({
         code: 'INVALID_STATE',
@@ -2051,7 +2142,7 @@ export class EscrowService {
         const dispute = await tx.escrowDispute.create({
           data: {
             milestone_id: milestoneId,
-            filed_by: filerClientProfileId,
+            filed_by_role: filedByRole,
             reason: reason.trim(),
           },
         });
@@ -2059,23 +2150,19 @@ export class EscrowService {
           where: { id: milestoneId },
           data: { status: 'DISPUTED', disputed_at: new Date() },
         });
-        await tx.escrowTransaction.update({
-          where: { id: milestone.escrow_id },
-          data: { status: 'DISPUTED', disputed_at: new Date() },
-        });
         await this.audit.log(
           filerClientProfileId,
           ESCROW_AUDIT_EVENTS.MILESTONE_DISPUTED,
           'escrow_dispute',
           dispute.id,
-          { milestone_id: String(milestoneId) },
+          { milestone_id: String(milestoneId), filed_by_role: filedByRole },
           ip,
         );
         return dispute;
       })
       .then((dispute) => {
         this.postChatSystemMessage(
-          milestone.escrow.contract_id,
+          collab.id,
           `⚠️ Dispute filed on milestone "${milestone.title}". A TradeHub mediator will review within 24h. The other party can respond with their side via the escrow page.\n\nReason: ${reason}`,
           filerClientProfileId,
         );
@@ -2095,29 +2182,21 @@ export class EscrowService {
         include: {
           milestone: {
             include: {
-              escrow: {
+              contract: {
                 include: {
-                  contract: {
+                  collaboration: {
                     include: {
-                      collaboration: {
+                      worker: {
                         include: {
-                          worker: {
-                            include: {
-                              client_profile: {
-                                include: {
-                                  account: { select: { email: true } },
-                                },
-                              },
-                            },
+                          client_profile: {
+                            include: { account: { select: { email: true } } },
                           },
-                          employer: {
-                            include: {
-                              client_profile: {
-                                include: {
-                                  account: { select: { email: true } },
-                                },
-                              },
-                            },
+                        },
+                      },
+                      employer: {
+                        include: {
+                          client_profile: {
+                            include: { account: { select: { email: true } } },
                           },
                         },
                       },
@@ -2130,10 +2209,9 @@ export class EscrowService {
         },
       });
       if (!d) return;
-      const worker =
-        d.milestone.escrow.contract.collaboration.worker.client_profile;
+      const worker = d.milestone.contract.collaboration.worker.client_profile;
       const employer =
-        d.milestone.escrow.contract.collaboration.employer.client_profile;
+        d.milestone.contract.collaboration.employer.client_profile;
       // Email the OTHER party (not the filer)
       const filerIsWorker = filerProfileId === worker.id;
       const recipient = filerIsWorker ? employer : worker;
@@ -2162,14 +2240,10 @@ export class EscrowService {
       include: {
         milestone: {
           include: {
-            escrow: {
+            contract: {
               include: {
-                contract: {
-                  include: {
-                    collaboration: {
-                      select: { worker_id: true, employer_id: true },
-                    },
-                  },
+                collaboration: {
+                  select: { worker_id: true, employer_id: true },
                 },
               },
             },
@@ -2178,17 +2252,21 @@ export class EscrowService {
       },
     });
     if (!dispute) throw new NotFoundException({ code: 'DISPUTE_NOT_FOUND' });
-    if (dispute.filed_by === responderClientProfileId) {
+    const collab = dispute.milestone.contract.collaboration;
+    // The filer is derived from the role string stored on the dispute.
+    const filerId =
+      dispute.filed_by_role === 'WORKER'
+        ? collab.worker_id
+        : collab.employer_id;
+    if (filerId === responderClientProfileId) {
       throw new ForbiddenException({
         code: 'CANNOT_RESPOND_OWN',
         message: 'You cannot respond to your own dispute.',
       });
     }
     const isParty =
-      dispute.milestone.escrow.contract.collaboration.worker_id ===
-        responderClientProfileId ||
-      dispute.milestone.escrow.contract.collaboration.employer_id ===
-        responderClientProfileId;
+      collab.worker_id === responderClientProfileId ||
+      collab.employer_id === responderClientProfileId;
     if (!isParty) throw new ForbiddenException({ code: 'NOT_PARTY' });
     if (dispute.status !== 'OPEN') {
       throw new ConflictException({ code: 'INVALID_STATE' });
@@ -2239,15 +2317,11 @@ export class EscrowService {
       include: {
         milestone: {
           include: {
-            escrow: {
+            contract: {
               include: {
-                contract: {
+                collaboration: {
                   include: {
-                    collaboration: {
-                      include: {
-                        worker: { include: { client_profile: true } },
-                      },
-                    },
+                    worker: { include: { client_profile: true } },
                   },
                 },
               },
@@ -2261,9 +2335,9 @@ export class EscrowService {
       throw new ConflictException({ code: 'ALREADY_RESOLVED' });
 
     const milestone = dispute.milestone;
+    const collab = milestone.contract.collaboration;
     const milestoneIdStr = String(milestone.id);
-    const workerProfile =
-      milestone.escrow.contract.collaboration.worker.client_profile;
+    const workerProfile = collab.worker.client_profile;
 
     // Compute amounts
     const workerPayoutFull =
@@ -2275,15 +2349,15 @@ export class EscrowService {
       ((milestone.amount.toNumber() * employerRefundPct) / 100) * 100,
     );
 
-    let workerTransferId: string | null = null;
-    let refundId: string | null = null;
+    let workerTransfer: Stripe.Transfer | null = null;
+    let refund: Stripe.Refund | null = null;
 
     if (
       workerAmountPence > 0 &&
       workerProfile.stripe_connect_account_id &&
       workerProfile.connect_payouts_enabled
     ) {
-      const t = await this.stripe.transfers.create(
+      workerTransfer = await this.stripe.transfers.create(
         {
           amount: workerAmountPence,
           currency: 'gbp',
@@ -2299,13 +2373,13 @@ export class EscrowService {
           idempotencyKey: `escrow_dispute_${String(disputeId)}_resolve_worker`,
         },
       );
-      workerTransferId = t.id;
     }
 
-    if (employerRefundPence > 0 && milestone.stripe_pi_id) {
-      const r = await this.stripe.refunds.create(
+    const charge = await this.findChargePayment(milestone.id);
+    if (employerRefundPence > 0 && charge?.stripe_id) {
+      refund = await this.stripe.refunds.create(
         {
-          payment_intent: milestone.stripe_pi_id,
+          payment_intent: charge.stripe_id,
           amount: employerRefundPence,
           refund_application_fee: !platformKeptFee,
         },
@@ -2313,7 +2387,6 @@ export class EscrowService {
           idempotencyKey: `escrow_dispute_${String(disputeId)}_resolve_employer`,
         },
       );
-      refundId = r.id;
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -2331,30 +2404,43 @@ export class EscrowService {
           resolution_reasoning: reasoning,
         },
       });
-      // Milestone moves to RELEASED if any worker payout, else REFUNDED
-      const newStatus: string = workerAmountPence > 0 ? 'RELEASED' : 'REFUNDED';
+      // Milestone moves to RELEASED if any worker payout, else REFUNDED.
+      const newStatus = workerAmountPence > 0 ? 'RELEASED' : 'REFUNDED';
       await tx.escrowMilestone.update({
         where: { id: milestone.id },
         data: {
           status: newStatus,
           released_at: workerAmountPence > 0 ? new Date() : null,
           refunded_at: employerRefundPence > 0 ? new Date() : null,
-          stripe_transfer_id: workerTransferId ?? milestone.stripe_transfer_id,
-          stripe_refund_id: refundId ?? milestone.stripe_refund_id,
         },
       });
-      // If no other disputed milestones, escrow goes back to ACTIVE
-      const otherDisputed = await tx.escrowMilestone.count({
-        where: {
-          escrow_id: milestone.escrow_id,
-          status: 'DISPUTED',
-          id: { not: milestone.id },
-        },
-      });
-      if (otherDisputed === 0) {
-        await tx.escrowTransaction.update({
-          where: { id: milestone.escrow_id },
-          data: { status: 'ACTIVE' },
+      // Ledger rows for the split.
+      if (workerAmountPence > 0) {
+        await tx.payment.create({
+          data: {
+            milestone_id: milestone.id,
+            client_profile_id: collab.worker_id,
+            type: 'WORKER_PAYOUT',
+            amount: new Prisma.Decimal(workerAmountPence).div(100),
+            currency: 'GBP',
+            status: workerTransfer ? 'PAID' : 'PENDING',
+            stripe_id: workerTransfer?.id ?? null,
+            settled_at: workerTransfer ? new Date() : null,
+          },
+        });
+      }
+      if (employerRefundPence > 0) {
+        await tx.payment.create({
+          data: {
+            milestone_id: milestone.id,
+            client_profile_id: collab.employer_id,
+            type: 'REFUND',
+            amount: new Prisma.Decimal(employerRefundPence).div(100),
+            currency: 'GBP',
+            status: refund ? 'PAID' : 'PENDING',
+            stripe_id: refund?.id ?? null,
+            settled_at: refund ? new Date() : null,
+          },
         });
       }
     });
@@ -2369,16 +2455,16 @@ export class EscrowService {
         employer_refund_pct: employerRefundPct,
         platform_kept_fee: platformKeptFee,
         reasoning,
-        worker_transfer_id: workerTransferId,
-        refund_id: refundId,
+        worker_transfer_id: workerTransfer?.id ?? null,
+        refund_id: refund?.id ?? null,
       },
       ip,
     );
 
     this.postChatSystemMessage(
-      milestone.escrow.contract_id,
+      collab.id,
       `⚖️ Mediator resolved dispute on milestone "${milestone.title}":\n• Worker: £${(workerAmountPence / 100).toFixed(2)} (${workerPct}%)\n• Employer refund: £${(employerRefundPence / 100).toFixed(2)} (${employerRefundPct}%)\n\nReasoning: ${reasoning}`,
-      milestone.escrow.contract.collaboration.employer_id, // moderator isn't a participant; use employer as sender placeholder
+      collab.employer_id, // moderator isn't a participant; use employer as sender placeholder
     );
 
     return this.prisma.escrowDispute.findUniqueOrThrow({
@@ -2393,23 +2479,18 @@ export class EscrowService {
       include: {
         milestone: {
           include: {
-            escrow: {
+            contract: {
               include: {
-                contract: {
+                collaboration: {
                   include: {
-                    collaboration: {
-                      include: {
-                        worker: { include: { client_profile: true } },
-                        employer: { include: { client_profile: true } },
-                      },
-                    },
+                    worker: { include: { client_profile: true } },
+                    employer: { include: { client_profile: true } },
                   },
                 },
               },
             },
           },
         },
-        filer: { select: { id: true, display_name: true } },
       },
     });
   }
@@ -2420,20 +2501,17 @@ export class EscrowService {
     reason: string,
     ip?: string,
   ) {
-    const escrow = await this.prisma.escrowTransaction.findUnique({
-      where: { contract_id: contractId },
-      include: {
-        milestones: true,
-        contract: { include: { collaboration: true } },
-      },
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: contractId },
+      include: { collaboration: true, milestones: true },
     });
-    if (!escrow) throw new NotFoundException({ code: 'ESCROW_NOT_FOUND' });
+    if (!contract) throw new NotFoundException({ code: 'CONTRACT_NOT_FOUND' });
     const isParty =
-      escrow.contract.collaboration.worker_id === actorClientProfileId ||
-      escrow.contract.collaboration.employer_id === actorClientProfileId;
+      contract.collaboration.worker_id === actorClientProfileId ||
+      contract.collaboration.employer_id === actorClientProfileId;
     if (!isParty) throw new ForbiddenException({ code: 'NOT_PARTY' });
 
-    const everFunded = escrow.milestones.some((m) =>
+    const everFunded = contract.milestones.some((m) =>
       [
         'FUNDED',
         'SUBMITTED',
@@ -2453,11 +2531,7 @@ export class EscrowService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.escrowMilestone.updateMany({
-        where: { escrow_id: escrow.id, status: 'PENDING' },
-        data: { status: 'CANCELED' },
-      });
-      await tx.escrowTransaction.update({
-        where: { id: escrow.id },
+        where: { contract_id: contractId, status: 'PENDING' },
         data: { status: 'CANCELED' },
       });
       await tx.contract.update({
@@ -2469,13 +2543,13 @@ export class EscrowService {
     await this.audit.log(
       actorClientProfileId,
       ESCROW_AUDIT_EVENTS.CONTRACT_CANCELED,
-      'escrow_transaction',
-      escrow.id,
+      'contract',
+      contractId,
       { reason, canceled_by: String(actorClientProfileId), refunded_count: 0 },
       ip,
     );
     this.postChatSystemMessage(
-      escrow.contract.collaboration_id,
+      contract.collaboration_id,
       `🚫 Contract canceled before any milestones were funded.\n\nReason: ${reason}`,
       actorClientProfileId,
     );
@@ -2490,37 +2564,49 @@ export class EscrowService {
   ) {
     if (!this.stripe)
       throw new ServiceUnavailableException({ code: 'STRIPE_NOT_CONFIGURED' });
-    const escrow = await this.prisma.escrowTransaction.findUnique({
-      where: { contract_id: contractId },
-      include: {
-        milestones: true,
-        contract: { include: { collaboration: true } },
-      },
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: contractId },
+      include: { collaboration: true, milestones: true },
     });
-    if (!escrow) throw new NotFoundException({ code: 'ESCROW_NOT_FOUND' });
-    if (escrow.contract.collaboration.worker_id !== workerClientProfileId) {
+    if (!contract) throw new NotFoundException({ code: 'CONTRACT_NOT_FOUND' });
+    if (contract.collaboration.worker_id !== workerClientProfileId) {
       throw new ForbiddenException({ code: 'NOT_WORKER' });
     }
 
     let refundedCount = 0;
     let refundedAmount = new Prisma.Decimal(0);
-    for (const m of escrow.milestones) {
-      if (['FUNDED', 'SUBMITTED'].includes(m.status) && m.stripe_pi_id) {
+    for (const m of contract.milestones) {
+      if (['FUNDED', 'SUBMITTED'].includes(m.status)) {
+        const charge = await this.findChargePayment(m.id);
+        if (!charge?.stripe_id) continue;
         try {
           const r = await this.stripe.refunds.create(
-            { payment_intent: m.stripe_pi_id },
+            { payment_intent: charge.stripe_id },
             {
               idempotencyKey: `escrow_milestone_${String(m.id)}_decline_refund`,
             },
           );
-          await this.prisma.escrowMilestone.update({
-            where: { id: m.id },
-            data: {
-              status: 'REFUNDED',
-              refunded_at: new Date(),
-              refund_reason: 'Worker declined contract',
-              stripe_refund_id: r.id,
-            },
+          await this.prisma.$transaction(async (tx) => {
+            await tx.escrowMilestone.update({
+              where: { id: m.id },
+              data: {
+                status: 'REFUNDED',
+                refunded_at: new Date(),
+                refund_reason: 'Worker declined contract',
+              },
+            });
+            await tx.payment.create({
+              data: {
+                milestone_id: m.id,
+                client_profile_id: contract.collaboration.employer_id,
+                type: 'REFUND',
+                amount: new Prisma.Decimal(r.amount).div(100),
+                currency: (r.currency ?? 'gbp').toUpperCase(),
+                status: 'PAID',
+                stripe_id: r.id,
+                settled_at: new Date(),
+              },
+            });
           });
           refundedCount += 1;
           refundedAmount = refundedAmount.plus(m.amount);
@@ -2537,21 +2623,15 @@ export class EscrowService {
       }
     }
 
-    await this.prisma.$transaction([
-      this.prisma.escrowTransaction.update({
-        where: { id: escrow.id },
-        data: { status: 'CANCELED' },
-      }),
-      this.prisma.contract.update({
-        where: { id: contractId },
-        data: { status: 'ENDED', end_reason: 'CANCELED', ended_at: new Date() },
-      }),
-    ]);
+    await this.prisma.contract.update({
+      where: { id: contractId },
+      data: { status: 'ENDED', end_reason: 'CANCELED', ended_at: new Date() },
+    });
     await this.audit.log(
       workerClientProfileId,
       ESCROW_AUDIT_EVENTS.CONTRACT_CANCELED,
-      'escrow_transaction',
-      escrow.id,
+      'contract',
+      contractId,
       {
         reason,
         canceled_by: String(workerClientProfileId),
@@ -2562,7 +2642,7 @@ export class EscrowService {
       ip,
     );
     this.postChatSystemMessage(
-      escrow.contract.collaboration_id,
+      contract.collaboration_id,
       `🚫 Worker declined the contract. ${refundedCount} milestone${refundedCount === 1 ? '' : 's'} refunded (£${refundedAmount.toFixed(2)} total).\n\nReason: ${reason}`,
       workerClientProfileId,
     );
@@ -2575,7 +2655,7 @@ export class EscrowService {
 
   /**
    * @deprecated Replaced by ContractService.endContract. Kept for HTTP
-   * back-compat — delegates to the new path. Remove once frontend is migrated.
+   * back-compat — delegates to the new path.
    */
   async initiateEndContract(
     contractId: bigint,
@@ -2616,9 +2696,8 @@ export class EscrowService {
   }
 
   /**
-   * No-op stub — silent contest sweep is no longer used after Contract
-   * refactor. Kept for cron back-compat; can be removed once
-   * EscrowAutoReleaseJob no longer calls it.
+   * No-op stub — silent contest sweep is no longer used after the Contract
+   * refactor. Kept for cron back-compat.
    */
   // eslint-disable-next-line @typescript-eslint/require-await
   async runEndContractSweep() {
@@ -2628,56 +2707,53 @@ export class EscrowService {
   // ─── Wallet + Admin settings (Slice E) ────────────────────────
 
   async getWallet(workerProfileId: bigint) {
-    const [profile, milestones, pendingRefPayouts, pendingWorkerPayouts] =
-      await Promise.all([
-        this.prisma.clientProfile.findUnique({
-          where: { id: workerProfileId },
-          select: {
-            id: true,
-            stripe_connect_account_id: true,
-            connect_charges_enabled: true,
-            connect_payouts_enabled: true,
-            stripe_onboarding_complete: true,
+    const [profile, milestones, pendingPayments] = await Promise.all([
+      this.prisma.clientProfile.findUnique({
+        where: { id: workerProfileId },
+        select: {
+          id: true,
+          stripe_connect_account_id: true,
+          connect_charges_enabled: true,
+          connect_payouts_enabled: true,
+          stripe_onboarding_complete: true,
+        },
+      }),
+      this.prisma.escrowMilestone.findMany({
+        where: {
+          contract: { collaboration: { worker_id: workerProfileId } },
+        },
+        orderBy: { updated_at: 'desc' },
+        take: 100,
+        select: {
+          id: true,
+          title: true,
+          amount: true,
+          status: true,
+          contract_id: true,
+          released_at: true,
+          frozen_worker_payout: true,
+        },
+      }),
+      // Worker payouts + referral commissions still awaiting Stripe payout.
+      this.prisma.payment.findMany({
+        where: {
+          client_profile_id: workerProfileId,
+          type: {
+            in: [
+              'WORKER_PAYOUT',
+              'REFERRAL_ACCOUNT',
+              'REFERRAL_W2W',
+              'REFERRAL_E2E',
+            ],
           },
-        }),
-        this.prisma.escrowMilestone.findMany({
-          where: {
-            escrow: {
-              contract: { collaboration: { worker_id: workerProfileId } },
-            },
-          },
-          orderBy: { updated_at: 'desc' },
-          take: 100,
-          include: {
-            escrow: {
-              select: { id: true, contract_id: true },
-            },
-          },
-        }),
-        this.prisma.pendingReferralPayout.findMany({
-          where: {
-            referrer_client_profile_id: workerProfileId,
-            status: 'PENDING',
-          },
-          orderBy: { created_at: 'desc' },
-          include: { milestone: { select: { title: true } } },
-        }),
-        this.prisma.pendingWorkerPayout.findMany({
-          where: {
-            worker_client_profile_id: workerProfileId,
-            status: { in: ['PENDING', 'FAILED'] },
-          },
-          orderBy: { created_at: 'desc' },
-          include: {
-            milestone: {
-              select: {
-                title: true,
-                escrow: { select: { contract_id: true } },
-              },
-            },
-          },
-        }),
-      ]);
+          status: { in: ['PENDING', 'FAILED'] },
+        },
+        orderBy: { created_at: 'desc' },
+        include: {
+          milestone: { select: { title: true, contract_id: true } },
+        },
+      }),
+    ]);
     if (!profile) throw new NotFoundException({ code: 'PROFILE_NOT_FOUND' });
 
     const active = milestones.filter((m) =>
@@ -2685,6 +2761,13 @@ export class EscrowService {
     );
     const released = milestones.filter((m) => m.status === 'RELEASED');
     const failed = milestones.filter((m) => m.status === 'RELEASE_FAILED');
+
+    const pendingWorkerPayouts = pendingPayments.filter(
+      (p) => p.type === 'WORKER_PAYOUT',
+    );
+    const pendingReferralPayouts = pendingPayments.filter((p) =>
+      ['REFERRAL_ACCOUNT', 'REFERRAL_W2W', 'REFERRAL_E2E'].includes(p.type),
+    );
 
     return {
       onboarding: {
@@ -2696,7 +2779,7 @@ export class EscrowService {
         title: m.title,
         amount: m.amount.toString(),
         status: m.status,
-        contract_id: String(m.escrow.contract_id),
+        contract_id: String(m.contract_id),
         expected_payout:
           m.frozen_worker_payout?.toString() ?? m.amount.toString(),
       })),
@@ -2705,32 +2788,33 @@ export class EscrowService {
         title: m.title,
         amount: m.frozen_worker_payout?.toString() ?? m.amount.toString(),
         released_at: m.released_at?.toISOString() ?? null,
-        contract_id: String(m.escrow.contract_id),
+        contract_id: String(m.contract_id),
       })),
-      // Money already authorised by employer (milestone RELEASED) but not
-      // yet paid out because the worker hasn't completed Stripe Connect
-      // onboarding (or the live transfer hit a transient rejection).
-      // Auto-paid on `account.updated → payouts_enabled` webhook.
+      // Money authorised by the employer (milestone RELEASED) but not yet
+      // paid out — the worker hasn't completed Stripe Connect onboarding or
+      // a live transfer hit a transient rejection. Auto-paid on the
+      // `account.updated → payouts_enabled` webhook.
       pending_worker_payouts: pendingWorkerPayouts.map((p) => ({
         id: String(p.id),
         amount: p.amount.toString(),
         milestone_id: String(p.milestone_id),
         milestone_title: p.milestone.title,
-        contract_id: String(p.milestone.escrow.contract_id),
+        contract_id: String(p.milestone.contract_id),
         status: p.status,
         failure_reason: p.failure_reason,
         created_at: p.created_at.toISOString(),
       })),
-      pending_referral_payouts: pendingRefPayouts.map((p) => ({
+      pending_referral_payouts: pendingReferralPayouts.map((p) => ({
         id: String(p.id),
         amount: p.amount.toString(),
         milestone_title: p.milestone.title,
+        status: p.status,
         created_at: p.created_at.toISOString(),
       })),
       failed_transfers: failed.map((m) => ({
         milestone_id: String(m.id),
         amount: m.frozen_worker_payout?.toString() ?? m.amount.toString(),
-        contract_id: String(m.escrow.contract_id),
+        contract_id: String(m.contract_id),
         title: m.title,
       })),
     };
@@ -2777,10 +2861,13 @@ export class EscrowService {
     }
 
     const before = await this.getPlatformSetting();
+    // `referral_commission_percent` is not a column — referral percentages
+    // are configured separately; ignore it on the settings patch.
+    const { referral_commission_percent: _drop, ...settingPatch } = patch;
     const updated = await this.prisma.platformSetting.update({
       where: { id: 1 },
       data: {
-        ...patch,
+        ...settingPatch,
         updated_by: actorAccountId,
       },
     });
@@ -2819,16 +2906,20 @@ export class EscrowService {
     return updated;
   }
 
-  // ─── Contract-keyed escrow surface ─
+  // ─── Contract-keyed escrow surface ─────────────────────────────
 
   /**
-   * Get the escrow record for a contract; lazy-create an empty shell on
-   * first access if the contract is ACTIVE so milestones can be added.
+   * Get the escrow view for a contract — the contract status + its ordered
+   * milestones. There is no separate escrow row anymore; `contract_id` IS the
+   * escrow key.
    */
   async getByContract(contractId: bigint, user: CurrentUserPayload) {
     const contract = await this.prisma.contract.findUnique({
       where: { id: contractId },
-      include: { collaboration: true },
+      include: {
+        collaboration: true,
+        milestones: { orderBy: { position: 'asc' } },
+      },
     });
     if (!contract) throw new NotFoundException('Contract not found');
 
@@ -2843,32 +2934,18 @@ export class EscrowService {
       }
     }
 
-    let escrow = await this.prisma.escrowTransaction.findUnique({
-      where: { contract_id: contractId },
-      include: { milestones: { orderBy: { position: 'asc' } } },
-    });
-
-    // Lazy auto-create on ACTIVE contract.
-    if (!escrow && contract.status === 'ACTIVE') {
-      escrow = await this.prisma.escrowTransaction.create({
-        data: {
-          contract_id: contractId,
-          status: 'CREATED',
-          job_amount: new Prisma.Decimal(0),
-          platform_fee: new Prisma.Decimal(0),
-          referral_commission: new Prisma.Decimal(0),
-          worker_payout: new Prisma.Decimal(0),
-        },
-        include: { milestones: { orderBy: { position: 'asc' } } },
-      });
-    }
-
-    return escrow;
+    return {
+      contract_id: contract.id,
+      collaboration_id: contract.collaboration_id,
+      status: contract.status,
+      agreed_amount: contract.agreed_amount,
+      milestones: contract.milestones,
+    };
   }
 
   /**
-   * Back-compat: old surface that accepted collaborationId. Resolves to
-   * the latest active contract under the collab and returns its escrow.
+   * Back-compat: old surface that accepted collaborationId. Resolves to the
+   * latest active contract under the collab and returns its escrow view.
    */
   async getByCollaboration(collaborationId: bigint, user: CurrentUserPayload) {
     const collaboration = await this.prisma.collaboration.findUnique({
@@ -2887,23 +2964,9 @@ export class EscrowService {
     return this.getByContract(latest.id, user);
   }
 
-  async getEscrowOrThrow(escrowId: bigint) {
-    const escrow = await this.prisma.escrowTransaction.findUnique({
-      where: { id: escrowId },
-      include: { contract: { include: { collaboration: true } } },
-    });
-    if (!escrow) throw new NotFoundException('Escrow not found');
-    return escrow;
-  }
-
-  // initiateDeposit / confirmDeposit / release / refund / dispute
-  // (contract-level mocks) REMOVED in Slice F. They desynced DB state
-  // with Stripe reality. Use the per-milestone methods instead.
-
   /**
    * Provider feature flag — SPA reads this to hide Fund/Withdraw CTAs
-   * when Stripe Connect isn't configured. Mirrors verification's
-   * /verification/providers pattern.
+   * when Stripe Connect isn't configured.
    */
   getProviders() {
     return {

@@ -135,11 +135,11 @@ export class AuthService {
     const refByCode = dto.referred_by_code;
     let referredById: bigint | null = null;
     if (refByCode) {
-      const referrer = await this.prisma.account.findUnique({
+      const referrer = await this.prisma.clientProfile.findUnique({
         where: { referral_code: refByCode.toUpperCase() },
-        select: { id: true, email: true },
+        select: { id: true, account: { select: { email: true } } },
       });
-      if (referrer && referrer.email !== dto.email) {
+      if (referrer && referrer.account.email !== dto.email) {
         referredById = referrer.id;
       }
     }
@@ -150,13 +150,13 @@ export class AuthService {
         password_hash: passwordHash,
         phone: dto.phone,
         status: 'PENDING_EMAIL_VERIFICATION',
-        referral_code: referralCode,
-        referred_by_id: referredById,
-        referred_at: referredById ? new Date() : null,
         client_profile: {
           create: {
             display_name: displayName,
             slug,
+            referral_code: referralCode,
+            referred_by_id: referredById,
+            referred_at: referredById ? new Date() : null,
             ...(dto.role === 'WORKER'
               ? { worker_profile: { create: {} } }
               : {
@@ -742,11 +742,11 @@ export class AuthService {
         google_id: profile.googleId,
         status: trustedVerified ? 'ACTIVE' : 'PENDING_EMAIL_VERIFICATION',
         email_verified_at: trustedVerified ? new Date() : null,
-        referral_code: referralCode,
         client_profile: {
           create: {
             display_name: profile.displayName,
             slug,
+            referral_code: referralCode,
             ...(profile.role === 'EMPLOYER'
               ? { employer_profile: { create: {} } }
               : { worker_profile: { create: {} } }),
@@ -1114,7 +1114,7 @@ export class AuthService {
     // Retry up to 5x on the (extremely unlikely) collision; 31^8 codespace.
     for (let i = 0; i < 5; i++) {
       const code = generateReferralCode();
-      const taken = await this.prisma.account.findUnique({
+      const taken = await this.prisma.clientProfile.findUnique({
         where: { referral_code: code },
         select: { id: true },
       });

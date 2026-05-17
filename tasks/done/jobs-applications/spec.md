@@ -1,5 +1,14 @@
 # Spec
 
+> ⚠️ **SCHEMA REVISED 2026-05-11.** Authoritative schema:
+> `tasks/in-progress/DATA-MODEL.md` + `backend/prisma/schema.prisma`. Jobs-
+> domain changes: `job_application` gained `project_referrer_id` (FK →
+> `client_profile`) + `project_referrer_role` from the referral feature;
+> `job_attachment` keeps its dual-nullable owner (`job_post_id` /
+> `job_application_id`) but now has a CHECK constraint enforcing "at most one
+> owner" (`job_attachment_one_owner`). `job_post` / `job_application` /
+> junction tables are otherwise unchanged.
+
 ## Summary
 
 Define the production-ready Jobs & Applications surface for TradeHub MVP. Covers the public job board, a real job-detail page, a "Post a job" form with searchable chip-multiselect for specialisations and tags, an employer dashboard for the employer's own posts (edit / close / reopen / delete + per-post applicants list with lifecycle actions), a worker dashboard for the worker's own applications (status tabs + withdraw + re-apply rules), and the role-aware primary CTAs that wire it all together.

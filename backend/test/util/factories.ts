@@ -138,13 +138,13 @@ export async function seedActiveWorker(
     data: {
       email,
       password_hash: await hash(password),
-      referral_code: generateReferralCode(),
       status: 'ACTIVE',
       email_verified_at: new Date(),
       client_profile: {
         create: {
           display_name: displayName,
           slug: slug(displayName),
+          referral_code: generateReferralCode(),
           worker_profile: { create: {} },
         },
       },
@@ -178,13 +178,13 @@ export async function seedActiveEmployer(
     data: {
       email,
       password_hash: await hash(password),
-      referral_code: generateReferralCode(),
       status: 'ACTIVE',
       email_verified_at: new Date(),
       client_profile: {
         create: {
           display_name: displayName,
           slug: slug(displayName),
+          referral_code: generateReferralCode(),
           employer_profile: {
             create: { company_name: overrides.companyName ?? displayName },
           },
@@ -214,12 +214,12 @@ export async function seedPendingWorker(
     data: {
       email,
       password_hash: await hash(password),
-      referral_code: generateReferralCode(),
       status: 'PENDING_EMAIL_VERIFICATION',
       client_profile: {
         create: {
           display_name: displayName,
           slug: slug(displayName),
+          referral_code: generateReferralCode(),
           worker_profile: { create: {} },
         },
       },
@@ -247,12 +247,12 @@ export async function seedPendingEmployer(
     data: {
       email,
       password_hash: await hash(password),
-      referral_code: generateReferralCode(),
       status: 'PENDING_EMAIL_VERIFICATION',
       client_profile: {
         create: {
           display_name: displayName,
           slug: slug(displayName),
+          referral_code: generateReferralCode(),
           employer_profile: { create: { company_name: displayName } },
         },
       },
@@ -279,12 +279,12 @@ export async function seedDeactivatedWorker(
     data: {
       email,
       password_hash: await hash(password),
-      referral_code: generateReferralCode(),
       status: 'DEACTIVATED',
       client_profile: {
         create: {
           display_name: displayName,
           slug: slug(displayName),
+          referral_code: generateReferralCode(),
           worker_profile: { create: {} },
         },
       },
@@ -317,7 +317,6 @@ export async function seedAdmin(
     data: {
       email,
       password_hash: await hash(password),
-      referral_code: generateReferralCode(),
       status: 'ACTIVE',
       email_verified_at: new Date(),
       last_login_at: overrides.lastLoginAt ?? new Date(),
@@ -351,7 +350,6 @@ export async function seedModerator(
     data: {
       email,
       password_hash: await hash(password),
-      referral_code: generateReferralCode(),
       status: 'ACTIVE',
       email_verified_at: new Date(),
       last_login_at: new Date(),
@@ -396,7 +394,6 @@ export async function seedFreshStaffInvite(
     data: {
       email,
       password_hash: await hash(initialPassword),
-      referral_code: generateReferralCode(),
       status: 'ACTIVE',
       email_verified_at: new Date(),
       // last_login_at deliberately null — invite has not been used.
@@ -1009,20 +1006,27 @@ export async function seedEscrowTransaction(
     throw new Error('seedEscrowTransaction: contractId is required');
   }
 
-  return prisma.escrowTransaction.create({
+  // Post-2026-05 there is no `escrow_transaction` table — the escrow of a
+  // contract is its milestones. Seed a single milestone instead, mapping the
+  // legacy escrow status onto the milestone state machine.
+  void platformFee;
+  void referralCommission;
+  void workerPayout;
+  const STATUS_MAP: Record<string, string> = {
+    CREATED: 'PENDING',
+    DEPOSIT_PENDING: 'PENDING',
+    HELD: 'FUNDED',
+    RELEASED: 'RELEASED',
+    REFUNDED: 'REFUNDED',
+    DISPUTED: 'DISPUTED',
+  };
+  return prisma.escrowMilestone.create({
     data: {
       contract_id: contractId,
-      status,
-      job_amount: jobAmount,
-      platform_fee: platformFee,
-      referral_commission: referralCommission,
-      worker_payout: workerPayout,
-      currency: opts.currency ?? 'GBP',
-      deposit_confirmed_at:
-        opts.depositConfirmedAt ??
-        (['HELD', 'RELEASED', 'REFUNDED', 'DISPUTED'].includes(status)
-          ? new Date()
-          : null),
+      position: 1,
+      title: 'Seed milestone',
+      amount: jobAmount,
+      status: STATUS_MAP[status] ?? 'FUNDED',
       released_at:
         opts.releasedAt ?? (status === 'RELEASED' ? new Date() : null),
       refunded_at:
@@ -1057,14 +1061,50 @@ export type SeedReviewOpts = {
   createdAt?: Date | null;
 };
 
+/**
+ * Find-or-create an ENDED contract under a collaboration. Post-CR-008 a
+ * review is scoped to a Contract and can only exist for an ENDED one.
+ */
+export async function seedEndedContract(
+  prisma: PrismaService,
+  opts: { collaborationId: bigint },
+) {
+  const existing = await prisma.contract.findFirst({
+    where: { collaboration_id: opts.collaborationId, status: 'ENDED' },
+    orderBy: { position: 'desc' },
+  });
+  if (existing) return existing;
+  const last = await prisma.contract.findFirst({
+    where: { collaboration_id: opts.collaborationId },
+    orderBy: { position: 'desc' },
+    select: { position: true },
+  });
+  return prisma.contract.create({
+    data: {
+      collaboration_id: opts.collaborationId,
+      position: (last?.position ?? 0) + 1,
+      status: 'ENDED',
+      end_reason: 'COMPLETED',
+      initiated_by: 'EMPLOYER',
+      started_at: new Date(),
+      ended_at: new Date(),
+    },
+  });
+}
+
 export async function seedReview(prisma: PrismaService, opts: SeedReviewOpts) {
   const { Prisma } =
     require('@prisma/client') as typeof import('@prisma/client');
   const isPublished = opts.isPublished ?? false;
   const publishedAt = opts.publishedAt ?? (isPublished ? new Date() : null);
 
+  // Reviews hang off a Contract now — ensure an ENDED contract exists.
+  const contract = await seedEndedContract(prisma, {
+    collaborationId: opts.collaborationId,
+  });
+
   const data: Record<string, unknown> = {
-    collaboration_id: opts.collaborationId,
+    contract_id: contract.id,
     reviewer_role: opts.reviewerRole,
     overall_rating: opts.overallRating ?? 5,
     quality_rating: opts.qualityRating ?? null,
@@ -1169,17 +1209,19 @@ export async function seedConversation(
       'seedConversation: exactly two participants required (group chat is out of scope)',
     );
   }
+  // Post-2026-05 a conversation is a strict 1:1 with a collaboration and
+  // shares its primary key — there is no participant table. The caller must
+  // supply the collaboration id; the participants are its worker + employer.
+  if (opts.collaborationId == null) {
+    throw new Error(
+      'seedConversation: collaborationId is required (conversation shares the collaboration PK)',
+    );
+  }
   return prisma.conversation.create({
     data: {
-      collaboration_id: opts.collaborationId ?? null,
+      id: opts.collaborationId,
       last_message_at: opts.lastMessageAt ?? null,
-      participants: {
-        create: opts.participantAccountIds.map((account_id) => ({
-          account_id,
-        })),
-      },
     },
-    include: { participants: true },
   });
 }
 
@@ -1214,28 +1256,34 @@ export async function seedMessage(
   });
 }
 
-export type SeedMessageAttachmentOpts = {
-  /** Pass `null` (or omit) for the orphan / "uploaded but unattached" path. */
-  messageId?: bigint | null;
+export type SeedFileMessageOpts = {
+  conversationId: bigint;
   /** ClientProfile.id == Account.id by the shared-PK pattern. */
-  uploadedById: bigint;
+  senderId: bigint;
   fileUrl?: string;
   mimeType?: string;
   sizeBytes?: number;
   originalName?: string;
+  content?: string;
 };
 
-export async function seedMessageAttachment(
+/**
+ * Seeds a FILE message. Post-2026-05 the `message_attachment` table was
+ * dropped — a file message carries its file columns inline on the message.
+ */
+export async function seedFileMessage(
   prisma: PrismaService,
-  opts: SeedMessageAttachmentOpts,
+  opts: SeedFileMessageOpts,
 ) {
-  return prisma.messageAttachment.create({
+  return prisma.message.create({
     data: {
-      message_id: opts.messageId ?? null,
-      uploaded_by_id: opts.uploadedById,
+      conversation_id: opts.conversationId,
+      sender_id: opts.senderId,
+      message_type: 'FILE',
+      content: opts.content ?? null,
       file_url:
         opts.fileUrl ??
-        `/uploads/message-attachments/seed-${crypto
+        `/uploads/message-files/seed-${crypto
           .randomBytes(3)
           .toString('hex')}.png`,
       mime_type: opts.mimeType ?? 'image/png',
@@ -1260,11 +1308,11 @@ export async function seedGoogleOnlyAccount(
       google_id: googleId,
       status: 'ACTIVE',
       email_verified_at: new Date(),
-      referral_code: generateReferralCode(),
       client_profile: {
         create: {
           display_name: displayName,
           slug: slug(displayName),
+          referral_code: generateReferralCode(),
           worker_profile: { create: {} },
         },
       },

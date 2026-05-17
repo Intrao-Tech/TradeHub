@@ -1,5 +1,14 @@
 # Spec — Tests for Contracts & Referrals
 
+> ⚠️ **SCHEMA REVISED 2026-05-11** — see `tasks/in-progress/DATA-MODEL.md`.
+> Test cases must target the new model: referral columns + all referral FKs
+> on `client_profile` (not `account`); `referral_intent` typed targets
+> (`target_job_post_id` / `target_worker_id`) + the two CHECK constraints;
+> referral commissions are `payment` rows (no `pending_referral_payout`); no
+> `escrow_transaction`; no `collaboration.last_contract_id`. `CR-NNN` ↔
+> `TEST-CR-NNN` mapping in `coverage-matrix.md` stays valid; only the
+> assertion shapes change.
+
 ## Summary
 
 Lock the Contracts & Referrals refactor behind an automated test suite.

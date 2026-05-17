@@ -37,7 +37,6 @@ type ContractRow = {
   started_at?: string | null;
   ended_at?: string | null;
   created_at?: string;
-  escrow_transaction?: { id: string; status: string } | null;
 };
 
 type CollaborationData = {

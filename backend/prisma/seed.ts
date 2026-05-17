@@ -90,6 +90,8 @@ async function main() {
   const hash = await bcrypt.hash('Password123!', 12);
 
   // ── Admin Account ────────────────────────────────────────────
+  // account is a pure auth root — no referral_code (that lives on
+  // client_profile, and staff have no client_profile).
   const adminAccount = await prisma.account.upsert({
     where: { email: 'admin@tradehub.co.uk' },
     update: {},
@@ -100,7 +102,6 @@ async function main() {
       phone_verified: true,
       status: 'ACTIVE',
       email_verified_at: new Date(),
-      referral_code: makeRefCode('admin@tradehub.co.uk'),
       staff_member: {
         create: {
           display_name: 'Platform Admin',
@@ -110,15 +111,16 @@ async function main() {
       },
     },
   });
-  console.log(`  Admin: admin@tradehub.co.uk (id=${adminAccount.id}) ref=${adminAccount.referral_code}`);
+  console.log(`  Admin: admin@tradehub.co.uk (id=${adminAccount.id})`);
 
   // ── Worker Accounts ──────────────────────────────────────────
+  // referral_code / referred_by_id / referred_at live on client_profile.
   const workers = [
-    { email: 'mike.builder@example.com', name: 'Mike Thompson', city: 'London', postcode: 'SW1', specIdx: [0, 7], yearsExp: 12, rateMin: 200, rateMax: 350 },
-    { email: 'sarah.sparks@example.com', name: 'Sarah Jenkins', city: 'Manchester', postcode: 'M1', specIdx: [1, 10], yearsExp: 8, rateMin: 250, rateMax: 400 },
-    { email: 'dave.pipes@example.com', name: 'Dave Wilson', city: 'Birmingham', postcode: 'B1', specIdx: [2, 9], yearsExp: 15, rateMin: 220, rateMax: 380 },
-    { email: 'tom.wood@example.com', name: 'Tom Harris', city: 'Leeds', postcode: 'LS1', specIdx: [3, 5], yearsExp: 6, rateMin: 180, rateMax: 280 },
-    { email: 'emma.tiles@example.com', name: 'Emma Clarke', city: 'Bristol', postcode: 'BS1', specIdx: [8, 5], yearsExp: 10, rateMin: 200, rateMax: 320 },
+    { email: 'mike.builder@example.com', name: 'Mike Thompson', city: 'London', postcode: 'SW1', specIdx: [0, 7], yearsExp: 12, rateMin: 200, rateMax: 350, langs: ['en'] },
+    { email: 'sarah.sparks@example.com', name: 'Sarah Jenkins', city: 'Manchester', postcode: 'M1', specIdx: [1, 10], yearsExp: 8, rateMin: 250, rateMax: 400, langs: ['en', 'pl'] },
+    { email: 'dave.pipes@example.com', name: 'Dave Wilson', city: 'Birmingham', postcode: 'B1', specIdx: [2, 9], yearsExp: 15, rateMin: 220, rateMax: 380, langs: ['en'] },
+    { email: 'tom.wood@example.com', name: 'Tom Harris', city: 'Leeds', postcode: 'LS1', specIdx: [3, 5], yearsExp: 6, rateMin: 180, rateMax: 280, langs: ['en', 'uk'] },
+    { email: 'emma.tiles@example.com', name: 'Emma Clarke', city: 'Bristol', postcode: 'BS1', specIdx: [8, 5], yearsExp: 10, rateMin: 200, rateMax: 320, langs: ['en'] },
   ];
 
   const workerAccounts: { id: bigint; name: string; refCode: string }[] = [];
@@ -134,7 +136,6 @@ async function main() {
         password_hash: hash,
         status: 'ACTIVE',
         email_verified_at: new Date(),
-        referral_code: refCode,
         client_profile: {
           create: {
             display_name: w.name,
@@ -142,6 +143,7 @@ async function main() {
             city: w.city,
             postcode_area: w.postcode,
             verification_level: 'BASIC',
+            referral_code: refCode,
             worker_profile: {
               create: {
                 years_experience: w.yearsExp,
@@ -172,11 +174,21 @@ async function main() {
         },
       });
     }
+
+    // Worker languages — ISO 639-1 codes, now a junction table (PROF-055).
+    for (const code of w.langs) {
+      await prisma.workerLanguage.upsert({
+        where: { worker_id_language_code: { worker_id: acc.id, language_code: code } },
+        update: {},
+        create: { worker_id: acc.id, language_code: code },
+      });
+    }
     console.log(`  Worker: ${w.email} (id=${acc.id}) ref=${refCode}`);
   }
 
   // Demo Account-referral: Sarah was referred by Mike at signup.
-  await prisma.account.update({
+  // The self-FK lives on client_profile (not account).
+  await prisma.clientProfile.update({
     where: { id: workerAccounts[1].id },
     data: {
       referred_by_id: workerAccounts[0].id,
@@ -205,7 +217,6 @@ async function main() {
         password_hash: hash,
         status: 'ACTIVE',
         email_verified_at: new Date(),
-        referral_code: refCode,
         client_profile: {
           create: {
             display_name: e.name,
@@ -213,6 +224,7 @@ async function main() {
             city: e.city,
             postcode_area: e.postcode,
             verification_level: 'BASIC',
+            referral_code: refCode,
             employer_profile: {
               create: {
                 company_name: e.company,
@@ -230,7 +242,7 @@ async function main() {
 
   // ── Portfolio Items (per worker) ─────────────────────────────
   for (const w of workerAccounts) {
-    const expItem = await prisma.portfolioItem.create({
+    await prisma.portfolioItem.create({
       data: {
         worker_id: w.id,
         item_type: 'EXPERIENCE',
@@ -274,7 +286,6 @@ async function main() {
         description: 'Construction Skills Certification Scheme',
         sort_order: 2,
         verified: true,
-        verified_by: 'PLATFORM',
         verified_at: new Date(),
         certification_detail: {
           create: {
@@ -316,7 +327,7 @@ async function main() {
   //   collab[2] (Dave <-> Rob)     → Contract #1 ENDED
   //   collab[3] (Tom <-> James)    → no contracts yet — demo "just-accepted, chat-only"
   //   collab[4] (Emma <-> Lisa)    → Contract #1 PROPOSED — demo "employer sent contract, worker to accept"
-  // Each ENDED contract gets 2 published reviews + 1 RELEASED escrow.
+  // Each ENDED contract gets 2 published reviews + 1 RELEASED milestone + payment rows.
 
   type CollabSeed = {
     workerIdx: number;
@@ -332,7 +343,7 @@ async function main() {
       ended_at?: Date;
       withReviews?: boolean;
       withEscrow?: boolean;
-      // Project ref demo: Sarah shared this job with another worker.
+      // Project ref demo: this contract was the result of a referral.
       project_referrer_account_idx?: number;
       project_referrer_role?: 'WORKER' | 'EMPLOYER';
     }>;
@@ -404,7 +415,14 @@ async function main() {
     },
   ];
 
-  type ContractSeedRow = { id: bigint; collabId: bigint; isLast: boolean; cfg: CollabSeed['contracts'][0] };
+  type ContractSeedRow = {
+    id: bigint;
+    collabId: bigint;
+    workerId: bigint;
+    employerId: bigint;
+    isLast: boolean;
+    cfg: CollabSeed['contracts'][0];
+  };
   const allContracts: ContractSeedRow[] = [];
 
   for (const cs of collabSeeds) {
@@ -418,8 +436,6 @@ async function main() {
         first_contracted_at: cs.contracts.length ? cs.contracts[0].started_at ?? new Date() : null,
       },
     });
-
-    let lastContractId: bigint | null = null;
 
     for (let i = 0; i < cs.contracts.length; i++) {
       const cfg = cs.contracts[i];
@@ -440,18 +456,18 @@ async function main() {
           initiated_by: cfg.initiated_by,
           started_at: cfg.started_at ?? null,
           ended_at: cfg.ended_at ?? null,
+          // project_referrer_id → client_profile (not account).
           project_referrer_id: projRefAccount?.id ?? null,
           project_referrer_role: cfg.project_referrer_role ?? null,
         },
       });
-      lastContractId = contract.id;
-      allContracts.push({ id: contract.id, collabId: collab.id, isLast: i === cs.contracts.length - 1, cfg });
-    }
-
-    if (lastContractId) {
-      await prisma.collaboration.update({
-        where: { id: collab.id },
-        data: { last_contract_id: lastContractId },
+      allContracts.push({
+        id: contract.id,
+        collabId: collab.id,
+        workerId: collab.worker_id,
+        employerId: collab.employer_id,
+        isLast: i === cs.contracts.length - 1,
+        cfg,
       });
     }
 
@@ -493,74 +509,60 @@ async function main() {
   // ── Update rating aggregates ─────────────────────────────────
   for (const row of allContracts) {
     if (!row.cfg.withReviews) continue;
-    const collab = await prisma.collaboration.findUnique({ where: { id: row.collabId } });
-    if (!collab) continue;
 
     const workerReviews = await prisma.review.findMany({
       where: {
-        contract: { collaboration: { worker_id: collab.worker_id } },
+        contract: { collaboration: { worker_id: row.workerId } },
         reviewer_role: 'EMPLOYER',
         is_published: true,
       },
     });
-
     if (workerReviews.length > 0) {
       const avg = workerReviews.reduce((s, r) => s + r.overall_rating, 0) / workerReviews.length;
       await prisma.workerProfile.update({
-        where: { id: collab.worker_id },
+        where: { id: row.workerId },
         data: { rating_avg: Math.round(avg * 100) / 100, rating_count: workerReviews.length },
       });
     }
 
     const employerReviews = await prisma.review.findMany({
       where: {
-        contract: { collaboration: { employer_id: collab.employer_id } },
+        contract: { collaboration: { employer_id: row.employerId } },
         reviewer_role: 'WORKER',
         is_published: true,
       },
     });
-
     if (employerReviews.length > 0) {
       const avg = employerReviews.reduce((s, r) => s + r.overall_rating, 0) / employerReviews.length;
       await prisma.employerProfile.update({
-        where: { id: collab.employer_id },
+        where: { id: row.employerId },
         data: { rating_avg: Math.round(avg * 100) / 100, rating_count: employerReviews.length },
       });
     }
   }
   console.log('  Rating aggregates updated');
 
-  // ── Escrow per ENDED contract (single-milestone, RELEASED) ───
+  // ── Escrow milestone + payment ledger per ENDED contract ─────
+  // A milestone belongs directly to a contract (no escrow_transaction).
+  // A RELEASED milestone has a PAID CHARGE (employer) and a PAID
+  // WORKER_PAYOUT (worker) in the `payment` ledger.
   for (const row of allContracts) {
     if (!row.cfg.withEscrow) continue;
     const platform = Number(row.cfg.agreed_amount) * 0.05;
     const workerPayout = Number(row.cfg.agreed_amount) - platform;
-    const escrow = await prisma.escrowTransaction.create({
+    const ts = row.cfg.ended_at ?? new Date();
+
+    const milestone = await prisma.escrowMilestone.create({
       data: {
         contract_id: row.id,
-        status: 'RELEASED',
-        job_amount: new Prisma.Decimal(row.cfg.agreed_amount),
-        platform_fee: new Prisma.Decimal(platform),
-        referral_commission: 0,
-        worker_payout: new Prisma.Decimal(workerPayout),
-        currency: 'GBP',
-        stripe_payment_intent_id: 'pi_seed_' + row.id + '_' + Math.random().toString(36).substring(2, 8),
-        stripe_charge_id: 'ch_seed_' + row.id + '_' + Math.random().toString(36).substring(2, 8),
-        stripe_transfer_id: 'tr_seed_' + row.id + '_' + Math.random().toString(36).substring(2, 8),
-        deposit_confirmed_at: row.cfg.started_at ?? new Date(),
-        released_at: row.cfg.ended_at ?? new Date(),
-      },
-    });
-    await prisma.escrowMilestone.create({
-      data: {
-        escrow_id: escrow.id,
         position: 1,
         title: row.cfg.project_type,
         amount: new Prisma.Decimal(row.cfg.agreed_amount),
         status: 'RELEASED',
-        worker_submitted_at: row.cfg.ended_at ?? new Date(),
-        employer_approved_at: row.cfg.ended_at ?? new Date(),
-        released_at: row.cfg.ended_at ?? new Date(),
+        created_by_role: 'EMPLOYER',
+        worker_submitted_at: ts,
+        employer_approved_at: ts,
+        released_at: ts,
         frozen_client_fee_pct: new Prisma.Decimal(5),
         frozen_freelancer_fee_pct: new Prisma.Decimal(10),
         frozen_referral_fee_pct: new Prisma.Decimal(0),
@@ -569,31 +571,54 @@ async function main() {
         frozen_platform_fee: new Prisma.Decimal(platform),
       },
     });
-  }
-  console.log('  Escrow + milestone (RELEASED) for each ENDED contract');
 
-  // ── Demo Project ref payout pending (Sarah->Dave on Dave's contract) ──
+    const rnd = () => Math.random().toString(36).substring(2, 8);
+    await prisma.payment.create({
+      data: {
+        milestone_id: milestone.id,
+        client_profile_id: row.employerId,
+        type: 'CHARGE',
+        amount: new Prisma.Decimal(row.cfg.agreed_amount),
+        status: 'PAID',
+        stripe_id: `pi_seed_${milestone.id}_${rnd()}`,
+        settled_at: row.cfg.started_at ?? ts,
+      },
+    });
+    await prisma.payment.create({
+      data: {
+        milestone_id: milestone.id,
+        client_profile_id: row.workerId,
+        type: 'WORKER_PAYOUT',
+        amount: new Prisma.Decimal(workerPayout),
+        status: 'PAID',
+        stripe_id: `tr_seed_${milestone.id}_${rnd()}`,
+        settled_at: ts,
+      },
+    });
+  }
+  console.log('  Escrow milestone (RELEASED) + payment ledger for each ENDED contract');
+
+  // ── Demo project-ref commission held (Sarah → Dave's contract) ──
+  // Sarah isn't Stripe-onboarded → the REFERRAL_W2W payment sits PENDING.
   const sarahRefedDaveContract = allContracts.find(
     (r) => r.cfg.project_referrer_account_idx === 1,
   );
   if (sarahRefedDaveContract) {
     const milestone = await prisma.escrowMilestone.findFirst({
-      where: { escrow: { contract_id: sarahRefedDaveContract.id } },
+      where: { contract_id: sarahRefedDaveContract.id },
     });
     if (milestone) {
       const cut = Number(sarahRefedDaveContract.cfg.agreed_amount) * 0.02;
-      await prisma.pendingReferralPayout.create({
+      await prisma.payment.create({
         data: {
-          referrer_client_profile_id: workerAccounts[1].id, // Sarah
           milestone_id: milestone.id,
-          contract_id: sarahRefedDaveContract.id,
-          type: 'PROJECT_W2W',
+          client_profile_id: workerAccounts[1].id, // Sarah
+          type: 'REFERRAL_W2W',
           amount: new Prisma.Decimal(cut),
-          currency: 'GBP',
           status: 'PENDING',
         },
       });
-      console.log(`  Pending project-ref payout: Sarah ← £${cut.toFixed(2)} on Dave's contract`);
+      console.log(`  Held project-ref payout: Sarah ← £${cut.toFixed(2)} on Dave's contract`);
     }
   }
 
@@ -645,13 +670,13 @@ async function main() {
   }
   console.log('  Welcome notifications sent');
 
-  // ── Audit Log entries ────────────────────────────────────────
+  // ── Audit Log entry ──────────────────────────────────────────
   await prisma.auditLog.create({
     data: {
       account_id: adminAccount.id,
       action: 'SEED_EXECUTED',
       entity_type: 'SYSTEM',
-      metadata: { seeded_at: new Date().toISOString(), version: 'contracts-and-referrals' },
+      metadata: { seeded_at: new Date().toISOString(), version: '2026-05-11-schema-rework' },
     },
   });
   console.log('  Audit log entry');
@@ -843,6 +868,7 @@ async function main() {
         initiated_by: 'WORKER',
         status: 'ACCEPTED',
         // Demo project-ref attribution: Mike shared this job to Tom.
+        // project_referrer_id → client_profile.
         project_referrer_id: workerAccounts[0].id,
         project_referrer_role: 'WORKER',
       },
@@ -863,9 +889,9 @@ async function main() {
   console.log('  Job applications (one project-ref attributed)');
 
   // ── Conversations & messages (one per Collaboration) ─────────
-  // Every collab gets a chat thread — the post-accept invariant. Tom's
-  // chat-only collab gets just the system "job accepted" message; the rest
-  // get a couple of TEXT messages for realism.
+  // conversation shares its PK with collaboration (conversation.id =
+  // collaboration.id) — a strict 1:1, no participant table. message.sender_id
+  // is a client_profile id; NULL for SYSTEM messages.
   const allCollabs = await prisma.collaboration.findMany({
     where: {
       OR: [
@@ -880,13 +906,7 @@ async function main() {
 
   for (const collab of allCollabs) {
     const conv = await prisma.conversation.create({
-      data: { collaboration_id: collab.id },
-    });
-    await prisma.conversationParticipant.createMany({
-      data: [
-        { conversation_id: conv.id, account_id: collab.employer_id },
-        { conversation_id: conv.id, account_id: collab.worker_id },
-      ],
+      data: { id: collab.id },
     });
     const isTom = collab.worker_id === workerAccounts[3].id;
     const isEmma = collab.worker_id === workerAccounts[4].id;
@@ -894,12 +914,11 @@ async function main() {
     const t1 = new Date('2026-04-10T10:00:00.000Z');
     const t2 = new Date('2026-04-10T10:15:00.000Z');
 
-    // Always seed an opening SYSTEM context message (mirrors the new
-    // accept-flow: chat opens with the job that triggered the relationship).
+    // Opening SYSTEM context message (no sender — sender_id NULL).
     await prisma.message.create({
       data: {
         conversation_id: conv.id,
-        sender_id: collab.employer_id,
+        sender_id: null,
         content: isTom
           ? 'Job accepted: "Loft conversion specialist". Discuss scope here, then create a contract.'
           : isEmma
@@ -967,10 +986,10 @@ async function main() {
   console.log('Employers: james@acmebuild, lisa@homeworks, rob@quickfix');
   console.log('');
   console.log('Referral demos:');
-  console.log('  Account ref: Sarah <- Mike (Sarah.referred_by = Mike, signed up 2025-12-01)');
+  console.log('  Account ref: Sarah <- Mike (client_profile.referred_by_id, signed up 2025-12-01)');
   console.log('  Project ref attribution on JobApplication: Tom -> jp4 by Mike');
   console.log('  Project ref attribution on Contract: Dave hired by Rob, referred by Sarah (W2W)');
-  console.log('  Pending payout: Sarah will receive 2% of Dave-Rob contract once she onboards Stripe');
+  console.log('  Held payout: Sarah has a PENDING REFERRAL_W2W payment until she onboards Stripe');
   console.log('');
   console.log('Collaboration demos:');
   console.log('  Mike  <-> James:  ENDED + ACTIVE contracts (Hire-again pattern)');

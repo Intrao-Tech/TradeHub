@@ -1,11 +1,22 @@
 # Status
 
-- State: in-progress (core MVP shipped; milestone-detail features added 2026-05-10)
+- State: in-progress (spec drafted + milestone-detail features; **schema reworked 2026-05-11 — code rewrite pending**)
 - Owner: Igor (PM); implementing engineer: Claude session
 - Created: 2026-05-09 (folder moved from product/ via scope.md → spec drafting)
 - Started: 2026-05-09
-- Last Updated: 2026-05-10
+- Last Updated: 2026-05-11
 - Shipped: —
+
+> **2026-05-11 — schema rework.** After a full DB audit the escrow data model
+> was redesigned. Authoritative schema: `tasks/in-progress/DATA-MODEL.md` +
+> `backend/prisma/schema.prisma` + `db-schema-full.sql`. Spec (`spec.md` §1 +
+> Decisions Log) updated; `contract.md` §1 superseded (banner added). Headline
+> escrow changes: `escrow_transaction` table dropped (milestone → contract
+> directly); unified `payment` ledger replaces `pending_worker_payout` +
+> `pending_referral_payout` and the milestone Stripe-id columns;
+> `escrow_milestone_attachment` has no `uploaded_by`; `escrow_dispute.filed_by`
+> → `filed_by_role`. **Backend/frontend code + migration + seed must be
+> rewritten against the new schema** — this is the next phase.
 
 ## Notes
 

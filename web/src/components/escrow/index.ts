@@ -42,8 +42,7 @@ export {
   getAccountReferralStats,
   getProjectShareStats,
   getIncomingAttribution,
-  getReferralPendingPayouts,
-  retryReferralPendingPayouts,
+  getReferralPayments,
   recordProjectIntent,
   lookupReferrerByCode,
   type ContractRow,
@@ -57,5 +56,6 @@ export {
   type Milestone,
   type MilestoneAttachment,
   type PlatformSettings,
+  type ReferralPayment,
   type WalletData,
 } from './api';

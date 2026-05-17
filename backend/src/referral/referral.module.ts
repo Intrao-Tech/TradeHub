@@ -1,13 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module';
-import { AuditModule } from '../audit/audit.module';
-import { StripeModule } from '../stripe/stripe.module';
+import { MailModule } from '../mail/mail.module';
 import { ReferralService } from './referral.service';
 import { ReferralController } from './referral.controller';
 
 @Module({
-  imports: [PrismaModule, AuditModule, ConfigModule, StripeModule],
+  imports: [PrismaModule, ConfigModule, MailModule],
   providers: [ReferralService],
   controllers: [ReferralController],
   exports: [ReferralService],

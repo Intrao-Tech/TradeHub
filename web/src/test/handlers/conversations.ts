@@ -1,15 +1,12 @@
-// TEST-CHAT-005 — MSW v2 handlers for the seven Conversations endpoints
-// the Chat surface calls. Default-permissive shapes; tests that need a
-// per-case override layer one on top via `server.use(http.<m>(...))`,
-// matching the per-test override pattern used by `tests-collaborations-polish`.
+// MSW v2 handlers for the Conversations endpoints the Chat surface calls.
+//
+// Post-2026-05: a conversation is a strict 1:1 with a collaboration (shared
+// PK). There is no `POST /conversations` start endpoint and no attachment
+// upload — file messages carry their file inline. Default-permissive
+// shapes; per-test overrides layer on via `server.use(...)`.
 
 import { http, HttpResponse } from 'msw';
-import {
-  mockConversation,
-  mockInboxItem,
-  mockMessage,
-  mockMessageAttachment,
-} from '../factories';
+import { mockConversation, mockInboxItem, mockMessage } from '../factories';
 
 const API = 'http://localhost:8081/api';
 
@@ -51,32 +48,24 @@ export const conversationsHandlers = [
     }),
   ),
 
-  // ── Start direct conversation (legacy entry point — should not be used
-  //    on the new chat surface but covered for completeness)
-  http.post(`${API}/conversations`, async () =>
-    HttpResponse.json(mockConversation(), { status: 201 }),
-  ),
-
   // ── Send message (REST fallback path — CHAT-030) ────────────────
-  http.post(`${API}/conversations/:id/messages`, async ({ params, request }) => {
-    await request.json().catch(() => ({}));
-    return HttpResponse.json(
-      mockConversation({
-        id: String(params.id),
-        last_message_at: new Date().toISOString(),
-      }),
-      { status: 201 },
-    );
-  }),
+  http.post(
+    `${API}/conversations/:id/messages`,
+    async ({ params, request }) => {
+      await request.json().catch(() => ({}));
+      return HttpResponse.json(
+        mockConversation({
+          id: String(params.id),
+          lastMessageAt: new Date().toISOString(),
+        }),
+        { status: 201 },
+      );
+    },
+  ),
 
   // ── Mark read (CHAT-032) ────────────────────────────────────────
   http.patch(`${API}/conversations/:id/read`, () =>
     HttpResponse.json({ ok: true, last_read_at: new Date().toISOString() }),
-  ),
-
-  // ── Attachment upload (CHAT-040) ────────────────────────────────
-  http.post(`${API}/conversations/:id/attachments`, () =>
-    HttpResponse.json(mockMessageAttachment(), { status: 201 }),
   ),
 ];
 

@@ -2,6 +2,22 @@
 
 Sealed technical decisions for the implementation session. Read after `spec.md`.
 
+> ⚠️ **SCHEMA SECTION SUPERSEDED — REVISED 2026-05-11.** The "Schema (final)"
+> block below is **stale**. Authoritative schema: `tasks/in-progress/DATA-MODEL.md`
+> + `backend/prisma/schema.prisma` + `db-schema-full.sql`. Corrections:
+> - `account` is a pure auth root — referral columns (`referral_code`,
+>   `referred_by_id`, `referred_at`) live on **`client_profile`**.
+> - All referral FKs (`referral_intent.actor_id`/`referrer_id`,
+>   `contract.project_referrer_id`, `job_application.project_referrer_id`,
+>   the account-ref self-FK) point at **`client_profile`**, not `account`.
+> - `referral_intent` uses typed `target_job_post_id` / `target_worker_id`
+>   (not `target_id` + `target_role`) + two CHECK constraints.
+> - No `escrow_transaction` table; no `pending_referral_payout` table —
+>   referral commissions are rows in the unified `payment` ledger.
+> - No `collaboration.last_contract_id`.
+> The endpoint logic, slice plan and audit events remain broadly valid; the
+> precise API surface is re-derived against the new schema in the code phase.
+
 ## Schema (final)
 
 ### New: `Contract`

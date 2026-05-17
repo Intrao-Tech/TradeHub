@@ -48,8 +48,6 @@ type MilestoneRowProps = {
   isEmployer: boolean;
   isWorker: boolean;
   hasReferral: boolean;
-  /** Current viewer's client profile id — used to show delete on own attachments. */
-  myClientProfileId: string | null;
   /**
    * True when another milestone on the same contract is currently in flight
    * (FUNDED / SUBMITTED / DISPUTED / RELEASE_FAILED). Lockstep funding (Q11)
@@ -101,7 +99,6 @@ export function MilestoneRow({
   isEmployer,
   isWorker,
   hasReferral: _hasReferral,
-  myClientProfileId,
   fundLocked = false,
   fundLockReason = null,
   onChanged,
@@ -578,7 +575,7 @@ export function MilestoneRow({
         <AttachmentSection
           heading="Attachments"
           attachments={creationAttachments}
-          myClientProfileId={myClientProfileId}
+          canRemove={isCreator}
           onRemove={removeAttachment}
           fileInputRef={creationFileRef}
           onPick={(e) => uploadAttachment(e, 'CREATION')}
@@ -593,7 +590,7 @@ export function MilestoneRow({
         <AttachmentSection
           heading="Submission files"
           attachments={submissionAttachments}
-          myClientProfileId={myClientProfileId}
+          canRemove={isWorker}
           onRemove={removeAttachment}
           fileInputRef={submissionFileRef}
           onPick={(e) => uploadAttachment(e, 'SUBMISSION')}
@@ -670,7 +667,7 @@ export function MilestoneRow({
             disabled={busy}
           />
           <div className="flex gap-2">
-            <Button type="button" size="sm" variant="default" onClick={doRefund} disabled={busy}>
+            <Button type="button" size="sm" variant="primary" onClick={doRefund} disabled={busy}>
               {busy ? 'Refunding…' : 'Confirm refund'}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => { setRefundMode(false); setRefundReason(''); }}>
@@ -691,7 +688,7 @@ export function MilestoneRow({
             disabled={busy}
           />
           <div className="flex gap-2">
-            <Button type="button" size="sm" variant="default" onClick={doDispute} disabled={busy}>
+            <Button type="button" size="sm" variant="primary" onClick={doDispute} disabled={busy}>
               {busy ? 'Filing…' : 'File dispute'}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => { setDisputeMode(false); setDisputeReason(''); }}>
@@ -713,7 +710,10 @@ export function MilestoneRow({
 type AttachmentSectionProps = {
   heading: string;
   attachments: MilestoneAttachment[];
-  myClientProfileId: string | null;
+  // The uploader is no longer stored — it is derived (SUBMISSION → worker;
+  // CREATION → the milestone creator). The parent passes whether the current
+  // user is that party.
+  canRemove: boolean;
   onRemove: (att: MilestoneAttachment) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onPick: (e: ChangeEvent<HTMLInputElement>) => void;
@@ -726,7 +726,7 @@ type AttachmentSectionProps = {
 function AttachmentSection({
   heading,
   attachments,
-  myClientProfileId,
+  canRemove,
   onRemove,
   fileInputRef,
   onPick,
@@ -740,9 +740,7 @@ function AttachmentSection({
       <div className="text-xs font-medium text-fg-muted">{heading}</div>
       <div className="flex flex-wrap gap-2">
         {attachments.map((att) => {
-          const isMine =
-            myClientProfileId !== null &&
-            String(att.uploaded_by_id) === myClientProfileId;
+          const isMine = canRemove;
           return (
             <a
               key={String(att.id)}

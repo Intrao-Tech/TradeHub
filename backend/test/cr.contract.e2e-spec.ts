@@ -194,20 +194,11 @@ describe('TEST-CR-030..052 Contract lifecycle e2e', () => {
       .send({ accept: true })
       .expect(200);
 
-    // Manually create an escrow + FUNDED milestone via Prisma.
-    const escrow = await h.prisma.escrowTransaction.create({
-      data: {
-        contract_id: BigInt(created.body.id),
-        status: 'ACTIVE',
-        job_amount: 1000,
-        platform_fee: 50,
-        worker_payout: 950,
-        currency: 'GBP',
-      },
-    });
+    // Manually create a FUNDED milestone via Prisma — milestones hang off
+    // the contract directly now (there is no escrow_transaction row).
     await h.prisma.escrowMilestone.create({
       data: {
-        escrow_id: escrow.id,
+        contract_id: BigInt(created.body.id),
         position: 1,
         title: 'WIP',
         amount: 500,
@@ -237,19 +228,9 @@ describe('TEST-CR-030..052 Contract lifecycle e2e', () => {
       .set(...bearer(workerToken))
       .send({ accept: true })
       .expect(200);
-    const escrow = await h.prisma.escrowTransaction.create({
-      data: {
-        contract_id: BigInt(created.body.id),
-        status: 'ACTIVE',
-        job_amount: 0,
-        platform_fee: 0,
-        worker_payout: 0,
-        currency: 'GBP',
-      },
-    });
     const ms = await h.prisma.escrowMilestone.create({
       data: {
-        escrow_id: escrow.id,
+        contract_id: BigInt(created.body.id),
         position: 1,
         title: 'Pending bit',
         amount: 100,
@@ -298,7 +279,8 @@ describe('TEST-CR-030..052 Contract lifecycle e2e', () => {
       .send({ project_type: 'second', initiated_by: 'EMPLOYER' })
       .expect(201);
     expect(c2.body.position).toBe(2);
-    expect(c2.body.status).toBe('DRAFT');
+    // hire-again creates *and proposes* the next contract in one step.
+    expect(c2.body.status).toBe('PROPOSED');
   });
 
   test('TEST-CR-051 (CR-024) — hire-again refuses 409 with in-flight contract', async () => {
@@ -336,7 +318,7 @@ describe('TEST-CR-030..052 Contract lifecycle e2e', () => {
       .send({ accept: true })
       .expect(200);
     const beforeEnd = await h.prisma.conversation.findFirst({
-      where: { collaboration_id: collab.id },
+      where: { id: collab.id },
     });
     await h
       .request()
@@ -351,7 +333,7 @@ describe('TEST-CR-030..052 Contract lifecycle e2e', () => {
       .send({ project_type: '2', initiated_by: 'EMPLOYER' })
       .expect(201);
     const afterHireAgain = await h.prisma.conversation.findFirst({
-      where: { collaboration_id: collab.id },
+      where: { id: collab.id },
     });
     // If a conversation existed before, it must be the same row id; if it
     // didn't exist before, it must still not exist (Contract creation

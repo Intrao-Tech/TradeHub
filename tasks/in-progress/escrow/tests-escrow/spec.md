@@ -2,6 +2,16 @@
 
 > **Placeholder draft.** This file gets fleshed out parallel to Slice A of the parent feature implementation. Real `TEST-ESCROW-NNN` cases are added as implementation lands. Per `PROMPTS.md §2`, this file is the contract for the testing session that runs alongside implementation.
 
+> ⚠️ **SCHEMA REVISED 2026-05-11** — see `tasks/in-progress/DATA-MODEL.md`.
+> Test cases must target the new model: no `escrow_transaction` (milestone →
+> contract directly); the unified **`payment`** ledger replaces
+> `pending_worker_payout` / `pending_referral_payout` (so a
+> `pending-worker-payout.e2e-spec.ts` becomes a `payment.e2e-spec.ts`
+> exercising CHARGE / WORKER_PAYOUT / REFERRAL_* / REFUND rows + the
+> held-payout sweep); `escrow_milestone_attachment` has no `uploaded_by`;
+> `escrow_dispute.filed_by_role`. Webhook tests assert `payment` row status
+> transitions, not milestone Stripe-id columns.
+
 ## Summary
 
 Test suite for `tasks/in-progress/escrow/`. Maps 1:1 to `ESCROW-NNN` requirements via `coverage-matrix.md`. Layers tagged on each case: U / E2E-B / E2E-WH / F / PW.

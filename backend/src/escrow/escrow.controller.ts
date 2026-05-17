@@ -94,24 +94,24 @@ export class EscrowController {
 
   // ─── Milestones + Fund (Slice B) ──────────────────────────────
 
-  @Get(':escrowId/milestones')
+  @Get(':contractId/milestones')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List milestones on an escrow contract' })
-  listMilestones(@Param('escrowId', ParseBigIntPipe) escrowId: bigint) {
-    return this.escrowService.listMilestones(escrowId);
+  @ApiOperation({ summary: 'List milestones on a contract' })
+  listMilestones(@Param('contractId', ParseBigIntPipe) contractId: bigint) {
+    return this.escrowService.listMilestones(contractId);
   }
 
-  @Post(':escrowId/milestones')
+  @Post(':contractId/milestones')
   @UseGuards(JwtAuthGuard, AccountStateGuard)
   @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({
     summary:
-      'Add a milestone. Employer creates → status=PENDING (immediately fundable). Worker creates → status=REQUESTED (employer must approve).',
+      'Add a milestone to a contract. Employer creates → status=PENDING (immediately fundable). Worker creates → status=REQUESTED (employer must approve).',
   })
   createMilestone(
-    @Param('escrowId', ParseBigIntPipe) escrowId: bigint,
+    @Param('contractId', ParseBigIntPipe) contractId: bigint,
     @CurrentUser() user: CurrentUserPayload,
     @Body() dto: CreateMilestoneDto,
     @Ip() ip: string,
@@ -120,7 +120,7 @@ export class EscrowController {
       throw new BadRequestException({ code: 'NO_CLIENT_PROFILE' });
     }
     return this.escrowService.createMilestone(
-      escrowId,
+      contractId,
       user.clientProfileId,
       dto,
       ip,

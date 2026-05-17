@@ -117,7 +117,7 @@ export function ReasonDialog({
             type="button"
             onClick={submit}
             disabled={busy || reason.trim().length < minChars}
-            variant={destructive ? 'destructive' : 'default'}
+            variant={destructive ? 'destructive' : 'primary'}
           >
             {busy ? 'Working…' : confirmLabel}
           </Button>

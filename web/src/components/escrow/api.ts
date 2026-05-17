@@ -21,13 +21,12 @@ export type MilestoneAttachment = {
   original_name: string;
   mime_type: string;
   size_bytes: number;
-  uploaded_by_id: string;
   created_at: string;
 };
 
 export type Milestone = {
   id: string | number;
-  escrow_id: string | number;
+  contract_id: string | number;
   position: number;
   title: string;
   description?: string | null;
@@ -61,27 +60,21 @@ export type Milestone = {
   worker_payout_on_hold?: boolean;
 };
 
+/**
+ * Escrow view for a contract. Post-2026-05 schema there is no separate
+ * `escrow_transaction` row — the contract IS the escrow; `contract_id` is
+ * the key and the milestones hang straight off it.
+ */
 export type Escrow = {
-  id: string | number;
+  contract_id: string | number;
   collaboration_id: string | number;
-  status: 'CREATED' | 'ACTIVE' | 'DISPUTED' | 'ENDED' | 'CANCELED';
-  job_amount: string;
-  platform_fee: string;
-  referral_commission: string;
-  worker_payout: string;
-  currency: string;
-  deposit_confirmed_at?: string | null;
-  released_at?: string | null;
-  refunded_at?: string | null;
-  disputed_at?: string | null;
-  end_initiated_at?: string | null;
-  end_initiated_by?: string | null;
-  ended_at?: string | null;
-  created_at?: string;
+  status: 'DRAFT' | 'PROPOSED' | 'ACTIVE' | 'ENDED';
+  agreed_amount: string | null;
+  milestones: Milestone[];
 };
 
-export function listMilestones(escrowId: string | number) {
-  return api<Milestone[]>(`/escrow/${escrowId}/milestones`);
+export function listMilestones(contractId: string | number) {
+  return api<Milestone[]>(`/escrow/${contractId}/milestones`);
 }
 
 export function getEscrowByCollaboration(collaborationId: string | number) {
@@ -93,7 +86,7 @@ export function getEscrowByContract(contractId: string | number) {
 }
 
 export function createMilestone(
-  escrowId: string | number,
+  contractId: string | number,
   data: {
     title: string;
     amount: string;
@@ -101,7 +94,7 @@ export function createMilestone(
     description?: string | null;
   },
 ) {
-  return api<Milestone>(`/escrow/${escrowId}/milestones`, {
+  return api<Milestone>(`/escrow/${contractId}/milestones`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -209,7 +202,7 @@ export function refundMilestone(milestoneId: string | number, reason: string) {
 export type DisputeRow = {
   id: string | number;
   milestone_id: string | number;
-  filed_by: string | number;
+  filed_by_role: 'WORKER' | 'EMPLOYER';
   reason: string;
   status: 'OPEN' | 'RESPONDED' | 'MEDIATION' | 'RESOLVED' | 'ARBITRATION_PENDING';
   response?: string | null;
@@ -386,7 +379,9 @@ export type ContractRow = {
   started_at: string | null;
   ended_at: string | null;
   created_at: string;
-  escrow_transaction?: { id: string; status: string } | null;
+  // Escrow lives directly on the contract now — its milestones, not a
+  // separate escrow_transaction row.
+  milestones?: Array<{ id: string; status: string; amount: string }>;
 };
 
 export function listContracts(collabId: string | number) {
@@ -512,25 +507,26 @@ export function getIncomingAttribution() {
   }>('/referrals/incoming');
 }
 
-export function getReferralPendingPayouts() {
-  return api<
-    Array<{
-      id: string;
-      milestone_id: string;
-      contract_id: string | null;
-      type: string;
-      amount: string;
-      status: string;
-      created_at: string;
-    }>
-  >('/referrals/pending-payouts');
-}
+export type ReferralPayment = {
+  id: string;
+  milestone_id: string;
+  type: 'REFERRAL_ACCOUNT' | 'REFERRAL_W2W' | 'REFERRAL_E2E';
+  amount: string;
+  currency: string;
+  status: 'PENDING' | 'PAID' | 'FAILED' | 'CANCELED';
+  failure_reason: string | null;
+  created_at: string;
+  settled_at: string | null;
+};
 
-export function retryReferralPendingPayouts() {
-  return api<{ paid: number; failed: number; skipped: number }>(
-    '/referrals/pending-payouts/retry',
-    { method: 'POST' },
-  );
+/**
+ * Referral-commission `payment` ledger rows for the current user (any
+ * status). Held commissions (PENDING) are swept automatically by the escrow
+ * `account.updated` handler once the referrer completes Stripe onboarding —
+ * there is no manual retry endpoint anymore.
+ */
+export function getReferralPayments() {
+  return api<ReferralPayment[]>('/referrals/payments');
 }
 
 /**

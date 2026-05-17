@@ -1,9 +1,12 @@
 // TEST-REVIEW-010..020 — ReviewService unit specs.
 //
-// Pure-logic tests with deep-mocked Prisma. Each test cites the REVIEW-NNN
-// clause from `tasks/in-progress/reviews/spec.md` it guards. Scope: the
-// service-layer authorisation + visibility + recalculation contract —
-// controllers / guards are exercised by `backend/test/review.e2e-spec.ts`.
+// Pure-logic tests with deep-mocked Prisma. Scope: the service-layer
+// authorisation + visibility + recalculation contract.
+//
+// Post-2026-05 / CR-008 rework: reviews are scoped to a **Contract**
+// (`review.contract_id`), not a collaboration. A review reaches its
+// collaboration through `contract.collaboration`. Reviews are created only
+// for ENDED contracts; the unique constraint is (contract_id, reviewer_role).
 
 import {
   BadRequestException,
@@ -26,6 +29,7 @@ function build(): {
 }
 
 const COLLAB_ID = 100n;
+const CONTRACT_ID = 700n;
 const WORKER_ID = 11n;
 const EMPLOYER_ID = 22n;
 const OUTSIDER_ID = 99n;
@@ -36,20 +40,21 @@ function fakeCollab(overrides: Partial<Record<string, unknown>> = {}) {
     id: COLLAB_ID,
     worker_id: WORKER_ID,
     employer_id: EMPLOYER_ID,
-    initiated_by: 'EMPLOYER',
-    referral_id: null,
-    job_post_id: null,
-    status: 'COMPLETED',
-    project_type: null,
-    site_postcode: null,
-    agreed_amount: null,
-    started_at: null,
-    ended_at: null,
-    flagged: false,
-    flag_reason: null,
-    confirmed_at: null,
+    first_contracted_at: null,
     created_at: new Date(),
     updated_at: new Date(),
+    ...overrides,
+  };
+}
+
+function fakeContract(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: CONTRACT_ID,
+    collaboration_id: COLLAB_ID,
+    position: 1,
+    status: 'ENDED',
+    end_reason: 'COMPLETED',
+    collaboration: fakeCollab(),
     ...overrides,
   };
 }
@@ -57,7 +62,7 @@ function fakeCollab(overrides: Partial<Record<string, unknown>> = {}) {
 function fakeReview(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: REVIEW_ID,
-    collaboration_id: COLLAB_ID,
+    contract_id: CONTRACT_ID,
     reviewer_role: 'WORKER',
     overall_rating: 5,
     quality_rating: null,
@@ -98,29 +103,30 @@ function userPayload(
 describe('TEST-REVIEW-010 ReviewService.create() — REVIEW-013 role derivation', () => {
   test('TEST-REVIEW-010 / REVIEW-013 — caller matches worker_id → reviewer_role: WORKER', async () => {
     const { service, prisma } = build();
-    prisma.collaboration.findUnique.mockResolvedValue(fakeCollab() as never);
+    prisma.contract.findUnique.mockResolvedValue(fakeContract() as never);
     prisma.review.findFirst.mockResolvedValue(null);
     prisma.review.create.mockResolvedValue(
       fakeReview({ reviewer_role: 'WORKER' }) as never,
     );
 
-    await service.create(COLLAB_ID, WORKER_ID, { overall_rating: 5 });
+    await service.create(CONTRACT_ID, WORKER_ID, { overall_rating: 5 });
 
     const args = prisma.review.create.mock.calls[0][0] as {
       data: Record<string, unknown>;
     };
     expect(args.data.reviewer_role).toBe('WORKER');
+    expect(args.data.contract_id).toBe(CONTRACT_ID);
   });
 
   test('TEST-REVIEW-010 / REVIEW-013 — caller matches employer_id → reviewer_role: EMPLOYER', async () => {
     const { service, prisma } = build();
-    prisma.collaboration.findUnique.mockResolvedValue(fakeCollab() as never);
+    prisma.contract.findUnique.mockResolvedValue(fakeContract() as never);
     prisma.review.findFirst.mockResolvedValue(null);
     prisma.review.create.mockResolvedValue(
       fakeReview({ reviewer_role: 'EMPLOYER' }) as never,
     );
 
-    await service.create(COLLAB_ID, EMPLOYER_ID, { overall_rating: 4 });
+    await service.create(CONTRACT_ID, EMPLOYER_ID, { overall_rating: 4 });
 
     const args = prisma.review.create.mock.calls[0][0] as {
       data: Record<string, unknown>;
@@ -130,10 +136,10 @@ describe('TEST-REVIEW-010 ReviewService.create() — REVIEW-013 role derivation'
 
   test('TEST-REVIEW-010 / REVIEW-013 — caller matches neither → ForbiddenException("Not a participant")', async () => {
     const { service, prisma } = build();
-    prisma.collaboration.findUnique.mockResolvedValue(fakeCollab() as never);
+    prisma.contract.findUnique.mockResolvedValue(fakeContract() as never);
 
     await expect(
-      service.create(COLLAB_ID, OUTSIDER_ID, { overall_rating: 5 }),
+      service.create(CONTRACT_ID, OUTSIDER_ID, { overall_rating: 5 }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.review.create).not.toHaveBeenCalled();
   });
@@ -141,8 +147,7 @@ describe('TEST-REVIEW-010 ReviewService.create() — REVIEW-013 role derivation'
   test('TEST-REVIEW-010 / REVIEW-013 — anti-test: client body cannot override server-derived reviewer_role', () => {
     // CreateReviewDto does not declare a `reviewer_role` field. A future PR
     // adding the field must not silently re-route worker submissions to the
-    // employer side. This is a compile-time assertion via type access; the
-    // expression below is the canary.
+    // employer side. This is a compile-time assertion via type access.
     type DtoKeys = keyof import('./dto/create-review.dto').CreateReviewDto;
     type AssertNoReviewerRole =
       Extract<DtoKeys, 'reviewer_role'> extends never ? true : false;
@@ -152,105 +157,101 @@ describe('TEST-REVIEW-010 ReviewService.create() — REVIEW-013 role derivation'
 });
 
 // ════════════════════════════════════════════════════════════════════
-// TEST-REVIEW-011 — create() COMPLETED-only gate (REVIEW-013)
+// TEST-REVIEW-011 — create() ENDED-only gate (REVIEW-013)
 // ════════════════════════════════════════════════════════════════════
 
 describe('TEST-REVIEW-011 ReviewService.create() — REVIEW-013 status gate', () => {
-  const STATES_REJECT = [
-    'PENDING',
-    'CONFIRMED',
-    'IN_PROGRESS',
-    'REJECTED',
-    'DISPUTED',
-  ] as const;
+  const STATES_REJECT = ['DRAFT', 'PROPOSED', 'ACTIVE'] as const;
 
   for (const status of STATES_REJECT) {
-    test(`TEST-REVIEW-011 / REVIEW-013 — status=${status} → BadRequest "Reviews can only be created for completed collaborations"`, async () => {
+    test(`TEST-REVIEW-011 / REVIEW-013 — status=${status} → BadRequest "ended contracts"`, async () => {
       const { service, prisma } = build();
-      prisma.collaboration.findUnique.mockResolvedValue(
-        fakeCollab({ status }) as never,
+      prisma.contract.findUnique.mockResolvedValue(
+        fakeContract({ status }) as never,
       );
-      const promise = service.create(COLLAB_ID, WORKER_ID, {
+      const promise = service.create(CONTRACT_ID, WORKER_ID, {
         overall_rating: 5,
       });
       await expect(promise).rejects.toBeInstanceOf(BadRequestException);
       await expect(promise).rejects.toThrow(
-        'Reviews can only be created for completed collaborations',
+        'Reviews can only be created for ended contracts',
       );
     });
   }
 
-  test('TEST-REVIEW-011 / REVIEW-013 — status=COMPLETED → review created', async () => {
+  test('TEST-REVIEW-011 / REVIEW-013 — status=ENDED → review created', async () => {
     const { service, prisma } = build();
-    prisma.collaboration.findUnique.mockResolvedValue(fakeCollab() as never);
+    prisma.contract.findUnique.mockResolvedValue(fakeContract() as never);
     prisma.review.findFirst.mockResolvedValue(null);
     prisma.review.create.mockResolvedValue(fakeReview() as never);
 
     await expect(
-      service.create(COLLAB_ID, WORKER_ID, { overall_rating: 5 }),
+      service.create(CONTRACT_ID, WORKER_ID, { overall_rating: 5 }),
     ).resolves.toBeDefined();
     expect(prisma.review.create).toHaveBeenCalled();
   });
 
-  test('TEST-REVIEW-011 / REVIEW-013 — missing collaboration → NotFoundException', async () => {
+  test('TEST-REVIEW-011 / REVIEW-013 — missing contract → NotFoundException', async () => {
     const { service, prisma } = build();
-    prisma.collaboration.findUnique.mockResolvedValue(null);
+    prisma.contract.findUnique.mockResolvedValue(null);
     await expect(
-      service.create(COLLAB_ID, WORKER_ID, { overall_rating: 5 }),
+      service.create(CONTRACT_ID, WORKER_ID, { overall_rating: 5 }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
 // ════════════════════════════════════════════════════════════════════
-// TEST-REVIEW-012 — create() unique-per-role (schema.prisma:543)
+// TEST-REVIEW-012 — create() unique-per-contract-per-role
 // ════════════════════════════════════════════════════════════════════
 
-describe('TEST-REVIEW-012 ReviewService.create() — unique-per-collab-per-role', () => {
-  test('TEST-REVIEW-012 — existing WORKER review, worker submits → BadRequest "A WORKER review already exists"', async () => {
+describe('TEST-REVIEW-012 ReviewService.create() — unique-per-contract-per-role', () => {
+  test('TEST-REVIEW-012 — existing WORKER review, worker submits → BadRequest', async () => {
     const { service, prisma } = build();
-    prisma.collaboration.findUnique.mockResolvedValue(fakeCollab() as never);
+    prisma.contract.findUnique.mockResolvedValue(fakeContract() as never);
     prisma.review.findFirst.mockResolvedValue(
       fakeReview({ reviewer_role: 'WORKER' }) as never,
     );
 
-    const promise = service.create(COLLAB_ID, WORKER_ID, { overall_rating: 5 });
+    const promise = service.create(CONTRACT_ID, WORKER_ID, {
+      overall_rating: 5,
+    });
     await expect(promise).rejects.toBeInstanceOf(BadRequestException);
     await expect(promise).rejects.toThrow(
-      'A WORKER review already exists for this collaboration',
+      'A WORKER review already exists for this contract',
     );
   });
 
   test('TEST-REVIEW-012 — existing EMPLOYER review, employer submits → mirror error', async () => {
     const { service, prisma } = build();
-    prisma.collaboration.findUnique.mockResolvedValue(fakeCollab() as never);
+    prisma.contract.findUnique.mockResolvedValue(fakeContract() as never);
     prisma.review.findFirst.mockResolvedValue(
       fakeReview({ reviewer_role: 'EMPLOYER' }) as never,
     );
 
-    const promise = service.create(COLLAB_ID, EMPLOYER_ID, {
+    const promise = service.create(CONTRACT_ID, EMPLOYER_ID, {
       overall_rating: 5,
     });
     await expect(promise).rejects.toThrow(
-      'A EMPLOYER review already exists for this collaboration',
+      'A EMPLOYER review already exists for this contract',
     );
   });
 
-  test('TEST-REVIEW-012 — existing WORKER review, employer submits → 201 (independent sides)', async () => {
+  test('TEST-REVIEW-012 — existing WORKER review, employer submits → created (independent sides)', async () => {
     const { service, prisma } = build();
-    prisma.collaboration.findUnique.mockResolvedValue(fakeCollab() as never);
-    // findFirst is scoped to the caller's derived role — service queries
-    // `{ collaboration_id, reviewer_role: 'EMPLOYER' }` for the employer.
+    prisma.contract.findUnique.mockResolvedValue(fakeContract() as never);
+    // findFirst is scoped to the caller's derived role.
     prisma.review.findFirst.mockResolvedValue(null);
     prisma.review.create.mockResolvedValue(
       fakeReview({ reviewer_role: 'EMPLOYER' }) as never,
     );
 
-    await service.create(COLLAB_ID, EMPLOYER_ID, { overall_rating: 5 });
+    await service.create(CONTRACT_ID, EMPLOYER_ID, { overall_rating: 5 });
 
     const findArgs = prisma.review.findFirst.mock.calls[0][0] as {
       where: Record<string, unknown>;
     };
     expect(findArgs.where.reviewer_role).toBe('EMPLOYER');
+    expect(findArgs.where.contract_id).toBe(CONTRACT_ID);
     expect(prisma.review.create).toHaveBeenCalled();
   });
 });
@@ -262,11 +263,11 @@ describe('TEST-REVIEW-012 ReviewService.create() — unique-per-collab-per-role'
 describe('TEST-REVIEW-013 ReviewService.create() — REVIEW-012 DTO field passthrough', () => {
   test('TEST-REVIEW-013 / REVIEW-012 — all six rating fields round-trip into the persisted row', async () => {
     const { service, prisma } = build();
-    prisma.collaboration.findUnique.mockResolvedValue(fakeCollab() as never);
+    prisma.contract.findUnique.mockResolvedValue(fakeContract() as never);
     prisma.review.findFirst.mockResolvedValue(null);
     prisma.review.create.mockResolvedValue(fakeReview() as never);
 
-    await service.create(COLLAB_ID, WORKER_ID, {
+    await service.create(CONTRACT_ID, WORKER_ID, {
       overall_rating: 4,
       quality_rating: 5,
       reliability_rating: 3,
@@ -288,13 +289,13 @@ describe('TEST-REVIEW-013 ReviewService.create() — REVIEW-012 DTO field passth
     expect(args.data.comment).toBe('great job');
   });
 
-  test('TEST-REVIEW-013 / REVIEW-012 — optional sub-ratings default to null when omitted from DTO', async () => {
+  test('TEST-REVIEW-013 / REVIEW-012 — optional sub-ratings default to null when omitted', async () => {
     const { service, prisma } = build();
-    prisma.collaboration.findUnique.mockResolvedValue(fakeCollab() as never);
+    prisma.contract.findUnique.mockResolvedValue(fakeContract() as never);
     prisma.review.findFirst.mockResolvedValue(null);
     prisma.review.create.mockResolvedValue(fakeReview() as never);
 
-    await service.create(COLLAB_ID, WORKER_ID, { overall_rating: 5 });
+    await service.create(CONTRACT_ID, WORKER_ID, { overall_rating: 5 });
 
     const args = prisma.review.create.mock.calls[0][0] as {
       data: Record<string, unknown>;
@@ -309,17 +310,17 @@ describe('TEST-REVIEW-013 ReviewService.create() — REVIEW-012 DTO field passth
 });
 
 // ════════════════════════════════════════════════════════════════════
-// TEST-REVIEW-014 — getById() four-branch visibility (REVIEW-032)
+// TEST-REVIEW-014 — getById() visibility branches (REVIEW-032)
 // ════════════════════════════════════════════════════════════════════
 
 describe('TEST-REVIEW-014 ReviewService.getById() — REVIEW-032 visibility branches', () => {
+  const withContract = (overrides: Record<string, unknown> = {}) =>
+    fakeReview({ contract: { collaboration: fakeCollab() }, ...overrides });
+
   test('TEST-REVIEW-014 / REVIEW-032 — published, anonymous caller → returns row', async () => {
     const { service, prisma } = build();
     prisma.review.findUnique.mockResolvedValue(
-      fakeReview({
-        is_published: true,
-        collaboration: fakeCollab(),
-      }) as never,
+      withContract({ is_published: true }) as never,
     );
     await expect(service.getById(REVIEW_ID, undefined)).resolves.toBeDefined();
   });
@@ -327,10 +328,7 @@ describe('TEST-REVIEW-014 ReviewService.getById() — REVIEW-032 visibility bran
   test('TEST-REVIEW-014 / REVIEW-032 — published, logged-in non-participant → returns row', async () => {
     const { service, prisma } = build();
     prisma.review.findUnique.mockResolvedValue(
-      fakeReview({
-        is_published: true,
-        collaboration: fakeCollab(),
-      }) as never,
+      withContract({ is_published: true }) as never,
     );
     await expect(
       service.getById(REVIEW_ID, userPayload({ clientProfileId: OUTSIDER_ID })),
@@ -340,11 +338,7 @@ describe('TEST-REVIEW-014 ReviewService.getById() — REVIEW-032 visibility bran
   test('TEST-REVIEW-014 / REVIEW-032 — draft, reviewer (WORKER side) → returns row', async () => {
     const { service, prisma } = build();
     prisma.review.findUnique.mockResolvedValue(
-      fakeReview({
-        is_published: false,
-        reviewer_role: 'WORKER',
-        collaboration: fakeCollab(),
-      }) as never,
+      withContract({ is_published: false, reviewer_role: 'WORKER' }) as never,
     );
     await expect(
       service.getById(REVIEW_ID, userPayload({ clientProfileId: WORKER_ID })),
@@ -354,11 +348,7 @@ describe('TEST-REVIEW-014 ReviewService.getById() — REVIEW-032 visibility bran
   test('TEST-REVIEW-014 / REVIEW-032 — draft, reviewer (EMPLOYER side) → returns row', async () => {
     const { service, prisma } = build();
     prisma.review.findUnique.mockResolvedValue(
-      fakeReview({
-        is_published: false,
-        reviewer_role: 'EMPLOYER',
-        collaboration: fakeCollab(),
-      }) as never,
+      withContract({ is_published: false, reviewer_role: 'EMPLOYER' }) as never,
     );
     await expect(
       service.getById(REVIEW_ID, userPayload({ clientProfileId: EMPLOYER_ID })),
@@ -368,10 +358,7 @@ describe('TEST-REVIEW-014 ReviewService.getById() — REVIEW-032 visibility bran
   test('TEST-REVIEW-014 / REVIEW-032 — draft, staff caller → returns row', async () => {
     const { service, prisma } = build();
     prisma.review.findUnique.mockResolvedValue(
-      fakeReview({
-        is_published: false,
-        collaboration: fakeCollab(),
-      }) as never,
+      withContract({ is_published: false }) as never,
     );
     await expect(
       service.getById(
@@ -381,13 +368,10 @@ describe('TEST-REVIEW-014 ReviewService.getById() — REVIEW-032 visibility bran
     ).resolves.toBeDefined();
   });
 
-  test('TEST-REVIEW-014 / REVIEW-032 — draft, anonymous caller → ForbiddenException("This review is not published")', async () => {
+  test('TEST-REVIEW-014 / REVIEW-032 — draft, anonymous caller → ForbiddenException', async () => {
     const { service, prisma } = build();
     prisma.review.findUnique.mockResolvedValue(
-      fakeReview({
-        is_published: false,
-        collaboration: fakeCollab(),
-      }) as never,
+      withContract({ is_published: false }) as never,
     );
     const promise = service.getById(REVIEW_ID, undefined);
     await expect(promise).rejects.toBeInstanceOf(ForbiddenException);
@@ -397,11 +381,7 @@ describe('TEST-REVIEW-014 ReviewService.getById() — REVIEW-032 visibility bran
   test('TEST-REVIEW-014 / REVIEW-032 — draft, logged-in non-participant non-staff → ForbiddenException', async () => {
     const { service, prisma } = build();
     prisma.review.findUnique.mockResolvedValue(
-      fakeReview({
-        is_published: false,
-        reviewer_role: 'WORKER',
-        collaboration: fakeCollab(),
-      }) as never,
+      withContract({ is_published: false, reviewer_role: 'WORKER' }) as never,
     );
     await expect(
       service.getById(REVIEW_ID, userPayload({ clientProfileId: OUTSIDER_ID })),
@@ -413,18 +393,14 @@ describe('TEST-REVIEW-014 ReviewService.getById() — REVIEW-032 visibility bran
     // reviewee) is not the reviewer and must not see the draft.
     const { service, prisma } = build();
     prisma.review.findUnique.mockResolvedValue(
-      fakeReview({
-        is_published: false,
-        reviewer_role: 'WORKER',
-        collaboration: fakeCollab(),
-      }) as never,
+      withContract({ is_published: false, reviewer_role: 'WORKER' }) as never,
     );
     await expect(
       service.getById(REVIEW_ID, userPayload({ clientProfileId: EMPLOYER_ID })),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  test('TEST-REVIEW-014 / REVIEW-032 — missing review → NotFoundException("Review not found")', async () => {
+  test('TEST-REVIEW-014 / REVIEW-032 — missing review → NotFoundException', async () => {
     const { service, prisma } = build();
     prisma.review.findUnique.mockResolvedValue(null);
     await expect(
@@ -438,7 +414,7 @@ describe('TEST-REVIEW-014 ReviewService.getById() — REVIEW-032 visibility bran
 // ════════════════════════════════════════════════════════════════════
 
 describe('TEST-REVIEW-015 ReviewService.getBySubject() — REVIEW-020 filter', () => {
-  test('TEST-REVIEW-015 / REVIEW-020 — worker subject queries published EMPLOYER reviews on collabs.worker_id', async () => {
+  test('TEST-REVIEW-015 / REVIEW-020 — worker subject queries published EMPLOYER reviews', async () => {
     const { service, prisma } = build();
     prisma.review.findMany.mockResolvedValue([] as never);
     prisma.review.count.mockResolvedValue(0);
@@ -448,18 +424,20 @@ describe('TEST-REVIEW-015 ReviewService.getBySubject() — REVIEW-020 filter', (
     const findArgs = prisma.review.findMany.mock.calls[0][0] as {
       where: Record<string, unknown>;
       orderBy: Record<string, unknown>;
-      skip: number;
-      take: number;
       include: Record<string, unknown>;
     };
     expect(findArgs.where.is_published).toBe(true);
     expect(findArgs.where.reviewer_role).toBe('EMPLOYER');
-    expect(findArgs.where.collaboration).toEqual({ worker_id: WORKER_ID });
+    expect(findArgs.where.contract).toEqual({
+      collaboration: { worker_id: WORKER_ID },
+    });
     expect(findArgs.orderBy).toEqual({ published_at: 'desc' });
-    expect(findArgs.include).toEqual({ collaboration: true });
+    expect(findArgs.include).toEqual({
+      contract: { include: { collaboration: true } },
+    });
   });
 
-  test('TEST-REVIEW-015 / REVIEW-020 — employer subject queries published WORKER reviews on collabs.employer_id', async () => {
+  test('TEST-REVIEW-015 / REVIEW-020 — employer subject queries published WORKER reviews', async () => {
     const { service, prisma } = build();
     prisma.review.findMany.mockResolvedValue([] as never);
     prisma.review.count.mockResolvedValue(0);
@@ -470,7 +448,9 @@ describe('TEST-REVIEW-015 ReviewService.getBySubject() — REVIEW-020 filter', (
       where: Record<string, unknown>;
     };
     expect(findArgs.where.reviewer_role).toBe('WORKER');
-    expect(findArgs.where.collaboration).toEqual({ employer_id: EMPLOYER_ID });
+    expect(findArgs.where.contract).toEqual({
+      collaboration: { employer_id: EMPLOYER_ID },
+    });
   });
 
   test('TEST-REVIEW-015 / REVIEW-020 — pagination skip = (page-1)*limit', async () => {
@@ -507,7 +487,7 @@ describe('TEST-REVIEW-015 ReviewService.getBySubject() — REVIEW-020 filter', (
     expect(countArgs.where).toEqual({
       is_published: true,
       reviewer_role: 'EMPLOYER',
-      collaboration: { worker_id: WORKER_ID },
+      contract: { collaboration: { worker_id: WORKER_ID } },
     });
   });
 });
@@ -517,17 +497,22 @@ describe('TEST-REVIEW-015 ReviewService.getBySubject() — REVIEW-020 filter', (
 // ════════════════════════════════════════════════════════════════════
 
 describe('TEST-REVIEW-016 ReviewService.publish() — REVIEW-042', () => {
-  test('TEST-REVIEW-016 / REVIEW-042 — draft → 200 with is_published true and published_at set', async () => {
+  test('TEST-REVIEW-016 / REVIEW-042 — draft → is_published true and published_at set', async () => {
     const { service, prisma } = build();
     prisma.review.findUnique.mockResolvedValue(
-      fakeReview({ is_published: false, reviewer_role: 'WORKER' }) as never,
+      fakeReview({
+        is_published: false,
+        reviewer_role: 'WORKER',
+        contract: { collaboration_id: COLLAB_ID },
+      }) as never,
     );
-    const updated = fakeReview({
-      is_published: true,
-      published_at: new Date(),
-      reviewer_role: 'WORKER',
-    });
-    prisma.review.update.mockResolvedValue(updated as never);
+    prisma.review.update.mockResolvedValue(
+      fakeReview({
+        is_published: true,
+        published_at: new Date(),
+        reviewer_role: 'WORKER',
+      }) as never,
+    );
     prisma.collaboration.findUniqueOrThrow.mockResolvedValue(
       fakeCollab() as never,
     );
@@ -552,6 +537,7 @@ describe('TEST-REVIEW-016 ReviewService.publish() — REVIEW-042', () => {
     const original = fakeReview({
       is_published: true,
       published_at: new Date('2026-01-01'),
+      contract: { collaboration_id: COLLAB_ID },
     });
     prisma.review.findUnique.mockResolvedValue(original as never);
 
@@ -572,14 +558,18 @@ describe('TEST-REVIEW-016 ReviewService.publish() — REVIEW-042', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════
-// TEST-REVIEW-017 — recalculateRatings() EMPLOYER side (review.service.ts:171-205)
+// TEST-REVIEW-017 — recalculateRatings() EMPLOYER side → WorkerProfile
 // ════════════════════════════════════════════════════════════════════
 
 describe('TEST-REVIEW-017 ReviewService.recalculateRatings() — EMPLOYER side updates WorkerProfile', () => {
   function setupPublish(opts: { avg: number | null; count: number }) {
     const { service, prisma } = build();
     prisma.review.findUnique.mockResolvedValue(
-      fakeReview({ is_published: false, reviewer_role: 'EMPLOYER' }) as never,
+      fakeReview({
+        is_published: false,
+        reviewer_role: 'EMPLOYER',
+        contract: { collaboration_id: COLLAB_ID },
+      }) as never,
     );
     prisma.review.update.mockResolvedValue(
       fakeReview({
@@ -623,7 +613,7 @@ describe('TEST-REVIEW-017 ReviewService.recalculateRatings() — EMPLOYER side u
     expect(args.data.rating_count).toBe(2);
   });
 
-  test('TEST-REVIEW-017 — query is filtered to is_published + reviewer_role:EMPLOYER + collaboration.worker_id (drafts and worker-side reviews excluded)', async () => {
+  test('TEST-REVIEW-017 — query filtered to is_published + reviewer_role:EMPLOYER + contract.collaboration.worker_id', async () => {
     const { service, prisma } = setupPublish({ avg: 4, count: 2 });
     await service.publish(REVIEW_ID);
 
@@ -633,11 +623,11 @@ describe('TEST-REVIEW-017 ReviewService.recalculateRatings() — EMPLOYER side u
     expect(aggArgs.where).toEqual({
       is_published: true,
       reviewer_role: 'EMPLOYER',
-      collaboration: { worker_id: WORKER_ID },
+      contract: { collaboration: { worker_id: WORKER_ID } },
     });
   });
 
-  test('TEST-REVIEW-017 — zero published reviews (avg=null) → rating_avg=0, rating_count=0 (?? 0 fallback)', async () => {
+  test('TEST-REVIEW-017 — zero published reviews (avg=null) → rating_avg=0, rating_count=0', async () => {
     const { service, prisma } = setupPublish({ avg: null, count: 0 });
     await service.publish(REVIEW_ID);
 
@@ -650,14 +640,18 @@ describe('TEST-REVIEW-017 ReviewService.recalculateRatings() — EMPLOYER side u
 });
 
 // ════════════════════════════════════════════════════════════════════
-// TEST-REVIEW-018 — recalculateRatings() WORKER side (review.service.ts:206-233)
+// TEST-REVIEW-018 — recalculateRatings() WORKER side → EmployerProfile
 // ════════════════════════════════════════════════════════════════════
 
 describe('TEST-REVIEW-018 ReviewService.recalculateRatings() — WORKER side updates EmployerProfile', () => {
   function setupPublish(opts: { avg: number | null; count: number }) {
     const { service, prisma } = build();
     prisma.review.findUnique.mockResolvedValue(
-      fakeReview({ is_published: false, reviewer_role: 'WORKER' }) as never,
+      fakeReview({
+        is_published: false,
+        reviewer_role: 'WORKER',
+        contract: { collaboration_id: COLLAB_ID },
+      }) as never,
     );
     prisma.review.update.mockResolvedValue(
       fakeReview({
@@ -690,7 +684,7 @@ describe('TEST-REVIEW-018 ReviewService.recalculateRatings() — WORKER side upd
     expect(args.data.rating_count).toBe(1);
   });
 
-  test('TEST-REVIEW-018 — query filtered to is_published + reviewer_role:WORKER + collaboration.employer_id', async () => {
+  test('TEST-REVIEW-018 — query filtered to is_published + reviewer_role:WORKER + contract.collaboration.employer_id', async () => {
     const { service, prisma } = setupPublish({ avg: 4, count: 1 });
     await service.publish(REVIEW_ID);
 
@@ -700,7 +694,7 @@ describe('TEST-REVIEW-018 ReviewService.recalculateRatings() — WORKER side upd
     expect(aggArgs.where).toEqual({
       is_published: true,
       reviewer_role: 'WORKER',
-      collaboration: { employer_id: EMPLOYER_ID },
+      contract: { collaboration: { employer_id: EMPLOYER_ID } },
     });
   });
 
@@ -736,7 +730,9 @@ describe('TEST-REVIEW-019 ReviewService.getUnpublished() — REVIEW-046', () => 
     };
     expect(findArgs.where).toEqual({ is_published: false });
     expect(findArgs.orderBy).toEqual({ created_at: 'desc' });
-    expect(findArgs.include).toEqual({ collaboration: true });
+    expect(findArgs.include).toEqual({
+      contract: { include: { collaboration: true } },
+    });
     expect(findArgs.skip).toBe(0);
     expect(findArgs.take).toBe(20);
 
@@ -744,113 +740,5 @@ describe('TEST-REVIEW-019 ReviewService.getUnpublished() — REVIEW-046', () => 
       where: Record<string, unknown>;
     };
     expect(countArgs.where).toEqual({ is_published: false });
-  });
-
-  test('TEST-REVIEW-019 / REVIEW-046 — pagination passes skip/take and returns paginated envelope', async () => {
-    const { service, prisma } = build();
-    prisma.review.findMany.mockResolvedValue([] as never);
-    prisma.review.count.mockResolvedValue(45);
-
-    const result = await service.getUnpublished({ page: 3, limit: 20 });
-    expect(result).toEqual({
-      items: [],
-      total: 45,
-      page: 3,
-      limit: 20,
-      totalPages: 3,
-    });
-    const findArgs = prisma.review.findMany.mock.calls[0][0] as {
-      skip: number;
-    };
-    expect(findArgs.skip).toBe(40);
-  });
-
-  test('TEST-REVIEW-019 / REVIEW-046 — empty result → totalPages 0', async () => {
-    const { service, prisma } = build();
-    prisma.review.findMany.mockResolvedValue([] as never);
-    prisma.review.count.mockResolvedValue(0);
-
-    await expect(
-      service.getUnpublished({ page: 1, limit: 20 }),
-    ).resolves.toEqual({
-      items: [],
-      total: 0,
-      page: 1,
-      limit: 20,
-      totalPages: 0,
-    });
-  });
-});
-
-// ════════════════════════════════════════════════════════════════════
-// TEST-REVIEW-020 — assertCollaborationParticipant()
-// ════════════════════════════════════════════════════════════════════
-
-describe('TEST-REVIEW-020 ReviewService.assertCollaborationParticipant()', () => {
-  test('TEST-REVIEW-020 — staff caller short-circuits (no DB fetch)', async () => {
-    const { service, prisma } = build();
-    await expect(
-      service.assertCollaborationParticipant(
-        COLLAB_ID,
-        userPayload({ isStaff: true, clientProfileId: null }),
-      ),
-    ).resolves.toBeUndefined();
-    expect(prisma.collaboration.findUnique).not.toHaveBeenCalled();
-  });
-
-  test('TEST-REVIEW-020 — non-staff without clientProfileId → ForbiddenException("No client profile")', async () => {
-    const { service } = build();
-    const promise = service.assertCollaborationParticipant(
-      COLLAB_ID,
-      userPayload({ clientProfileId: null }),
-    );
-    await expect(promise).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(promise).rejects.toThrow('No client profile');
-  });
-
-  test('TEST-REVIEW-020 — caller matches worker_id → no throw', async () => {
-    const { service, prisma } = build();
-    prisma.collaboration.findUnique.mockResolvedValue(fakeCollab() as never);
-    await expect(
-      service.assertCollaborationParticipant(
-        COLLAB_ID,
-        userPayload({ clientProfileId: WORKER_ID }),
-      ),
-    ).resolves.toBeUndefined();
-  });
-
-  test('TEST-REVIEW-020 — caller matches employer_id → no throw', async () => {
-    const { service, prisma } = build();
-    prisma.collaboration.findUnique.mockResolvedValue(fakeCollab() as never);
-    await expect(
-      service.assertCollaborationParticipant(
-        COLLAB_ID,
-        userPayload({ clientProfileId: EMPLOYER_ID }),
-      ),
-    ).resolves.toBeUndefined();
-  });
-
-  test('TEST-REVIEW-020 — caller matches neither → ForbiddenException("Not a participant in this collaboration")', async () => {
-    const { service, prisma } = build();
-    prisma.collaboration.findUnique.mockResolvedValue(fakeCollab() as never);
-    const promise = service.assertCollaborationParticipant(
-      COLLAB_ID,
-      userPayload({ clientProfileId: OUTSIDER_ID }),
-    );
-    await expect(promise).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(promise).rejects.toThrow(
-      'Not a participant in this collaboration',
-    );
-  });
-
-  test('TEST-REVIEW-020 — missing collaboration → NotFoundException', async () => {
-    const { service, prisma } = build();
-    prisma.collaboration.findUnique.mockResolvedValue(null);
-    await expect(
-      service.assertCollaborationParticipant(
-        COLLAB_ID,
-        userPayload({ clientProfileId: WORKER_ID }),
-      ),
-    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

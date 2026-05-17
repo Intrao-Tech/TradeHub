@@ -1,10 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
-  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsIn,
-  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -85,15 +83,4 @@ export class UpdateJobPostDto {
   @IsOptional()
   @IsArray()
   tag_ids?: number[];
-
-  @ApiPropertyOptional({
-    type: [Number],
-    description:
-      'Replaces the post’s attachment list. Rows currently attached but not in this list are detached (cron-swept after 48 h).',
-  })
-  @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(10)
-  @IsInt({ each: true })
-  attachment_ids?: number[];
 }

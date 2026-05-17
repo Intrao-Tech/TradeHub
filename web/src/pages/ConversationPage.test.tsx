@@ -49,25 +49,15 @@ afterEach(() => {
 function renderPanel(opts: {
   conversationId?: string;
   myAccountId?: string;
-  collabBound?: boolean;
 } = {}) {
   const conversationId = opts.conversationId ?? '6001';
-  const collab = opts.collabBound
-    ? {
-        id: '900',
-        status: 'CONFIRMED',
-        worker_id: '101',
-        employer_id: '202',
-      }
-    : null;
   const inboxRow = mockInboxItem({
     conversation: {
       id: conversationId,
-      collaboration_id: collab?.id ?? null,
+      collaboration_id: conversationId,
       last_message_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
     },
-    collaboration: collab,
     other_participant: {
       account_id: '202',
       client_profile_id: '202',
@@ -90,46 +80,21 @@ function renderPanel(opts: {
 // ════════════════════════════════════════════════════════════════════
 
 describe('TEST-CHAT-110 ConversationPanel header (CHAT-060)', () => {
-  test('TEST-CHAT-110 — collab-bound conversation renders the View-collaboration link + status pill', async () => {
+  test('TEST-CHAT-110 — conversation header renders the View-collaboration link', async () => {
+    // A conversation is a strict 1:1 with its collaboration (shared PK), so
+    // the header always links to /collaborations/<conversation id>.
     server.use(
       http.get(`${API}/conversations/6001`, () =>
-        HttpResponse.json(
-          mockConversation({
-            id: '6001',
-            collaboration_id: '900',
-            collaboration: {
-              id: '900',
-              status: 'CONFIRMED',
-              worker_id: '101',
-              employer_id: '202',
-            },
-          }),
-        ),
+        HttpResponse.json(mockConversation({ id: '6001' })),
       ),
       http.get(`${API}/conversations/6001/messages`, () =>
         HttpResponse.json({ items: [], total: 0, page: 1, limit: 100 }),
       ),
     );
-    renderPanel({ collabBound: true });
+    renderPanel({});
     expect(await screen.findByText(/View collaboration/i)).toBeInTheDocument();
     const link = screen.getByRole('link', { name: /View collaboration/i });
-    expect(link.getAttribute('href')).toBe('/collaborations/900');
-  });
-
-  test('TEST-CHAT-110 — direct conversation renders "Direct message" + no collab pill', async () => {
-    server.use(
-      http.get(`${API}/conversations/6001`, () =>
-        HttpResponse.json(
-          mockConversation({ id: '6001', collaboration_id: null }),
-        ),
-      ),
-      http.get(`${API}/conversations/6001/messages`, () =>
-        HttpResponse.json({ items: [], total: 0, page: 1, limit: 100 }),
-      ),
-    );
-    renderPanel({ collabBound: false });
-    expect(await screen.findByText(/Direct message/i)).toBeInTheDocument();
-    expect(screen.queryByText(/View collaboration/i)).toBeNull();
+    expect(link.getAttribute('href')).toBe('/collaborations/6001');
   });
 });
 

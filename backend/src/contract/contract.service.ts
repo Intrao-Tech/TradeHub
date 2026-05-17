@@ -99,11 +99,11 @@ export class ContractService {
         'EMPLOYER',
         collab.worker_id,
       );
-      if (intent && intent.referrer_account_id !== collab.employer_id) {
-        projectReferrerId = intent.referrer_account_id;
+      if (intent && intent.referrer_id !== collab.employer_id) {
+        projectReferrerId = intent.referrer_id;
         projectReferrerRole = 'EMPLOYER';
         const referrerAcc = await this.prisma.account.findUnique({
-          where: { id: intent.referrer_account_id },
+          where: { id: intent.referrer_id },
           include: { client_profile: { select: { display_name: true } } },
         });
         if (referrerAcc) {
@@ -211,11 +211,6 @@ export class ContractService {
         .catch(() => undefined);
     }
 
-    await this.prisma.collaboration.update({
-      where: { id: collaborationId },
-      data: { last_contract_id: contract.id },
-    });
-
     await this.audit.log(
       actorAccountId,
       CONTRACT_AUDIT_EVENTS.CREATED,
@@ -303,7 +298,6 @@ export class ContractService {
         await tx.collaboration.update({
           where: { id: contract.collaboration_id },
           data: {
-            last_contract_id: contractId,
             first_contracted_at: collab.first_contracted_at ?? new Date(),
           },
         });
@@ -373,7 +367,7 @@ export class ContractService {
 
     const blocking = await this.prisma.escrowMilestone.findFirst({
       where: {
-        escrow: { contract_id: contractId },
+        contract_id: contractId,
         status: {
           in: CONTRACT_BLOCKING_MILESTONE_STATES as unknown as string[],
         },
@@ -388,7 +382,7 @@ export class ContractService {
     const updated = await this.prisma.$transaction(async (tx) => {
       // PENDING milestones → CANCELED.
       await tx.escrowMilestone.updateMany({
-        where: { escrow: { contract_id: contractId }, status: 'PENDING' },
+        where: { contract_id: contractId, status: 'PENDING' },
         data: { status: 'CANCELED' },
       });
       const c = await tx.contract.update({
@@ -398,10 +392,6 @@ export class ContractService {
           end_reason: dto.end_reason as ContractEndReason,
           ended_at: new Date(),
         },
-      });
-      await tx.collaboration.update({
-        where: { id: contract.collaboration_id },
-        data: { last_contract_id: contractId },
       });
       return c;
     });
@@ -441,10 +431,10 @@ export class ContractService {
           },
         },
         project_referrer: {
-          select: { id: true, email: true, referral_code: true },
+          select: { id: true, referral_code: true, display_name: true },
         },
-        escrow_transaction: {
-          select: { id: true, status: true },
+        milestones: {
+          select: { id: true, status: true, amount: true },
         },
         reviews: true,
       },
@@ -462,7 +452,7 @@ export class ContractService {
       where: { collaboration_id: collaborationId },
       orderBy: { position: 'asc' },
       include: {
-        escrow_transaction: { select: { id: true, status: true } },
+        milestones: { select: { id: true, status: true, amount: true } },
       },
     });
   }

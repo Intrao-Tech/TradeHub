@@ -1,9 +1,11 @@
-import { AlertCircle, Loader2, RotateCcw, Trash2 } from 'lucide-react';
+import { AlertCircle, FileText, Loader2, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { formatTimeShort } from './helpers';
-import { MessageAttachmentChip } from './MessageAttachmentChip';
+import { fileBytesPretty, formatTimeShort } from './helpers';
 import type { ChatMessage, OptimisticMessage } from './types';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
+const ATTACHMENT_HOST = API_BASE.replace(/\/api\/?$/, '');
 
 type MessageBubbleProps = {
   message: ChatMessage | OptimisticMessage;
@@ -58,16 +60,28 @@ export function MessageBubble({
         {message.content ? (
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
         ) : null}
-        {message.attachments && message.attachments.length > 0 ? (
-          <div className="flex flex-col gap-1.5">
-            {message.attachments.map((att) => (
-              <MessageAttachmentChip
-                key={String(att.id)}
-                attachment={att}
-                mine={mine}
-              />
-            ))}
-          </div>
+        {message.file_url ? (
+          <a
+            href={`${ATTACHMENT_HOST}${message.file_url}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              'flex max-w-xs items-center gap-2 rounded-md border px-3 py-2 text-xs',
+              mine
+                ? 'border-primary-fg/30 bg-primary-fg/10 text-primary-fg hover:bg-primary-fg/20'
+                : 'border-border-default bg-raised text-fg hover:bg-subtle',
+            )}
+          >
+            <FileText className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 flex-1 truncate font-medium">
+              {message.original_name ?? 'Attachment'}
+            </span>
+            {message.size_bytes != null ? (
+              <span className={mine ? 'text-primary-fg/80' : 'text-fg-muted'}>
+                {fileBytesPretty(message.size_bytes)}
+              </span>
+            ) : null}
+          </a>
         ) : null}
       </div>
 

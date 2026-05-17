@@ -1,38 +1,29 @@
 // TEST-CR-010..020 — ReferralService.computeMilestoneCommissions cap math.
 // Pure-logic tests with deep-mocked Prisma; no DB, no Stripe calls.
-// Tests target the contract in tasks/in-progress/contracts-and-referrals/spec.md
-// CR-041 (compute math + cap) and CR-107 (account ref window).
+// Targets CR-041 (compute math + cap) and CR-107 (account ref window).
+// Post-2026-05 rework: commissions are computed against the client_profile
+// referral columns; the payment ledger + Stripe transfers moved to
+// EscrowService (fireCommissionsForRelease was removed from ReferralService).
 
 import { mockDeep, type DeepMockProxy } from 'jest-mock-extended';
 import { Prisma } from '@prisma/client';
 import { ReferralService } from './referral.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { REFERRAL_TYPE } from './referral.constants';
 
-type StripeStub = {
-  transfers: { create: jest.Mock };
-};
-
-function build(opts: { stripe?: StripeStub | null } = {}): {
+function build(): {
   service: ReferralService;
   prisma: DeepMockProxy<PrismaService>;
-  audit: { log: jest.Mock };
   mail: { sendReferralCommissionPaid: jest.Mock };
-  stripe: StripeStub | null;
 } {
   const prisma = mockDeep<PrismaService>();
-  const audit = { log: jest.fn().mockResolvedValue(undefined) };
   const mail = {
     sendReferralCommissionPaid: jest.fn().mockResolvedValue(undefined),
   };
-  const stripe = opts.stripe ?? null;
   const service = new ReferralService(
     prisma,
-    audit as unknown as ConstructorParameters<typeof ReferralService>[1],
-    mail as unknown as ConstructorParameters<typeof ReferralService>[2],
-    stripe as unknown as ConstructorParameters<typeof ReferralService>[3],
+    mail as unknown as ConstructorParameters<typeof ReferralService>[1],
   );
-  return { service, prisma, audit, mail, stripe };
+  return { service, prisma, mail };
 }
 
 const D = (n: string | number) => new Prisma.Decimal(n);
@@ -64,7 +55,7 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
-    prisma.account.findUnique
+    prisma.clientProfile.findUnique
       .mockResolvedValueOnce({
         referred_by_id: null,
         referred_at: null,
@@ -79,8 +70,8 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
       contractId: CONTRACT_ID,
       agreedAmount: D('1000'),
       platformFee: D('50'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
+      workerClientProfileId: WORKER_ACC,
+      employerClientProfileId: EMPLOYER_ACC,
       projectReferrerId: null,
       projectReferrerRole: null,
     });
@@ -93,7 +84,7 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
-    prisma.account.findUnique
+    prisma.clientProfile.findUnique
       .mockResolvedValueOnce({
         referred_by_id: REFERRER_W,
         referred_at: new Date(), // fresh
@@ -108,15 +99,15 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
       contractId: CONTRACT_ID,
       agreedAmount: D('1000'),
       platformFee: D('50'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
+      workerClientProfileId: WORKER_ACC,
+      employerClientProfileId: EMPLOYER_ACC,
       projectReferrerId: null,
       projectReferrerRole: null,
     });
 
     expect(lines).toHaveLength(1);
-    expect(lines[0].referrerAccountId).toBe(REFERRER_W);
-    expect(lines[0].type).toBe(REFERRAL_TYPE.ACCOUNT);
+    expect(lines[0].referrerClientProfileId).toBe(REFERRER_W);
+    expect(lines[0].type).toBe('REFERRAL_ACCOUNT');
     // 50 * 10/100 = 5
     expect(lines[0].grossAmount.toString()).toBe('5');
     expect(lines[0].cappedAmount.toString()).toBe('5');
@@ -127,7 +118,7 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
-    prisma.account.findUnique
+    prisma.clientProfile.findUnique
       .mockResolvedValueOnce({
         referred_by_id: null,
         referred_at: null,
@@ -142,15 +133,15 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
       contractId: CONTRACT_ID,
       agreedAmount: D('1000'),
       platformFee: D('50'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
+      workerClientProfileId: WORKER_ACC,
+      employerClientProfileId: EMPLOYER_ACC,
       projectReferrerId: null,
       projectReferrerRole: null,
     });
 
     expect(lines).toHaveLength(1);
-    expect(lines[0].referrerAccountId).toBe(REFERRER_E);
-    expect(lines[0].type).toBe(REFERRAL_TYPE.ACCOUNT);
+    expect(lines[0].referrerClientProfileId).toBe(REFERRER_E);
+    expect(lines[0].type).toBe('REFERRAL_ACCOUNT');
   });
 
   test('TEST-CR-013 (CR-041) — both worker AND employer have account refs → 2 ACCOUNT lines', async () => {
@@ -158,7 +149,7 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
-    prisma.account.findUnique
+    prisma.clientProfile.findUnique
       .mockResolvedValueOnce({
         referred_by_id: REFERRER_W,
         referred_at: new Date(),
@@ -173,17 +164,17 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
       contractId: CONTRACT_ID,
       agreedAmount: D('1000'),
       platformFee: D('50'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
+      workerClientProfileId: WORKER_ACC,
+      employerClientProfileId: EMPLOYER_ACC,
       projectReferrerId: null,
       projectReferrerRole: null,
     });
 
     expect(lines).toHaveLength(2);
-    expect(lines.map((l) => l.referrerAccountId).sort()).toEqual(
+    expect(lines.map((l) => l.referrerClientProfileId).sort()).toEqual(
       [REFERRER_W, REFERRER_E].sort(),
     );
-    expect(lines.every((l) => l.type === REFERRAL_TYPE.ACCOUNT)).toBe(true);
+    expect(lines.every((l) => l.type === 'REFERRAL_ACCOUNT')).toBe(true);
   });
 
   test('TEST-CR-014 (CR-041) — project ref WORKER → 1 PROJECT_W2W line', async () => {
@@ -191,7 +182,7 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
-    prisma.account.findUnique
+    prisma.clientProfile.findUnique
       .mockResolvedValueOnce({
         referred_by_id: null,
         referred_at: null,
@@ -206,14 +197,14 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
       contractId: CONTRACT_ID,
       agreedAmount: D('1000'),
       platformFee: D('50'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
+      workerClientProfileId: WORKER_ACC,
+      employerClientProfileId: EMPLOYER_ACC,
       projectReferrerId: PROJECT_REF,
       projectReferrerRole: 'WORKER',
     });
 
     expect(lines).toHaveLength(1);
-    expect(lines[0].type).toBe(REFERRAL_TYPE.PROJECT_W2W);
+    expect(lines[0].type).toBe('REFERRAL_W2W');
     // 1000 * 2/100 = 20
     expect(lines[0].grossAmount.toString()).toBe('20');
     // 20 < 50 platform_fee, no cap
@@ -225,7 +216,7 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
-    prisma.account.findUnique
+    prisma.clientProfile.findUnique
       .mockResolvedValueOnce({
         referred_by_id: null,
         referred_at: null,
@@ -240,14 +231,14 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
       contractId: CONTRACT_ID,
       agreedAmount: D('1000'),
       platformFee: D('50'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
+      workerClientProfileId: WORKER_ACC,
+      employerClientProfileId: EMPLOYER_ACC,
       projectReferrerId: PROJECT_REF,
       projectReferrerRole: 'EMPLOYER',
     });
 
     expect(lines).toHaveLength(1);
-    expect(lines[0].type).toBe(REFERRAL_TYPE.PROJECT_E2E);
+    expect(lines[0].type).toBe('REFERRAL_E2E');
     expect(lines[0].grossAmount.toString()).toBe('20');
   });
 
@@ -256,7 +247,7 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
-    prisma.account.findUnique
+    prisma.clientProfile.findUnique
       .mockResolvedValueOnce({
         referred_by_id: REFERRER_W,
         referred_at: new Date(),
@@ -271,8 +262,8 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
       contractId: CONTRACT_ID,
       agreedAmount: D('1000'),
       platformFee: D('50'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
+      workerClientProfileId: WORKER_ACC,
+      employerClientProfileId: EMPLOYER_ACC,
       projectReferrerId: PROJECT_REF,
       projectReferrerRole: 'WORKER',
     });
@@ -300,7 +291,7 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       highSetting as never,
     );
-    prisma.account.findUnique
+    prisma.clientProfile.findUnique
       .mockResolvedValueOnce({
         referred_by_id: REFERRER_W,
         referred_at: new Date(),
@@ -315,8 +306,8 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
       contractId: CONTRACT_ID,
       agreedAmount: D('1000'),
       platformFee: D('50'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
+      workerClientProfileId: WORKER_ACC,
+      employerClientProfileId: EMPLOYER_ACC,
       projectReferrerId: PROJECT_REF,
       projectReferrerRole: 'WORKER',
     });
@@ -346,7 +337,7 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       highSetting as never,
     );
-    prisma.account.findUnique
+    prisma.clientProfile.findUnique
       .mockResolvedValueOnce({
         referred_by_id: REFERRER_W,
         referred_at: new Date(),
@@ -361,8 +352,8 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
       contractId: CONTRACT_ID,
       agreedAmount: D('100'),
       platformFee: D('3'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
+      workerClientProfileId: WORKER_ACC,
+      employerClientProfileId: EMPLOYER_ACC,
       projectReferrerId: null,
       projectReferrerRole: null,
     });
@@ -380,7 +371,7 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
     // referred_at 18 months ago → outside window
     const longAgo = new Date();
     longAgo.setMonth(longAgo.getMonth() - 18);
-    prisma.account.findUnique
+    prisma.clientProfile.findUnique
       .mockResolvedValueOnce({
         referred_by_id: REFERRER_W,
         referred_at: longAgo,
@@ -395,8 +386,8 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
       contractId: CONTRACT_ID,
       agreedAmount: D('1000'),
       platformFee: D('50'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
+      workerClientProfileId: WORKER_ACC,
+      employerClientProfileId: EMPLOYER_ACC,
       projectReferrerId: null,
       projectReferrerRole: null,
     });
@@ -415,7 +406,7 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
     );
     const ancient = new Date();
     ancient.setFullYear(ancient.getFullYear() - 10);
-    prisma.account.findUnique
+    prisma.clientProfile.findUnique
       .mockResolvedValueOnce({
         referred_by_id: REFERRER_W,
         referred_at: ancient,
@@ -430,294 +421,13 @@ describe('TEST-CR-010..020 ReferralService.computeMilestoneCommissions', () => {
       contractId: CONTRACT_ID,
       agreedAmount: D('1000'),
       platformFee: D('50'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
+      workerClientProfileId: WORKER_ACC,
+      employerClientProfileId: EMPLOYER_ACC,
       projectReferrerId: null,
       projectReferrerRole: null,
     });
 
     expect(lines).toHaveLength(1);
-    expect(lines[0].referrerAccountId).toBe(REFERRER_W);
-  });
-});
-
-describe('TEST-CR-070..077 ReferralService.fireCommissionsForRelease', () => {
-  test('TEST-CR-070 (CR-042) — no referrers → no PendingReferralPayout rows', async () => {
-    const { service, prisma } = build();
-    prisma.platformSetting.findUnique.mockResolvedValueOnce(
-      DEFAULT_SETTING as never,
-    );
-    prisma.account.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never)
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never);
-
-    await service.fireCommissionsForRelease({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
-      agreedAmount: D('1000'),
-      platformFee: D('50'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
-      projectReferrerId: null,
-      projectReferrerRole: null,
-    });
-
-    expect(prisma.pendingReferralPayout.create).not.toHaveBeenCalled();
-  });
-
-  test('TEST-CR-071 (CR-042 live) — referrer onboarded → live transfer fires + PAID row', async () => {
-    const stripe: StripeStub = {
-      transfers: {
-        create: jest.fn().mockResolvedValue({ id: 'tr_test_123' }),
-      },
-    };
-    const { service, prisma, mail } = build({ stripe });
-    prisma.platformSetting.findUnique.mockResolvedValueOnce(
-      DEFAULT_SETTING as never,
-    );
-    prisma.account.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: REFERRER_W,
-        referred_at: new Date(),
-      } as never)
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never);
-    // Referrer profile: onboarded.
-    prisma.clientProfile.findUnique.mockResolvedValueOnce({
-      id: REFERRER_W,
-      stripe_connect_account_id: 'acct_live_x',
-      connect_payouts_enabled: true,
-    } as never);
-    prisma.contract.findUnique.mockResolvedValue({
-      project_type: 'X',
-      position: 1,
-    } as never);
-
-    await service.fireCommissionsForRelease({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
-      agreedAmount: D('1000'),
-      platformFee: D('50'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
-      projectReferrerId: null,
-      projectReferrerRole: null,
-    });
-
-    expect(stripe.transfers.create).toHaveBeenCalledTimes(1);
-    expect(prisma.pendingReferralPayout.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          status: 'PAID',
-          stripe_transfer_id: 'tr_test_123',
-        }),
-      }),
-    );
-    // (Email notification is fire-and-forget; covered by integration tests.)
-    void mail;
-  });
-
-  test('TEST-CR-072 (CR-042 fallback) — referrer not onboarded → PENDING row, no transfer', async () => {
-    const stripe: StripeStub = {
-      transfers: { create: jest.fn() },
-    };
-    const { service, prisma } = build({ stripe });
-    prisma.platformSetting.findUnique.mockResolvedValueOnce(
-      DEFAULT_SETTING as never,
-    );
-    prisma.account.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: REFERRER_W,
-        referred_at: new Date(),
-      } as never)
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never);
-    // Referrer profile: NOT onboarded.
-    prisma.clientProfile.findUnique.mockResolvedValueOnce({
-      id: REFERRER_W,
-      stripe_connect_account_id: null,
-      connect_payouts_enabled: false,
-    } as never);
-    prisma.contract.findUnique.mockResolvedValue({
-      project_type: 'X',
-      position: 1,
-    } as never);
-
-    await service.fireCommissionsForRelease({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
-      agreedAmount: D('1000'),
-      platformFee: D('50'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
-      projectReferrerId: null,
-      projectReferrerRole: null,
-    });
-
-    expect(stripe.transfers.create).not.toHaveBeenCalled();
-    expect(prisma.pendingReferralPayout.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          status: 'PENDING',
-        }),
-      }),
-    );
-  });
-
-  test('TEST-CR-073 (CR-042 fallback) — live transfer rejects → PENDING fallback', async () => {
-    const stripe: StripeStub = {
-      transfers: {
-        create: jest.fn().mockRejectedValue(new Error('insufficient funds')),
-      },
-    };
-    const { service, prisma } = build({ stripe });
-    prisma.platformSetting.findUnique.mockResolvedValueOnce(
-      DEFAULT_SETTING as never,
-    );
-    prisma.account.findUnique
-      .mockResolvedValueOnce({
-        referred_by_id: REFERRER_W,
-        referred_at: new Date(),
-      } as never)
-      .mockResolvedValueOnce({
-        referred_by_id: null,
-        referred_at: null,
-      } as never);
-    prisma.clientProfile.findUnique.mockResolvedValueOnce({
-      id: REFERRER_W,
-      stripe_connect_account_id: 'acct_x',
-      connect_payouts_enabled: true,
-    } as never);
-    prisma.contract.findUnique.mockResolvedValue({
-      project_type: 'X',
-      position: 1,
-    } as never);
-
-    await service.fireCommissionsForRelease({
-      milestoneId: MILESTONE_ID,
-      contractId: CONTRACT_ID,
-      agreedAmount: D('1000'),
-      platformFee: D('50'),
-      workerAccountId: WORKER_ACC,
-      employerAccountId: EMPLOYER_ACC,
-      projectReferrerId: null,
-      projectReferrerRole: null,
-    });
-
-    expect(stripe.transfers.create).toHaveBeenCalled();
-    expect(prisma.pendingReferralPayout.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'PENDING' }),
-      }),
-    );
-  });
-});
-
-describe('TEST-CR-080..085 ReferralService.payPendingReferralPayouts (backfill)', () => {
-  test('TEST-CR-080 (followup) — no PENDING rows → no-op {paid:0, failed:0}', async () => {
-    const stripe: StripeStub = {
-      transfers: { create: jest.fn() },
-    };
-    const { service, prisma } = build({ stripe });
-    prisma.clientProfile.findUnique.mockResolvedValueOnce({
-      stripe_connect_account_id: 'acct_x',
-      connect_payouts_enabled: true,
-    } as never);
-    prisma.pendingReferralPayout.findMany.mockResolvedValueOnce([] as never);
-    const r = await service.payPendingReferralPayouts(REFERRER_W);
-    expect(r).toEqual({ paid: 0, failed: 0, skipped: 0 });
-    expect(stripe.transfers.create).not.toHaveBeenCalled();
-  });
-
-  test('TEST-CR-080 (followup) — referrer not onboarded → no-op', async () => {
-    const stripe: StripeStub = {
-      transfers: { create: jest.fn() },
-    };
-    const { service, prisma } = build({ stripe });
-    prisma.clientProfile.findUnique.mockResolvedValueOnce({
-      stripe_connect_account_id: null,
-      connect_payouts_enabled: false,
-    } as never);
-    const r = await service.payPendingReferralPayouts(REFERRER_W);
-    expect(r).toEqual({ paid: 0, failed: 0, skipped: 0 });
-    expect(stripe.transfers.create).not.toHaveBeenCalled();
-  });
-
-  test('TEST-CR-081 (followup) — onboarded + 1 PENDING → live transfer + flip to PAID', async () => {
-    const stripe: StripeStub = {
-      transfers: {
-        create: jest.fn().mockResolvedValue({ id: 'tr_backfill_x' }),
-      },
-    };
-    const { service, prisma } = build({ stripe });
-    prisma.clientProfile.findUnique.mockResolvedValueOnce({
-      stripe_connect_account_id: 'acct_x',
-      connect_payouts_enabled: true,
-    } as never);
-    prisma.pendingReferralPayout.findMany.mockResolvedValueOnce([
-      {
-        id: 1n,
-        amount: D('5'),
-        milestone_id: 100n,
-        contract_id: 200n,
-        type: 'ACCOUNT',
-      },
-    ] as never);
-    const r = await service.payPendingReferralPayouts(REFERRER_W);
-    expect(r.paid).toBe(1);
-    expect(r.failed).toBe(0);
-    expect(stripe.transfers.create).toHaveBeenCalledTimes(1);
-    expect(prisma.pendingReferralPayout.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 1n },
-        data: expect.objectContaining({
-          status: 'PAID',
-          stripe_transfer_id: 'tr_backfill_x',
-        }),
-      }),
-    );
-  });
-
-  test('TEST-CR-082 (followup) — transfer rejects → row flips to FAILED with reason', async () => {
-    const stripe: StripeStub = {
-      transfers: {
-        create: jest.fn().mockRejectedValue(new Error('account_blocked')),
-      },
-    };
-    const { service, prisma } = build({ stripe });
-    prisma.clientProfile.findUnique.mockResolvedValueOnce({
-      stripe_connect_account_id: 'acct_x',
-      connect_payouts_enabled: true,
-    } as never);
-    prisma.pendingReferralPayout.findMany.mockResolvedValueOnce([
-      {
-        id: 99n,
-        amount: D('1'),
-        milestone_id: 1n,
-        contract_id: 1n,
-        type: 'ACCOUNT',
-      },
-    ] as never);
-    const r = await service.payPendingReferralPayouts(REFERRER_W);
-    expect(r.failed).toBe(1);
-    expect(prisma.pendingReferralPayout.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 99n },
-        data: expect.objectContaining({
-          status: 'FAILED',
-          failure_reason: expect.stringContaining('account_blocked'),
-        }),
-      }),
-    );
+    expect(lines[0].referrerClientProfileId).toBe(REFERRER_W);
   });
 });

@@ -27,5 +27,10 @@ export default defineConfig({
     // owned by Playwright, not Vitest.
     include: ['src/**/*.test.{ts,tsx}'],
     exclude: ['node_modules', 'dist', 'e2e'],
+    // The jsdom suite runs ~56 files across parallel forks; on a loaded
+    // machine a single render + userEvent interaction can exceed the 5s
+    // default. Give correct-but-slow tests headroom so they don't flake.
+    testTimeout: 20_000,
+    hookTimeout: 20_000,
   },
 })

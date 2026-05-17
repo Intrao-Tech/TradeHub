@@ -11,7 +11,6 @@ import { MailService } from '../mail/mail.service';
 import { AuditService } from '../audit/audit.service';
 import { DocumentAssignmentService } from '../verification/document-assignment.service';
 import { generateInitialPassword } from '../common/validators/generate-initial-password';
-import { generateReferralCode } from '../referral/referral.constants';
 import { CreateStaffDto } from './dto/create-staff.dto';
 
 const INVITE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
@@ -218,13 +217,14 @@ export class StaffService {
     const passwordHash = await bcrypt.hash(initialPassword, 12);
     const inviteExpiresAt = new Date(Date.now() + INVITE_TTL_MS);
 
+    // Staff have no client_profile, hence no referral_code — account is a
+    // pure auth root.
     const account = await this.prisma.account.create({
       data: {
         email: dto.email,
         password_hash: passwordHash,
         status: 'ACTIVE',
         email_verified_at: new Date(),
-        referral_code: generateReferralCode(),
         staff_member: {
           create: {
             display_name: dto.display_name,

@@ -44,7 +44,6 @@ type FullContract = ContractRow & {
     employer: { client_profile: { display_name: string } };
     conversation?: { id: string } | null;
   };
-  escrow_transaction?: { id: string; status: string } | null;
 };
 
 const fmtGbp = (s: string | null | undefined) => {

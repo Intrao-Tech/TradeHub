@@ -1,6 +1,36 @@
 # Contract — Escrow
 
-Sealed technical decisions for the implementation session. Once locked in this file (post-spec phase), they don't change without a Decisions Log update in `spec.md`. Frontend + tests sessions read this as the source of truth for shapes.
+Sealed technical decisions for the implementation session. Frontend + tests sessions read this as the source of truth for shapes.
+
+---
+
+> ⚠️ **SUPERSEDED IN PART — SCHEMA REVISED 2026-05-11.**
+> §1 below (Schema migrations: the SQL DDL + Prisma models + the
+> `EscrowTransaction` state machine §1D) describes the **old** data model and
+> is **stale**. The authoritative schema is now `tasks/in-progress/DATA-MODEL.md`
+> + `backend/prisma/schema.prisma` + `db-schema-full.sql` (repo root).
+>
+> What §1 gets wrong, and the corrections (full detail in DATA-MODEL.md):
+> - **No `escrow_transaction` table.** `escrow_milestone.contract_id` → `contract`
+>   directly. §1D's contract-level state machine no longer maps to a row —
+>   escrow-level status is derived.
+> - **No `stripe_*` id columns on `escrow_milestone`**, and **no
+>   `pending_referral_payout` table.** Both folded into the new unified
+>   **`payment`** ledger (one row per money movement: CHARGE / WORKER_PAYOUT /
+>   REFERRAL_* / REFUND; status PENDING/PAID/FAILED/CANCELED).
+> - `escrow_milestone` gained `description`, `created_by_role`,
+>   `submission_message`, six `frozen_*` fee-snapshot columns; status enum
+>   gained `REQUESTED` / `DECLINED` / `RELEASE_FAILED`.
+> - `escrow_milestone_attachment` exists (no `uploaded_by` column);
+>   `escrow_dispute.filed_by` → `filed_by_role`.
+> - `platform_setting` has the four referral-percentage columns, not a single
+>   `referral_commission_percent`.
+>
+> The §1C milestone state machine, §2 endpoint *logic*, §3 slice plan, §4
+> audit events and §5–§9 are still broadly valid — but endpoint paths/shapes
+> shift (`escrow_id` → `contract_id`; release/refund/onboarding now read &
+> write `payment` rows). Re-derive the precise API surface against the new
+> schema during the code-rewrite phase.
 
 ---
 

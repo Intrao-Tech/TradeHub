@@ -1,5 +1,27 @@
 # Spec — Contracts & Referrals
 
+> ⚠️ **SCHEMA REVISED 2026-05-11.** The data model was reworked after this
+> spec was written. Authoritative schema: `tasks/in-progress/DATA-MODEL.md` +
+> `backend/prisma/schema.prisma`. Referral-domain changes (applied in §1
+> Schema below + the 2026-05-11 Decisions Log entry):
+> - **`account` is now a pure auth root.** The referral columns
+>   (`referral_code`, `referred_by_id`, `referred_at`) moved from `account`
+>   to **`client_profile`** — only clients refer, not staff.
+> - **All referral FKs point at `client_profile`, not `account`:**
+>   `referral_intent.actor_id` / `referrer_id`, `contract.project_referrer_id`,
+>   `job_application.project_referrer_id`, the account-referral self-FK
+>   `client_profile.referred_by_id`.
+> - `referral_intent` — `target_id`/`target_role` replaced by typed
+>   `target_job_post_id` (→ job_post, W2W) / `target_worker_id` (→
+>   worker_profile, E2E); CHECK exactly-one + CHECK `actor_id <> referrer_id`.
+> - **`escrow_transaction` table dropped** — `contract` owns milestones
+>   directly. **`pending_referral_payout` merged into the `payment` ledger** —
+>   a referral commission is a `payment` row (`type` = REFERRAL_ACCOUNT /
+>   REFERRAL_W2W / REFERRAL_E2E).
+> - **`collaboration.last_contract_id` dropped** — latest contract is
+>   `ORDER BY position DESC LIMIT 1`.
+> Business logic / endpoints / referral economics below are still valid.
+
 ## Summary
 
 Refactor `Collaboration` into a stateless relationship + introduce `Contract` as the lifecycle entity (Upwork model). Drop legacy `Referral`/`ReferralOffer` subcontract feature. Introduce a real referral system with two types — Account (signup attribution) and Project (per-job for W→W, per-worker-profile for E→E). Both reward referrers with a % cut paid out of platform_fee on every released milestone, capped at 100% of platform_fee.
@@ -78,21 +100,24 @@ See `brief.md`.
 
 ### 1. Schema
 
-- **CR-001 (Must).** Add `Contract` model: `id` BigInt PK, `collaboration_id` BigInt FK Collaboration ON DELETE RESTRICT, `position` Int (sequential 1..N within collaboration, unique per collab), `status` VarChar(20) default `DRAFT`, `end_reason` VarChar(20) NULL (only set on `ENDED`), `agreed_amount` Decimal(12,2) NULL (snapshot at fund), `project_type` VarChar(100) NULL, `site_postcode` VarChar(10) NULL, `job_post_id` BigInt FK NULL, `initiated_by` VarChar(10), `project_referrer_id` BigInt FK Account NULL, `project_referrer_role` VarChar(10) NULL ('WORKER' | 'EMPLOYER'), `started_at` Timestamptz NULL (when ACTIVE), `ended_at` Timestamptz NULL, `created_at` default now(), `updated_at` updatedAt. Unique `(collaboration_id, position)`. Indexes: `(status)`, `(project_referrer_id)`.
-- **CR-002 (Must).** `Contract.status` enum (string-validated): `DRAFT`, `PROPOSED`, `ACTIVE`, `ENDED`. `end_reason` enum (NULL unless status=ENDED): `COMPLETED`, `CANCELED`, `ABANDONED`, `DISPUTED_LOST`.
-- **CR-003 (Must).** Slim `Collaboration`: drop `status`, `agreed_amount`, `project_type`, `site_postcode`, `job_post_id`, `referral_id`, `started_at`, `ended_at`, `confirmed_at`, `flagged`, `flag_reason`, `initiated_by`. Keep: `id`, `worker_id`, `employer_id`, `created_at`, `updated_at`. Add: `last_contract_id` BigInt FK Contract NULL (latest contract for quick hire-again). Add `first_contracted_at` Timestamptz NULL (set when first contract becomes ACTIVE).
-- **CR-004 (Must).** Migrate existing data via fresh seed (no in-place data migration — dev-only DB, user accepted reset). For seed: each existing seeded "completed" collab becomes 1 Contract (position=1, status=ENDED, end_reason=COMPLETED).
-- **CR-005 (Must).** Drop `Referral` and `ReferralOffer` tables and all FK references (including `Collaboration.referral_id`). Drop the `referral` and `referral_offer` migrations' indexes.
-- **CR-006 (Must).** Update `EscrowTransaction.collaboration_id` → `EscrowTransaction.contract_id` (FK Contract). Unique constraint moves with it. Remove `EscrowTransaction.end_initiated_at`, `end_initiated_by`, `ended_at` (these move to Contract).
-- **CR-007 (Must).** Update `Conversation.collaboration_id` stays as-is (chat persists at relationship level). System messages add `metadata.contract_id` for filtering on the UI.
-- **CR-008 (Must).** Update `Review.collaboration_id` → `Review.contract_id`. Reviews are per-contract, not per-relationship.
-- **CR-009 (Must).** Add `Account.referral_code` VarChar(16) UNIQUE NOT NULL — generated on account creation, format `^[A-Z0-9]{4}-[A-Z0-9]{4}$`. Backfill existing accounts in seed.
-- **CR-010 (Must).** Add `Account.referred_by_id` BigInt FK Account NULL (set at signup time only, never updated). Add `Account.referred_at` Timestamptz NULL.
-- **CR-011 (Must).** Add `JobApplication.project_referrer_id` BigInt FK Account NULL. Add `JobApplication.project_referrer_role` VarChar(10) NULL.
-- **CR-012 (Must).** Extend `PlatformSetting` with: `account_referral_pct` Decimal(5,2) default 10.00, `account_referral_window_months` Int NULL default 12 (NULL = lifetime), `project_referral_w2w_pct` Decimal(5,2) default 2.00, `project_referral_e2e_pct` Decimal(5,2) default 2.00. Drop the old `referral_commission_percent` column (replaced by the three new ones).
-- **CR-013 (Must).** Extend `PendingReferralPayout` with `type` VarChar(20) NOT NULL ('ACCOUNT' | 'PROJECT_W2W' | 'PROJECT_E2E'). Default no longer makes sense — every row must declare its type at insert.
-- **CR-014 (Must).** Migration name: `contracts_and_referrals_refactor`. Single migration to keep schema atomic. New seed regenerates all data.
-- **CR-015 (Must).** Add `ReferralIntent` model: `id` BigInt PK, `actor_account_id` BigInt FK Account ON DELETE CASCADE (the logged-in user who clicked the link), `referrer_account_id` BigInt FK Account ON DELETE CASCADE (the link owner), `target_role` VarChar(10) ('WORKER' for job links / 'EMPLOYER' for worker links), `target_id` BigInt (job_post_id or worker client_profile_id), `expires_at` Timestamptz NOT NULL, `created_at` default now(). Index `(actor_account_id, target_role, target_id, expires_at)`. Migration name: `referral_intent` (separate from `contracts_and_referrals_refactor` — added in a follow-up architecture revision documented in the Decisions Log on 2026-05-10). Replaces cookie-based attribution.
+> Schema §1 below was reworked 2026-05-11 — see DATA-MODEL.md §2.4–§2.6 for
+> the authoritative shape. CR-NNN ids retained for traceability.
+
+- **CR-001 (Must).** `contract` model: `id` BigInt PK, `collaboration_id` FK → collaboration (`Restrict`), `position` Int (unique per collab), `status` VarChar(20) default `DRAFT`, `end_reason` VarChar(20) NULL, `agreed_amount` Decimal(12,2) NULL, `project_type` VarChar(100) NULL, `site_postcode` VarChar(10) NULL, `job_post_id` FK NULL, `initiated_by` VarChar(10), **`project_referrer_id` FK → `client_profile` NULL** (not account), `project_referrer_role` VarChar(10) NULL, `started_at`, `ended_at`, `created_at`, `updated_at`. Unique `(collaboration_id, position)`. Indexes `(status)`, `(project_referrer_id)`. Owns `escrow_milestone[]` directly.
+- **CR-002 (Must).** `contract.status` enum: `DRAFT`, `PROPOSED`, `ACTIVE`, `ENDED`. `end_reason`: `COMPLETED`, `CANCELED`, `ABANDONED`, `DISPUTED_LOST`.
+- **CR-003 (Must).** Slim `collaboration`: keep `id`, `worker_id`, `employer_id`, `first_contracted_at`, `created_at`, `updated_at`. **No `last_contract_id`** — the latest contract is `ORDER BY position DESC LIMIT 1` (the `(collaboration_id, position)` unique index makes this free; a stored shortcut FK would be a redundant/circular reference).
+- **CR-004 (Must).** Dev DB only — fresh migration + reseed, no in-place data migration.
+- **CR-005 (Must).** No `Referral` / `ReferralOffer` tables (legacy subcontract feature dropped).
+- **CR-006 (Must).** **There is no `escrow_transaction` table.** `escrow_milestone` references `contract` directly (`escrow_milestone.contract_id`). Contract-end timestamps live on `contract` (`started_at`, `ended_at`). See escrow spec §1.
+- **CR-007 (Must).** Chat: `conversation` is shared-PK 1:1 with `collaboration` (`conversation.id = collaboration.id`). System messages add `metadata.contract_id` for UI filtering.
+- **CR-008 (Must).** `review.contract_id` — reviews are per-contract.
+- **CR-009 (Must).** **`client_profile.referral_code`** VarChar(16) UNIQUE NOT NULL — generated at signup, format `^[A-HJ-KM-NP-Z2-9]{4}-[A-HJ-KM-NP-Z2-9]{4}$`. **On `client_profile`, not `account`** — only clients (workers/employers) refer; staff don't.
+- **CR-010 (Must).** **`client_profile.referred_by_id`** BigInt self-FK → `client_profile` NULL (set at signup, never updated) + `client_profile.referred_at` Timestamptz NULL. The account-referral self-relationship lives on `client_profile`.
+- **CR-011 (Must).** **`job_application.project_referrer_id`** BigInt FK → `client_profile` NULL + `project_referrer_role` VarChar(10) NULL.
+- **CR-012 (Must).** `platform_setting`: `account_referral_pct` Decimal(5,2) default 10.00, `account_referral_window_months` Int NULL default 12 (NULL = lifetime), `project_referral_w2w_pct` / `project_referral_e2e_pct` Decimal(5,2) default 2.00. No single `referral_commission_percent`.
+- **CR-013 (Must).** **There is no `PendingReferralPayout` table.** A referral commission is a row in the unified **`payment`** ledger: `type` ∈ `REFERRAL_ACCOUNT` / `REFERRAL_W2W` / `REFERRAL_E2E`, `client_profile_id` = the referrer, `status` PENDING until the referrer's Connect account is ready. See escrow spec ESCROW-005.
+- **CR-014 (Must).** Dev DB — applied via a fresh migration + reseed.
+- **CR-015 (Must).** `referral_intent` model: `id` BigInt PK, **`actor_id` FK → `client_profile`** `Cascade` (the logged-in client who clicked), **`referrer_id` FK → `client_profile`** `Cascade` (the link owner), **`target_job_post_id` FK → `job_post` NULL** (W2W) and **`target_worker_id` FK → `worker_profile` NULL** (E2E) — exactly one non-null (CHECK `referral_intent_one_target`); CHECK `actor_id <> referrer_id`. `expires_at` Timestamptz NOT NULL (now + 30d), `created_at`. Indexes `(actor_id, target_job_post_id, expires_at)` and `(actor_id, target_worker_id, expires_at)`. Replaces cookie-based attribution.
 
 ### 2. Backend — Contract domain
 

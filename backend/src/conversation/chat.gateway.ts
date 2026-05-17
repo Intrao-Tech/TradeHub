@@ -96,17 +96,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
       this.accountToSockets.get(accountId)!.add(client.id);
 
-      const conversations = await this.prisma.conversationParticipant.findMany({
-        where: { account_id: BigInt(accountId) },
-        select: { conversation_id: true },
+      // A conversation shares its PK with its collaboration; the user's chat
+      // rooms are every collaboration they participate in (worker/employer).
+      const collaborations = await this.prisma.collaboration.findMany({
+        where: {
+          OR: [
+            { worker_id: BigInt(accountId) },
+            { employer_id: BigInt(accountId) },
+          ],
+        },
+        select: { id: true },
       });
 
-      for (const c of conversations) {
-        void client.join(`conv:${c.conversation_id}`);
+      for (const c of collaborations) {
+        void client.join(`conv:${c.id}`);
       }
 
       this.logger.log(
-        `Connected: account=${accountId} socket=${client.id} rooms=${conversations.length}`,
+        `Connected: account=${accountId} socket=${client.id} rooms=${collaborations.length}`,
       );
     } catch {
       void client.disconnect();
@@ -138,16 +145,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     } catch {
       return;
     }
-    const participant = await this.prisma.conversationParticipant.findUnique({
-      where: {
-        conversation_id_account_id: {
-          conversation_id: conversationId,
-          account_id: BigInt(accountId),
-        },
-      },
-      select: { account_id: true },
-    });
-    if (!participant) return;
+    if (!(await this.isParticipant(conversationId, BigInt(accountId)))) return;
     void client.join(`conv:${conversationId}`);
   }
 
@@ -160,7 +158,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       conversation_id: string | number;
       content: string;
       client_id?: string;
-      attachment_ids?: number[];
       message_type?: string;
     },
   ) {
@@ -178,13 +175,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
       return;
     }
+    // WS send is text-only; file messages go through the REST send endpoint
+    // which carries the file columns inline on the message.
     const content = typeof body?.content === 'string' ? body.content : '';
-    const hasAttachments =
-      Array.isArray(body?.attachment_ids) && body.attachment_ids.length > 0;
-    if (content.trim().length === 0 && !hasAttachments) {
+    if (content.trim().length === 0) {
       client.emit('error', {
         code: 'INVALID_INPUT',
-        message: 'Message content or attachment is required.',
+        message: 'Message content is required.',
         client_id: body?.client_id,
       });
       return;
@@ -209,7 +206,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           content,
           message_type: body.message_type,
           client_id: body.client_id,
-          attachment_ids: body.attachment_ids,
         },
       );
       // The service emits `new_message` to the room — no extra emit here.
@@ -263,20 +259,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
     // Verify participant first to avoid leaking presence to non-participants.
-    const participant = await this.prisma.conversationParticipant.findUnique({
-      where: {
-        conversation_id_account_id: {
-          conversation_id: conversationId,
-          account_id: BigInt(accountId),
-        },
-      },
-      select: { account_id: true },
-    });
-    if (!participant) return;
+    if (!(await this.isParticipant(conversationId, BigInt(accountId)))) return;
     client.to(`conv:${conversationId}`).emit(event, {
       conversation_id: String(conversationId),
       account_id: accountId,
     });
+  }
+
+  /**
+   * A conversation is a strict 1:1 with a collaboration (shared PK); the two
+   * participants are always the collaboration's worker + employer.
+   */
+  private async isParticipant(
+    conversationId: bigint,
+    accountId: bigint,
+  ): Promise<boolean> {
+    const collab = await this.prisma.collaboration.findUnique({
+      where: { id: conversationId },
+      select: { worker_id: true, employer_id: true },
+    });
+    if (!collab) return false;
+    return collab.worker_id === accountId || collab.employer_id === accountId;
   }
 
   private consumeRateToken(client: Socket): boolean {

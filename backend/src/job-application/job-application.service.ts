@@ -83,9 +83,9 @@ export class JobApplicationService {
       'WORKER',
       jobPostId,
     );
-    if (intent && intent.referrer_account_id !== workerId) {
+    if (intent && intent.referrer_id !== workerId) {
       const referrerAcc = await this.prisma.account.findUnique({
-        where: { id: intent.referrer_account_id },
+        where: { id: intent.referrer_id },
         include: { client_profile: { select: { display_name: true } } },
       });
       if (referrerAcc) {
@@ -150,19 +150,6 @@ export class JobApplicationService {
       })();
     }
 
-    if (dto.attachment_ids && dto.attachment_ids.length > 0) {
-      await attachOrphansToJobApplication(
-        this.prisma,
-        dto.attachment_ids,
-        created.id,
-        workerId,
-      );
-      return this.prisma.jobApplication.findUniqueOrThrow({
-        where: { id: created.id },
-        include: applicationInclude,
-      });
-    }
-
     return created;
   }
 
@@ -196,19 +183,28 @@ export class JobApplicationService {
         ? message.trim()
         : 'You have been invited to apply for this job.';
 
-    return this.prisma.$transaction(async (tx) => {
-      const conversation = await tx.conversation.create({ data: {} });
-
-      await tx.conversationParticipant.createMany({
-        data: [
-          { conversation_id: conversation.id, account_id: employerId },
-          { conversation_id: conversation.id, account_id: workerId },
-        ],
+    // Chat is collaboration-scoped now — find-or-create the worker<->employer
+    // relationship so the invitation lands in their shared conversation.
+    let collab = await this.prisma.collaboration.findFirst({
+      where: { worker_id: workerId, employer_id: employerId },
+    });
+    if (!collab) {
+      collab = await this.prisma.collaboration.create({
+        data: { worker_id: workerId, employer_id: employerId },
       });
+    }
+    const collabId = collab.id;
+
+    let newConvId: bigint | null = null;
+    const application = await this.prisma.$transaction(async (tx) => {
+      newConvId = await this.conversations.ensureCollaborationConversation(
+        tx,
+        collabId,
+      );
 
       const createdMessage = await tx.message.create({
         data: {
-          conversation_id: conversation.id,
+          conversation_id: collabId,
           sender_id: employerId,
           content,
           message_type: 'JOB_INVITATION',
@@ -217,7 +213,7 @@ export class JobApplicationService {
       });
 
       await tx.conversation.update({
-        where: { id: conversation.id },
+        where: { id: collabId },
         data: { last_message_at: createdMessage.created_at },
       });
 
@@ -231,6 +227,14 @@ export class JobApplicationService {
         include: applicationInclude,
       });
     });
+
+    if (newConvId !== null) {
+      this.conversations.announceConversationCreated(newConvId, [
+        workerId,
+        employerId,
+      ]);
+    }
+    return application;
   }
 
   async getByJobPost(
@@ -389,10 +393,7 @@ export class JobApplicationService {
       await this.prisma.$transaction(async (tx) => {
         convId = await this.conversations.ensureCollaborationConversation(
           tx,
-          collab!.id,
-          workerId,
-          employerId,
-          employerId,
+          collab.id,
         );
       });
       if (convId !== null) {
@@ -459,38 +460,6 @@ export class JobApplicationService {
         employer_id: application.job_post.employer_id,
       },
       include: collaborationInclude,
-    });
-  }
-}
-
-/**
- * Wire orphan attachments to a job application. The worker must own each row;
- * each row must currently be unattached. Mismatch → NOT_OWNER.
- */
-export async function attachOrphansToJobApplication(
-  tx: Prisma.TransactionClient,
-  attachmentIds: number[],
-  jobApplicationId: bigint,
-  workerId: bigint,
-): Promise<void> {
-  if (attachmentIds.length === 0) return;
-  const ids = attachmentIds.map(BigInt);
-
-  const result = await tx.jobAttachment.updateMany({
-    where: {
-      id: { in: ids },
-      uploaded_by_id: workerId,
-      job_post_id: null,
-      job_application_id: null,
-    },
-    data: { job_application_id: jobApplicationId },
-  });
-
-  if (result.count !== ids.length) {
-    throw new ForbiddenException({
-      code: 'NOT_OWNER',
-      message:
-        'One or more attachments could not be wired (not owned by you, or already attached elsewhere).',
     });
   }
 }

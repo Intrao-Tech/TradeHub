@@ -1,11 +1,22 @@
 # Status
 
-- State: in-progress (schema, backend, frontend implemented; refactor revision applied)
+- State: in-progress (spec drafted; **schema reworked 2026-05-11 — code rewrite pending**)
 - Owner: Igor (PM); implementing engineer: Claude session
 - Created: 2026-05-10
 - Started: 2026-05-10
-- Last Updated: 2026-05-10
+- Last Updated: 2026-05-11
 - Shipped: —
+
+> **2026-05-11 — schema rework.** After a full DB audit the referral/contract
+> data model was redesigned. Authoritative schema: `tasks/in-progress/DATA-MODEL.md`
+> + `backend/prisma/schema.prisma` + `db-schema-full.sql`. `spec.md` §1 +
+> banner updated; `contract.md` Schema section superseded (banner added).
+> Headline changes: `account` is now a pure auth root — referral columns +
+> all referral FKs moved to `client_profile`; `referral_intent` targets are
+> typed FKs (`target_job_post_id` / `target_worker_id`); `escrow_transaction`
+> and `pending_referral_payout` dropped (commissions are `payment` rows);
+> `collaboration.last_contract_id` dropped. **Backend/frontend code +
+> migration + seed must be rewritten against the new schema** — next phase.
 
 ## Notes
 

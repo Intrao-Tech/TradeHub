@@ -17,17 +17,18 @@ import { parseApiError } from '../../api';
 type Dispute = {
   id: string | number;
   milestone_id: string | number;
-  filed_by: string | number;
+  // The filer FK was replaced by a role string; the actual party is derived
+  // through the contract's collaboration.
+  filed_by_role: 'WORKER' | 'EMPLOYER';
   reason: string;
   status: string;
   response?: string | null;
   created_at?: string;
-  filer?: { display_name?: string };
   milestone?: {
     id: string | number;
     title: string;
     amount: string;
-    escrow?: {
+    contract?: {
       collaboration?: {
         id: string | number;
         worker?: { client_profile?: { display_name?: string } };
@@ -114,16 +115,25 @@ export function EscrowDisputesTab() {
                   Milestone "{d.milestone?.title}" — £{d.milestone?.amount}
                 </span>
                 <span className="text-xs text-fg-muted">
-                  Collab #{String(d.milestone?.escrow?.collaboration?.id)}
+                  Collab #{String(d.milestone?.contract?.collaboration?.id)}
                 </span>
               </div>
               <div className="text-sm text-fg-muted">
-                <strong>Worker:</strong> {d.milestone?.escrow?.collaboration?.worker?.client_profile?.display_name}
+                <strong>Worker:</strong> {d.milestone?.contract?.collaboration?.worker?.client_profile?.display_name}
                 {' · '}
-                <strong>Employer:</strong> {d.milestone?.escrow?.collaboration?.employer?.client_profile?.display_name}
+                <strong>Employer:</strong> {d.milestone?.contract?.collaboration?.employer?.client_profile?.display_name}
               </div>
               <div className="text-sm">
-                <strong>Filed by {d.filer?.display_name}:</strong> {d.reason}
+                <strong>
+                  Filed by{' '}
+                  {d.filed_by_role === 'WORKER'
+                    ? (d.milestone?.contract?.collaboration?.worker?.client_profile
+                        ?.display_name ?? 'worker')
+                    : (d.milestone?.contract?.collaboration?.employer
+                        ?.client_profile?.display_name ?? 'employer')}
+                  :
+                </strong>{' '}
+                {d.reason}
               </div>
               {d.response ? (
                 <div className="text-sm text-fg-muted">

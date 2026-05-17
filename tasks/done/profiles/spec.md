@@ -1,5 +1,14 @@
 # Spec
 
+> ⚠️ **SCHEMA REVISED 2026-05-11.** Authoritative schema:
+> `tasks/in-progress/DATA-MODEL.md` + `backend/prisma/schema.prisma`. Profile-
+> domain change: worker languages (PROF-055) are no longer a `worker_profile.languages`
+> Postgres array column — they are now a proper **`worker_language`** junction
+> table (`worker_id`, `language_code` — composite PK), mirroring
+> `worker_specialisation` / `worker_tag`. Also: account-referral columns
+> (`referral_code`, `referred_by_id`, `referred_at`) and the Stripe Connect
+> fields live on `client_profile`; `account` is a pure auth root.
+
 ## Summary
 
 Define the production-ready Profiles surface for TradeHub MVP. Covers public profile pages for every role, self-service profile editing, avatar upload, portfolio CRUD with media and document linkage, document upload and verification visibility, profile completeness indicator, search detail entry, and Stripe Connect onboarding state.

@@ -20,13 +20,13 @@ const ALLOWED_MIME = [
 ];
 
 type Props = {
-  escrowId: string | number;
+  contractId: string | number;
   /** Submit label override — defaults to 'Add milestone'. Worker → 'Request milestone'. */
   submitLabel?: string;
   onAdded: () => void;
 };
 
-export function AddMilestoneForm({ escrowId, submitLabel, onAdded }: Props) {
+export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -87,7 +87,7 @@ export function AddMilestoneForm({ escrowId, submitLabel, onAdded }: Props) {
     }
     setBusy(true);
     try {
-      const m = await createMilestone(escrowId, {
+      const m = await createMilestone(contractId, {
         title: title.trim(),
         amount,
         description: description.trim() || undefined,
