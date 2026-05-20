@@ -74,16 +74,17 @@ describe('TEST-JOBS-111 JobDetailPage role-aware CTA (JOBS-011)', () => {
     );
   }
 
-  test('JOBS-011 anon — "Sign in to apply" links to /login?next=/jobs/100', async () => {
+  test('JOBS-011 anon — Sign up + Log in links both carry next=/jobs/100', async () => {
     setupPost();
     renderWithProfile(withRoute(), { route: '/jobs/100', account: null });
     await waitFor(() =>
-      expect(
-        screen.getByRole('link', { name: /sign in to apply/i }),
-      ).toBeInTheDocument(),
+      expect(screen.getByRole('link', { name: /^log in$/i })).toBeInTheDocument(),
     );
-    const link = screen.getByRole('link', { name: /sign in to apply/i });
-    expect(link).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /^sign up$/i })).toHaveAttribute(
+      'href',
+      `/register?next=${encodeURIComponent('/jobs/100')}`,
+    );
+    expect(screen.getByRole('link', { name: /^log in$/i })).toHaveAttribute(
       'href',
       `/login?next=${encodeURIComponent('/jobs/100')}`,
     );
