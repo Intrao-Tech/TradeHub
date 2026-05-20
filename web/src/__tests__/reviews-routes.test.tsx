@@ -40,12 +40,12 @@ describe('TEST-REVIEW-171 — REVIEW-003 / REVIEW-051 /reviews/:id route', () =>
     expect(appSource()).toContain('path="/reviews/:id"');
   });
 
-  test('TEST-REVIEW-171 / REVIEW-051 — /reviews/:id is NOT wrapped in <Protected>', () => {
+  test('TEST-REVIEW-171 / REVIEW-051 — /reviews/:id is wrapped in <Protected>', () => {
     const src = appSource();
     const lineMatch = src
       .split('\n')
       .find((l) => l.includes('path="/reviews/:id"'));
     expect(lineMatch).toBeDefined();
-    expect(lineMatch ?? '').not.toMatch(/<Protected/);
+    expect(lineMatch ?? '').toMatch(/<Protected/);
   });
 });

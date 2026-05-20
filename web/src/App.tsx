@@ -213,9 +213,9 @@ function MarketplaceRouter() {
           <Route path="/jobs" element={<JobBoardPage />} />
           <Route path="/jobs/:id" element={<JobDetailPage />} />
           <Route path="/workers" element={<WorkerSearchPage />} />
-          <Route path="/workers/:id" element={<WorkerDetailPage />} />
+          <Route path="/workers/:id" element={<Protected loggedIn={loggedIn}><WorkerDetailPage /></Protected>} />
           <Route path="/employers" element={<EmployerSearchPage />} />
-          <Route path="/employers/:id" element={<EmployerDetailPage />} />
+          <Route path="/employers/:id" element={<Protected loggedIn={loggedIn}><EmployerDetailPage /></Protected>} />
           <Route path="/clients" element={<ClientDirectoryPage />} />
           <Route path="/clients/:slug" element={<ClientPublicProfilePage />} />
           <Route
@@ -227,7 +227,7 @@ function MarketplaceRouter() {
               />
             }
           />
-          <Route path="/reviews/:id" element={<ReviewDetailPage />} />
+          <Route path="/reviews/:id" element={<Protected loggedIn={loggedIn}><ReviewDetailPage /></Protected>} />
 
           {/* Private */}
           <Route path="/dashboard" element={<Protected loggedIn={loggedIn}><DashboardPage /></Protected>} />
