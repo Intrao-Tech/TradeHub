@@ -49,6 +49,12 @@
   /* --- Overlay (modal scrim — neutral.950 @ 60%) --- */
   --color-overlay: rgb(2 6 23 / 0.6);
 
+  /* --- Always-dark surface (e.g. footer). Identical in light/dark themes. --- */
+  --color-bg-footer:        #0A0F1A;
+  --color-fg-footer:        #F8FAFC;
+  --color-fg-footer-muted:  #94A3B8;
+  --color-border-footer:    #1E293B;
+
   /* --- shadcn-compatible aliases (so shadcn/ui components "just work") --- */
   --background: var(--color-bg-page);
   --foreground: var(--color-fg-default);
@@ -162,6 +168,11 @@
   --color-danger-subtle:  var(--color-state-danger-subtle);
   --color-info-subtle:    var(--color-state-info-subtle);
   --color-overlay: var(--color-overlay);
+
+  --color-footer:           var(--color-bg-footer);
+  --color-footer-fg:        var(--color-fg-footer);
+  --color-footer-fg-muted:  var(--color-fg-footer-muted);
+  --color-footer-border:    var(--color-border-footer);
 
   /* shadcn-compatible utility names (bg-background, text-foreground, etc.) */
   --color-background: var(--background);

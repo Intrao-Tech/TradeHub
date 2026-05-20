@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useTheme } from '@/lib/theme';
 import { useUnreadCount } from '@/components/chat/useUnreadCount';
+import { Footer } from '@/components/Footer';
 
 export type NavItem = { to: string; label: string };
 
@@ -135,6 +136,7 @@ export function AppShell({ loggedIn, publicNav, privateNav, onLogout, children }
       <main key={location.pathname} className="mx-auto w-full max-w-7xl px-4 py-6 sm:py-8">
         {children}
       </main>
+      {!loggedIn ? <Footer /> : null}
     </div>
   );
 }
