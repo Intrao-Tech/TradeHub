@@ -126,7 +126,7 @@ export default function PublicWorkerSearchPage() {
       <section className="space-y-4">
         {results ? (
           results.data.length > 0 ? (
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {results.data.map((w) => (
                 <WorkerCard
                   key={String(w.id)}

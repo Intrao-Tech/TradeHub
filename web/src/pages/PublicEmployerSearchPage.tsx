@@ -118,7 +118,7 @@ export default function PublicEmployerSearchPage() {
       <section className="space-y-4">
         {results ? (
           results.data.length > 0 ? (
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {results.data.map((emp) => (
                 <EmployerCard
                   key={String(emp.id)}

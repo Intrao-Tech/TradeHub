@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { AlertTriangle, MapPin, Users } from 'lucide-react';
+import { AlertTriangle, Clock, MapPin, Tag } from 'lucide-react';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export type JobCardData = {
@@ -12,9 +13,11 @@ export type JobCardData = {
   day_rate_max?: string | number | null;
   fixed_price?: string | number | null;
   postcode_area?: string | null;
+  duration_days?: number | null;
   is_urgent?: boolean;
   status?: string;
   description?: string | null;
+  created_at?: string | null;
   employer?: {
     company_name?: string | null;
     client_profile?: { display_name?: string | null } | null;
@@ -32,12 +35,6 @@ type JobCardProps = {
   className?: string;
 };
 
-function employerName(j: JobCardData): string {
-  const d = j.employer?.client_profile?.display_name;
-  const c = j.employer?.company_name;
-  return (d && String(d)) || (c && String(c)) || 'Employer';
-}
-
 function payLine(j: JobCardData): string {
   if (j.pay_type === 'DAY_RATE') {
     const a = j.day_rate_min != null ? `£${j.day_rate_min}` : '—';
@@ -50,11 +47,39 @@ function payLine(j: JobCardData): string {
   return j.pay_type ?? '—';
 }
 
+function payTypeLabel(payType?: string): string {
+  if (payType === 'DAY_RATE') return 'Day rate';
+  if (payType === 'FIXED_PRICE') return 'Fixed price';
+  return 'Job';
+}
+
+function relativeTime(iso?: string | null): string | null {
+  if (!iso) return null;
+  const diff = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(diff) || diff < 0) return null;
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} hour${hr === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hr / 24);
+  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
+  const years = Math.floor(months / 12);
+  return `${years} year${years === 1 ? '' : 's'} ago`;
+}
+
 export function JobCard({ job, onSelect, actions, selected, className }: JobCardProps) {
   const specs = (job.specialisations ?? [])
     .map((s) => s.specialisation?.name)
     .filter(Boolean) as string[];
-  const tags = (job.tags ?? []).map((t) => t.tag?.name).filter(Boolean) as string[];
+  const tagNames = (job.tags ?? []).map((t) => t.tag?.name).filter(Boolean) as string[];
+  const chips = [...specs, ...tagNames].slice(0, 3);
+  const posted = relativeTime(job.created_at);
+  const meta = posted
+    ? `${payTypeLabel(job.pay_type)} · Posted ${posted}`
+    : payTypeLabel(job.pay_type);
 
   return (
     <Card
@@ -66,50 +91,70 @@ export function JobCard({ job, onSelect, actions, selected, className }: JobCard
       )}
       onClick={onSelect ? () => onSelect(job) : undefined}
     >
-      <CardHeader className="pb-3">
+      <CardHeader className="space-y-2 pb-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h3 className="truncate text-base font-semibold text-fg">{job.title}</h3>
-            <p className="truncate text-xs text-fg-muted">{employerName(job)}</p>
-          </div>
+          <h3 className="text-lg font-semibold leading-tight text-fg">{job.title}</h3>
           {job.is_urgent ? (
-            <Badge variant="danger" className="gap-1">
+            <Badge variant="danger" className="shrink-0 gap-1">
               <AlertTriangle className="h-3 w-3" />
               Urgent
             </Badge>
           ) : null}
         </div>
+        <p className="text-sm text-fg-muted">{meta}</p>
       </CardHeader>
-      <CardContent className="flex-1 space-y-3">
-        <div className="text-sm font-medium text-fg">{payLine(job)}</div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
-          {job.postcode_area ? (
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3 w-3" />
-              {job.postcode_area}
-            </span>
-          ) : null}
-          {job._count?.applications != null ? (
-            <span className="inline-flex items-center gap-1">
-              <Users className="h-3 w-3" />
-              {job._count.applications} application{job._count.applications === 1 ? '' : 's'}
-            </span>
+
+      <CardContent className="flex flex-1 flex-col gap-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex items-start gap-2">
+            <Tag className="mt-0.5 h-5 w-5 shrink-0 text-fg" />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium text-fg">{payLine(job)}</div>
+              <div className="text-xs text-fg-muted">Pay</div>
+            </div>
+          </div>
+          {job.duration_days != null ? (
+            <div className="flex items-start gap-2">
+              <Clock className="mt-0.5 h-5 w-5 shrink-0 text-fg" />
+              <div>
+                <div className="text-sm font-medium text-fg">
+                  {job.duration_days} day{job.duration_days === 1 ? '' : 's'}
+                </div>
+                <div className="text-xs text-fg-muted">Duration</div>
+              </div>
+            </div>
+          ) : job.postcode_area ? (
+            <div className="flex items-start gap-2">
+              <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-fg" />
+              <div>
+                <div className="text-sm font-medium text-fg">{job.postcode_area}</div>
+                <div className="text-xs text-fg-muted">Location</div>
+              </div>
+            </div>
           ) : null}
         </div>
+
         {job.description ? (
           <p className="line-clamp-2 text-sm text-fg-muted">{job.description}</p>
         ) : null}
-        {(specs.length > 0 || tags.length > 0) && (
-          <div className="flex flex-wrap gap-1">
-            {specs.slice(0, 3).map((s) => (
-              <Badge key={`s-${s}`} variant="secondary">{s}</Badge>
-            ))}
-            {tags.slice(0, 3).map((t) => (
-              <Badge key={`t-${t}`} variant="outline">{t}</Badge>
+
+        {chips.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {chips.map((c) => (
+              <Badge key={c} variant="secondary" className="rounded-full px-3 py-1 text-xs font-medium">
+                {c}
+              </Badge>
             ))}
           </div>
-        )}
+        ) : null}
+
+        <div className="mt-auto pt-1">
+          <Button type="button" size="sm" tabIndex={-1}>
+            See more
+          </Button>
+        </div>
       </CardContent>
+
       {actions ? (
         <CardFooter className="flex flex-wrap gap-2 border-t border-border-default pt-4">{actions}</CardFooter>
       ) : null}

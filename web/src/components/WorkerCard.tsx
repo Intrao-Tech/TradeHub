@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
-import { MapPin } from 'lucide-react';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Briefcase, Star } from 'lucide-react';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { VerificationBadge, verificationFromLevel } from './VerificationBadge';
-import { StarRating } from './StarRating';
 import { cn } from '@/lib/utils';
 
 export type WorkerCardData = {
@@ -45,8 +45,8 @@ function initials(name?: string | null): string {
 }
 
 function rateLine(w: WorkerCardData): string | null {
-  if (w.day_rate != null) return `£${w.day_rate} / day`;
-  if (w.hourly_rate != null) return `£${w.hourly_rate} / hr`;
+  if (w.day_rate != null) return `£${w.day_rate}/day`;
+  if (w.hourly_rate != null) return `£${w.hourly_rate}/hr`;
   return null;
 }
 
@@ -58,8 +58,10 @@ export function WorkerCard({ worker, onSelect, actions, selected, className }: W
   const specs = (worker.specialisations ?? [])
     .map((s) => s.specialisation?.name)
     .filter(Boolean) as string[];
-  const tags = (worker.tags ?? []).map((t) => t.tag?.name).filter(Boolean) as string[];
+  const tagNames = (worker.tags ?? []).map((t) => t.tag?.name).filter(Boolean) as string[];
+  const chips = [...specs, ...tagNames].slice(0, 3);
   const rating = worker.rating_average != null ? Number(worker.rating_average) : null;
+  const reviewCount = worker.rating_count ?? null;
   const rate = rateLine(worker);
 
   return (
@@ -72,53 +74,62 @@ export function WorkerCard({ worker, onSelect, actions, selected, className }: W
       )}
       onClick={onSelect ? () => onSelect(worker) : undefined}
     >
-      <CardHeader className="pb-3">
+      <CardContent className="flex flex-1 flex-col gap-4 p-5">
         <div className="flex items-start gap-3">
-          <Avatar className="h-11 w-11">
+          <Avatar className="h-12 w-12 shrink-0">
             {avatar ? <AvatarImage src={avatar} alt={name} /> : null}
             <AvatarFallback>{initials(name)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-sm font-semibold text-fg">{name}</h3>
-            {worker.headline ? (
-              <p className="truncate text-xs text-fg-muted">{worker.headline}</p>
+            <h3 className="truncate text-base font-semibold text-fg">{name}</h3>
+            {postcode ? (
+              <p className="truncate text-sm text-fg-muted">{postcode}</p>
             ) : null}
             <div className="mt-1">
               <VerificationBadge state={verification} />
             </div>
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="flex-1 space-y-3">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
-          {postcode ? (
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium text-fg">
+          {rate ? <span>{rate}</span> : null}
+          {rating != null ? (
             <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3 w-3" />
-              {postcode}
+              <Star className="h-4 w-4 fill-primary text-primary" aria-hidden />
+              {rating.toFixed(1)}
             </span>
           ) : null}
-          {rate ? <span className="font-medium text-fg">{rate}</span> : null}
-        </div>
-        {rating != null ? (
-          <div className="flex items-center gap-2">
-            <StarRating value={Math.round(rating)} size="sm" />
-            <span className="text-xs text-fg-muted">
-              {rating.toFixed(1)}
-              {worker.rating_count != null ? ` · ${worker.rating_count} reviews` : ''}
+          {reviewCount != null && reviewCount > 0 ? (
+            <span className="inline-flex items-center gap-1 text-fg-muted">
+              <Briefcase className="h-4 w-4" aria-hidden />
+              {reviewCount} review{reviewCount === 1 ? '' : 's'}
             </span>
+          ) : null}
+        </div>
+
+        {worker.headline ? (
+          <p className="line-clamp-3 text-sm italic text-fg-muted">{worker.headline}</p>
+        ) : null}
+
+        {chips.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {chips.map((c) => (
+              <Badge
+                key={c}
+                variant="secondary"
+                className="rounded-full px-3 py-1 text-xs font-medium"
+              >
+                {c}
+              </Badge>
+            ))}
           </div>
         ) : null}
-        {(specs.length > 0 || tags.length > 0) && (
-          <div className="flex flex-wrap gap-1">
-            {specs.slice(0, 3).map((s) => (
-              <Badge key={`s-${s}`} variant="secondary">{s}</Badge>
-            ))}
-            {tags.slice(0, 2).map((t) => (
-              <Badge key={`t-${t}`} variant="outline">{t}</Badge>
-            ))}
-          </div>
-        )}
+
+        <Button type="button" className="mt-auto w-full" tabIndex={-1}>
+          See profile
+        </Button>
       </CardContent>
+
       {actions ? (
         <CardFooter className="flex flex-wrap gap-2 border-t border-border-default pt-4">{actions}</CardFooter>
       ) : null}
