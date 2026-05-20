@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Lock, ShieldCheck, Star, Users } from 'lucide-react';
 import { api } from '../api';
 import { WorkerCard, type WorkerCardData } from '@/components/WorkerCard';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
+import { SignupGatePopup, type SignupGateStat } from '@/components/SignupGatePopup';
 
 type WorkerSpec = {
   specialisation_id?: string | number;
@@ -29,11 +30,11 @@ type WorkerSearchResponse = {
 const SAMPLE_LIMIT = 20;
 
 export default function PublicWorkerSearchPage() {
-  const navigate = useNavigate();
   const [results, setResults] = useState<WorkerSearchResponse | null>(null);
   const [error, setError] = useState('');
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasLoadedMore, setHasLoadedMore] = useState(false);
+  const [selected, setSelected] = useState<WorkerRow | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,9 +132,7 @@ export default function PublicWorkerSearchPage() {
                 <WorkerCard
                   key={String(w.id)}
                   worker={w}
-                  onSelect={(picked) =>
-                    navigate(`/workers/${String(picked.id)}`)
-                  }
+                  onSelect={(picked) => setSelected(picked as WorkerRow)}
                 />
               ))}
             </div>
@@ -174,6 +173,41 @@ export default function PublicWorkerSearchPage() {
           </div>
         ) : null}
       </section>
+
+      {selected ? (
+        <SignupGatePopup
+          open={!!selected}
+          onOpenChange={(o) => {
+            if (!o) setSelected(null);
+          }}
+          action="contact this tradesperson"
+          name={selected.client_profile?.display_name ?? 'this tradesperson'}
+          nextPath={`/workers/${String(selected.id)}`}
+          avatarUrl={selected.avatar_url ?? selected.client_profile?.avatar_url}
+          subtitle={selected.headline ?? null}
+          location={selected.postcode_area ?? selected.client_profile?.postcode_area ?? null}
+          stats={workerStats(selected)}
+          rating={selected.rating_average != null ? Number(selected.rating_average) : null}
+        />
+      ) : null}
     </div>
   );
+}
+
+function workerStats(w: WorkerRow): SignupGateStat[] {
+  const out: SignupGateStat[] = [];
+  if (w.day_rate_min != null && w.day_rate_max != null) {
+    out.push({ label: 'Day rate', value: `£${w.day_rate_min}–${w.day_rate_max}` });
+  } else if (w.day_rate_min != null) {
+    out.push({ label: 'Day rate', value: `£${w.day_rate_min}` });
+  }
+  if (w.rating_avg != null) {
+    out.push({ label: 'Rating', value: Number(w.rating_avg).toFixed(1) });
+  } else if (w.rating_average != null) {
+    out.push({ label: 'Rating', value: Number(w.rating_average).toFixed(1) });
+  }
+  if (w.rating_count != null && w.rating_count > 0) {
+    out.push({ label: 'Reviews', value: String(w.rating_count) });
+  }
+  return out;
 }

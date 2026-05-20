@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  isSafeNext,
   postAuthRedirect,
   type AccountSummary,
 } from '@/lib/auth-routing';
@@ -61,9 +62,22 @@ export default function VerifyEmailConfirmPage({ onLogin }: Props) {
         setTokens(data.access_token, data.refresh_token);
         onLogin();
         setState({ kind: 'success' });
-        // Brief success → land on profile (worker / employer)
+        // RegisterPage stashes the pre-signup `next` in localStorage so we can
+        // return the user to the page they came from (e.g. /workers/123 after
+        // a SignupGatePopup click). Consume + clear.
+        let stashed: string | null = null;
+        try {
+          stashed = localStorage.getItem('auth_next');
+          localStorage.removeItem('auth_next');
+        } catch {
+          /* ignore */
+        }
+        const target = stashed && isSafeNext(stashed)
+          ? stashed
+          : '/profile?reason=verified';
+        // Brief success → land on intended next, or profile.
         setTimeout(() => {
-          navigate(postAuthRedirect(data.account, '/profile?reason=verified'), {
+          navigate(postAuthRedirect(data.account, target), {
             replace: true,
           });
         }, 800);

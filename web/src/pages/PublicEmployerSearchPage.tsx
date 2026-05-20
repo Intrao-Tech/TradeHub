@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Building2, Lock, ShieldCheck, Star } from 'lucide-react';
 import { api } from '../api';
 import { EmployerCard, type EmployerCardData } from '@/components/EmployerCard';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
+import { SignupGatePopup, type SignupGateStat } from '@/components/SignupGatePopup';
 
 type EmployerRow = EmployerCardData & {
   rating_avg?: string | number;
@@ -21,11 +22,11 @@ type EmployerSearchResponse = {
 const SAMPLE_LIMIT = 20;
 
 export default function PublicEmployerSearchPage() {
-  const navigate = useNavigate();
   const [results, setResults] = useState<EmployerSearchResponse | null>(null);
   const [error, setError] = useState('');
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasLoadedMore, setHasLoadedMore] = useState(false);
+  const [selected, setSelected] = useState<EmployerRow | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,9 +124,7 @@ export default function PublicEmployerSearchPage() {
                 <EmployerCard
                   key={String(emp.id)}
                   employer={emp}
-                  onSelect={(picked) =>
-                    navigate(`/employers/${String(picked.id)}`)
-                  }
+                  onSelect={(picked) => setSelected(picked as EmployerRow)}
                 />
               ))}
             </div>
@@ -166,6 +165,48 @@ export default function PublicEmployerSearchPage() {
           </div>
         ) : null}
       </section>
+
+      {selected ? (
+        <SignupGatePopup
+          open={!!selected}
+          onOpenChange={(o) => {
+            if (!o) setSelected(null);
+          }}
+          action="contact this employer"
+          name={
+            selected.company_name ??
+            selected.client_profile?.display_name ??
+            'this employer'
+          }
+          nextPath={`/employers/${String(selected.id)}`}
+          avatarUrl={selected.client_profile?.avatar_url}
+          avatarShape="square"
+          subtitle={selected.industry ?? null}
+          location={selected.postcode_area ?? selected.client_profile?.postcode_area ?? null}
+          stats={employerStats(selected)}
+          rating={selected.rating_average != null ? Number(selected.rating_average) : null}
+        />
+      ) : null}
     </div>
   );
+}
+
+function employerStats(e: EmployerRow): SignupGateStat[] {
+  const out: SignupGateStat[] = [];
+  if (e.rating_avg != null) {
+    out.push({ label: 'Rating', value: Number(e.rating_avg).toFixed(1) });
+  } else if (e.rating_average != null) {
+    out.push({ label: 'Rating', value: Number(e.rating_average).toFixed(1) });
+  }
+  if (e.rating_count != null && e.rating_count > 0) {
+    out.push({ label: 'Reviews', value: String(e.rating_count) });
+  }
+  const jobs = e.active_jobs_count ?? e._count?.job_posts;
+  if (jobs != null) {
+    out.push({ label: 'Open jobs', value: String(jobs) });
+  }
+  if (e.team_size != null) {
+    out.push({ label: 'Team', value: String(e.team_size) });
+  }
+  return out.slice(0, 3);
 }

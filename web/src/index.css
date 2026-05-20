@@ -245,6 +245,28 @@ body {
     );
 }
 
+/* Centered amber glow on the dark right panel of the signup-gate popup
+   (Spotify-style split modal). */
+.signup-gate-spotlight {
+  background: radial-gradient(
+    ellipse 70% 55% at 50% 50%,
+    color-mix(in oklab, var(--color-action-primary) 20%, transparent),
+    transparent 70%
+  );
+}
+
+/* Subtle diagonal hairlines layered over the dark right panel.
+   Mirrors Upwork's textured backdrop pattern. */
+.signup-gate-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in oklab, var(--color-fg-footer) 6%, transparent) 0px,
+    color-mix(in oklab, var(--color-fg-footer) 6%, transparent) 1px,
+    transparent 1px,
+    transparent 9px
+  );
+}
+
 /* Multi-stop brand-tinted gradient for role-picker tiles.
    Pattern mirrors Upwork's .accout-type-gradient (four stops, 135deg). */
 .role-tile-gradient {

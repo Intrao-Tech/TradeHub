@@ -15,6 +15,7 @@ import {
   readPendingProjectRef,
   clearPendingProjectRef,
 } from '@/components/referral/pendingProjectRef';
+import { isSafeNext } from '@/lib/auth-routing';
 
 type RegisterResponse = {
   pending_verification: boolean;
@@ -31,6 +32,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const refCode = searchParams.get('ref')?.toUpperCase().trim() || null;
+  const nextParam = searchParams.get('next');
   // A logged-out project-referral click (stashed by useRefAttribution) is
   // applied here as an ACCOUNT referral — a brand-new user becomes the
   // referrer's signup. An explicit /r/:code link (URL ?ref=) takes priority.
@@ -160,6 +162,16 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
       // A project-ref (if any) is now consumed as an account referral — clear
       // the stash so the post-verify login doesn't also replay a project intent.
       clearPendingProjectRef();
+      // Stash the post-auth target so the email-verify confirm step (a fresh
+      // tab from the inbox) can route back to where the user originally
+      // intended to go (e.g. /workers/123 after a SignupGatePopup click).
+      if (nextParam && isSafeNext(nextParam)) {
+        try {
+          localStorage.setItem('auth_next', nextParam);
+        } catch {
+          /* localStorage quota / disabled — non-fatal */
+        }
+      }
       // No tokens issued. Send the user to /verify-email so they confirm.
       navigate(`/verify-email?email=${encodeURIComponent(email)}`, { replace: true });
     } catch (err) {
