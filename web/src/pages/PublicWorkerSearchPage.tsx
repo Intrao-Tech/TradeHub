@@ -32,6 +32,8 @@ export default function PublicWorkerSearchPage() {
   const navigate = useNavigate();
   const [results, setResults] = useState<WorkerSearchResponse | null>(null);
   const [error, setError] = useState('');
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasLoadedMore, setHasLoadedMore] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +53,27 @@ export default function PublicWorkerSearchPage() {
       cancelled = true;
     };
   }, []);
+
+  async function loadMore() {
+    if (!results || hasLoadedMore || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const next = await api<WorkerSearchResponse>(
+        `/worker-profiles?page=2&limit=${SAMPLE_LIMIT}`,
+      );
+      setResults((prev) =>
+        prev ? { ...next, data: [...prev.data, ...next.data] } : next,
+      );
+      setHasLoadedMore(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  const canLoadMore =
+    results != null && !hasLoadedMore && results.total > results.data.length;
 
   return (
     <div className="space-y-6">
@@ -103,7 +126,7 @@ export default function PublicWorkerSearchPage() {
       <section className="space-y-4">
         {results ? (
           results.data.length > 0 ? (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               {results.data.map((w) => (
                 <WorkerCard
                   key={String(w.id)}
@@ -124,6 +147,32 @@ export default function PublicWorkerSearchPage() {
         ) : (
           <p className="text-sm text-fg-muted">Loading…</p>
         )}
+
+        {canLoadMore ? (
+          <div className="flex justify-center pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="border-primary bg-transparent text-primary hover:bg-primary/5"
+            >
+              {loadingMore ? 'Loading…' : 'Load more workers'}
+            </Button>
+          </div>
+        ) : null}
+
+        {hasLoadedMore ? (
+          <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row sm:gap-6">
+            <p className="text-base font-medium text-fg">
+              Want to browse more tradespeople?
+            </p>
+            <Button asChild size="lg">
+              <Link to="/register?next=/workers">Sign up</Link>
+            </Button>
+          </div>
+        ) : null}
       </section>
     </div>
   );

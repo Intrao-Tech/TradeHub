@@ -24,6 +24,8 @@ export default function PublicJobBoardPage() {
   const navigate = useNavigate();
   const [list, setList] = useState<JobListResponse | null>(null);
   const [listError, setListError] = useState('');
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasLoadedMore, setHasLoadedMore] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +46,27 @@ export default function PublicJobBoardPage() {
       cancelled = true;
     };
   }, []);
+
+  async function loadMore() {
+    if (!list || hasLoadedMore || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const next = await api<JobListResponse>(
+        `/job-posts?status=OPEN&page=2&limit=${SAMPLE_SIZE}`,
+      );
+      setList((prev) =>
+        prev ? { ...next, items: [...prev.items, ...next.items] } : next,
+      );
+      setHasLoadedMore(true);
+    } catch (e) {
+      setListError(parseApiError(e)?.message ?? 'Could not load more jobs.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  const canLoadMore =
+    list != null && !hasLoadedMore && list.total > list.items.length;
 
   return (
     <div className="space-y-6">
@@ -100,7 +123,7 @@ export default function PublicJobBoardPage() {
           </h2>
         ) : null}
         {list?.items?.length ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             {list.items.map((j) => (
               <JobCard
                 key={String(j.id)}
@@ -118,6 +141,32 @@ export default function PublicJobBoardPage() {
         ) : (
           <p className="text-sm text-fg-muted">Loading…</p>
         )}
+
+        {canLoadMore ? (
+          <div className="flex justify-center pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="border-primary bg-transparent text-primary hover:bg-primary/5"
+            >
+              {loadingMore ? 'Loading…' : 'Load more jobs'}
+            </Button>
+          </div>
+        ) : null}
+
+        {hasLoadedMore ? (
+          <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row sm:gap-6">
+            <p className="text-base font-medium text-fg">
+              Want to browse more jobs?
+            </p>
+            <Button asChild size="lg">
+              <Link to="/register?next=/jobs">Sign up</Link>
+            </Button>
+          </div>
+        ) : null}
       </section>
     </div>
   );

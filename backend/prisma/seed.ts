@@ -978,6 +978,172 @@ async function main() {
   }
   console.log('  Conversations + messages (one per Collaboration)');
 
+  // ── Bulk mock data so public lists have a "Load more" page ──
+  // Idempotent for accounts (upsert-by-email); job posts use plain
+  // create — re-seed only after `prisma migrate reset`.
+  console.log('\nSeeding bulk mock data for public lists...');
+
+  const cities = [
+    { city: 'London', area: 'EC1' }, { city: 'London', area: 'E14' },
+    { city: 'London', area: 'SW1' }, { city: 'London', area: 'N1' },
+    { city: 'London', area: 'SE1' }, { city: 'London', area: 'W1' },
+    { city: 'Manchester', area: 'M1' }, { city: 'Manchester', area: 'M2' },
+    { city: 'Birmingham', area: 'B1' }, { city: 'Birmingham', area: 'B2' },
+    { city: 'Leeds', area: 'LS1' }, { city: 'Bristol', area: 'BS1' },
+    { city: 'Liverpool', area: 'L1' }, { city: 'Glasgow', area: 'G1' },
+    { city: 'Edinburgh', area: 'EH1' },
+  ];
+
+  const firstNames = [
+    'Alex', 'Ben', 'Chris', 'Dan', 'Ethan', 'Frank', 'George', 'Harry',
+    'Ian', 'Jack', 'Kyle', 'Liam', 'Max', 'Nick', 'Oliver', 'Pete',
+    'Quinn', 'Ryan', 'Sam', 'Tom', 'Will', 'Xander', 'Yusuf', 'Zac', 'Adam',
+  ];
+  const lastNames = [
+    'Smith', 'Brown', 'Taylor', 'Jones', 'Wilson', 'Davies', 'Evans',
+    'Thomas', 'Roberts', 'Walker', 'Wright', 'Robinson', 'Thompson',
+    'White', 'Hughes', 'Edwards', 'Green', 'Hall', 'Wood', 'Harris',
+    'Martin', 'Jackson', 'Clarke', 'Lewis', 'Lee',
+  ];
+
+  const BULK_COUNT = 25;
+
+  for (let i = 0; i < BULK_COUNT; i++) {
+    const name = `${firstNames[i % firstNames.length]} ${lastNames[i % lastNames.length]}`;
+    const email = `mock-worker-${i + 1}@example.com`;
+    const slug = `mock-worker-${i + 1}`;
+    const loc = cities[i % cities.length];
+    const specIdx = (i * 3) % specRecords.length;
+    const rateMin = 150 + ((i * 17) % 200);
+    const rateMax = rateMin + 50 + ((i * 13) % 150);
+
+    const acc = await prisma.account.upsert({
+      where: { email },
+      update: {},
+      create: {
+        email,
+        password_hash: hash,
+        status: 'ACTIVE',
+        email_verified_at: new Date(),
+        client_profile: {
+          create: {
+            display_name: name,
+            slug,
+            city: loc.city,
+            postcode_area: loc.area,
+            verification_level: 'BASIC',
+            referral_code: makeRefCode(email),
+            worker_profile: {
+              create: {
+                years_experience: 2 + (i % 15),
+                day_rate_min: rateMin,
+                day_rate_max: rateMax,
+                is_available: i % 4 !== 0,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    await prisma.workerSpecialisation.upsert({
+      where: { worker_id_specialisation_id: { worker_id: acc.id, specialisation_id: specRecords[specIdx].id } },
+      update: {},
+      create: { worker_id: acc.id, specialisation_id: specRecords[specIdx].id, is_primary: true },
+    });
+  }
+  console.log(`  ${BULK_COUNT} bulk workers`);
+
+  const companies = [
+    'BuildPro Ltd', 'Solid Foundations Co', 'TopSpec Construction',
+    'CityWorks Group', 'Skyline Builders', 'GreenLeaf Properties',
+    'Northern Build', 'Crown Estates Maintenance', 'Heritage Restoration',
+    'Modern Living Builds', 'Premier Property Services', 'Stonebridge Contractors',
+    'Riverside Developments', 'Westside Renovations', 'EcoBuild Solutions',
+    'Bright Home Improvements', 'PrimeCraft Construction', 'Urban Edge Builders',
+    'Trusty Trades Ltd', 'Royal Builds Group', 'Elite Property Co',
+    'Aspect Construction', 'Pinnacle Building Services', 'Vantage Build Ltd',
+    'Cornerstone Contractors',
+  ];
+
+  const bulkEmployerIds: bigint[] = [];
+  for (let i = 0; i < BULK_COUNT; i++) {
+    const company = companies[i % companies.length];
+    const owner = `${firstNames[(i + 5) % firstNames.length]} ${lastNames[(i + 5) % lastNames.length]}`;
+    const email = `mock-employer-${i + 1}@example.com`;
+    const slug = `mock-employer-${i + 1}`;
+    const loc = cities[(i + 3) % cities.length];
+
+    const acc = await prisma.account.upsert({
+      where: { email },
+      update: {},
+      create: {
+        email,
+        password_hash: hash,
+        status: 'ACTIVE',
+        email_verified_at: new Date(),
+        client_profile: {
+          create: {
+            display_name: owner,
+            slug,
+            city: loc.city,
+            postcode_area: loc.area,
+            verification_level: 'BASIC',
+            referral_code: makeRefCode(email),
+            employer_profile: {
+              create: {
+                company_name: company,
+                company_number: String(20000000 + i),
+                team_size: 5 + ((i * 7) % 50),
+              },
+            },
+          },
+        },
+      },
+    });
+    bulkEmployerIds.push(acc.id);
+  }
+  console.log(`  ${BULK_COUNT} bulk employers`);
+
+  const jobTitles = [
+    'Bathroom refit needed', 'Garden patio installation', 'Loft insulation top-up',
+    'Annual boiler service', 'Tiled roof repair', 'Driveway resurfacing',
+    'Window replacement (uPVC)', 'Internal wall removal', 'Single-storey extension',
+    'Garage conversion', 'External wall painting', 'Kitchen splashback tiling',
+    'Replumb downstairs WC', 'New socket installation', 'EV charger installation',
+    'Plastering 3 rooms', 'Fence replacement', 'Decking installation',
+    'Underfloor heating retrofit', 'Cavity wall insulation', 'Solar panel install',
+    'Chimney repointing', 'Smart thermostat install', 'Bricklaying — boundary wall',
+    'Damp-proofing course',
+  ];
+
+  const allEmployerIds = [
+    ...employerAccounts.map((e) => e.id),
+    ...bulkEmployerIds,
+  ];
+  for (let i = 0; i < BULK_COUNT; i++) {
+    const title = jobTitles[i % jobTitles.length];
+    const empId = allEmployerIds[i % allEmployerIds.length];
+    const loc = cities[(i + 1) % cities.length];
+    const useFixed = i % 3 === 0;
+    await prisma.jobPost.create({
+      data: {
+        employer_id: empId,
+        title,
+        description: `${title}. Quote required; references appreciated.`,
+        postcode_area: loc.area,
+        pay_type: useFixed ? 'FIXED_PRICE' : 'DAY_RATE',
+        fixed_price: useFixed ? new Prisma.Decimal(500 + ((i * 250) % 5000)) : null,
+        day_rate_min: useFixed ? null : new Prisma.Decimal(150 + ((i * 11) % 200)),
+        day_rate_max: useFixed ? null : new Prisma.Decimal(300 + ((i * 17) % 300)),
+        duration_days: 1 + (i % 30),
+        status: 'OPEN',
+        is_urgent: i % 7 === 0,
+      },
+    });
+  }
+  console.log(`  ${BULK_COUNT} bulk job posts`);
+
   console.log('\nSeed completed successfully!');
   console.log('──────────────────────────────────────────');
   console.log('Test credentials (all accounts): Password123!');
