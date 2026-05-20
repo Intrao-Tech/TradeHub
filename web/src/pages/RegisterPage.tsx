@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { ArrowLeft, Hammer, HardHat } from 'lucide-react';
+import { ArrowRight, Hammer, HardHat } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { AuthShell } from '@/components/AppShell';
 import { AuthBanner } from '@/components/AuthBanner';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -222,163 +221,140 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
 
   if (!role) {
     return (
-      <AuthShell>
-        <Card>
-          <CardHeader>
-            <CardTitle>Join TradeHub</CardTitle>
-            <CardDescription>How do you want to use the platform?</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <RoleCard
-                icon={<Hammer className="h-8 w-8" />}
-                title="I'm a tradesperson"
-                description="Find jobs, get hired, manage projects"
-                onClick={() => setRole('WORKER')}
-              />
-              <RoleCard
-                icon={<HardHat className="h-8 w-8" />}
-                title="I'm hiring"
-                description="Post jobs, find workers, manage payments"
-                onClick={() => setRole('EMPLOYER')}
-              />
-            </div>
-            <p className="text-center text-sm text-fg-muted">
-              Already have an account?{' '}
-              <Link to="/login" className="font-medium text-primary underline-offset-4 hover:underline">
-                Sign in
-              </Link>
-            </p>
-          </CardContent>
-        </Card>
+      <AuthShell
+        contentClassName="max-w-3xl"
+        headerGradient
+        footer={
+          <>
+            Already have an account?{' '}
+            <Link
+              to="/login"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Log in
+            </Link>
+          </>
+        }
+      >
+        <div className="text-center">
+          <h1 className="text-3xl font-semibold tracking-tight text-fg sm:text-4xl">
+            Welcome to TradeHub
+          </h1>
+          <p className="mt-3 text-base text-fg-muted">
+            Which describes you best?
+          </p>
+        </div>
+        <div className="mt-12 grid gap-4 sm:grid-cols-2">
+          <RoleCard
+            icon={<Hammer className="h-12 w-12" />}
+            title="Tradesperson"
+            description="Find jobs and get paid"
+            onClick={() => setRole('WORKER')}
+          />
+          <RoleCard
+            icon={<HardHat className="h-12 w-12" />}
+            title="Employer"
+            description="Post jobs and hire"
+            onClick={() => setRole('EMPLOYER')}
+          />
+        </div>
       </AuthShell>
     );
   }
 
   return (
-    <AuthShell>
-      <Card>
-        <CardHeader>
-          <Button
+    <AuthShell
+      contentClassName="max-w-xl"
+      headerAction={
+        <p className="text-sm text-fg">
+          {role === 'WORKER' ? 'Here to hire talent?' : 'Looking for work?'}{' '}
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
-            className="self-start -ml-2"
-            onClick={() => setRole(null)}
+            onClick={() => setRole(role === 'WORKER' ? 'EMPLOYER' : 'WORKER')}
+            className="font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Change role
-          </Button>
-          <CardTitle>Create your account</CardTitle>
-          <CardDescription>
-            Signing up as{' '}
-            <span className="font-medium text-fg">
-              {role === 'WORKER' ? 'Tradesperson' : 'Employer'}
-            </span>
-            .
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {referrerName ? (
-            <AuthBanner variant="info" title={`Referred by ${referrerName}`}>
-              They'll get a small commission on your first projects — no cost
-              to you.
-            </AuthBanner>
-          ) : null}
+            {role === 'WORKER' ? 'Join as an Employer' : 'Apply as a Tradesperson'}
+          </button>
+        </p>
+      }
+      footer={
+        <>
+          Already have an account?{' '}
+          <Link
+            to="/login"
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Log in
+          </Link>
+        </>
+      }
+    >
+      <div className="space-y-6">
+        <h1 className="text-center text-3xl font-semibold tracking-tight text-fg sm:text-4xl">
+          {role === 'WORKER'
+            ? 'Sign up to find work you love'
+            : 'Sign up to hire talent'}
+        </h1>
 
-          {error ? (
-            <AuthBanner
-              variant="danger"
-              title={error.title}
-              action={
-                error.emailTaken ? (
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                    <Link
-                      to={`/login?email=${encodeURIComponent(error.emailTaken)}`}
-                      className="font-medium underline-offset-4 hover:underline"
-                    >
-                      Sign in instead
-                    </Link>
-                    <Link
-                      to="/forgot-password"
-                      className="font-medium underline-offset-4 hover:underline"
-                    >
-                      Forgot password?
-                    </Link>
-                  </div>
-                ) : null
-              }
+        {referrerName ? (
+          <AuthBanner variant="info" title={`Referred by ${referrerName}`}>
+            They'll get a small commission on your first projects — no cost to you.
+          </AuthBanner>
+        ) : null}
+
+        {error ? (
+          <AuthBanner
+            variant="danger"
+            title={error.title}
+            action={
+              error.emailTaken ? (
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                  <Link
+                    to={`/login?email=${encodeURIComponent(error.emailTaken)}`}
+                    className="font-medium underline-offset-4 hover:underline"
+                  >
+                    Sign in instead
+                  </Link>
+                  <Link
+                    to="/forgot-password"
+                    className="font-medium underline-offset-4 hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+              ) : null
+            }
+          >
+            {error.message}
+          </AuthBanner>
+        ) : null}
+
+        {googleEnabled ? (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="w-full"
+              onClick={handleGoogle}
             >
-              {error.message}
-            </AuthBanner>
-          ) : null}
-
-          {googleEnabled ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="w-full"
-                onClick={handleGoogle}
-              >
-                <GoogleIcon />
-                Continue with Google
-              </Button>
-              <div className="relative py-2">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border-default" />
-                </div>
-                <div className="relative flex justify-center">
-                  <span className="bg-raised px-2 text-xs uppercase tracking-wide text-fg-subtle">
-                    or
-                  </span>
-                </div>
+              <GoogleIcon />
+              Continue with Google
+            </Button>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border-default" />
               </div>
-            </>
-          ) : null}
+              <div className="relative flex justify-center">
+                <span className="bg-page px-2 text-xs uppercase tracking-wide text-fg-subtle">
+                  or
+                </span>
+              </div>
+            </div>
+          </>
+        ) : null}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="reg-email">Email</Label>
-              <Input
-                id="reg-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                autoComplete="email"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="reg-password">Password</Label>
-              <Input
-                id="reg-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={`At least ${MIN_LENGTH} characters`}
-                autoComplete="new-password"
-                required
-                minLength={MIN_LENGTH}
-              />
-              <PasswordRules password={password} dirty={password.length > 0} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="reg-confirm-password">Confirm password</Label>
-              <Input
-                id="reg-confirm-password"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                autoComplete="new-password"
-                required
-              />
-              {confirmPassword.length > 0 && !passwordsMatch ? (
-                <p className="text-xs text-warning">Passwords don't match.</p>
-              ) : null}
-            </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
             {role === 'WORKER' ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
@@ -427,6 +403,46 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
               </div>
             )}
             <div className="space-y-2">
+              <Label htmlFor="reg-email">Email</Label>
+              <Input
+                id="reg-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reg-password">Password</Label>
+              <Input
+                id="reg-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={`At least ${MIN_LENGTH} characters`}
+                autoComplete="new-password"
+                required
+                minLength={MIN_LENGTH}
+              />
+              <PasswordRules password={password} dirty={password.length > 0} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reg-confirm-password">Confirm password</Label>
+              <Input
+                id="reg-confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+                required
+              />
+              {confirmPassword.length > 0 && !passwordsMatch ? (
+                <p className="text-xs text-warning">Passwords don't match.</p>
+              ) : null}
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="reg-phone">
                 Phone <span className="text-fg-subtle">(optional)</span>
               </Label>
@@ -438,19 +454,11 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
                 onLocalNumberChange={setPhoneLocal}
               />
             </div>
-            <Button type="submit" size="lg" className="w-full" disabled={loading}>
-              {loading ? 'Creating account…' : 'Create account'}
-            </Button>
-          </form>
-
-          <p className="text-center text-sm text-fg-muted">
-            Already have an account?{' '}
-            <Link to="/login" className="font-medium text-primary underline-offset-4 hover:underline">
-              Sign in
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
+          <Button type="submit" size="lg" className="w-full" disabled={loading}>
+            {loading ? 'Creating account…' : 'Create account'}
+          </Button>
+        </form>
+      </div>
     </AuthShell>
   );
 }
@@ -470,13 +478,18 @@ function RoleCard({
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-start gap-2 rounded-md border border-border-default bg-raised p-4 text-left transition-colors hover:border-border-strong hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex flex-col gap-5 rounded-lg border border-border-default bg-raised p-5 text-center transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <span className="flex h-12 w-12 items-center justify-center rounded-md bg-subtle text-primary">
+      <span className="role-tile-gradient flex aspect-square items-center justify-center rounded-md text-fg">
         {icon}
       </span>
-      <span className="font-semibold text-fg">{title}</span>
-      <span className="text-xs text-fg-muted">{description}</span>
+      <span className="space-y-1">
+        <span className="flex items-center justify-center gap-2 text-lg font-semibold text-fg">
+          {title}
+          <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+        </span>
+        <span className="block text-sm text-fg-muted">{description}</span>
+      </span>
     </button>
   );
 }

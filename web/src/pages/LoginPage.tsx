@@ -7,7 +7,6 @@ import { AuthBanner, bannerFromReason } from '@/components/AuthBanner';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -132,10 +131,9 @@ export default function LoginPage({ onLogin }: Props) {
     <AuthShell>
       <Card>
         <CardHeader>
-          <CardTitle>Welcome back</CardTitle>
-          <CardDescription>Sign in to your TradeHub account.</CardDescription>
+          <CardTitle className="text-center text-2xl">Log in to TradeHub</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5">
           {banner ? (
             <AuthBanner variant={banner.variant} title={banner.title}>
               {banner.message}
@@ -150,31 +148,6 @@ export default function LoginPage({ onLogin }: Props) {
             >
               {error.message ?? 'Something went wrong. Please try again.'}
             </AuthBanner>
-          ) : null}
-
-          {googleEnabled ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="w-full"
-                onClick={handleGoogle}
-              >
-                <GoogleIcon />
-                Continue with Google
-              </Button>
-              <div className="relative py-2">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border-default" />
-                </div>
-                <div className="relative flex justify-center">
-                  <span className="bg-raised px-2 text-xs uppercase tracking-wide text-fg-subtle">
-                    or
-                  </span>
-                </div>
-              </div>
-            </>
           ) : null}
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -220,15 +193,39 @@ export default function LoginPage({ onLogin }: Props) {
             </Button>
           </form>
 
-          <p className="text-center text-sm text-fg-muted">
-            New here?{' '}
-            <Link
-              to="/register"
-              className="font-medium text-primary underline-offset-4 hover:underline"
-            >
-              Create an account
-            </Link>
-          </p>
+          {googleEnabled ? (
+            <>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border-default" />
+                </div>
+                <div className="relative flex justify-center">
+                  <span className="bg-raised px-2 text-xs uppercase tracking-wide text-fg-subtle">
+                    or
+                  </span>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full"
+                onClick={handleGoogle}
+              >
+                <GoogleIcon />
+                Continue with Google
+              </Button>
+            </>
+          ) : null}
+
+          <div className="space-y-3 border-t border-border-default pt-5">
+            <p className="text-center text-sm text-fg-muted">
+              Don't have a TradeHub account?
+            </p>
+            <Button asChild variant="outline" size="lg" className="w-full">
+              <Link to="/register">Sign up</Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </AuthShell>

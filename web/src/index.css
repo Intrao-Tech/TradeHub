@@ -228,3 +228,41 @@ body {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
+
+/* Faint brand-tinted blob behind the top of the auth pages.
+   Echoes Upwork's lime-tinted welcome surface but in amber. */
+.auth-header-gradient {
+  background:
+    radial-gradient(
+      ellipse 60% 60% at 30% 0%,
+      color-mix(in oklab, var(--color-action-primary) 14%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 55% 55% at 80% 5%,
+      color-mix(in oklab, var(--color-action-primary) 8%, transparent),
+      transparent 70%
+    );
+}
+
+/* Multi-stop brand-tinted gradient for role-picker tiles.
+   Pattern mirrors Upwork's .accout-type-gradient (four stops, 135deg). */
+.role-tile-gradient {
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--color-action-primary) 28%, transparent),
+    color-mix(in oklab, var(--color-action-primary) 12%, transparent) 50%,
+    color-mix(in oklab, var(--color-action-primary) 22%, transparent) 90%,
+    color-mix(in oklab, var(--color-action-primary) 28%, transparent)
+  );
+}
+
+/* Tailwind v4 Preflight removed the default pointer cursor on interactive
+   elements (matching the HTML spec). Bring it back globally — the product UX
+   expects pointer affordance on every clickable control. */
+button:not(:disabled),
+[role='button']:not(:disabled),
+a[href],
+summary {
+  cursor: pointer;
+}

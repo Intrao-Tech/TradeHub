@@ -22,14 +22,14 @@ function noop() {}
 describe('TEST-AUTH-076 RegisterPage', () => {
   test('Decisions Log 2026-04-26 — role chooser surfaces both roles', () => {
     renderWithRouter(<RegisterPage onRegister={noop} />);
-    expect(screen.getByText(/I'm a tradesperson/i)).toBeInTheDocument();
-    expect(screen.getByText(/I'm hiring/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tradesperson/i)).toBeInTheDocument();
+    expect(screen.getByText(/Employer/i)).toBeInTheDocument();
   });
 
   test('Decisions Log 2026-04-26 — picking WORKER reveals First name + Surname (not Company)', async () => {
     const user = userEvent.setup();
     renderWithRouter(<RegisterPage onRegister={noop} />);
-    await user.click(screen.getByText(/I'm a tradesperson/i));
+    await user.click(screen.getByText(/Tradesperson/i));
     expect(screen.getByLabelText(/First name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Surname/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/Company name/i)).not.toBeInTheDocument();
@@ -38,7 +38,7 @@ describe('TEST-AUTH-076 RegisterPage', () => {
   test('AUTH-019-001 — picking EMPLOYER reveals Company name (not First/Surname)', async () => {
     const user = userEvent.setup();
     renderWithRouter(<RegisterPage onRegister={noop} />);
-    await user.click(screen.getByText(/I'm hiring/i));
+    await user.click(screen.getByText(/Employer/i));
     expect(screen.getByLabelText(/Company name/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/First name/i)).not.toBeInTheDocument();
   });
@@ -46,7 +46,7 @@ describe('TEST-AUTH-076 RegisterPage', () => {
   test('AUTH-019-003 — confirm-password mismatch shows inline copy "Passwords don\'t match"', async () => {
     const user = userEvent.setup();
     renderWithRouter(<RegisterPage onRegister={noop} />);
-    await user.click(screen.getByText(/I'm a tradesperson/i));
+    await user.click(screen.getByText(/Tradesperson/i));
     // fireEvent.change sets the whole value in one render — char-by-char
     // userEvent.type re-renders the live-validating PasswordRules per
     // keystroke and is too slow for jsdom here.
@@ -65,7 +65,7 @@ describe('TEST-AUTH-076 RegisterPage', () => {
     );
     const user = userEvent.setup();
     renderWithRouter(<RegisterPage onRegister={noop} />);
-    await user.click(screen.getByText(/I'm a tradesperson/i));
+    await user.click(screen.getByText(/Tradesperson/i));
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /Continue with Google/i })).not.toBeInTheDocument();
     });
@@ -86,7 +86,7 @@ describe('TEST-AUTH-076 RegisterPage', () => {
     renderWithRouter(<RegisterPage onRegister={noop} />);
     // All-fireEvent — userEvent is too slow under full-suite load for this
     // heaviest test (6 fields + submit), which flaked on the test timeout.
-    fireEvent.click(screen.getByText(/I'm a tradesperson/i));
+    fireEvent.click(screen.getByText(/Tradesperson/i));
 
     // fireEvent.change per field — one render each instead of per keystroke.
     const policyCompliant = 'Tr@deHub1A!';

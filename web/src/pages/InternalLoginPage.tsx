@@ -82,7 +82,7 @@ export default function InternalLoginPage({ onLogin }: Props) {
   }
 
   return (
-    <AuthShell backTo={null}>
+    <AuthShell>
       <Card className="border-t-4 border-t-danger">
         <CardHeader>
           <CardTitle>Staff sign in</CardTitle>

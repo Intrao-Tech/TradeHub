@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { ArrowLeft, Menu, Moon, Sun, X } from 'lucide-react';
+import { Menu, Moon, Sun, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -181,35 +181,52 @@ function ThemeToggle() {
 
 type AuthShellProps = {
   children: ReactNode;
-  /** Optional back link target (rendered as a small arrow icon top-left). `null` hides it. */
-  backTo?: string | null;
-  /** Aria label for the back link (default: "Back"). */
-  backLabel?: string;
+  /** Override the centered max-width on the children container. Defaults to `max-w-md`. */
+  contentClassName?: string;
+  /** Rendered at the bottom of the viewport (e.g. "Already have an account? Sign in"). */
+  footer?: ReactNode;
+  /** Adds a faint brand-tinted gradient at the top of the page. */
+  headerGradient?: boolean;
+  /** Optional element rendered top-right in the header (e.g. a "Change role" link). */
+  headerAction?: ReactNode;
 };
 
 export function AuthShell({
   children,
-  backTo = '/jobs',
-  backLabel = 'Back',
+  contentClassName,
+  footer,
+  headerGradient = false,
+  headerAction,
 }: AuthShellProps) {
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-page px-4 py-10">
-      {backTo ? (
-        <NavLink
-          to={backTo}
-          aria-label={backLabel}
-          className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full text-fg-muted hover:bg-subtle hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:left-6 sm:top-6"
-        >
-          <ArrowLeft className="h-5 w-5" aria-hidden />
-        </NavLink>
+    <div className="relative flex min-h-screen flex-col bg-page">
+      {headerGradient ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-[60vh] auth-header-gradient"
+        />
       ) : null}
-      <div className="w-full max-w-md">
-        <NavLink to="/" className="mb-6 flex items-center justify-center gap-2 font-semibold tracking-tight">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-fg text-base font-bold">T</span>
+      <header className="relative z-10 flex items-center justify-between gap-4 px-4 pt-4 sm:px-6 sm:pt-6">
+        <NavLink
+          to="/"
+          aria-label="TradeHub home"
+          className="inline-flex items-center gap-2 font-semibold tracking-tight text-fg hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-fg text-base font-bold">
+            T
+          </span>
           <span className="text-lg">TradeHub</span>
         </NavLink>
-        {children}
-      </div>
+        {headerAction ? <div className="flex items-center">{headerAction}</div> : null}
+      </header>
+      <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-12">
+        <div className={cn('w-full max-w-md', contentClassName)}>{children}</div>
+      </main>
+      {footer ? (
+        <footer className="relative z-10 px-4 pb-10 text-center text-sm text-fg-muted">
+          {footer}
+        </footer>
+      ) : null}
     </div>
   );
 }
