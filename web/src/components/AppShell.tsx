@@ -1,17 +1,30 @@
 import { type ReactNode, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { Menu, Moon, Sun, X } from "lucide-react";
+import { Check, LogOut, Menu, Monitor, Moon, Settings, Sun, User, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { useTheme } from "@/lib/theme";
+import { useTheme, useThemePreference, type ThemePreference } from "@/lib/theme";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
+import { useAccountMe } from "@/hooks/useAccountMe";
+import { publicFileUrl } from "@/lib/files";
 import { Footer } from "@/components/Footer";
 
 export type NavItem = { to: string; label: string };
@@ -69,9 +82,7 @@ export function AppShell({
           <div className="ml-auto flex items-center gap-2">
             {/* <ThemeToggle /> */}
             {loggedIn ? (
-              <Button size="sm" variant="outline" onClick={onLogout}>
-                Logout
-              </Button>
+              <UserMenu onLogout={onLogout} />
             ) : (
               <div className="hidden items-center gap-2 sm:flex">
                 <Button size="sm" variant="ghost" asChild>
@@ -199,6 +210,148 @@ function NavItemLink({
         </Badge>
       ) : null}
     </NavLink>
+  );
+}
+
+function UserMenu({ onLogout }: { onLogout: () => void }) {
+  const { account, clientProfile } = useAccountMe();
+  const displayName =
+    clientProfile?.display_name?.trim() ||
+    account?.email?.split("@")[0] ||
+    "Account";
+  const email = account?.email ?? "";
+  const avatarSrc = publicFileUrl(clientProfile?.avatar_url ?? undefined);
+  const initials = displayName
+    .split(/\s+/)
+    .map((p) => p[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Open account menu"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-raised transition-colors hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Avatar className="h-9 w-9">
+            {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+            <AvatarFallback className="text-xs">
+              {initials || <User className="h-4 w-4" />}
+            </AvatarFallback>
+          </Avatar>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <div className="px-2 py-2">
+          <div className="truncate text-sm font-semibold text-fg">
+            {displayName}
+          </div>
+          {email ? (
+            <div className="truncate text-xs text-fg-muted">{email}</div>
+          ) : null}
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <NavLink to="/profile" className="flex items-center gap-2">
+            <User className="h-4 w-4" />
+            <span>Profile</span>
+          </NavLink>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <NavLink to="/settings/security" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            <span>Settings</span>
+          </NavLink>
+        </DropdownMenuItem>
+        <ThemeSubmenu />
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault();
+            onLogout();
+          }}
+          className="text-fg"
+        >
+          <LogOut className="h-4 w-4" />
+          <span>Log out</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+const THEME_OPTIONS: {
+  value: ThemePreference;
+  label: string;
+  description: string;
+  Icon: typeof Sun;
+}[] = [
+  {
+    value: "system",
+    label: "Auto",
+    description: "Use the same theme as your device",
+    Icon: Monitor,
+  },
+  {
+    value: "light",
+    label: "Light",
+    description: "Light background with dark text",
+    Icon: Sun,
+  },
+  {
+    value: "dark",
+    label: "Dark",
+    description: "Dark background with light text",
+    Icon: Moon,
+  },
+];
+
+function ThemeSubmenu() {
+  const { preference, effective, setPreference } = useThemePreference();
+  const ActiveIcon =
+    preference === "system" ? Monitor : effective === "dark" ? Moon : Sun;
+  const activeLabel =
+    preference === "system"
+      ? "Auto"
+      : preference === "dark"
+      ? "Dark"
+      : "Light";
+
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger className="gap-2">
+        <ActiveIcon className="h-4 w-4" />
+        <span>Theme: {activeLabel}</span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="w-72">
+        {THEME_OPTIONS.map(({ value, label, description, Icon }) => {
+          const active = preference === value;
+          return (
+            <DropdownMenuItem
+              key={value}
+              onSelect={(e) => {
+                e.preventDefault();
+                setPreference(value);
+              }}
+              className="items-start gap-3 py-2"
+            >
+              <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="text-sm font-medium text-fg">{label}</span>
+                <span className="text-xs text-fg-muted">{description}</span>
+              </div>
+              {active ? (
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              ) : null}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   );
 }
 

@@ -63,7 +63,6 @@ const PUBLIC_NAV: NavItem[] = [
 
 const PRIVATE_NAV: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard' },
-  { to: '/profile', label: 'Profile' },
   { to: '/my-applications', label: 'Applications' },
   { to: '/my-jobs', label: 'Posted jobs' },
   { to: '/collaborations', label: 'Work' },
@@ -71,12 +70,10 @@ const PRIVATE_NAV: NavItem[] = [
   { to: '/referrals', label: 'Referrals' },
   { to: '/inbox', label: 'Inbox' },
   { to: '/notifications', label: 'Alerts' },
-  { to: '/settings/security', label: 'Settings' },
 ];
 
 const STAFF_NAV: NavItem[] = [
   { to: '/admin', label: 'Admin' },
-  { to: '/settings/security', label: 'Settings' },
 ];
 
 // ── Helpers ─────────────────────────────────────────────────────────
