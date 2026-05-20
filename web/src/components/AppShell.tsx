@@ -1,13 +1,18 @@
-import { type ReactNode, useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
-import { Menu, Moon, Sun, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { useTheme } from '@/lib/theme';
-import { useUnreadCount } from '@/components/chat/useUnreadCount';
-import { Footer } from '@/components/Footer';
+import { type ReactNode, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import { Menu, Moon, Sun, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { useTheme } from "@/lib/theme";
+import { useUnreadCount } from "@/components/chat/useUnreadCount";
+import { Footer } from "@/components/Footer";
 
 export type NavItem = { to: string; label: string };
 
@@ -19,7 +24,13 @@ type AppShellProps = {
   children: ReactNode;
 };
 
-export function AppShell({ loggedIn, publicNav, privateNav, onLogout, children }: AppShellProps) {
+export function AppShell({
+  loggedIn,
+  publicNav,
+  privateNav,
+  onLogout,
+  children,
+}: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const items = [...publicNav, ...(loggedIn ? privateNav : [])];
@@ -31,8 +42,13 @@ export function AppShell({ loggedIn, publicNav, privateNav, onLogout, children }
     <div className="min-h-screen bg-page text-fg">
       <header className="sticky top-0 z-40 border-b border-border-default bg-raised/95 backdrop-blur supports-[backdrop-filter]:bg-raised/80">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:gap-6">
-          <NavLink to={loggedIn ? '/dashboard' : '/jobs'} className="flex items-center gap-2 font-semibold tracking-tight">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-fg text-sm font-bold">T</span>
+          <NavLink
+            to={loggedIn ? "/dashboard" : "/jobs"}
+            className="flex items-center gap-2 font-semibold tracking-tight"
+          >
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-fg text-sm font-bold">
+              T
+            </span>
             <span>TradeHub</span>
           </NavLink>
 
@@ -41,7 +57,11 @@ export function AppShell({ loggedIn, publicNav, privateNav, onLogout, children }
               <NavItemLink
                 key={n.to}
                 item={n}
-                badge={loggedIn && n.to === '/inbox' && unreadTotal > 0 ? unreadTotal : null}
+                badge={
+                  loggedIn && n.to === "/inbox" && unreadTotal > 0
+                    ? unreadTotal
+                    : null
+                }
               />
             ))}
           </nav>
@@ -49,7 +69,9 @@ export function AppShell({ loggedIn, publicNav, privateNav, onLogout, children }
           <div className="ml-auto flex items-center gap-2">
             {/* <ThemeToggle /> */}
             {loggedIn ? (
-              <Button size="sm" variant="outline" onClick={onLogout}>Logout</Button>
+              <Button size="sm" variant="outline" onClick={onLogout}>
+                Logout
+              </Button>
             ) : (
               <div className="hidden items-center gap-2 sm:flex">
                 <Button size="sm" variant="ghost" asChild>
@@ -96,17 +118,20 @@ export function AppShell({ loggedIn, publicNav, privateNav, onLogout, children }
                 onClick={() => setMobileOpen(false)}
                 className={({ isActive }) =>
                   cn(
-                    'flex min-h-12 items-center justify-between rounded-md px-3 text-sm font-medium',
+                    "flex min-h-12 items-center justify-between rounded-md px-3 text-sm font-medium",
                     isActive
-                      ? 'bg-primary text-primary-fg'
-                      : 'text-fg-muted hover:bg-subtle hover:text-fg',
+                      ? "bg-primary text-primary-fg"
+                      : "text-fg-muted hover:bg-subtle hover:text-fg",
                   )
                 }
               >
                 <span>{n.label}</span>
-                {loggedIn && n.to === '/inbox' && unreadTotal > 0 ? (
-                  <Badge variant="default" className="ml-2 h-5 min-w-5 justify-center px-1.5 text-xs">
-                    {unreadTotal > 99 ? '99+' : unreadTotal}
+                {loggedIn && n.to === "/inbox" && unreadTotal > 0 ? (
+                  <Badge
+                    variant="default"
+                    className="ml-2 h-5 min-w-5 justify-center px-1.5 text-xs"
+                  >
+                    {unreadTotal > 99 ? "99+" : unreadTotal}
                   </Badge>
                 ) : null}
               </NavLink>
@@ -133,32 +158,44 @@ export function AppShell({ loggedIn, publicNav, privateNav, onLogout, children }
         </SheetContent>
       </Sheet>
 
-      <main key={location.pathname} className="mx-auto w-full max-w-7xl px-4 py-6 sm:py-8">
+      <main
+        key={location.pathname}
+        className="mx-auto w-full max-w-7xl px-4 py-6 sm:py-8"
+      >
         {children}
       </main>
       {!loggedIn ? <Footer /> : null}
     </div>
   );
 }
-AppShell.displayName = 'AppShell';
+AppShell.displayName = "AppShell";
 
-function NavItemLink({ item, badge }: { item: NavItem; badge?: number | null }) {
+function NavItemLink({
+  item,
+  badge,
+}: {
+  item: NavItem;
+  badge?: number | null;
+}) {
   return (
     <NavLink
       to={item.to}
       className={({ isActive }) =>
         cn(
-          'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+          "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
           isActive
-            ? 'bg-subtle text-fg'
-            : 'text-fg-muted hover:bg-subtle hover:text-fg',
+            ? "bg-subtle text-fg"
+            : "text-fg-muted hover:bg-subtle hover:text-fg",
         )
       }
     >
       <span>{item.label}</span>
       {badge != null && badge > 0 ? (
-        <Badge variant="default" className="h-5 min-w-5 justify-center px-1.5 text-xs">
-          {badge > 99 ? '99+' : badge}
+        <Badge
+          variant="default"
+          className="h-5 min-w-5 justify-center px-1.5 text-xs"
+        >
+          {badge > 99 ? "99+" : badge}
         </Badge>
       ) : null}
     </NavLink>
@@ -171,10 +208,16 @@ function ThemeToggle() {
     <Button
       size="icon"
       variant="ghost"
-      aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      aria-label={
+        theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+      }
       onClick={toggle}
     >
-      {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      {theme === "dark" ? (
+        <Sun className="h-4 w-4" />
+      ) : (
+        <Moon className="h-4 w-4" />
+      )}
     </Button>
   );
 }
@@ -217,10 +260,14 @@ export function AuthShell({
           </span>
           <span className="text-lg">TradeHub</span>
         </NavLink>
-        {headerAction ? <div className="flex items-center">{headerAction}</div> : null}
+        {headerAction ? (
+          <div className="flex items-center">{headerAction}</div>
+        ) : null}
       </header>
       <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-12">
-        <div className={cn('w-full max-w-md', contentClassName)}>{children}</div>
+        <div className={cn("w-full max-w-md", contentClassName)}>
+          {children}
+        </div>
       </main>
       {footer ? (
         <footer className="relative z-10 px-4 pb-10 text-center text-sm text-fg-muted">
@@ -230,4 +277,4 @@ export function AuthShell({
     </div>
   );
 }
-AuthShell.displayName = 'AuthShell';
+AuthShell.displayName = "AuthShell";
