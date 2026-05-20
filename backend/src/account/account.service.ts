@@ -15,6 +15,7 @@ export class AccountService {
             worker_profile: {
               include: {
                 worker_specialisations: { include: { specialisation: true } },
+                worker_languages: true,
               },
             },
             employer_profile: true,

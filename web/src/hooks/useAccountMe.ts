@@ -28,6 +28,11 @@ export type SpecialisationLink = {
   };
 };
 
+export type WorkerLanguageLink = {
+  worker_id?: string | number;
+  language_code: string;
+};
+
 export type WorkerProfile = {
   id: string | number;
   years_experience?: number | null;
@@ -38,6 +43,7 @@ export type WorkerProfile = {
   rating_avg?: string | number | null;
   rating_count?: number | null;
   worker_specialisations?: SpecialisationLink[];
+  worker_languages?: WorkerLanguageLink[];
   [key: string]: unknown;
 };
 

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Upload, Trash2 } from 'lucide-react';
+import { Pencil, Upload, Trash2 } from 'lucide-react';
 import Cropper, { type Area } from 'react-easy-crop';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 import { api, parseApiError } from '../../api';
 import { getCroppedBlob } from '../../lib/crop';
 import { publicFileUrl } from '../../lib/files';
@@ -25,6 +26,14 @@ export type AvatarUploaderProps = {
   fallback: string;
   /** Called after a successful upload or removal so the parent can refetch. */
   onChanged: () => void | Promise<void>;
+  /**
+   * Upwork-style compact trigger: a small circular avatar with a pencil overlay.
+   * Clicking opens a "Manage photo" dialog instead of rendering the dropzone
+   * and Replace / Remove buttons inline. The crop dialog flow is unchanged.
+   */
+  compact?: boolean;
+  /** Tailwind size classes for the avatar in compact mode. Default `h-20 w-20`. */
+  compactClassName?: string;
 };
 
 type Stage = 'idle' | 'cropping' | 'uploading' | 'removing';
@@ -33,6 +42,8 @@ export function AvatarUploader({
   avatarUrl,
   fallback,
   onChanged,
+  compact = false,
+  compactClassName,
 }: AvatarUploaderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stage, setStage] = useState<Stage>('idle');
@@ -46,6 +57,7 @@ export function AvatarUploader({
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
 
   const renderedUrl = publicFileUrl(avatarUrl);
 
@@ -84,6 +96,8 @@ export function AvatarUploader({
           : 'image/jpeg',
       );
       setStage('cropping');
+      // Close the compact "Manage photo" dialog so the crop dialog has the stage to itself.
+      setManageOpen(false);
     };
     reader.onerror = () => setError('Could not read this file.');
     reader.readAsDataURL(file);
@@ -170,6 +184,166 @@ export function AvatarUploader({
     }
   }
 
+  const fileInputEl = (
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept="image/jpeg,image/png,image/webp"
+      className="sr-only"
+      onChange={(e) => {
+        pickFile(e.target.files?.[0]);
+        e.target.value = '';
+      }}
+    />
+  );
+
+  const cropDialog = (
+    <Dialog
+      open={stage === 'cropping' || stage === 'uploading'}
+      onOpenChange={(open) => {
+        if (!open && stage !== 'uploading') reset();
+      }}
+    >
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Edit photo</DialogTitle>
+          <DialogDescription>
+            Drag to reposition · pinch or use the slider to zoom.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="relative h-72 w-full overflow-hidden rounded-md bg-subtle">
+          {imageSrc ? (
+            <Cropper
+              image={imageSrc}
+              crop={crop}
+              zoom={zoom}
+              aspect={1}
+              cropShape="round"
+              showGrid={false}
+              onCropChange={setCrop}
+              onZoomChange={setZoom}
+              onCropComplete={onCropComplete}
+            />
+          ) : null}
+        </div>
+        <div className="space-y-2">
+          <label htmlFor="avatar-zoom" className="text-sm font-medium text-fg">
+            Zoom
+          </label>
+          <input
+            id="avatar-zoom"
+            type="range"
+            min={1}
+            max={3}
+            step={0.05}
+            value={zoom}
+            onChange={(e) => setZoom(Number(e.target.value))}
+            className="w-full accent-primary"
+          />
+        </div>
+        <DialogFooter className="flex flex-row-reverse gap-2">
+          <Button
+            type="button"
+            onClick={save}
+            disabled={stage === 'uploading' || !croppedAreaPixels}
+          >
+            {stage === 'uploading' ? 'Uploading…' : 'Save photo'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={reset}
+            disabled={stage === 'uploading'}
+          >
+            Cancel
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  if (compact) {
+    return (
+      <>
+        <div className="relative inline-block">
+          <Avatar className={cn('h-20 w-20', compactClassName)}>
+            {renderedUrl ? (
+              <AvatarImage src={renderedUrl} alt="Current avatar" />
+            ) : null}
+            <AvatarFallback className="text-base">{fallback}</AvatarFallback>
+          </Avatar>
+          <button
+            type="button"
+            aria-label="Edit photo"
+            onClick={() => setManageOpen(true)}
+            className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full border-2 border-raised bg-primary text-primary-fg shadow-sm transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {fileInputEl}
+
+        <Dialog
+          open={manageOpen}
+          onOpenChange={(open) => {
+            if (!open && stage === 'removing') return;
+            setManageOpen(open);
+            if (!open) setError('');
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Photo</DialogTitle>
+              <DialogDescription>
+                Square photo, ≥ 256×256 px. JPEG, PNG, or WebP up to 5 MB.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col items-center gap-4 py-2">
+              <Avatar className="h-32 w-32">
+                {renderedUrl ? (
+                  <AvatarImage src={renderedUrl} alt="Current avatar" />
+                ) : null}
+                <AvatarFallback className="text-2xl">{fallback}</AvatarFallback>
+              </Avatar>
+              {error ? (
+                <p
+                  role="alert"
+                  className="w-full rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+                >
+                  {error}
+                </p>
+              ) : null}
+            </div>
+            <DialogFooter className="flex flex-row-reverse gap-2 sm:justify-between">
+              <Button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload />
+                {avatarUrl ? 'Change image' : 'Upload photo'}
+              </Button>
+              {avatarUrl ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={remove}
+                  disabled={stage === 'removing'}
+                  className="text-danger hover:text-danger"
+                >
+                  <Trash2 />
+                  {stage === 'removing' ? 'Removing…' : 'Delete current image'}
+                </Button>
+              ) : null}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {cropDialog}
+      </>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-4">
@@ -246,71 +420,7 @@ export function AvatarUploader({
         {status}
       </p>
 
-      <Dialog
-        open={stage === 'cropping' || stage === 'uploading'}
-        onOpenChange={(open) => {
-          if (!open && stage !== 'uploading') reset();
-        }}
-      >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Crop your avatar</DialogTitle>
-            <DialogDescription>
-              Drag to reposition · pinch or use the slider to zoom.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="relative h-72 w-full overflow-hidden rounded-md bg-subtle">
-            {imageSrc ? (
-              <Cropper
-                image={imageSrc}
-                crop={crop}
-                zoom={zoom}
-                aspect={1}
-                cropShape="round"
-                showGrid={false}
-                onCropChange={setCrop}
-                onZoomChange={setZoom}
-                onCropComplete={onCropComplete}
-              />
-            ) : null}
-          </div>
-          <div className="space-y-2">
-            <label
-              htmlFor="avatar-zoom"
-              className="text-sm font-medium text-fg"
-            >
-              Zoom
-            </label>
-            <input
-              id="avatar-zoom"
-              type="range"
-              min={1}
-              max={3}
-              step={0.05}
-              value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
-              className="w-full accent-primary"
-            />
-          </div>
-          <DialogFooter className="flex flex-row-reverse gap-2">
-            <Button
-              type="button"
-              onClick={save}
-              disabled={stage === 'uploading' || !croppedAreaPixels}
-            >
-              {stage === 'uploading' ? 'Uploading…' : 'Save'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={reset}
-              disabled={stage === 'uploading'}
-            >
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {cropDialog}
     </div>
   );
 }

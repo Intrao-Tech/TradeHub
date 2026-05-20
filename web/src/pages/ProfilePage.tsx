@@ -1,16 +1,26 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { MapPin, Pencil } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '../hooks/useAccountMe';
 import { AuthBanner } from '../components/AuthBanner';
 import { AvatarUploader } from '../components/profile/AvatarUploader';
+import { PhoneInput, combinePhone } from '../components/PhoneInput';
+import { COUNTRIES } from '../lib/countries';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { PortfolioTab } from '../components/profile/PortfolioTab';
 import { DocumentsTab } from '../components/profile/DocumentsTab';
 import {
   VerificationBadge,
   verificationFromLevel,
 } from '../components/VerificationBadge';
-import { MilestonesStrip } from '../components/MilestonesStrip';
 import {
   CompletenessPanel,
   type CompletenessAction,
@@ -34,7 +44,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -62,6 +71,26 @@ function initialsFor(name: string): string {
     .slice(0, 2)
     .map((s) => s[0]?.toUpperCase() ?? '')
     .join('') || 'TH';
+}
+
+function formatRate(min?: string | number | null, max?: string | number | null): string {
+  const m = min == null || min === '' ? null : Number(min);
+  const x = max == null || max === '' ? null : Number(max);
+  if (m == null && x == null) return '—';
+  if (m != null && x != null) return `£${m}–£${x}/day`;
+  if (m != null) return `from £${m}/day`;
+  return `up to £${x}/day`;
+}
+
+function formatRating(avg?: string | number | null, count?: number | null): {
+  avg: string;
+  count: number;
+} {
+  const a = avg == null || avg === '' ? null : Number(avg);
+  return {
+    avg: a == null || Number.isNaN(a) ? '—' : a.toFixed(1),
+    count: count ?? 0,
+  };
 }
 
 export default function ProfilePage() {
@@ -96,18 +125,15 @@ export default function ProfilePage() {
   const [companyNumber, setCompanyNumber] = useState('');
   const [teamSize, setTeamSize] = useState('');
 
-
   const cp = clientProfile;
   const workerId = cp?.id != null ? String(cp.id) : '';
   const postcodeOptions = useMemo(() => postcodeAreasFor(city), [city]);
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'portfolio' | 'documents'>('profile');
   const [hasPortfolioItem, setHasPortfolioItem] = useState(false);
   const [hasUploadedDocument, setHasUploadedDocument] = useState(false);
 
-  // Lightweight summary fetch for the completeness panel only — sub-components
-  // own their own (richer) loads. We refetch when the account cache replaces
-  // (post-save) so flipping a section to "Done" lands without a full reload.
+  // Lightweight summary fetch so the completeness panel can show portfolio /
+  // documents as "done" without forcing a full PortfolioTab / DocumentsTab load.
   useEffect(() => {
     if (!cp) return;
     const cancel = { current: false };
@@ -117,7 +143,7 @@ export default function ProfilePage() {
           if (!cancel.current) setHasPortfolioItem(items.length > 0);
         })
         .catch(() => {
-          /* non-fatal — completeness card just stays "not done" */
+          /* non-fatal */
         });
     }
     api<unknown[]>('/documents/me')
@@ -133,21 +159,22 @@ export default function ProfilePage() {
   }, [cp, workerId]);
 
   function handleCompletenessAction(action: CompletenessAction) {
-    if (action.switchTab) {
-      setActiveTab(action.switchTab);
-      return;
-    }
-    if (action.scrollTo) {
-      requestAnimationFrame(() => {
-        document
-          .getElementById(action.scrollTo!)
-          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    }
+    const targetId =
+      action.scrollTo ??
+      (action.switchTab === 'portfolio'
+        ? 'section-portfolio'
+        : action.switchTab === 'documents'
+          ? 'section-documents'
+          : null);
+    if (!targetId) return;
+    requestAnimationFrame(() => {
+      document
+        .getElementById(targetId)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
-  // Hydrate editor inputs from the cache. Re-runs when the cache snapshot
-  // replaces (initial load, post-save refetch, auth-change invalidation).
+  // Hydrate editor inputs from the cache.
   useEffect(() => {
     if (!cp) return;
     setDisplayName(cp.display_name ?? '');
@@ -166,7 +193,13 @@ export default function ProfilePage() {
           : '',
       );
       setWorkerAvailable(Boolean(wp.is_available));
-      setLanguages(Array.isArray(wp.languages) ? wp.languages : []);
+      setLanguages(
+        Array.isArray(wp.worker_languages)
+          ? wp.worker_languages
+              .map((l) => l.language_code)
+              .filter((c): c is string => typeof c === 'string')
+          : [],
+      );
     }
     const ep = cp.employer_profile;
     if (ep) {
@@ -200,7 +233,7 @@ export default function ProfilePage() {
         method: 'PATCH',
         body: JSON.stringify(patch),
       });
-      flash('Client profile updated');
+      flash('Public details updated');
       await refetch();
     } catch (err) {
       reportError(err);
@@ -233,7 +266,7 @@ export default function ProfilePage() {
         method: 'PATCH',
         body: JSON.stringify(bodyObj),
       });
-      flash('Worker profile updated');
+      flash('Worker details updated');
       await refetch();
     } catch (err) {
       reportError(err);
@@ -262,7 +295,6 @@ export default function ProfilePage() {
   if (loadError && !account) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-semibold tracking-tight">My profile</h1>
         <div
           role="alert"
           className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
@@ -276,23 +308,47 @@ export default function ProfilePage() {
   if (loading && !account) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-semibold tracking-tight">My profile</h1>
         <p className="text-sm text-fg-muted">Loading…</p>
       </div>
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">My profile</h1>
-          <p className="text-sm text-fg-muted">
-            Manage your account, portfolio, and verification documents.
-          </p>
+  const rating = formatRating(
+    cp?.worker_profile?.rating_avg,
+    cp?.worker_profile?.rating_count ?? null,
+  );
+
+  const headerCard = cp ? (
+    <Card className="overflow-hidden">
+      <CardContent className="space-y-4 pt-6">
+        <div className="flex items-start gap-4">
+          <AvatarUploader
+            avatarUrl={avatarUrl}
+            fallback={initialsFor(displayName)}
+            onChanged={refetch}
+            compact
+          />
+          <div className="min-w-0 flex-1 space-y-1">
+            <h2 className="truncate text-lg font-semibold text-fg">
+              {displayName || 'Add a display name'}
+            </h2>
+            <div>
+              <VerificationBadge
+                state={verificationFromLevel(cp.verification_level ?? 'UNVERIFIED')}
+              />
+            </div>
+            {(city || postcodeAreaClient) ? (
+              <p className="inline-flex max-w-full items-center gap-1 text-sm text-fg-muted">
+                <MapPin className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">
+                  {[city, postcodeAreaClient].filter(Boolean).join(' · ')}
+                </span>
+              </p>
+            ) : null}
+          </div>
         </div>
-        {cp && (isWorker || isEmployer) ? (
-          <Button asChild variant="outline" size="sm">
+        {isWorker || isEmployer ? (
+          <Button asChild variant="outline" size="sm" className="w-full">
             <Link
               to={
                 isWorker
@@ -304,10 +360,93 @@ export default function ProfilePage() {
             </Link>
           </Button>
         ) : null}
-      </div>
+      </CardContent>
+    </Card>
+  ) : null;
 
-      {cp ? <MyTrustSummary clientProfileId={cp.id} /> : null}
+  const statsCard = isWorker ? (
+    <Card>
+      <CardContent className="grid grid-cols-2 gap-4 pt-6">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-fg-muted">Rating</p>
+          <p className="text-lg font-semibold text-fg">{rating.avg}</p>
+          <p className="text-xs text-fg-muted">{rating.count} reviews</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-fg-muted">Day rate</p>
+          <p className="text-lg font-semibold text-fg">
+            {formatRate(
+              cp?.worker_profile?.day_rate_min,
+              cp?.worker_profile?.day_rate_max,
+            )}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  ) : null;
 
+  const availabilityCard = isWorker && cp ? (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Availability</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <label className="flex items-center gap-2 text-sm text-fg">
+          <input
+            type="checkbox"
+            checked={workerAvailable}
+            onChange={(e) => setWorkerAvailable(e.target.checked)}
+            className="h-4 w-4"
+          />
+          Available for work
+        </label>
+        <div className="space-y-2">
+          <Label htmlFor="w-available-from" className="text-xs">
+            Available from
+          </Label>
+          <Input
+            id="w-available-from"
+            type="date"
+            value={availableFrom}
+            onChange={(e) => setAvailableFrom(e.target.value)}
+          />
+        </div>
+        <Button type="button" size="sm" onClick={(e) => submitWorker(e as unknown as FormEvent)}>
+          Save
+        </Button>
+      </CardContent>
+    </Card>
+  ) : null;
+
+  const languagesCard = isWorker && cp ? (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Languages</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <LanguagesEditor value={languages} onChange={setLanguages} />
+        <Button type="button" size="sm" onClick={(e) => submitWorker(e as unknown as FormEvent)}>
+          Save
+        </Button>
+      </CardContent>
+    </Card>
+  ) : null;
+
+  const verificationsCard = cp ? <VerificationSection /> : null;
+
+  const accountCard = account ? (
+    <AccountSection
+      email={account.email}
+      emailVerifiedAt={account.email_verified_at}
+      phone={account.phone}
+      phoneVerified={account.phone_verified}
+      verificationState={verificationState}
+      onPhoneChanged={refetch}
+    />
+  ) : null;
+
+  return (
+    <div className="space-y-6">
       {verificationState === 'PENDING_EMAIL_VERIFICATION' && account ? (
         <EmailNotVerifiedBanner email={account.email} />
       ) : null}
@@ -329,43 +468,256 @@ export default function ProfilePage() {
         </div>
       ) : null}
 
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as 'profile' | 'portfolio' | 'documents')}
-        className="space-y-4"
-      >
-        <TabsList>
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          {isWorker ? (
-            <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
-          ) : null}
-          <TabsTrigger value="documents">Documents</TabsTrigger>
-        </TabsList>
+      {cp ? (
+        <CompletenessPanel
+          isWorker={isWorker}
+          isEmployer={isEmployer}
+          clientProfile={cp}
+          workerProfile={cp.worker_profile}
+          employerProfile={cp.employer_profile}
+          hasPortfolioItem={hasPortfolioItem}
+          hasUploadedDocument={hasUploadedDocument}
+          onAction={handleCompletenessAction}
+        />
+      ) : null}
 
-        <TabsContent value="profile" className="space-y-6">
-          {account ? (
-            <AccountSection
-              email={account.email}
-              emailVerifiedAt={account.email_verified_at}
-              phone={account.phone}
-              phoneVerified={account.phone_verified}
-              verificationState={verificationState}
-            />
-          ) : null}
+      {isWorker ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          {/* Left rail */}
+          <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+            {headerCard}
+            {statsCard}
+            {availabilityCard}
+            {languagesCard}
+            {verificationsCard}
+            {accountCard}
+          </aside>
 
-          {cp ? (
-            <CompletenessPanel
-              isWorker={isWorker}
-              isEmployer={isEmployer}
-              clientProfile={cp}
-              workerProfile={cp.worker_profile}
-              employerProfile={cp.employer_profile}
-              hasPortfolioItem={hasPortfolioItem}
-              hasUploadedDocument={hasUploadedDocument}
-              onAction={handleCompletenessAction}
-            />
-          ) : null}
+          {/* Main column */}
+          <div className="space-y-4">
+            {/* Public details: display name, bio, city, postcode */}
+            {cp ? (
+              <Card id="section-client">
+                <CardHeader>
+                  <CardTitle>Public details</CardTitle>
+                  <CardDescription>What clients see on your profile.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form
+                    onSubmit={submitClient}
+                    className="grid gap-4 sm:grid-cols-2"
+                  >
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="p-display-name">Display name</Label>
+                      <Input
+                        id="p-display-name"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        maxLength={150}
+                      />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="p-bio">Bio</Label>
+                      <Textarea
+                        id="p-bio"
+                        rows={4}
+                        value={bio}
+                        onChange={(e) => setBio(e.target.value)}
+                        maxLength={2000}
+                        placeholder="Tell clients what you do, your specialties, and what makes you stand out."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="p-city">City (London borough)</Label>
+                      <Select
+                        value={city || '__none__'}
+                        onValueChange={(v) => {
+                          // Radix Select can fire onValueChange with '' during
+                          // an external value-prop transition (hidden form
+                          // <select> sync). Ignore empty; only act on real
+                          // user picks (which fire '__none__' for "Not set").
+                          if (!v) return;
+                          const next = v === '__none__' ? '' : v;
+                          setCity(next);
+                          if (
+                            next &&
+                            postcodeAreaClient &&
+                            !postcodeAreasFor(next).includes(postcodeAreaClient)
+                          ) {
+                            setPostcodeAreaClient('');
+                          }
+                        }}
+                      >
+                        <SelectTrigger id="p-city">
+                          <SelectValue placeholder="Select borough" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Not set</SelectItem>
+                          {LONDON_BOROUGH_NAMES.map((b) => (
+                            <SelectItem key={b} value={b}>
+                              {b}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="p-postcode">Postcode area</Label>
+                      <Select
+                        value={postcodeAreaClient || '__none__'}
+                        onValueChange={(v) => {
+                          if (!v) return;
+                          setPostcodeAreaClient(v === '__none__' ? '' : v);
+                        }}
+                        disabled={postcodeOptions.length === 0}
+                      >
+                        <SelectTrigger id="p-postcode">
+                          <SelectValue
+                            placeholder={
+                              city ? 'Select outward code' : 'Pick a borough first'
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Not set</SelectItem>
+                          {postcodeOptions.map((p) => (
+                            <SelectItem key={p} value={p}>
+                              {p}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {postcodeAreaClient &&
+                      !POSTCODE_OUTWARD_REGEX.test(postcodeAreaClient) ? (
+                        <p className="text-xs text-danger">
+                          Outward code looks invalid (e.g. SW1, EC2A, NW10).
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Button type="submit">Save public details</Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            ) : (
+              <p className="text-sm text-fg-muted">No client profile on this account.</p>
+            )}
 
+            {/* Worker rate + experience */}
+            {cp ? (
+              <Card id="section-worker">
+                <CardHeader>
+                  <CardTitle>Rate & experience</CardTitle>
+                  <CardDescription>How clients price and find you.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form
+                    onSubmit={submitWorker}
+                    className="grid gap-4 sm:grid-cols-3"
+                  >
+                    <div className="space-y-2">
+                      <Label htmlFor="w-years">Years experience</Label>
+                      <Input
+                        id="w-years"
+                        type="number"
+                        value={yearsExperience}
+                        onChange={(e) => setYearsExperience(e.target.value)}
+                        min={0}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="w-rate-min">Day rate min (£)</Label>
+                      <Input
+                        id="w-rate-min"
+                        type="number"
+                        step="0.01"
+                        value={dayRateMin}
+                        onChange={(e) => setDayRateMin(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="w-rate-max">Day rate max (£)</Label>
+                      <Input
+                        id="w-rate-max"
+                        type="number"
+                        step="0.01"
+                        value={dayRateMax}
+                        onChange={(e) => setDayRateMax(e.target.value)}
+                      />
+                      {dayRateMin &&
+                      dayRateMax &&
+                      Number(dayRateMax) < Number(dayRateMin) ? (
+                        <p className="text-xs text-danger">
+                          Max must be ≥ min.
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="sm:col-span-3">
+                      <Button type="submit">Save rate & experience</Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {/* Skills / specialisations */}
+            {cp ? (
+              <Card id="section-skills">
+                <CardHeader>
+                  <CardTitle>Skills</CardTitle>
+                  <CardDescription>
+                    Trades you cover. These power filters in worker search.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <SpecialisationPicker
+                    links={cp.worker_profile?.worker_specialisations}
+                    onChanged={refetch}
+                  />
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {/* Portfolio */}
+            {cp ? (
+              <Card id="section-portfolio">
+                <CardHeader>
+                  <CardTitle>Portfolio</CardTitle>
+                  <CardDescription>
+                    Showcase past projects with photos and descriptions.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <PortfolioTab workerId={workerId} flash={flash} />
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {/* Documents */}
+            {cp ? (
+              <Card id="section-documents">
+                <CardHeader>
+                  <CardTitle>Documents</CardTitle>
+                  <CardDescription>
+                    Insurance, accreditations, and other verification artefacts.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <DocumentsTab
+                    isWorker={isWorker}
+                    isEmployer={isEmployer}
+                    flash={flash}
+                  />
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        // Employer / no-role: single-column legacy layout
+        <div className="space-y-6">
+          {accountCard}
           {cp ? (
             <Card id="section-avatar">
               <CardHeader>
@@ -387,24 +739,24 @@ export default function ProfilePage() {
           {cp ? (
             <Card id="section-client">
               <CardHeader>
-                <CardTitle>Client profile</CardTitle>
-                <CardDescription>Public details shown to other users.</CardDescription>
+                <CardTitle>Public details</CardTitle>
+                <CardDescription>What other users see on your profile.</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={submitClient} className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="p-display-name">Display name</Label>
+                    <Label htmlFor="p-display-name-e">Display name</Label>
                     <Input
-                      id="p-display-name"
+                      id="p-display-name-e"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                       maxLength={150}
                     />
                   </div>
                   <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="p-bio">Bio</Label>
+                    <Label htmlFor="p-bio-e">Bio</Label>
                     <Textarea
-                      id="p-bio"
+                      id="p-bio-e"
                       rows={3}
                       value={bio}
                       onChange={(e) => setBio(e.target.value)}
@@ -412,10 +764,11 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="p-city">City (London borough)</Label>
+                    <Label htmlFor="p-city-e">City (London borough)</Label>
                     <Select
                       value={city || '__none__'}
                       onValueChange={(v) => {
+                        if (!v) return;
                         const next = v === '__none__' ? '' : v;
                         setCity(next);
                         if (
@@ -427,7 +780,7 @@ export default function ProfilePage() {
                         }
                       }}
                     >
-                      <SelectTrigger id="p-city">
+                      <SelectTrigger id="p-city-e">
                         <SelectValue placeholder="Select borough" />
                       </SelectTrigger>
                       <SelectContent>
@@ -441,15 +794,16 @@ export default function ProfilePage() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="p-postcode">Postcode area</Label>
+                    <Label htmlFor="p-postcode-e">Postcode area</Label>
                     <Select
                       value={postcodeAreaClient || '__none__'}
-                      onValueChange={(v) =>
-                        setPostcodeAreaClient(v === '__none__' ? '' : v)
-                      }
+                      onValueChange={(v) => {
+                        if (!v) return;
+                        setPostcodeAreaClient(v === '__none__' ? '' : v);
+                      }}
                       disabled={postcodeOptions.length === 0}
                     >
-                      <SelectTrigger id="p-postcode">
+                      <SelectTrigger id="p-postcode-e">
                         <SelectValue
                           placeholder={
                             city ? 'Select outward code' : 'Pick a borough first'
@@ -465,104 +819,11 @@ export default function ProfilePage() {
                         ))}
                       </SelectContent>
                     </Select>
-                    {postcodeAreaClient &&
-                    !POSTCODE_OUTWARD_REGEX.test(postcodeAreaClient) ? (
-                      <p className="text-xs text-danger">
-                        Outward code looks invalid (e.g. SW1, EC2A, NW10).
-                      </p>
-                    ) : null}
                   </div>
                   <div className="sm:col-span-2">
-                    <Button type="submit">Save client profile</Button>
+                    <Button type="submit">Save public details</Button>
                   </div>
                 </form>
-              </CardContent>
-            </Card>
-          ) : (
-            <p className="text-sm text-fg-muted">No client profile on this account.</p>
-          )}
-
-          {cp && isWorker ? (
-            <Card id="section-worker">
-              <CardHeader>
-                <CardTitle>Worker profile</CardTitle>
-                <CardDescription>Rates, availability, and experience.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={submitWorker} className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="w-years">Years experience</Label>
-                    <Input
-                      id="w-years"
-                      type="number"
-                      value={yearsExperience}
-                      onChange={(e) => setYearsExperience(e.target.value)}
-                      min={0}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="w-rate-min">Day rate min</Label>
-                    <Input
-                      id="w-rate-min"
-                      type="number"
-                      step="0.01"
-                      value={dayRateMin}
-                      onChange={(e) => setDayRateMin(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="w-rate-max">Day rate max</Label>
-                    <Input
-                      id="w-rate-max"
-                      type="number"
-                      step="0.01"
-                      value={dayRateMax}
-                      onChange={(e) => setDayRateMax(e.target.value)}
-                    />
-                    {dayRateMin &&
-                    dayRateMax &&
-                    Number(dayRateMax) < Number(dayRateMin) ? (
-                      <p className="text-xs text-danger">
-                        Max must be ≥ min.
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="w-available-from">Available from</Label>
-                    <Input
-                      id="w-available-from"
-                      type="date"
-                      value={availableFrom}
-                      onChange={(e) => setAvailableFrom(e.target.value)}
-                    />
-                  </div>
-                  <label className="flex items-center gap-2 text-sm text-fg sm:col-span-2">
-                    <input
-                      type="checkbox"
-                      checked={workerAvailable}
-                      onChange={(e) => setWorkerAvailable(e.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    Is available
-                  </label>
-                  <div className="sm:col-span-2">
-                    <Button type="submit">Save worker profile</Button>
-                  </div>
-                </form>
-                <div className="mt-6 space-y-2 border-t border-border-default pt-4">
-                  <Label>Specialisations</Label>
-                  <p className="text-xs text-fg-muted">
-                    Pick one or more trades you cover. These power filters in
-                    Worker search.
-                  </p>
-                  <SpecialisationPicker
-                    links={cp.worker_profile?.worker_specialisations}
-                    onChanged={refetch}
-                  />
-                </div>
-                <div className="mt-6 border-t border-border-default pt-4">
-                  <LanguagesEditor value={languages} onChange={setLanguages} />
-                </div>
               </CardContent>
             </Card>
           ) : null}
@@ -610,30 +871,25 @@ export default function ProfilePage() {
           ) : null}
 
           {cp ? <VerificationSection /> : null}
-        </TabsContent>
-
-        {isWorker ? (
-          <TabsContent value="portfolio" className="space-y-6">
-            {cp ? (
-              <PortfolioTab workerId={workerId} flash={flash} />
-            ) : null}
-          </TabsContent>
-        ) : null}
-
-        <TabsContent value="documents" className="space-y-6">
           {cp ? (
-            <DocumentsTab
-              isWorker={isWorker}
-              isEmployer={isEmployer}
-              flash={flash}
-            />
-          ) : (
-            <p className="text-sm text-fg-muted">
-              You need a client profile to upload documents.
-            </p>
-          )}
-        </TabsContent>
-      </Tabs>
+            <Card id="section-documents">
+              <CardHeader>
+                <CardTitle>Documents</CardTitle>
+                <CardDescription>
+                  Verification documents and other artefacts.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DocumentsTab
+                  isWorker={isWorker}
+                  isEmployer={isEmployer}
+                  flash={flash}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
@@ -644,6 +900,7 @@ type AccountSectionProps = {
   phone: string | null;
   phoneVerified: boolean;
   verificationState: 'PENDING_EMAIL_VERIFICATION' | 'ACTIVE' | 'DEACTIVATED' | null;
+  onPhoneChanged: () => void | Promise<void>;
 };
 
 function AccountSection({
@@ -652,20 +909,21 @@ function AccountSection({
   phone,
   phoneVerified,
   verificationState,
+  onPhoneChanged,
 }: AccountSectionProps) {
   const verifiedDate = formatDate(emailVerifiedAt);
+  const [phoneOpen, setPhoneOpen] = useState(false);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Account</CardTitle>
-        <CardDescription>Email, phone, and verification state.</CardDescription>
+        <CardTitle className="text-base">Account</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-wide text-fg-muted">Email</p>
-            <p className="text-sm text-fg">{email}</p>
+            <p className="truncate text-sm text-fg">{email}</p>
             {verifiedDate ? (
               <p className="text-xs text-fg-muted">Verified on {verifiedDate}</p>
             ) : null}
@@ -682,35 +940,37 @@ function AccountSection({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-wide text-fg-muted">Phone</p>
-            <p className="text-sm text-fg">{phone ?? 'Not set'}</p>
+            <p className="text-sm text-fg">{phone || 'Not set'}</p>
           </div>
-          {phone ? (
-            phoneVerified ? (
-              <Badge variant="success">Verified</Badge>
-            ) : (
-              <Badge variant="outline">Unverified</Badge>
-            )
-          ) : null}
+          <div className="flex items-center gap-2">
+            {phone ? (
+              phoneVerified ? (
+                <Badge variant="success">Verified</Badge>
+              ) : (
+                <Badge variant="outline">Unverified</Badge>
+              )
+            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={phone ? 'Edit phone' : 'Add phone'}
+              onClick={() => setPhoneOpen(true)}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wide text-fg-muted">Account state</p>
-            <p className="text-sm text-fg">
-              {verificationState
-                ? VERIFICATION_STATE_LABEL[verificationState]
-                : 'Unknown'}
-            </p>
-          </div>
-          {verificationState ? (
-            <Badge variant={VERIFICATION_STATE_VARIANT[verificationState]}>
-              {VERIFICATION_STATE_LABEL[verificationState]}
-            </Badge>
-          ) : null}
-        </div>
+        <EditPhoneDialog
+          open={phoneOpen}
+          onOpenChange={setPhoneOpen}
+          currentPhone={phone}
+          onSaved={onPhoneChanged}
+        />
 
-        <div className="border-t border-border-default pt-4">
-          <Button asChild variant="outline" size="sm">
+        <div className="border-t border-border-default pt-3">
+          <Button asChild variant="outline" size="sm" className="w-full">
             <Link to="/settings/security">Manage security</Link>
           </Button>
         </div>
@@ -736,6 +996,125 @@ const VERIFICATION_STATE_VARIANT: Record<
   ACTIVE: 'success',
   DEACTIVATED: 'danger',
 };
+
+function parseE164(phone: string | null): { iso: string; local: string } {
+  if (!phone) return { iso: 'GB', local: '' };
+  const digits = phone.replace(/^\+/, '').replace(/\D/g, '');
+  // Match by longest dial-code first so e.g. "44" wins over "4".
+  const sorted = [...COUNTRIES].sort((a, b) => b.dial.length - a.dial.length);
+  for (const c of sorted) {
+    if (digits.startsWith(c.dial)) {
+      return { iso: c.iso, local: digits.slice(c.dial.length) };
+    }
+  }
+  return { iso: 'GB', local: digits };
+}
+
+type EditPhoneDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentPhone: string | null;
+  onSaved: () => void | Promise<void>;
+};
+
+function EditPhoneDialog({
+  open,
+  onOpenChange,
+  currentPhone,
+  onSaved,
+}: EditPhoneDialogProps) {
+  const initial = useMemo(() => parseE164(currentPhone), [currentPhone]);
+  const [iso, setIso] = useState(initial.iso);
+  const [local, setLocal] = useState(initial.local);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  // Re-sync when the dialog opens (account may have refetched).
+  useEffect(() => {
+    if (open) {
+      setIso(initial.iso);
+      setLocal(initial.local);
+      setError('');
+    }
+  }, [open, initial.iso, initial.local]);
+
+  async function save(nextPhone: string) {
+    setError('');
+    setSaving(true);
+    try {
+      await api('/account/me', {
+        method: 'PATCH',
+        body: JSON.stringify({ phone: nextPhone }),
+      });
+      await onSaved();
+      onOpenChange(false);
+    } catch (err) {
+      const parsed = parseApiError(err);
+      setError(parsed?.message ?? 'Could not update phone number.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleSave() {
+    const combined = combinePhone(iso, local);
+    if (!combined) {
+      setError('Enter a phone number, or press Remove to clear it.');
+      return;
+    }
+    void save(combined);
+  }
+
+  function handleRemove() {
+    void save('');
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{currentPhone ? 'Edit phone' : 'Add phone'}</DialogTitle>
+          <DialogDescription>
+            Used by support and verified clients. Not shown publicly.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <PhoneInput
+            countryIso={iso}
+            onCountryIsoChange={setIso}
+            localNumber={local}
+            onLocalNumberChange={setLocal}
+            inputId="account-phone"
+          />
+          {error ? (
+            <p
+              role="alert"
+              className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+            >
+              {error}
+            </p>
+          ) : null}
+        </div>
+        <DialogFooter className="flex flex-row-reverse gap-2 sm:justify-between">
+          <Button type="button" onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+          {currentPhone ? (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleRemove}
+              disabled={saving}
+              className="text-danger hover:text-danger"
+            >
+              Remove
+            </Button>
+          ) : null}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function EmailNotVerifiedBanner({ email }: { email: string }) {
   const [sending, setSending] = useState(false);
@@ -779,54 +1158,6 @@ function EmailNotVerifiedBanner({ email }: { email: string }) {
       </p>
       {error ? <p className="mt-1 text-xs">{error}</p> : null}
     </AuthBanner>
-  );
-}
-
-type PublicLevelResponse = {
-  verification_level: string;
-  flags?: {
-    identity_verified?: boolean;
-    insurance_approved?: boolean;
-    company_house_verified?: boolean;
-    company_letterhead_approved?: boolean;
-    right_to_work_verified?: boolean;
-    hmrc_cis_verified?: boolean;
-    certification_doc_types?: string[];
-  };
-  reviews?: { count?: number; average?: number | null };
-};
-
-function MyTrustSummary({
-  clientProfileId,
-}: {
-  clientProfileId: string | number | bigint;
-}) {
-  const [data, setData] = useState<PublicLevelResponse | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    api<PublicLevelResponse>(`/verification/levels/${clientProfileId}`)
-      .then((d) => {
-        if (!cancelled) setData(d);
-      })
-      .catch(() => {
-        if (!cancelled) setData(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [clientProfileId]);
-
-  if (!data) return null;
-
-  return (
-    <div className="rounded-md border border-border-default bg-raised p-3 sm:p-4 space-y-2">
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-medium text-fg">Trust status</span>
-        <VerificationBadge state={verificationFromLevel(data.verification_level)} />
-      </div>
-      <MilestonesStrip flags={data.flags} reviews={data.reviews} />
-    </div>
   );
 }
 
@@ -878,10 +1209,6 @@ function VerificationSection() {
     void refresh();
   }, [refresh]);
 
-  // Poll only while Stripe is actually processing (or the user just returned
-  // from the redirect and the webhook may not have landed yet). Once Stripe
-  // settles to a terminal state — `verified`, `requires_input`, `canceled` —
-  // there's nothing to wait for, so we stop polling.
   useEffect(() => {
     const verifiedNow =
       level === 'BASIC' || level === 'CERTIFIED' || level === 'PREMIUM';
@@ -902,8 +1229,6 @@ function VerificationSection() {
       );
       if (res.verification_url) {
         window.open(res.verification_url, '_blank');
-        // Optimistically reflect the new in-progress state so the CTA hides
-        // immediately; the next refresh confirms via Stripe.
         setSessionStatus('processing');
       }
     } catch (err) {
@@ -914,8 +1239,6 @@ function VerificationSection() {
   }
 
   const verified = level !== null && level !== 'UNVERIFIED';
-  // ONLY hide the CTA while Stripe is actively reviewing. `requires_input` /
-  // `canceled` are terminal failure states — the user must be able to retry.
   const inProgress = !verified && sessionStatus === 'processing';
   const lastAttemptFailed =
     !verified &&
@@ -924,10 +1247,8 @@ function VerificationSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Identity verification</CardTitle>
-        <CardDescription>
-          Verify your identity to build trust with other users.
-        </CardDescription>
+        <CardTitle className="text-base">Identity verification</CardTitle>
+        <CardDescription>Build trust with verified ID.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {justCompleted && !verified && !lastAttemptFailed ? (
@@ -945,7 +1266,7 @@ function VerificationSection() {
             className="rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-warning"
           >
             Your last verification attempt didn't go through. Try again with a
-            sharper photo and an in-date ID — you can re-run the check below.
+            sharper photo and an in-date ID.
           </div>
         ) : null}
         <div className="flex items-center gap-2 text-sm">
@@ -976,8 +1297,7 @@ function VerificationSection() {
           <p className="text-sm text-success">Your identity has been verified.</p>
         ) : inProgress ? (
           <p className="text-sm text-info">
-            We're waiting for Stripe to confirm your check. You'll get an email
-            with the result, or refresh this page in a minute or two.
+            We're waiting for Stripe to confirm your check.
           </p>
         ) : (
           <>
@@ -995,7 +1315,7 @@ function VerificationSection() {
                 {error}
               </div>
             ) : null}
-            <Button type="button" onClick={startVerification} disabled={loading}>
+            <Button type="button" size="sm" onClick={startVerification} disabled={loading}>
               {loading
                 ? 'Starting…'
                 : lastAttemptFailed
