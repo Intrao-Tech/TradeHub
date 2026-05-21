@@ -15,6 +15,7 @@ import { AppShell, type NavItem } from './components/AppShell';
 import { Skeleton } from './components/ui/skeleton';
 import { Toaster } from './components/ui/toast';
 import { replayPendingProjectRef } from './components/referral/pendingProjectRef';
+import { useAccountMe } from './hooks/useAccountMe';
 
 // ── Lazy pages ──────────────────────────────────────────────────────
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -78,12 +79,20 @@ const STAFF_NAV: NavItem[] = [
 
 function Protected({
   loggedIn,
+  requires,
   children,
 }: {
   loggedIn: boolean;
+  /**
+   * Optional role gate. When set, the route also requires the account to
+   * have the matching profile. Mismatched roles redirect to `/profile`.
+   */
+  requires?: 'worker' | 'employer';
   children: React.ReactElement;
 }) {
   const location = useLocation();
+  const { isWorker, isEmployer, loading } = useAccountMe();
+
   if (!loggedIn) {
     return (
       <Navigate
@@ -92,6 +101,15 @@ function Protected({
       />
     );
   }
+
+  if (requires) {
+    // Wait for the account cache before judging the role — avoids a flash
+    // of the page followed by a redirect.
+    if (loading) return null;
+    const hasRole = requires === 'worker' ? isWorker : isEmployer;
+    if (!hasRole) return <Navigate to="/profile" replace />;
+  }
+
   return children;
 }
 
@@ -234,10 +252,10 @@ function MarketplaceRouter() {
           <Route path="/wallet" element={<Protected loggedIn={loggedIn}><WalletPage /></Protected>} />
           <Route path="/referrals" element={<Protected loggedIn={loggedIn}><ReferralsPage /></Protected>} />
           <Route path="/notifications" element={<Protected loggedIn={loggedIn}><NotificationsPage /></Protected>} />
-          <Route path="/my-applications" element={<Protected loggedIn={loggedIn}><MyApplicationsPage /></Protected>} />
-          <Route path="/my-jobs" element={<Protected loggedIn={loggedIn}><MyJobsPage /></Protected>} />
-          <Route path="/my-jobs/:id/applicants" element={<Protected loggedIn={loggedIn}><MyJobApplicantsPage /></Protected>} />
-          <Route path="/my-jobs/:id/edit" element={<Protected loggedIn={loggedIn}><EditJobPage /></Protected>} />
+          <Route path="/my-applications" element={<Protected loggedIn={loggedIn} requires="worker"><MyApplicationsPage /></Protected>} />
+          <Route path="/my-jobs" element={<Protected loggedIn={loggedIn} requires="employer"><MyJobsPage /></Protected>} />
+          <Route path="/my-jobs/:id/applicants" element={<Protected loggedIn={loggedIn} requires="employer"><MyJobApplicantsPage /></Protected>} />
+          <Route path="/my-jobs/:id/edit" element={<Protected loggedIn={loggedIn} requires="employer"><EditJobPage /></Protected>} />
           <Route path="/inbox" element={<Protected loggedIn={loggedIn}><InboxPage /></Protected>} />
           <Route path="/inbox/:conversationId" element={<Protected loggedIn={loggedIn}><InboxPage /></Protected>} />
           <Route path="/settings/security" element={<Protected loggedIn={loggedIn}><SettingsSecurityPage /></Protected>} />
