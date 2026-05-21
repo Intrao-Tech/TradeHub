@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/sheet";
 import { useTheme, useThemePreference, type ThemePreference } from "@/lib/theme";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
+import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { useAccountMe } from "@/hooks/useAccountMe";
 import { publicFileUrl } from "@/lib/files";
 import { Footer } from "@/components/Footer";
@@ -97,6 +98,7 @@ export function AppShell({
 
           <div className="ml-auto flex items-center gap-2">
             {/* <ThemeToggle /> */}
+            {loggedIn ? <NotificationsBell /> : null}
             {loggedIn ? (
               <UserMenu onLogout={onLogout} />
             ) : (

@@ -43,7 +43,6 @@ const WalletPage = lazy(() => import('./pages/WalletPage'));
 const ReferralsPage = lazy(() => import('./pages/ReferralsPage'));
 const ReviewDetailPage = lazy(() => import('./pages/ReviewDetailPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
-const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const JobBoardPage = lazy(() => import('./pages/JobBoardPage'));
 const JobDetailPage = lazy(() => import('./pages/JobDetailPage'));
 const MyJobsPage = lazy(() => import('./pages/MyJobsPage'));
@@ -68,7 +67,6 @@ const PRIVATE_NAV: NavItem[] = [
   { to: '/wallet', label: 'Wallet' },
   { to: '/referrals', label: 'Referrals' },
   { to: '/inbox', label: 'Inbox' },
-  { to: '/notifications', label: 'Alerts' },
 ];
 
 const STAFF_NAV: NavItem[] = [
@@ -251,7 +249,6 @@ function MarketplaceRouter() {
           <Route path="/contracts/:contractId/escrow" element={<Protected loggedIn={loggedIn}><EscrowPlaceholderPage /></Protected>} />
           <Route path="/wallet" element={<Protected loggedIn={loggedIn}><WalletPage /></Protected>} />
           <Route path="/referrals" element={<Protected loggedIn={loggedIn}><ReferralsPage /></Protected>} />
-          <Route path="/notifications" element={<Protected loggedIn={loggedIn}><NotificationsPage /></Protected>} />
           <Route path="/my-applications" element={<Protected loggedIn={loggedIn} requires="worker"><MyApplicationsPage /></Protected>} />
           <Route path="/my-jobs" element={<Protected loggedIn={loggedIn} requires="employer"><MyJobsPage /></Protected>} />
           <Route path="/my-jobs/:id/applicants" element={<Protected loggedIn={loggedIn} requires="employer"><MyJobApplicantsPage /></Protected>} />
