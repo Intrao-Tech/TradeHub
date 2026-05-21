@@ -40,10 +40,10 @@ test.describe('TEST-AUTH-101 post-login routing', () => {
     );
     expect(verifyRes.ok()).toBeTruthy();
 
-    await page.goto('/login?next=%2Fdashboard');
+    await page.goto('/login?next=%2Fprofile');
     await page.getByLabel(/Email/i).fill(email);
     await page.getByLabel(/Password/i).fill(TEST_PASSWORD);
     await page.getByRole('button', { name: /^Sign in$/i }).click();
-    await page.waitForURL(/\/dashboard/);
+    await page.waitForURL(/\/profile/);
   });
 });

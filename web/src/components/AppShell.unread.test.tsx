@@ -40,7 +40,7 @@ afterEach(() => {
 
 const NAV = [{ to: '/inbox', label: 'Inbox' }];
 
-function renderShell(route = '/dashboard') {
+function renderShell(route = '/profile') {
   return renderWithProfile(
     <AppShell
       loggedIn

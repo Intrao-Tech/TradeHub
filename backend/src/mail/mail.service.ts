@@ -73,7 +73,7 @@ export class MailService implements OnModuleInit {
       <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
         <h2 style="color: #0f766e;">Welcome, ${escapeHtml(displayName)} 👋</h2>
         <p>Your TradeHub account is ready. You can now browse jobs, connect with workers, and manage your projects.</p>
-        <p><a href="${this.frontendUrl}/dashboard" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">Open your dashboard</a></p>
+        <p><a href="${this.frontendUrl}/profile" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">Open your profile</a></p>
         <p style="color:#64748b;font-size:13px;">If you didn't create this account, ignore this email.</p>
       </div>
     `;

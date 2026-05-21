@@ -56,7 +56,7 @@ export function AppShell({
       <header className="sticky top-0 z-40 border-b border-border-default bg-raised/95 backdrop-blur supports-[backdrop-filter]:bg-raised/80">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:gap-6">
           <NavLink
-            to={loggedIn ? "/dashboard" : "/jobs"}
+            to={loggedIn ? "/profile" : "/jobs"}
             className="flex items-center gap-2 font-semibold tracking-tight"
           >
             <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-fg text-sm font-bold">
