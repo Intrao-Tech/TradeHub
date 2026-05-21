@@ -105,8 +105,9 @@ describe('TEST-PROF-102 ProfilePage worker editor (PROF-011 / PROF-012 / PROF-01
     // value's source).
     const root = screen.getByText(/manage security/i).closest('main, body, div');
     expect(root).not.toBeNull();
-    // Loose probe — Camden appears in either the value or hidden options.
-    expect(within(document.body).queryByText(/camden/i)).toBeDefined();
+    // Loose probe — Camden appears in either the Select value, the header
+    // location chip, or hidden options. Tolerate multiple matches.
+    expect(within(document.body).queryAllByText(/camden/i).length).toBeGreaterThan(0);
   });
 });
 

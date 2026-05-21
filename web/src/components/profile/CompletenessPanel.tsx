@@ -75,6 +75,9 @@ export function CompletenessPanel({
   if (reqs.length === 0) return null;
 
   const done = reqs.filter((r) => r.done).length;
+  // Hide the panel entirely once the profile is fully filled in — the user
+  // no longer needs prompting.
+  if (done === reqs.length) return null;
   const percent = Math.round((done / reqs.length) * 100);
   const missing = reqs.filter((r) => !r.done);
 
