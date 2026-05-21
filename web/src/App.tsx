@@ -57,8 +57,10 @@ const RefLandingPage = lazy(() => import('./pages/RefLandingPage'));
 
 const PUBLIC_NAV: NavItem[] = [
   { to: '/jobs', label: 'Jobs' },
-  { to: '/workers', label: 'Workers' },
-  { to: '/employers', label: 'Employers' },
+  // Workers don't browse other workers; employers don't browse other employers.
+  // Routes stay reachable by URL — only the nav surface hides.
+  { to: '/workers', label: 'Workers', hideForRole: 'worker' },
+  { to: '/employers', label: 'Employers', hideForRole: 'employer' },
 ];
 
 const PRIVATE_NAV: NavItem[] = [

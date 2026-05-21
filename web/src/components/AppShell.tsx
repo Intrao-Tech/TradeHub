@@ -37,6 +37,12 @@ export type NavItem = {
    * accounts see both. Unset items are shown to anyone logged in.
    */
   requires?: 'worker' | 'employer';
+  /**
+   * Inverse of `requires`. When set, hides the item from accounts that
+   * have the matching role — e.g. a logged-in worker doesn't need to see
+   * /workers in their nav. Logged-out viewers always see these items.
+   */
+  hideForRole?: 'worker' | 'employer';
 };
 
 type AppShellProps = {
@@ -60,8 +66,10 @@ export function AppShell({
   // We read account roles here (hook is no-op'd when there's no token).
   const { isWorker, isEmployer } = useAccountMe();
   const items = [...publicNav, ...(loggedIn ? privateNav : [])].filter((n) => {
-    if (n.requires === 'worker') return isWorker;
-    if (n.requires === 'employer') return isEmployer;
+    if (n.requires === 'worker' && !isWorker) return false;
+    if (n.requires === 'employer' && !isEmployer) return false;
+    if (n.hideForRole === 'worker' && isWorker) return false;
+    if (n.hideForRole === 'employer' && isEmployer) return false;
     return true;
   });
   // Surface the chat unread badge in the nav whenever the user is logged in.
