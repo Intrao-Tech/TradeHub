@@ -43,6 +43,7 @@ const WalletPage = lazy(() => import('./pages/WalletPage'));
 const ReferralsPage = lazy(() => import('./pages/ReferralsPage'));
 const ReviewDetailPage = lazy(() => import('./pages/ReviewDetailPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const JobBoardPage = lazy(() => import('./pages/JobBoardPage'));
 const JobDetailPage = lazy(() => import('./pages/JobDetailPage'));
 const MyJobsPage = lazy(() => import('./pages/MyJobsPage'));
@@ -253,6 +254,7 @@ function MarketplaceRouter() {
           <Route path="/my-jobs" element={<Protected loggedIn={loggedIn} requires="employer"><MyJobsPage /></Protected>} />
           <Route path="/my-jobs/:id/applicants" element={<Protected loggedIn={loggedIn} requires="employer"><MyJobApplicantsPage /></Protected>} />
           <Route path="/my-jobs/:id/edit" element={<Protected loggedIn={loggedIn} requires="employer"><EditJobPage /></Protected>} />
+          <Route path="/notifications" element={<Protected loggedIn={loggedIn}><NotificationsPage /></Protected>} />
           <Route path="/inbox" element={<Protected loggedIn={loggedIn}><InboxPage /></Protected>} />
           <Route path="/inbox/:conversationId" element={<Protected loggedIn={loggedIn}><InboxPage /></Protected>} />
           <Route path="/settings/security" element={<Protected loggedIn={loggedIn}><SettingsSecurityPage /></Protected>} />

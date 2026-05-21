@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { NavLink } from 'react-router-dom';
 import { Bell, X } from 'lucide-react';
 import { api, parseApiError } from '@/api';
 import { Button } from '@/components/ui/button';
@@ -111,19 +112,20 @@ export function NotificationsBell() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 p-0">
-        <div className="flex items-center justify-between px-3 py-2">
-          <p className="text-sm font-semibold text-fg">Notifications</p>
-          {unread > 0 ? (
-            <button
-              type="button"
-              onClick={() => void markAllRead()}
-              className="text-xs text-primary hover:underline"
-            >
-              Mark all read
-            </button>
-          ) : null}
-        </div>
-        <DropdownMenuSeparator className="m-0" />
+        {unread > 0 ? (
+          <>
+            <div className="flex items-center justify-end px-3 py-2">
+              <button
+                type="button"
+                onClick={() => void markAllRead()}
+                className="text-xs text-primary hover:underline"
+              >
+                Mark all read
+              </button>
+            </div>
+            <DropdownMenuSeparator className="m-0" />
+          </>
+        ) : null}
         {error ? (
           <p className="px-3 py-4 text-xs text-danger">{error}</p>
         ) : rows == null ? (
@@ -174,6 +176,14 @@ export function NotificationsBell() {
             ))}
           </ul>
         )}
+        <DropdownMenuSeparator className="m-0" />
+        <NavLink
+          to="/notifications"
+          onClick={() => setOpen(false)}
+          className="block px-3 py-2 text-center text-sm font-medium text-primary hover:bg-subtle"
+        >
+          See all notifications
+        </NavLink>
       </DropdownMenuContent>
     </DropdownMenu>
   );
