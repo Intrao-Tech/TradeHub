@@ -61,8 +61,8 @@ const PUBLIC_NAV: NavItem[] = [
 ];
 
 const PRIVATE_NAV: NavItem[] = [
-  { to: '/my-applications', label: 'Applications' },
-  { to: '/my-jobs', label: 'Posted jobs' },
+  { to: '/my-applications', label: 'Applications', requires: 'worker' },
+  { to: '/my-jobs', label: 'Posted jobs', requires: 'employer' },
   { to: '/collaborations', label: 'Work' },
   { to: '/wallet', label: 'Wallet' },
   { to: '/referrals', label: 'Referrals' },

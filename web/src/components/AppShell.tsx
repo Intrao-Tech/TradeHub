@@ -27,7 +27,16 @@ import { useAccountMe } from "@/hooks/useAccountMe";
 import { publicFileUrl } from "@/lib/files";
 import { Footer } from "@/components/Footer";
 
-export type NavItem = { to: string; label: string };
+export type NavItem = {
+  to: string;
+  label: string;
+  /**
+   * Role gate. When set, the nav item is hidden unless the current account
+   * has the matching profile (worker_profile / employer_profile). Dual-role
+   * accounts see both. Unset items are shown to anyone logged in.
+   */
+  requires?: 'worker' | 'employer';
+};
 
 type AppShellProps = {
   loggedIn: boolean;
@@ -46,7 +55,14 @@ export function AppShell({
 }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
-  const items = [...publicNav, ...(loggedIn ? privateNav : [])];
+  // Role-based filter for private nav items. Public items are always shown.
+  // We read account roles here (hook is no-op'd when there's no token).
+  const { isWorker, isEmployer } = useAccountMe();
+  const items = [...publicNav, ...(loggedIn ? privateNav : [])].filter((n) => {
+    if (n.requires === 'worker') return isWorker;
+    if (n.requires === 'employer') return isEmployer;
+    return true;
+  });
   // Surface the chat unread badge in the nav whenever the user is logged in.
   // Hook is no-op'd internally when there's no token.
   const { total: unreadTotal } = useUnreadCount();
