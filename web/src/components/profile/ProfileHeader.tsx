@@ -24,6 +24,12 @@ export type ProfileHeaderProps = {
   ratingCount?: number | null;
   /** Worker only: shows availability chip when present. */
   isAvailable?: boolean | null;
+  /**
+   * When true, suppresses the verified-milestones chip strip inside the
+   * header. Use on pages that surface those signals separately (e.g. a
+   * dedicated Verifications rail card).
+   */
+  hideMilestonesStrip?: boolean;
 };
 
 type PublicLevelResponse = {
@@ -69,6 +75,7 @@ export function ProfileHeader({
   rating,
   ratingCount,
   isAvailable,
+  hideMilestonesStrip = false,
 }: ProfileHeaderProps) {
   const ratingNum = rating != null ? Number(rating) : null;
   const hasReviews = ratingNum != null && (ratingCount ?? 0) > 0;
@@ -141,7 +148,7 @@ export function ProfileHeader({
               <span className="text-fg-muted">No reviews yet</span>
             )}
           </div>
-          {publicLevel ? (
+          {publicLevel && !hideMilestonesStrip ? (
             <MilestonesStrip
               flags={publicLevel.flags}
               reviews={publicLevel.reviews}

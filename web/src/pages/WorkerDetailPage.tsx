@@ -1,14 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import {
-  Award,
-  Briefcase,
-  Hammer,
-  ShieldCheck,
-  Star,
-} from 'lucide-react';
+import { Briefcase, Hammer, ShieldCheck } from 'lucide-react';
 import { api, getToken, parseApiError } from '../api';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
+import { VerificationsCard } from '../components/profile/VerificationsCard';
 import { EmptyState } from '../components/EmptyState';
 import { ReviewsTab } from '@/components/reviews/ReviewsTab';
 import { languageName } from '../lib/iso-639-1';
@@ -22,7 +17,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ShareForCommissionButton } from '@/components/referral/ShareForCommissionButton';
 import { useRefAttribution } from '@/components/referral/useRefAttribution';
 import { useAccountMe } from '@/hooks/useAccountMe';
@@ -50,6 +44,7 @@ type ClientProfile = {
   postcode_area?: string | null;
   avatar_url?: string | null;
   verification_level?: string | number | null;
+  created_at?: string | null;
 };
 
 type WorkerDetail = {
@@ -76,6 +71,13 @@ function formatRate(
     return `£${Number(min).toFixed(0)} – £${Number(max).toFixed(0)} / day`;
   }
   return `£${Number(min ?? max).toFixed(0)} / day`;
+}
+
+function formatMemberSince(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short' });
 }
 
 export default function WorkerDetailPage() {
@@ -140,6 +142,7 @@ export default function WorkerDetailPage() {
   const cp = worker.client_profile;
   const displayName = cp?.display_name ?? 'Tradesperson';
   const rate = formatRate(worker.day_rate_min, worker.day_rate_max);
+  const memberSince = formatMemberSince(cp?.created_at);
   const loggedIn = Boolean(getToken());
 
   return (
@@ -155,6 +158,7 @@ export default function WorkerDetailPage() {
         rating={worker.rating_avg}
         ratingCount={worker.rating_count}
         isAvailable={worker.is_available}
+        hideMilestonesStrip
       />
 
       {loggedIn && isEmployer && id ? (
@@ -176,20 +180,59 @@ export default function WorkerDetailPage() {
         </div>
       ) : null}
 
-      <Tabs defaultValue="about" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="about">About</TabsTrigger>
-          <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
-          <TabsTrigger value="certifications">Certifications</TabsTrigger>
-          <TabsTrigger value="reviews">Reviews</TabsTrigger>
-        </TabsList>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        {/* Left rail */}
+        <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+          <Card>
+            <CardContent className="grid grid-cols-2 gap-4 pt-6">
+              <Stat label="Day rate" value={rate ?? '—'} />
+              <Stat
+                label="Experience"
+                value={
+                  worker.years_experience != null
+                    ? `${worker.years_experience} yr${worker.years_experience === 1 ? '' : 's'}`
+                    : '—'
+                }
+              />
+              {worker.available_from ? (
+                <Stat
+                  label="Available from"
+                  value={new Date(worker.available_from).toLocaleDateString()}
+                />
+              ) : null}
+              {memberSince ? (
+                <Stat label="Member since" value={memberSince} />
+              ) : null}
+            </CardContent>
+          </Card>
 
-        <TabsContent value="about" className="space-y-4">
+          {worker.languages && worker.languages.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Languages</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-1.5">
+                  {worker.languages.map((code) => (
+                    <Badge key={code} variant="outline">
+                      {languageName(code)}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <VerificationsCard clientProfileId={cp?.id} role="WORKER" />
+        </aside>
+
+        {/* Main column */}
+        <div className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>About</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent>
               {cp?.bio ? (
                 <p className="whitespace-pre-line text-sm text-fg">{cp.bio}</p>
               ) : (
@@ -197,115 +240,86 @@ export default function WorkerDetailPage() {
                   This tradesperson hasn’t added a bio yet.
                 </p>
               )}
-              <div className="grid gap-3 text-sm sm:grid-cols-2">
-                {rate ? (
-                  <DetailRow icon={Briefcase} label="Day rate" value={rate} />
-                ) : null}
-                {worker.years_experience != null ? (
-                  <DetailRow
-                    icon={Star}
-                    label="Experience"
-                    value={`${worker.years_experience} year${worker.years_experience === 1 ? '' : 's'}`}
-                  />
-                ) : null}
-                {worker.available_from ? (
-                  <DetailRow
-                    icon={ShieldCheck}
-                    label="Available from"
-                    value={new Date(worker.available_from).toLocaleDateString()}
-                  />
-                ) : null}
-              </div>
-              {specs.length > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-wide text-fg-muted">
-                    Specialisations
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {specs.map((s) => (
-                      <Badge key={s} variant="secondary">
-                        {s}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              {worker.languages && worker.languages.length > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-wide text-fg-muted">
-                    Languages
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {worker.languages.map((code) => (
-                      <Badge key={code} variant="outline">
-                        {languageName(code)}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
             </CardContent>
           </Card>
-        </TabsContent>
 
-        <TabsContent value="portfolio" className="space-y-4">
-          {work.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {work.map((item) => (
-                <PortfolioItemCard key={String(item.id)} item={item} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icon={Briefcase}
-              title="No portfolio yet"
-              description="This tradesperson hasn’t added any project history."
-            />
-          )}
-        </TabsContent>
+          {specs.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Skills</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-1.5">
+                  {specs.map((s) => (
+                    <Badge key={s} variant="secondary">
+                      {s}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
 
-        <TabsContent value="certifications" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Portfolio</CardTitle>
+              <CardDescription>Past projects and work samples.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {work.length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {work.map((item) => (
+                    <PortfolioItemCard key={String(item.id)} item={item} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={Briefcase}
+                  title="No portfolio yet"
+                  description="This tradesperson hasn’t added any project history."
+                />
+              )}
+            </CardContent>
+          </Card>
+
           {certifications.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {certifications.map((item) => (
-                <PortfolioItemCard key={String(item.id)} item={item} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icon={Award}
-              title="No certifications listed"
-              description="Trade certifications appear here once added."
-            />
-          )}
-        </TabsContent>
+            <Card>
+              <CardHeader>
+                <CardTitle>Certifications</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {certifications.map((item) => (
+                    <PortfolioItemCard key={String(item.id)} item={item} />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
 
-        <TabsContent value="reviews" className="space-y-4">
-          <ReviewsTab
-            subjectId={worker.id}
-            subjectKind="worker"
-            subjectName={displayName}
-          />
-        </TabsContent>
-      </Tabs>
+          <Card>
+            <CardHeader>
+              <CardTitle>Reviews</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ReviewsTab
+                subjectId={worker.id}
+                subjectKind="worker"
+                subjectName={displayName}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
 
-function DetailRow({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Briefcase;
-  label: string;
-  value: string;
-}) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center gap-2 text-fg">
-      <Icon className="h-4 w-4 text-fg-muted" />
-      <span className="text-fg-muted">{label}:</span>
-      <span className="font-medium">{value}</span>
+    <div>
+      <p className="text-xs uppercase tracking-wide text-fg-muted">{label}</p>
+      <p className="text-sm font-semibold text-fg">{value}</p>
     </div>
   );
 }
@@ -351,3 +365,4 @@ function DetailSkeleton() {
     </div>
   );
 }
+

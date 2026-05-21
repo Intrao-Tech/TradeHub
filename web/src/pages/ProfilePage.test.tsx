@@ -132,7 +132,9 @@ describe('TEST-PROF-103 ProfilePage employer editor (PROF-013)', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(/company name/i)).toBeInTheDocument();
     });
-    expect(screen.getByLabelText(/company number/i)).toBeInTheDocument();
+    // Field renamed to "Companies House number" in the Upwork-style redesign;
+    // the underlying field is still company_number.
+    expect(screen.getByLabelText(/companies house/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/team size/i)).toBeInTheDocument();
   });
 });

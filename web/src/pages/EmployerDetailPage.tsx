@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Briefcase, Building2, Users } from 'lucide-react';
+import { Building2 } from 'lucide-react';
 import { api, getToken, parseApiError } from '../api';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
+import { VerificationsCard } from '../components/profile/VerificationsCard';
 import { EmptyState } from '../components/EmptyState';
 import { ReviewsTab } from '@/components/reviews/ReviewsTab';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type ClientProfile = {
   id: string | number;
@@ -23,6 +23,7 @@ type ClientProfile = {
   postcode_area?: string | null;
   avatar_url?: string | null;
   verification_level?: string | number | null;
+  created_at?: string | null;
 };
 
 type EmployerDetail = {
@@ -34,6 +35,13 @@ type EmployerDetail = {
   rating_count?: number | null;
   client_profile?: ClientProfile | null;
 };
+
+function formatMemberSince(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short' });
+}
 
 export default function EmployerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -79,8 +87,8 @@ export default function EmployerDetailPage() {
   }
 
   const cp = employer.client_profile;
-  const displayName =
-    employer.company_name ?? cp?.display_name ?? 'Employer';
+  const displayName = employer.company_name ?? cp?.display_name ?? 'Employer';
+  const memberSince = formatMemberSince(cp?.created_at);
   const loggedIn = Boolean(getToken());
 
   return (
@@ -95,6 +103,7 @@ export default function EmployerDetailPage() {
         clientProfileId={cp?.id}
         rating={employer.rating_avg}
         ratingCount={employer.rating_count}
+        hideMilestonesStrip
       />
 
       {!loggedIn ? (
@@ -106,18 +115,33 @@ export default function EmployerDetailPage() {
         </div>
       ) : null}
 
-      <Tabs defaultValue="about" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="about">About</TabsTrigger>
-          <TabsTrigger value="reviews">Reviews</TabsTrigger>
-        </TabsList>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        {/* Left rail */}
+        <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+          <Card>
+            <CardContent className="grid grid-cols-2 gap-4 pt-6">
+              <Stat
+                label="Team size"
+                value={
+                  employer.team_size != null ? String(employer.team_size) : '—'
+                }
+              />
+              {memberSince ? (
+                <Stat label="Member since" value={memberSince} />
+              ) : null}
+            </CardContent>
+          </Card>
 
-        <TabsContent value="about" className="space-y-4">
+          <VerificationsCard clientProfileId={cp?.id} role="EMPLOYER" />
+        </aside>
+
+        {/* Main column */}
+        <div className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>About</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent>
               {cp?.bio ? (
                 <p className="whitespace-pre-line text-sm text-fg">{cp.bio}</p>
               ) : (
@@ -125,59 +149,70 @@ export default function EmployerDetailPage() {
                   This employer hasn’t added a bio yet.
                 </p>
               )}
-              <div className="grid gap-3 text-sm sm:grid-cols-2">
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Company</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid gap-3 text-sm sm:grid-cols-2">
                 {employer.company_name ? (
-                  <DetailRow
-                    icon={Building2}
-                    label="Company"
-                    value={employer.company_name}
-                  />
+                  <Field label="Company" value={employer.company_name} />
                 ) : null}
                 {employer.company_number ? (
-                  <DetailRow
-                    icon={Briefcase}
+                  <Field
                     label="Companies House"
                     value={employer.company_number}
                   />
                 ) : null}
                 {employer.team_size != null ? (
-                  <DetailRow
-                    icon={Users}
-                    label="Team size"
-                    value={`${employer.team_size}`}
-                  />
+                  <Field label="Team size" value={String(employer.team_size)} />
                 ) : null}
-              </div>
+                {!employer.company_name &&
+                !employer.company_number &&
+                employer.team_size == null ? (
+                  <p className="text-sm text-fg-muted sm:col-span-2">
+                    This employer hasn’t added company details yet.
+                  </p>
+                ) : null}
+              </dl>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        <TabsContent value="reviews" className="space-y-4">
-          <ReviewsTab
-            subjectId={employer.id}
-            subjectKind="employer"
-            subjectName={displayName}
-          />
-        </TabsContent>
-      </Tabs>
+          <Card>
+            <CardHeader>
+              <CardTitle>Reviews</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ReviewsTab
+                subjectId={employer.id}
+                subjectKind="employer"
+                subjectName={displayName}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
 
-function DetailRow({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Briefcase;
-  label: string;
-  value: string;
-}) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center gap-2 text-fg">
-      <Icon className="h-4 w-4 text-fg-muted" />
-      <span className="text-fg-muted">{label}:</span>
-      <span className="font-medium">{value}</span>
+    <div>
+      <p className="text-xs uppercase tracking-wide text-fg-muted">{label}</p>
+      <p className="text-sm font-semibold text-fg">{value}</p>
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs uppercase tracking-wide text-fg-muted">{label}</dt>
+      <dd className="text-sm font-medium text-fg">{value}</dd>
     </div>
   );
 }

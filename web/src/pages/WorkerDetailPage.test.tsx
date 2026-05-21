@@ -58,7 +58,7 @@ describe('TEST-PROF-110 WorkerDetailPage (PROF-001, PROF-006, PROF-007, PROF-008
     expect(screen.getByText(/id verified/i)).toBeInTheDocument();
   });
 
-  test('PROF-008 — tabs render: About / Portfolio / Certifications / Reviews placeholder', async () => {
+  test('PROF-008 — sections render: About / Portfolio / Certifications / Reviews', async () => {
     server.use(
       http.get(`${API}/worker-profiles/42`, () =>
         HttpResponse.json(workerFixture()),
@@ -70,14 +70,15 @@ describe('TEST-PROF-110 WorkerDetailPage (PROF-001, PROF-006, PROF-007, PROF-008
       </Routes>,
       { route: '/workers/42', account: null },
     );
+    // Upwork-style redesign drops the Tabs primitive in favour of stacked
+    // section cards. CardTitle renders a <div>, so assert by text instead of
+    // by heading role.
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /about/i })).toBeInTheDocument();
+      expect(screen.getByText(/^about$/i)).toBeInTheDocument();
     });
-    expect(screen.getByRole('tab', { name: /portfolio/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole('tab', { name: /certifications/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /reviews/i })).toBeInTheDocument();
+    expect(screen.getByText(/^portfolio$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^certifications$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^reviews$/i)).toBeInTheDocument();
   });
 
   test('PROF-006 — anonymous viewer sees the auth-gated CTA, not a Send-message button', async () => {
