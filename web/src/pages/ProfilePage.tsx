@@ -385,6 +385,28 @@ export default function ProfilePage() {
     </Card>
   ) : null;
 
+  const employerRating = formatRating(
+    cp?.employer_profile?.rating_avg,
+    cp?.employer_profile?.rating_count ?? null,
+  );
+  const employerStatsCard = isEmployer ? (
+    <Card>
+      <CardContent className="grid grid-cols-2 gap-4 pt-6">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-fg-muted">Rating</p>
+          <p className="text-lg font-semibold text-fg">{employerRating.avg}</p>
+          <p className="text-xs text-fg-muted">{employerRating.count} reviews</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-fg-muted">Team size</p>
+          <p className="text-lg font-semibold text-fg">
+            {cp?.employer_profile?.team_size ?? '—'}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  ) : null;
+
   const availabilityCard = isWorker && cp ? (
     <Card>
       <CardHeader>
@@ -714,181 +736,187 @@ export default function ProfilePage() {
             ) : null}
           </div>
         </div>
-      ) : (
-        // Employer / no-role: single-column legacy layout
-        <div className="space-y-6">
-          {accountCard}
-          {cp ? (
-            <Card id="section-avatar">
-              <CardHeader>
-                <CardTitle>Avatar</CardTitle>
-                <CardDescription>
-                  Square photo, ≥ 256×256 px. JPEG, PNG, or WebP up to 5 MB.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AvatarUploader
-                  avatarUrl={avatarUrl}
-                  fallback={initialsFor(displayName)}
-                  onChanged={refetch}
-                />
-              </CardContent>
-            </Card>
-          ) : null}
+      ) : isEmployer ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          {/* Left rail */}
+          <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+            {headerCard}
+            {employerStatsCard}
+            {verificationsCard}
+            {accountCard}
+          </aside>
 
-          {cp ? (
-            <Card id="section-client">
-              <CardHeader>
-                <CardTitle>Public details</CardTitle>
-                <CardDescription>What other users see on your profile.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={submitClient} className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="p-display-name-e">Display name</Label>
-                    <Input
-                      id="p-display-name-e"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      maxLength={150}
-                    />
-                  </div>
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="p-bio-e">Bio</Label>
-                    <Textarea
-                      id="p-bio-e"
-                      rows={3}
-                      value={bio}
-                      onChange={(e) => setBio(e.target.value)}
-                      maxLength={2000}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="p-city-e">City (London borough)</Label>
-                    <Select
-                      value={city || '__none__'}
-                      onValueChange={(v) => {
-                        if (!v) return;
-                        const next = v === '__none__' ? '' : v;
-                        setCity(next);
-                        if (
-                          next &&
-                          postcodeAreaClient &&
-                          !postcodeAreasFor(next).includes(postcodeAreaClient)
-                        ) {
-                          setPostcodeAreaClient('');
-                        }
-                      }}
-                    >
-                      <SelectTrigger id="p-city-e">
-                        <SelectValue placeholder="Select borough" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">Not set</SelectItem>
-                        {LONDON_BOROUGH_NAMES.map((b) => (
-                          <SelectItem key={b} value={b}>
-                            {b}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="p-postcode-e">Postcode area</Label>
-                    <Select
-                      value={postcodeAreaClient || '__none__'}
-                      onValueChange={(v) => {
-                        if (!v) return;
-                        setPostcodeAreaClient(v === '__none__' ? '' : v);
-                      }}
-                      disabled={postcodeOptions.length === 0}
-                    >
-                      <SelectTrigger id="p-postcode-e">
-                        <SelectValue
-                          placeholder={
-                            city ? 'Select outward code' : 'Pick a borough first'
+          {/* Main column */}
+          <div className="space-y-4">
+            {/* Public details: display name, bio, city, postcode */}
+            {cp ? (
+              <Card id="section-client">
+                <CardHeader>
+                  <CardTitle>Public details</CardTitle>
+                  <CardDescription>What workers see on your profile.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form
+                    onSubmit={submitClient}
+                    className="grid gap-4 sm:grid-cols-2"
+                  >
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="p-display-name-e">Display name</Label>
+                      <Input
+                        id="p-display-name-e"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        maxLength={150}
+                      />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="p-bio-e">Bio</Label>
+                      <Textarea
+                        id="p-bio-e"
+                        rows={4}
+                        value={bio}
+                        onChange={(e) => setBio(e.target.value)}
+                        maxLength={2000}
+                        placeholder="Tell workers about your business, the kind of jobs you post, and how you work."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="p-city-e">City (London borough)</Label>
+                      <Select
+                        value={city || '__none__'}
+                        onValueChange={(v) => {
+                          if (!v) return;
+                          const next = v === '__none__' ? '' : v;
+                          setCity(next);
+                          if (
+                            next &&
+                            postcodeAreaClient &&
+                            !postcodeAreasFor(next).includes(postcodeAreaClient)
+                          ) {
+                            setPostcodeAreaClient('');
                           }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">Not set</SelectItem>
-                        {postcodeOptions.map((p) => (
-                          <SelectItem key={p} value={p}>
-                            {p}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Button type="submit">Save public details</Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          ) : null}
+                        }}
+                      >
+                        <SelectTrigger id="p-city-e">
+                          <SelectValue placeholder="Select borough" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Not set</SelectItem>
+                          {LONDON_BOROUGH_NAMES.map((b) => (
+                            <SelectItem key={b} value={b}>
+                              {b}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="p-postcode-e">Postcode area</Label>
+                      <Select
+                        value={postcodeAreaClient || '__none__'}
+                        onValueChange={(v) => {
+                          if (!v) return;
+                          setPostcodeAreaClient(v === '__none__' ? '' : v);
+                        }}
+                        disabled={postcodeOptions.length === 0}
+                      >
+                        <SelectTrigger id="p-postcode-e">
+                          <SelectValue
+                            placeholder={
+                              city ? 'Select outward code' : 'Pick a borough first'
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Not set</SelectItem>
+                          {postcodeOptions.map((p) => (
+                            <SelectItem key={p} value={p}>
+                              {p}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Button type="submit">Save public details</Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            ) : null}
 
-          {cp && isEmployer ? (
-            <Card id="section-employer">
-              <CardHeader>
-                <CardTitle>Employer profile</CardTitle>
-                <CardDescription>Company details.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={submitEmployer} className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="e-company">Company name</Label>
-                    <Input
-                      id="e-company"
-                      value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="e-number">Company number</Label>
-                    <Input
-                      id="e-number"
-                      value={companyNumber}
-                      onChange={(e) => setCompanyNumber(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="e-team">Team size</Label>
-                    <Input
-                      id="e-team"
-                      type="number"
-                      value={teamSize}
-                      onChange={(e) => setTeamSize(e.target.value)}
-                      min={0}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Button type="submit">Save employer profile</Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          ) : null}
+            {/* Company details (employer-specific) */}
+            {cp ? (
+              <Card id="section-employer">
+                <CardHeader>
+                  <CardTitle>Company details</CardTitle>
+                  <CardDescription>
+                    How workers identify and verify your business.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form
+                    onSubmit={submitEmployer}
+                    className="grid gap-4 sm:grid-cols-2"
+                  >
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="e-company">Company name</Label>
+                      <Input
+                        id="e-company"
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="e-number">Companies House number</Label>
+                      <Input
+                        id="e-number"
+                        value={companyNumber}
+                        onChange={(e) => setCompanyNumber(e.target.value)}
+                        placeholder="e.g. 12345678"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="e-team">Team size</Label>
+                      <Input
+                        id="e-team"
+                        type="number"
+                        value={teamSize}
+                        onChange={(e) => setTeamSize(e.target.value)}
+                        min={0}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Button type="submit">Save company details</Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            ) : null}
 
-          {cp ? <VerificationSection /> : null}
-          {cp ? (
-            <Card id="section-documents">
-              <CardHeader>
-                <CardTitle>Documents</CardTitle>
-                <CardDescription>
-                  Verification documents and other artefacts.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DocumentsTab
-                  isWorker={isWorker}
-                  isEmployer={isEmployer}
-                  flash={flash}
-                />
-              </CardContent>
-            </Card>
-          ) : null}
+            {/* Documents (employer types: INSURANCE, COMPANY_LETTERHEAD, OTHER) */}
+            {cp ? (
+              <Card id="section-documents">
+                <CardHeader>
+                  <CardTitle>Documents</CardTitle>
+                  <CardDescription>
+                    Insurance, company letterhead, and other verification artefacts.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <DocumentsTab
+                    isWorker={isWorker}
+                    isEmployer={isEmployer}
+                    flash={flash}
+                  />
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
         </div>
+      ) : (
+        // No role: minimal fallback (signed up but no client profile yet)
+        <div className="space-y-6">{accountCard}</div>
       )}
     </div>
   );
