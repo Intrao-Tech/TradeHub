@@ -114,6 +114,32 @@ function Protected({
   return children;
 }
 
+/**
+ * Inverse of Protected's `requires` gate: a publicly accessible route that
+ * redirects users who have the named role (e.g. workers don't need to
+ * browse other workers). Logged-out viewers and opposite-role users render
+ * the children. Mirrors AppShell's `hideForRole` nav filter.
+ */
+function HideForRole({
+  role,
+  redirectTo = '/profile',
+  children,
+}: {
+  role: 'worker' | 'employer';
+  redirectTo?: string;
+  children: React.ReactElement;
+}) {
+  const { isWorker, isEmployer, loading } = useAccountMe();
+  // Logged-out viewers always see the page — no role data to gate on.
+  if (!getToken()) return children;
+  // Wait for the account cache before deciding so a logged-in user with the
+  // matching role doesn't flash the page before the redirect kicks in.
+  if (loading) return null;
+  const hasRole = role === 'worker' ? isWorker : isEmployer;
+  if (hasRole) return <Navigate to={redirectTo} replace />;
+  return children;
+}
+
 function PageFallback() {
   return (
     <div className="space-y-4">
@@ -226,9 +252,9 @@ function MarketplaceRouter() {
           <Route path="/r/:code" element={<RefLandingPage />} />
           <Route path="/jobs" element={<JobBoardPage />} />
           <Route path="/jobs/:id" element={<JobDetailPage />} />
-          <Route path="/workers" element={<WorkerSearchPage />} />
+          <Route path="/workers" element={<HideForRole role="worker"><WorkerSearchPage /></HideForRole>} />
           <Route path="/workers/:id" element={<Protected loggedIn={loggedIn}><WorkerDetailPage /></Protected>} />
-          <Route path="/employers" element={<EmployerSearchPage />} />
+          <Route path="/employers" element={<HideForRole role="employer"><EmployerSearchPage /></HideForRole>} />
           <Route path="/employers/:id" element={<Protected loggedIn={loggedIn}><EmployerDetailPage /></Protected>} />
           <Route path="/clients" element={<ClientDirectoryPage />} />
           <Route path="/clients/:slug" element={<ClientPublicProfilePage />} />
