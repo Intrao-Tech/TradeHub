@@ -57,7 +57,10 @@ export function NotificationsBell() {
   async function loadList() {
     setError('');
     try {
-      const res = await api<ListResponse>('/notifications?page=1&limit=10');
+      // Bell popover surfaces only unread — full history lives on /notifications.
+      const res = await api<ListResponse>(
+        '/notifications?page=1&limit=10&unread_only=true',
+      );
       setRows(res.data ?? []);
     } catch (err) {
       const parsed = parseApiError(err);
@@ -134,7 +137,7 @@ export function NotificationsBell() {
           </p>
         ) : rows.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm text-fg-muted">
-            No notifications yet
+            You're all caught up
           </p>
         ) : (
           <ul className="max-h-96 overflow-y-auto">
