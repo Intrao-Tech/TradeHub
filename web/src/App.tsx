@@ -56,9 +56,10 @@ const RefLandingPage = lazy(() => import('./pages/RefLandingPage'));
 // ── Nav items ───────────────────────────────────────────────────────
 
 const PUBLIC_NAV: NavItem[] = [
-  { to: '/jobs', label: 'Jobs' },
+  // Jobs is a "find work" surface — workers + logged-out viewers see it;
+  // employers manage their own jobs at /my-jobs.
+  { to: '/jobs', label: 'Jobs', hideForRole: 'employer' },
   // Workers don't browse other workers; employers don't browse other employers.
-  // Routes stay reachable by URL — only the nav surface hides.
   { to: '/workers', label: 'Workers', hideForRole: 'worker' },
   { to: '/employers', label: 'Employers', hideForRole: 'employer' },
 ];
@@ -250,7 +251,7 @@ function MarketplaceRouter() {
         <Routes>
           {/* Public */}
           <Route path="/r/:code" element={<RefLandingPage />} />
-          <Route path="/jobs" element={<JobBoardPage />} />
+          <Route path="/jobs" element={<HideForRole role="employer"><JobBoardPage /></HideForRole>} />
           <Route path="/jobs/:id" element={<JobDetailPage />} />
           <Route path="/workers" element={<HideForRole role="worker"><WorkerSearchPage /></HideForRole>} />
           <Route path="/workers/:id" element={<Protected loggedIn={loggedIn}><WorkerDetailPage /></Protected>} />
