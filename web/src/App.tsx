@@ -245,8 +245,9 @@ function MarketplaceRouter() {
           {/* Marketplace stragglers landing on /internal/* — punt them to the staff subdomain */}
           <Route path="/internal/*" element={<MarketplaceInternalBounce />} />
 
-          {/* Default */}
+          {/* Default + catch-all (covers retired routes like /dashboard) */}
           <Route path="/" element={<Navigate to={loggedIn ? '/profile' : '/jobs'} replace />} />
+          <Route path="*" element={<Navigate to={loggedIn ? '/profile' : '/jobs'} replace />} />
         </Routes>
       </Suspense>
     </AppShell>
