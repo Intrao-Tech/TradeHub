@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ShareForCommissionButton } from '@/components/referral/ShareForCommissionButton';
 import { useRefAttribution } from '@/components/referral/useRefAttribution';
 import { useAccountMe } from '@/hooks/useAccountMe';
+import { InviteToJobButton } from '@/components/workers/InviteToJobButton';
 
 type Specialisation = {
   specialisation_id?: string | number;
@@ -109,8 +110,17 @@ export default function WorkerDetailPage() {
     () => portfolio.filter((p) => p.item_type === 'CERTIFICATION'),
     [portfolio],
   );
-  const work = useMemo(
-    () => portfolio.filter((p) => p.item_type !== 'CERTIFICATION'),
+  const projects = useMemo(
+    () => portfolio.filter((p) => p.item_type === 'PROJECT'),
+    [portfolio],
+  );
+  const otherExperiences = useMemo(
+    () =>
+      portfolio.filter(
+        (p) =>
+          p.item_type !== 'CERTIFICATION' &&
+          p.item_type !== 'PROJECT',
+      ),
     [portfolio],
   );
   const specs = useMemo(
@@ -161,15 +171,31 @@ export default function WorkerDetailPage() {
         hideMilestonesStrip
       />
 
-      {loggedIn && isEmployer && id ? (
-        <div className="flex justify-end">
-          <ShareForCommissionButton
-            kind="WORKER"
-            targetId={id}
-            targetTitle={displayName}
-          />
+      <div className="flex flex-col gap-3 rounded-md border border-border-default bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          {rate ? (
+            <p className="text-xl font-semibold text-fg">{rate}</p>
+          ) : (
+            <p className="text-sm text-fg-muted">Rate not set</p>
+          )}
+          {worker.years_experience != null ? (
+            <p className="text-xs text-fg-muted">
+              {worker.years_experience} year
+              {worker.years_experience === 1 ? '' : 's'} experience
+            </p>
+          ) : null}
         </div>
-      ) : null}
+        {loggedIn && isEmployer && id ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <ShareForCommissionButton
+              kind="WORKER"
+              targetId={id}
+              targetTitle={displayName}
+            />
+            <InviteToJobButton workerId={id} workerName={displayName} />
+          </div>
+        ) : null}
+      </div>
 
       {!loggedIn ? (
         <div className="rounded-md border border-info/40 bg-info-subtle px-3 py-2 text-sm text-info">
@@ -185,7 +211,6 @@ export default function WorkerDetailPage() {
         <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
           <Card>
             <CardContent className="grid grid-cols-2 gap-4 pt-6">
-              <Stat label="Day rate" value={rate ?? '—'} />
               <Stat
                 label="Experience"
                 value={
@@ -266,9 +291,9 @@ export default function WorkerDetailPage() {
               <CardDescription>Past projects and work samples.</CardDescription>
             </CardHeader>
             <CardContent>
-              {work.length > 0 ? (
+              {projects.length > 0 ? (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {work.map((item) => (
+                  {projects.map((item) => (
                     <PortfolioItemCard key={String(item.id)} item={item} />
                   ))}
                 </div>
@@ -282,20 +307,39 @@ export default function WorkerDetailPage() {
             </CardContent>
           </Card>
 
-          {certifications.length > 0 ? (
+          {otherExperiences.length > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>Certifications</CardTitle>
+                <CardTitle>Other experiences</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {certifications.map((item) => (
+                  {otherExperiences.map((item) => (
                     <PortfolioItemCard key={String(item.id)} item={item} />
                   ))}
                 </div>
               </CardContent>
             </Card>
           ) : null}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Certifications</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {certifications.length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {certifications.map((item) => (
+                    <PortfolioItemCard key={String(item.id)} item={item} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-fg-muted">
+                  No certifications added yet.
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
