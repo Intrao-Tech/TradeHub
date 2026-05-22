@@ -314,7 +314,11 @@ export default function AuthJobDetailPage() {
             </section>
           ) : null}
 
-          <AttachmentList heading="Attachments" attachments={detail.attachments} />
+          <AttachmentList
+            heading="Attachments"
+            attachments={detail.attachments}
+            previewImages
+          />
 
           <section className="space-y-2">
             <h2 className="text-base font-semibold text-fg">Activity on this job</h2>
