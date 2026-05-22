@@ -6,9 +6,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import { ReviewCard } from './ReviewCard';
+import { ReviewDetailDialog } from './ReviewDetailDialog';
 import {
   getReviewsByEmployer,
   getReviewsByWorker,
+  type Review,
   type ReviewListResponse,
 } from './api';
 
@@ -34,6 +36,7 @@ export function ReviewsTab({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [selected, setSelected] = useState<Review | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,10 +112,18 @@ export function ReviewsTab({
       <ul className="space-y-3">
         {items.map((r) => (
           <li key={String(r.id)}>
-            <ReviewCard review={r} />
+            <ReviewCard review={r} onClick={() => setSelected(r)} />
           </li>
         ))}
       </ul>
+
+      <ReviewDetailDialog
+        review={selected}
+        open={selected != null}
+        onOpenChange={(o) => {
+          if (!o) setSelected(null);
+        }}
+      />
 
       <footer className="flex flex-wrap items-center justify-between gap-3 pt-1 text-sm text-fg-muted">
         <span>

@@ -3,13 +3,13 @@
 // Locks the review card shape: header / ratings / comment / footer +
 // link-or-not behaviour.
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { renderWithRouter, screen, within } from '@/test/render';
 import { mockReview, mockReviewDraft } from '@/test/factories';
 import { ReviewCard } from './ReviewCard';
 
 describe('TEST-REVIEW-140 — REVIEW-021 header row', () => {
-  test('TEST-REVIEW-140 / REVIEW-021 — EMPLOYER reviewer renders "From an employer" + Published badge + <time>', () => {
+  test('TEST-REVIEW-140 / REVIEW-021 — EMPLOYER reviewer renders "From an employer" + <time>; no Published badge for the public state', () => {
     const review = mockReview({
       reviewer_role: 'EMPLOYER',
       published_at: '2026-04-15T12:00:00Z',
@@ -17,7 +17,9 @@ describe('TEST-REVIEW-140 — REVIEW-021 header row', () => {
     });
     renderWithRouter(<ReviewCard review={review} />);
     expect(screen.getByText(/from an employer/i)).toBeInTheDocument();
-    expect(screen.getByText(/published/i)).toBeInTheDocument();
+    // Public reviews don't surface a "Published" badge — every card on a
+    // public profile is published by definition, so the badge is noise.
+    expect(screen.queryByText(/^published$/i)).toBeNull();
     expect(document.querySelector('time')).not.toBeNull();
   });
 
@@ -130,24 +132,31 @@ describe('TEST-REVIEW-143 — REVIEW-021 footer (project_type + dates)', () => {
   });
 });
 
-describe('TEST-REVIEW-144 — REVIEW-021 link-to-permalink toggle', () => {
-  test('TEST-REVIEW-144 / REVIEW-031 — linkToPermalink default true wraps card in <Link to="/reviews/:id">', () => {
+describe('TEST-REVIEW-144 — REVIEW-021 click-to-open-dialog wrapper', () => {
+  test('TEST-REVIEW-144 / REVIEW-031 — onClick wraps card in a button that fires on click', async () => {
     const review = mockReview({ id: '551' });
-    const { container } = renderWithRouter(<ReviewCard review={review} />);
-    const link = container.querySelector('a[href="/reviews/551"]');
-    expect(link).not.toBeNull();
+    const onClick = vi.fn();
+    const { container } = renderWithRouter(
+      <ReviewCard review={review} onClick={onClick} />,
+    );
+    // No permalink anchor — we replaced /reviews/:id with an in-page dialog.
+    expect(container.querySelector('a[href="/reviews/551"]')).toBeNull();
+    const btn = container.querySelector('button');
+    expect(btn).not.toBeNull();
+    const userEvent = (await import('@testing-library/user-event')).default;
+    await userEvent.setup().click(btn as HTMLButtonElement);
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  test('TEST-REVIEW-144 / REVIEW-031 — linkToPermalink={false} omits the wrapper link', () => {
+  test('TEST-REVIEW-144 / REVIEW-031 — omitting onClick renders a plain card (no button wrapper)', () => {
     const review = mockReview({ id: '551' });
-    const { container } = renderWithRouter(
-      <ReviewCard review={review} linkToPermalink={false} />,
-    );
+    const { container } = renderWithRouter(<ReviewCard review={review} />);
     expect(container.querySelector('a[href="/reviews/551"]')).toBeNull();
+    expect(container.querySelector('button')).toBeNull();
   });
 });
 
-describe('TEST-REVIEW-145 — REVIEW-021 Draft vs Published badge', () => {
+describe('TEST-REVIEW-145 — REVIEW-021 Draft-only badge', () => {
   test('TEST-REVIEW-145 / REVIEW-021 — is_published:false renders "Draft" badge', () => {
     const review = mockReviewDraft();
     renderWithRouter(<ReviewCard review={review} />);
@@ -155,10 +164,10 @@ describe('TEST-REVIEW-145 — REVIEW-021 Draft vs Published badge', () => {
     expect(badges.length).toBeGreaterThan(0);
   });
 
-  test('TEST-REVIEW-145 / REVIEW-021 — is_published:true renders "Published" badge', () => {
+  test('TEST-REVIEW-145 / REVIEW-021 — is_published:true renders no status badge', () => {
     const review = mockReview({ is_published: true });
     const { container } = renderWithRouter(<ReviewCard review={review} />);
-    const card = container.querySelector('[class*="card"]') ?? container;
-    expect(within(card as HTMLElement).getByText(/published/i)).toBeInTheDocument();
+    expect(within(container).queryByText(/^published$/i)).toBeNull();
+    expect(within(container).queryByText(/^draft$/i)).toBeNull();
   });
 });

@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { StarRating } from '@/components/StarRating';
@@ -33,13 +32,13 @@ function formatDate(value?: string | null): string | null {
 
 type ReviewCardProps = {
   review: Review;
-  linkToPermalink?: boolean;
+  onClick?: () => void;
   className?: string;
 };
 
 export function ReviewCard({
   review,
-  linkToPermalink = true,
+  onClick,
   className,
 }: ReviewCardProps) {
   const reviewerLabel =
@@ -58,7 +57,7 @@ export function ReviewCard({
   const inner = (
     <Card
       className={cn(
-        linkToPermalink && 'transition-colors hover:bg-subtle',
+        onClick && 'transition-colors hover:bg-subtle',
         className,
       )}
     >
@@ -73,9 +72,9 @@ export function ReviewCard({
               </>
             ) : null}
           </div>
-          <Badge variant={review.is_published ? 'success' : 'warning'}>
-            {review.is_published ? 'Published' : 'Draft'}
-          </Badge>
+          {!review.is_published ? (
+            <Badge variant="warning">Draft</Badge>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-2">
@@ -118,15 +117,16 @@ export function ReviewCard({
     </Card>
   );
 
-  if (!linkToPermalink) return inner;
+  if (!onClick) return inner;
 
   return (
-    <Link
-      to={`/reviews/${review.id}`}
-      className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    <button
+      type="button"
+      onClick={onClick}
+      className="block w-full rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {inner}
-    </Link>
+    </button>
   );
 }
 

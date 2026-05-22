@@ -129,13 +129,16 @@ describe('TEST-REVIEW-133 — REVIEW-024 skeleton on first load', () => {
   });
 });
 
-describe('TEST-REVIEW-134 — REVIEW-021 cards wrapped in <Link to="/reviews/:id">', () => {
-  test('TEST-REVIEW-134 / REVIEW-021 — each card wraps in a permalink anchor', async () => {
+describe('TEST-REVIEW-134 — REVIEW-021 cards open a detail dialog on click', () => {
+  test('TEST-REVIEW-134 / REVIEW-021 — clicking a review row opens a dialog with its details', async () => {
     server.use(
       http.get(`${API}/reviews/worker/:id`, () =>
         HttpResponse.json(
           mockReviewListResponse(
-            [mockReview({ id: '1' }), mockReview({ id: '2' })],
+            [
+              mockReview({ id: '1', comment: 'Excellent communication.' }),
+              mockReview({ id: '2', comment: 'Delivered on time.' }),
+            ],
             { limit: 10 },
           ),
         ),
@@ -145,10 +148,30 @@ describe('TEST-REVIEW-134 — REVIEW-021 cards wrapped in <Link to="/reviews/:id
       <ReviewsTab subjectId="300" subjectKind="worker" />,
       { route: '/' },
     );
+    const userEvent = (await import('@testing-library/user-event')).default;
+    const user = userEvent.setup();
+
+    // No permalink anchors should be rendered — review rows are buttons now.
     await waitFor(() =>
-      expect(container.querySelector('a[href="/reviews/1"]')).not.toBeNull(),
+      expect(screen.getAllByText(/From an employer/i).length).toBeGreaterThan(0),
     );
-    expect(container.querySelector('a[href="/reviews/2"]')).not.toBeNull();
+    expect(container.querySelector('a[href^="/reviews/"]')).toBeNull();
+
+    // No dialog open initially.
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    // Click the first review row → dialog opens with the review's content.
+    const rows = container.querySelectorAll('button');
+    const firstRow = Array.from(rows).find((b) =>
+      /Excellent communication/i.test(b.textContent ?? ''),
+    );
+    expect(firstRow).toBeDefined();
+    await user.click(firstRow as HTMLButtonElement);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByText(/Excellent communication/i),
+    ).toBeInTheDocument();
   });
 });
 
