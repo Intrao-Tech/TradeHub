@@ -18,10 +18,12 @@ export function ShareForCommissionButton({
   kind,
   targetId,
   targetTitle,
+  className,
 }: {
   kind: Kind;
   targetId: string | number;
   targetTitle?: string | null;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState<string | null>(null);
@@ -55,7 +57,7 @@ export function ShareForCommissionButton({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" variant="outline">
+        <Button type="button" variant="outline" className={className}>
           <Share2 className="h-4 w-4" />
           {label}
         </Button>

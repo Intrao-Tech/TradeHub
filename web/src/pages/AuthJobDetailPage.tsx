@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, Briefcase, MapPin } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Briefcase,
+  CalendarDays,
+  Clock,
+  Copy,
+  MapPin,
+  Users,
+} from 'lucide-react';
 import { api, getToken, parseApiError } from '../api';
 import { useAccountMe } from '@/hooks/useAccountMe';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { EmptyState } from '@/components/EmptyState';
 import { AuthBanner } from '@/components/AuthBanner';
 import { EmployerChip } from '@/components/jobs/EmployerChip';
@@ -19,6 +30,11 @@ import { formatRelative } from '@/lib/relative-time';
 import { toast } from '@/components/ui/toast';
 import { ShareForCommissionButton } from '@/components/referral/ShareForCommissionButton';
 import { useRefAttribution } from '@/components/referral/useRefAttribution';
+import { StarRating } from '@/components/StarRating';
+import {
+  VerificationBadge,
+  verificationFromLevel,
+} from '@/components/VerificationBadge';
 
 type Specialisation = { id?: number; name?: string };
 type Tag = { id?: number; name?: string };
@@ -42,10 +58,16 @@ type JobDetail = {
   employer?: {
     id?: string | number;
     company_name?: string | null;
+    rating_avg?: string | number | null;
+    rating_count?: number | null;
     client_profile?: {
       display_name?: string | null;
       verification_level?: string | null;
       avatar_url?: string | null;
+      city?: string | null;
+      postcode_area?: string | null;
+      slug?: string | null;
+      created_at?: string | null;
     } | null;
   } | null;
   specialisations?: Array<{ specialisation?: Specialisation }>;
@@ -192,6 +214,7 @@ export default function AuthJobDetailPage() {
   const tags = (detail.tags ?? []).map((t) => t.tag?.name).filter(Boolean) as string[];
   const isClosed = detail.status != null && detail.status.toUpperCase() !== 'OPEN';
   const nextHref = `/jobs/${id}`;
+  const proposalsCount = detail._count?.applications ?? 0;
 
   return (
     <article className="space-y-6">
@@ -202,13 +225,6 @@ export default function AuthJobDetailPage() {
             Back to jobs
           </Link>
         </Button>
-        {loggedIn && isWorker && id ? (
-          <ShareForCommissionButton
-            kind="JOB"
-            targetId={id}
-            targetTitle={detail.title}
-          />
-        ) : null}
       </div>
 
       {isClosed ? (
@@ -226,117 +242,114 @@ export default function AuthJobDetailPage() {
         </AuthBanner>
       ) : null}
 
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {detail.is_urgent ? (
-            <Badge variant="danger" className="gap-1">
-              <AlertTriangle className="h-3 w-3" />
-              Urgent
-            </Badge>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-6">
+          <header className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {detail.is_urgent ? (
+                <Badge variant="danger" className="gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Urgent
+                </Badge>
+              ) : null}
+              <JobStatusBadge status={detail.status} />
+              {myApp ? <ApplicationStatusBadge status={myApp.status} /> : null}
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
+              {detail.title}
+            </h1>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-fg-muted">
+              <EmployerChip employer={detail.employer ?? null} />
+              {detail.postcode_area ? (
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="h-4 w-4" />
+                  {detail.postcode_area}
+                </span>
+              ) : null}
+              {detail.created_at ? (
+                <span>Posted {formatRelative(detail.created_at)}</span>
+              ) : null}
+              {detail.expires_at ? (
+                <span>Expires {formatRelative(detail.expires_at)}</span>
+              ) : null}
+            </div>
+          </header>
+
+          <ScopeStrip detail={detail} />
+
+          {detail.description ? (
+            <section className="space-y-2">
+              <h2 className="text-base font-semibold text-fg">Description</h2>
+              <p className="whitespace-pre-wrap text-sm text-fg">
+                {detail.description}
+              </p>
+            </section>
           ) : null}
-          <JobStatusBadge status={detail.status} />
-          {myApp ? <ApplicationStatusBadge status={myApp.status} /> : null}
+
+          {specs.length > 0 ? (
+            <section className="space-y-2">
+              <h2 className="text-base font-semibold text-fg">
+                Required specialisations
+              </h2>
+              <div className="flex flex-wrap gap-1.5">
+                {specs.map((s) => (
+                  <Badge key={`spec-${s}`} variant="secondary">
+                    {s}
+                  </Badge>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {tags.length > 0 ? (
+            <section className="space-y-2">
+              <h2 className="text-base font-semibold text-fg">Tags</h2>
+              <div className="flex flex-wrap gap-1.5">
+                {tags.map((t) => (
+                  <Badge key={`tag-${t}`} variant="outline">
+                    {t}
+                  </Badge>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <AttachmentList heading="Attachments" attachments={detail.attachments} />
+
+          <section className="space-y-2">
+            <h2 className="text-base font-semibold text-fg">Activity on this job</h2>
+            <div className="flex items-center gap-2 text-sm text-fg-muted">
+              <Users className="h-4 w-4" />
+              <span>
+                <span className="font-medium text-fg">
+                  {proposalsCount >= 50 ? '50+' : proposalsCount}
+                </span>{' '}
+                {proposalsCount === 1 ? 'application' : 'applications'} received
+              </span>
+            </div>
+          </section>
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
-          {detail.title}
-        </h1>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-fg-muted">
-          <EmployerChip employer={detail.employer ?? null} />
-          {detail.postcode_area ? (
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
-              {detail.postcode_area}
-            </span>
-          ) : null}
-          {detail.created_at ? (
-            <span>Posted {formatRelative(detail.created_at)}</span>
-          ) : null}
-          {detail.expires_at ? (
-            <span>Expires {formatRelative(detail.expires_at)}</span>
-          ) : null}
-        </div>
-      </header>
 
-      <Card>
-        <CardHeader>
-          <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Pay
-          </p>
-          <p className="text-lg font-semibold text-fg">{formatPay(detail)}</p>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-          {detail.duration_days != null ? (
-            <DetailField label="Duration">
-              {detail.duration_days} day{detail.duration_days === 1 ? '' : 's'}
-            </DetailField>
-          ) : null}
-          {detail.start_date ? (
-            <DetailField label="Start date">
-              {new Date(detail.start_date).toLocaleDateString('en-GB', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              })}
-            </DetailField>
-          ) : null}
-          {detail.site_address ? (
-            <DetailField label="Site address" className="sm:col-span-2">
-              {detail.site_address}
-            </DetailField>
-          ) : null}
-        </CardContent>
-      </Card>
+        <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          <ActionCard
+            loggedIn={loggedIn}
+            isWorker={isWorker}
+            isEmployer={isEmployer}
+            ownsPost={ownsPost}
+            verificationState={verificationState}
+            isClosed={isClosed}
+            myApp={myApp}
+            nextHref={nextHref}
+            jobId={String(id)}
+            jobTitle={detail.title}
+            onApply={() => setApplyOpen(true)}
+          />
 
-      {detail.description ? (
-        <section className="space-y-2">
-          <h2 className="text-base font-semibold text-fg">Description</h2>
-          <p className="whitespace-pre-wrap text-sm text-fg">{detail.description}</p>
-        </section>
-      ) : null}
+          <AboutClientCard employer={detail.employer ?? null} />
 
-      {specs.length > 0 ? (
-        <section className="space-y-2">
-          <h2 className="text-base font-semibold text-fg">Required specialisations</h2>
-          <div className="flex flex-wrap gap-1.5">
-            {specs.map((s) => (
-              <Badge key={`spec-${s}`} variant="secondary">
-                {s}
-              </Badge>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {tags.length > 0 ? (
-        <section className="space-y-2">
-          <h2 className="text-base font-semibold text-fg">Tags</h2>
-          <div className="flex flex-wrap gap-1.5">
-            {tags.map((t) => (
-              <Badge key={`tag-${t}`} variant="outline">
-                {t}
-              </Badge>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <AttachmentList
-        heading="Attachments"
-        attachments={detail.attachments}
-      />
-
-      <CtaBar
-        loggedIn={loggedIn}
-        isWorker={isWorker}
-        isEmployer={isEmployer}
-        ownsPost={ownsPost}
-        verificationState={verificationState}
-        isClosed={isClosed}
-        myApp={myApp}
-        nextHref={nextHref}
-        jobId={String(id)}
-        onApply={() => setApplyOpen(true)}
-      />
+          <JobLinkCard jobId={String(id)} />
+        </aside>
+      </div>
 
       {detail && id ? (
         <ApplyJobSheet
@@ -388,7 +401,63 @@ export default function AuthJobDetailPage() {
   );
 }
 
-type CtaBarProps = {
+function ScopeStrip({ detail }: { detail: JobDetail }) {
+  const pay = formatPay(detail);
+  const duration =
+    detail.duration_days != null
+      ? `${detail.duration_days} day${detail.duration_days === 1 ? '' : 's'}`
+      : null;
+  const startDate = detail.start_date
+    ? new Date(detail.start_date).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : null;
+  const items: Array<{
+    icon: React.ComponentType<{ className?: string }>;
+    label: string;
+    value: string;
+  }> = [
+    { icon: Briefcase, label: payTypeLabel(detail.pay_type), value: pay },
+  ];
+  if (duration) {
+    items.push({ icon: Clock, label: 'Duration', value: duration });
+  }
+  if (startDate) {
+    items.push({ icon: CalendarDays, label: 'Start date', value: startDate });
+  }
+  if (detail.site_address) {
+    items.push({ icon: MapPin, label: 'Site', value: detail.site_address });
+  }
+  return (
+    <Card>
+      <CardContent className="grid gap-4 p-5 sm:grid-cols-2">
+        {items.map((it) => (
+          <div key={it.label} className="flex items-start gap-3">
+            <it.icon className="mt-0.5 h-5 w-5 shrink-0 text-fg-muted" />
+            <div className="min-w-0">
+              <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                {it.label}
+              </div>
+              <div className="truncate text-sm font-medium text-fg">
+                {it.value}
+              </div>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function payTypeLabel(payType?: string): string {
+  if (payType === 'DAY_RATE') return 'Day rate';
+  if (payType === 'FIXED_PRICE') return 'Fixed price';
+  return 'Pay';
+}
+
+type ActionCardProps = {
   loggedIn: boolean;
   isWorker: boolean;
   isEmployer: boolean;
@@ -398,10 +467,57 @@ type CtaBarProps = {
   myApp: MyApplication | null;
   nextHref: string;
   jobId: string;
+  jobTitle: string;
   onApply: () => void;
 };
 
-function CtaBar({
+function ActionCard({
+  loggedIn,
+  isWorker,
+  isEmployer,
+  ownsPost,
+  verificationState,
+  isClosed,
+  myApp,
+  nextHref,
+  jobId,
+  jobTitle,
+  onApply,
+}: ActionCardProps) {
+  // Employer-other: keep the existing behaviour of rendering nothing — but
+  // still surface "About the client" elsewhere on the page. The wrapper
+  // section below decides what to render given the role/state.
+  const body = renderActionBody({
+    loggedIn,
+    isWorker,
+    isEmployer,
+    ownsPost,
+    verificationState,
+    isClosed,
+    myApp,
+    nextHref,
+    jobId,
+    onApply,
+  });
+  if (!body) return null;
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-5">
+        {body}
+        {loggedIn && isWorker ? (
+          <ShareForCommissionButton
+            kind="JOB"
+            targetId={jobId}
+            targetTitle={jobTitle}
+            className="w-full"
+          />
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function renderActionBody({
   loggedIn,
   isWorker,
   isEmployer,
@@ -412,31 +528,27 @@ function CtaBar({
   nextHref,
   jobId,
   onApply,
-}: CtaBarProps) {
+}: Omit<ActionCardProps, 'jobTitle'>): React.ReactNode {
   if (!loggedIn) {
     return (
-      <StickyBar>
-        <Button asChild className="w-full sm:w-auto">
-          <Link to={`/login?next=${encodeURIComponent(nextHref)}`}>
-            Sign in to apply
-          </Link>
-        </Button>
-      </StickyBar>
+      <Button asChild className="w-full">
+        <Link to={`/login?next=${encodeURIComponent(nextHref)}`}>
+          Sign in to apply
+        </Link>
+      </Button>
     );
   }
 
   if (isEmployer && ownsPost) {
     return (
-      <StickyBar>
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-          <Button asChild variant="outline">
-            <Link to={`/my-jobs/${jobId}/edit`}>Edit</Link>
-          </Button>
-          <Button asChild>
-            <Link to={`/my-jobs/${jobId}/applicants`}>View applicants</Link>
-          </Button>
-        </div>
-      </StickyBar>
+      <div className="flex flex-col gap-2">
+        <Button asChild>
+          <Link to={`/my-jobs/${jobId}/applicants`}>View applicants</Link>
+        </Button>
+        <Button asChild variant="outline">
+          <Link to={`/my-jobs/${jobId}/edit`}>Edit</Link>
+        </Button>
+      </div>
     );
   }
 
@@ -452,74 +564,168 @@ function CtaBar({
     const upper = myApp.status.toUpperCase();
     if (upper === 'WITHDRAWN') {
       return (
-        <StickyBar>
-          <Button disabled className="w-full sm:w-auto">
-            Application withdrawn
-          </Button>
-        </StickyBar>
+        <Button disabled className="w-full">
+          Application withdrawn
+        </Button>
       );
     }
     return (
-      <StickyBar>
-        <Button asChild className="w-full sm:w-auto">
-          <Link to="/my-applications">Application submitted · View status</Link>
-        </Button>
-      </StickyBar>
+      <Button asChild className="w-full">
+        <Link to="/my-applications">
+          Application submitted · View status
+        </Link>
+      </Button>
     );
   }
 
   if (isClosed) {
     return (
-      <StickyBar>
-        <Button disabled className="w-full sm:w-auto">
-          Closed
-        </Button>
-      </StickyBar>
+      <Button disabled className="w-full">
+        Closed
+      </Button>
     );
   }
 
   if (verificationState === 'PENDING_EMAIL_VERIFICATION') {
     return (
-      <StickyBar>
-        <Button disabled className="w-full sm:w-auto" title="Verify your email to apply">
-          Apply
-        </Button>
-      </StickyBar>
+      <Button
+        disabled
+        className="w-full"
+        title="Verify your email to apply"
+      >
+        Apply
+      </Button>
     );
   }
 
   return (
-    <StickyBar>
-      <Button onClick={onApply} className="w-full sm:w-auto">
-        Apply
-      </Button>
-    </StickyBar>
+    <Button onClick={onApply} className="w-full">
+      Apply
+    </Button>
   );
 }
 
-function StickyBar({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border-default bg-page/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-md sm:border sm:bg-raised">
-      {children}
-    </div>
-  );
-}
-
-function DetailField({
-  label,
-  children,
-  className,
+function AboutClientCard({
+  employer,
 }: {
-  label: string;
-  children: React.ReactNode;
-  className?: string;
+  employer: JobDetail['employer'] | null;
 }) {
+  if (!employer) return null;
+  const cp = employer.client_profile ?? null;
+  const displayName =
+    cp?.display_name?.trim() || employer.company_name?.trim() || 'Client';
+  const avatar = cp?.avatar_url ?? undefined;
+  const verification = verificationFromLevel(cp?.verification_level);
+  const showVerification = verification !== 'unverified';
+  const ratingCount = employer.rating_count ?? 0;
+  const ratingAvg =
+    employer.rating_avg != null ? Number(employer.rating_avg) : 0;
+  const showRating = ratingCount > 0 && Number.isFinite(ratingAvg);
+  const location = [cp?.city, cp?.postcode_area].filter(Boolean).join(' · ');
+  const memberSince = cp?.created_at
+    ? new Date(cp.created_at).toLocaleDateString('en-GB', {
+        month: 'short',
+        year: 'numeric',
+      })
+    : null;
+
   return (
-    <div className={className}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-        {label}
-      </p>
-      <p className="mt-1 text-sm text-fg">{children}</p>
-    </div>
+    <Card>
+      <CardHeader className="pb-3">
+        <h2 className="text-base font-semibold text-fg">About the client</h2>
+      </CardHeader>
+      <CardContent className="space-y-3 p-5 pt-0 text-sm">
+        <div className="flex items-center gap-3">
+          <Avatar className="h-12 w-12 shrink-0">
+            {avatar ? <AvatarImage src={avatar} alt={displayName} /> : null}
+            <AvatarFallback>
+              {displayName
+                .split(/\s+/)
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((s) => s[0]?.toUpperCase())
+                .join('') || 'C'}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            {cp?.slug ? (
+              <Link
+                to={`/employers/${cp.slug}`}
+                className="block truncate font-semibold text-fg hover:underline"
+              >
+                {displayName}
+              </Link>
+            ) : (
+              <span className="block truncate font-semibold text-fg">
+                {displayName}
+              </span>
+            )}
+            {showVerification ? (
+              <div className="mt-1">
+                <VerificationBadge state={verification} />
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {showRating ? (
+          <div className="flex items-center gap-2 text-fg-muted">
+            <StarRating value={Math.round(ratingAvg)} size="sm" />
+            <span className="font-medium text-fg">{ratingAvg.toFixed(1)}</span>
+            <span>
+              ({ratingCount} review{ratingCount === 1 ? '' : 's'})
+            </span>
+          </div>
+        ) : null}
+
+        {location ? (
+          <div className="inline-flex items-center gap-1 text-fg-muted">
+            <MapPin className="h-4 w-4" />
+            {location}
+          </div>
+        ) : null}
+
+        {memberSince ? (
+          <div className="text-fg-muted">Member since {memberSince}</div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function JobLinkCard({ jobId }: { jobId: string }) {
+  const url =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/jobs/${jobId}`
+      : `/jobs/${jobId}`;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied');
+    } catch {
+      toast.error('Could not copy link');
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <h2 className="text-base font-semibold text-fg">Job link</h2>
+      </CardHeader>
+      <CardContent className="space-y-2 p-5 pt-0">
+        <Input value={url} readOnly aria-label="Job link" />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={copy}
+        >
+          <Copy />
+          Copy link
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
