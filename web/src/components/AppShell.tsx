@@ -27,6 +27,7 @@ import { NotificationsBell } from "@/components/notifications/NotificationsBell"
 import { useAccountMe } from "@/hooks/useAccountMe";
 import { publicFileUrl } from "@/lib/files";
 import { Footer } from "@/components/Footer";
+import { AuthFooter } from "@/components/AuthFooter";
 
 export type NavItem = {
   to: string;
@@ -201,7 +202,7 @@ export function AppShell({
       >
         {children}
       </main>
-      {!loggedIn ? <Footer /> : null}
+      {loggedIn ? <AuthFooter /> : <Footer />}
     </div>
   );
 }
