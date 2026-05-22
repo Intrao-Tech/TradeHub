@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Download, FileText, Image as ImageIcon, Paperclip } from 'lucide-react';
 import { getToken } from '../../api';
 import {
@@ -24,9 +24,9 @@ interface AttachmentListProps {
   heading?: string;
   /**
    * Render image attachments as inline thumbnails (Upwork-style gallery).
-   * Only safe for contexts where attachments are public — job-post
-   * attachments. Application attachments require auth and will 403 from a
-   * naked <img> tag, so leave this off there.
+   * Images are fetched with the user's token and rendered from blob URLs,
+   * so this works for both public job-post attachments and auth-gated
+   * application attachments.
    */
   previewImages?: boolean;
 }
@@ -39,15 +39,57 @@ export function AttachmentList({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string>('');
   const [lightbox, setLightbox] = useState<ReadAttachment | null>(null);
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
 
-  if (!attachments || attachments.length === 0) return null;
-
-  const images = previewImages
+  const images = previewImages && attachments
     ? attachments.filter((a) => a.mime_type.startsWith('image/'))
     : [];
-  const files = previewImages
+  const files = previewImages && attachments
     ? attachments.filter((a) => !a.mime_type.startsWith('image/'))
-    : attachments;
+    : attachments ?? [];
+
+  const imageKey = images.map((a) => String(a.id)).join(',');
+
+  useEffect(() => {
+    if (!previewImages || images.length === 0) {
+      setImageUrls({});
+      return;
+    }
+    let cancelled = false;
+    const controllers: AbortController[] = [];
+    const created: string[] = [];
+    const token = getToken();
+
+    images.forEach((a) => {
+      const ctrl = new AbortController();
+      controllers.push(ctrl);
+      fetch(`${API_BASE}/job-attachments/${a.id}/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        signal: ctrl.signal,
+      })
+        .then((res) => (res.ok ? res.blob() : null))
+        .then((blob) => {
+          if (cancelled || !blob) return;
+          const url = URL.createObjectURL(
+            new Blob([blob], { type: a.mime_type }),
+          );
+          created.push(url);
+          setImageUrls((prev) => ({ ...prev, [String(a.id)]: url }));
+        })
+        .catch(() => {
+          // swallow — thumbnail will show a fallback icon
+        });
+    });
+
+    return () => {
+      cancelled = true;
+      controllers.forEach((c) => c.abort());
+      created.forEach((u) => URL.revokeObjectURL(u));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewImages, imageKey]);
+
+  if (!attachments || attachments.length === 0) return null;
 
   async function open(att: ReadAttachment) {
     const sid = String(att.id);
@@ -100,22 +142,27 @@ export function AttachmentList({
       {images.length > 0 ? (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
           {images.map((a) => {
-            const src = `${API_BASE}/job-attachments/${a.id}/download`;
+            const sid = String(a.id);
+            const src = imageUrls[sid];
             return (
-              <li key={`img-${String(a.id)}`}>
+              <li key={`img-${sid}`}>
                 <button
                   type="button"
                   onClick={() => setLightbox(a)}
                   className="group block w-full overflow-hidden rounded-md border border-border-default bg-bg-subtle text-left transition-colors hover:border-border-strong focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label={`Preview ${a.original_name}`}
                 >
-                  <div className="aspect-[4/3] w-full overflow-hidden bg-bg-muted">
-                    <img
-                      src={src}
-                      alt={a.original_name}
-                      loading="lazy"
-                      className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
-                    />
+                  <div className="flex aspect-[4/3] w-full items-center justify-center overflow-hidden bg-bg-muted">
+                    {src ? (
+                      <img
+                        src={src}
+                        alt={a.original_name}
+                        loading="lazy"
+                        className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                      />
+                    ) : (
+                      <ImageIcon className="h-6 w-6 text-fg-muted" />
+                    )}
                   </div>
                   <div className="flex items-center justify-between gap-2 px-2.5 py-2 text-xs">
                     <span className="min-w-0 truncate text-fg" title={a.original_name}>
@@ -181,11 +228,17 @@ export function AttachmentList({
                 Attachment preview
               </DialogDescription>
               <div className="flex items-center justify-center overflow-hidden rounded-md bg-bg-muted">
-                <img
-                  src={`${API_BASE}/job-attachments/${lightbox.id}/download`}
-                  alt={lightbox.original_name}
-                  className="max-h-[70vh] w-auto max-w-full object-contain"
-                />
+                {imageUrls[String(lightbox.id)] ? (
+                  <img
+                    src={imageUrls[String(lightbox.id)]}
+                    alt={lightbox.original_name}
+                    className="max-h-[70vh] w-auto max-w-full object-contain"
+                  />
+                ) : (
+                  <div className="flex h-64 w-full items-center justify-center text-fg-muted">
+                    <ImageIcon className="h-8 w-8" />
+                  </div>
+                )}
               </div>
               <div className="flex items-center justify-between gap-2 text-xs text-fg-muted">
                 <span>{formatSize(lightbox.size_bytes)}</span>

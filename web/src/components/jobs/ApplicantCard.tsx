@@ -133,6 +133,7 @@ export function ApplicantCard({
         <AttachmentList
           heading="Work samples"
           attachments={application.attachments}
+          previewImages
         />
         <ActionRow
           status={status}

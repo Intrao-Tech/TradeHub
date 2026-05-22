@@ -311,6 +311,7 @@ function ApplicationRow({
         <AttachmentList
           heading="Your attachments"
           attachments={application.attachments}
+          previewImages
         />
       </div>
       <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
