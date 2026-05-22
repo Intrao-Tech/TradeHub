@@ -4,9 +4,10 @@ import {
   Briefcase,
   ChevronLeft,
   ChevronRight,
+  Filter,
   Plus,
-  RefreshCw,
   Search,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '@/hooks/useAccountMe';
@@ -17,13 +18,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -31,10 +25,17 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/toast';
 import { JobPostForm } from '@/components/jobs/JobPostForm';
-import { ChipMultiSelect } from '@/components/ui/chip-multi-select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 type JobPostRow = JobCardData & {
   pay_type: string;
@@ -50,10 +51,26 @@ type JobListResponse = {
 
 const PAGE_SIZE = 20;
 
+type FeedTab = 'best_matches' | 'most_recent';
+
+function isFeedTab(v: string | null): v is FeedTab {
+  return v === 'best_matches' || v === 'most_recent';
+}
+
 export default function AuthJobBoardPage() {
   const navigate = useNavigate();
-  const { isEmployer, verificationState } = useAccountMe();
+  const { isEmployer, verificationState, clientProfile } = useAccountMe();
   const canPostJob = isEmployer && verificationState === 'ACTIVE';
+
+  // Worker's own specialisations — used for Best Matches re-ranking. Real
+  // data from `/account/me`; nothing fabricated here. If the user is not a
+  // worker or has no specs, Best Matches falls back to the server order.
+  const workerSpecIds = useMemo<number[]>(() => {
+    const links = clientProfile?.worker_profile?.worker_specialisations ?? [];
+    return links
+      .map((l) => l.specialisation?.id ?? l.specialisation_id)
+      .filter((v): v is number => typeof v === 'number');
+  }, [clientProfile]);
 
   const [params, setParams] = useSearchParams();
   const search = params.get('search') ?? '';
@@ -62,13 +79,16 @@ export default function AuthJobBoardPage() {
   const specialisationId = specialisationParam
     ? Number(specialisationParam)
     : null;
+  const isUrgentParam = params.get('is_urgent');
+  const isUrgentOnly = isUrgentParam === 'true';
   const page = Math.max(1, Number(params.get('page') ?? '1') || 1);
+  const tabParam = params.get('tab');
+  const activeTab: FeedTab = isFeedTab(tabParam) ? tabParam : 'best_matches';
 
   const [searchInput, setSearchInput] = useState(search);
   const [postcodeInput, setPostcodeInput] = useState(postcodeArea);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
-  // Keep the controlled inputs in sync if the URL changes externally
-  // (back-button, deep link, refresh).
   useEffect(() => {
     setSearchInput(search);
   }, [search]);
@@ -93,8 +113,9 @@ export default function AuthJobBoardPage() {
     if (specialisationId != null && Number.isFinite(specialisationId)) {
       p.set('specialisation_id', String(specialisationId));
     }
+    if (isUrgentOnly) p.set('is_urgent', 'true');
     return `?${p.toString()}`;
-  }, [search, postcodeArea, specialisationId, page]);
+  }, [search, postcodeArea, specialisationId, isUrgentOnly, page]);
 
   const loadJobs = useCallback(async () => {
     setListError('');
@@ -111,10 +132,37 @@ export default function AuthJobBoardPage() {
     void loadJobs();
   }, [loadJobs]);
 
+  // Best-matches re-rank: count overlapping specialisations between the
+  // current worker and each returned job; ties broken by server order
+  // (which is is_urgent desc then created_at desc). When the user is not a
+  // worker or has zero specs, fall back to server order — no fake scoring.
+  const visibleItems = useMemo<JobPostRow[]>(() => {
+    const items = list?.items ?? [];
+    if (activeTab !== 'best_matches' || workerSpecIds.length === 0) return items;
+    const workerSet = new Set(workerSpecIds);
+    const scored = items.map((job, index) => {
+      const jobSpecIds = (job.specialisations ?? [])
+        .map((s) => s.specialisation?.id)
+        .filter((v): v is number => typeof v === 'number');
+      const overlap = jobSpecIds.reduce(
+        (acc, id) => acc + (workerSet.has(id) ? 1 : 0),
+        0,
+      );
+      return { job, overlap, index };
+    });
+    scored.sort((a, b) => {
+      if (b.overlap !== a.overlap) return b.overlap - a.overlap;
+      return a.index - b.index;
+    });
+    return scored.map((s) => s.job);
+  }, [list, activeTab, workerSpecIds]);
+
   function commitFilters(next: {
     search?: string | null;
     postcodeArea?: string | null;
     specialisationId?: number | null;
+    isUrgent?: boolean | null;
+    tab?: FeedTab | null;
     page?: number | null;
   }) {
     const merged = new URLSearchParams(params);
@@ -133,8 +181,14 @@ export default function AuthJobBoardPage() {
         merged.delete('specialisation_id');
       }
     }
-    // Any filter mutation resets to page 1; only an explicit `page` arg
-    // advances the paginator.
+    if (next.isUrgent !== undefined) {
+      if (next.isUrgent) merged.set('is_urgent', 'true');
+      else merged.delete('is_urgent');
+    }
+    if (next.tab !== undefined) {
+      if (next.tab) merged.set('tab', next.tab);
+      else merged.delete('tab');
+    }
     if (next.page != null) {
       merged.set('page', String(next.page));
     } else {
@@ -143,16 +197,110 @@ export default function AuthJobBoardPage() {
     setParams(merged, { replace: false });
   }
 
-  function applyFilters(e: React.FormEvent) {
+  function applySearch(e: React.FormEvent) {
     e.preventDefault();
     commitFilters({
       search: searchInput.trim() || null,
-      postcodeArea: postcodeInput.trim() || null,
     });
   }
 
+  function applyPostcode() {
+    commitFilters({ postcodeArea: postcodeInput.trim() || null });
+  }
+
+  function clearFilters() {
+    setSearchInput('');
+    setPostcodeInput('');
+    commitFilters({
+      search: null,
+      postcodeArea: null,
+      specialisationId: null,
+      isUrgent: null,
+    });
+  }
+
+  const activeFilterCount =
+    (search ? 1 : 0) +
+    (postcodeArea ? 1 : 0) +
+    (specialisationId != null ? 1 : 0) +
+    (isUrgentOnly ? 1 : 0);
+
   const totalPages = list ? Math.max(1, Math.ceil(list.total / PAGE_SIZE)) : 1;
   const showPaginator = list != null && list.total > PAGE_SIZE;
+
+  const filterRail = (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <Label htmlFor="filter-postcode">Postcode area</Label>
+        <div className="flex gap-2">
+          <Input
+            id="filter-postcode"
+            value={postcodeInput}
+            onChange={(e) => setPostcodeInput(e.target.value)}
+            placeholder="e.g. SW1"
+            onBlur={applyPostcode}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                applyPostcode();
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="filter-spec">Specialisation</Label>
+        <Select
+          value={specialisationId != null ? String(specialisationId) : '__any__'}
+          onValueChange={(v) =>
+            commitFilters({
+              specialisationId: v === '__any__' ? null : Number(v),
+            })
+          }
+          disabled={specsLoading}
+        >
+          <SelectTrigger id="filter-spec" aria-label="Specialisation filter">
+            <SelectValue placeholder="Any specialisation" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__any__">Any specialisation</SelectItem>
+            {specialisationOptions.map((opt) => (
+              <SelectItem key={opt.id} value={String(opt.id)}>
+                {opt.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-border-default text-primary focus-visible:ring-2 focus-visible:ring-ring"
+            checked={isUrgentOnly}
+            onChange={(e) =>
+              commitFilters({ isUrgent: e.target.checked ? true : null })
+            }
+          />
+          Urgent jobs only
+        </Label>
+      </div>
+
+      {activeFilterCount > 0 ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="w-full"
+          onClick={clearFilters}
+        >
+          Clear filters
+        </Button>
+      ) : null}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -205,6 +353,27 @@ export default function AuthJobBoardPage() {
         </div>
       ) : null}
 
+      <form onSubmit={applySearch} className="relative">
+        <Label htmlFor="search-title" className="sr-only">
+          Search title
+        </Label>
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
+        <Input
+          id="search-title"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder="Search for jobs"
+          className="h-12 pl-11 pr-28 text-base"
+        />
+        <Button
+          type="submit"
+          size="sm"
+          className="absolute right-2 top-1/2 -translate-y-1/2"
+        >
+          Search
+        </Button>
+      </form>
+
       {listError ? (
         <div
           role="alert"
@@ -214,138 +383,147 @@ export default function AuthJobBoardPage() {
         </div>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-          <CardDescription>Search open job posts.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            onSubmit={applyFilters}
-            className="grid gap-3 sm:grid-cols-[1fr_200px_auto]"
-          >
-            <div className="space-y-2">
-              <Label htmlFor="search-title">Search title</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
-                <Input
-                  id="search-title"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="e.g. electrician"
-                  className="pl-9"
-                />
-              </div>
+      <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <aside className="hidden lg:block">
+          <div className="sticky top-4 space-y-4 rounded-md border border-border-default bg-card p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-fg">
+              <SlidersHorizontal className="h-4 w-4" />
+              Filters
+              {activeFilterCount > 0 ? (
+                <Badge variant="secondary" className="ml-auto">
+                  {activeFilterCount}
+                </Badge>
+              ) : null}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="postcode-area">Postcode area</Label>
-              <Input
-                id="postcode-area"
-                value={postcodeInput}
-                onChange={(e) => setPostcodeInput(e.target.value)}
-                placeholder="e.g. SW1"
-              />
-            </div>
-            <div className="flex items-end">
-              <Button type="submit" variant="outline" className="w-full sm:w-auto">
-                <RefreshCw />
-                Apply
-              </Button>
-            </div>
-          </form>
-          <div className="mt-3 space-y-2">
-            <Label htmlFor="job-board-spec">Specialisation</Label>
-            <ChipMultiSelect
-              id="job-board-spec"
-              options={specialisationOptions}
-              loading={specsLoading}
-              selectedIds={specialisationId != null ? [specialisationId] : []}
-              onChange={(next) => {
-                // Single-select for the public board: pick the latest id.
-                const last = next.length > 0 ? next[next.length - 1] : null;
-                commitFilters({ specialisationId: last });
-              }}
-              ariaLabel="Specialisation filter"
-              placeholder="Filter by specialisation…"
-              emptyText="No specialisations match."
-            />
+            {filterRail}
           </div>
-        </CardContent>
-      </Card>
+        </aside>
 
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">Open jobs</h2>
-          {list ? (
-            <Badge variant="secondary">{list.total} total</Badge>
-          ) : null}
-        </div>
-        {list?.items?.length ? (
-          <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {list.items.map((j) => (
-                <JobCard
-                  key={String(j.id)}
-                  job={j}
-                  onSelect={() => navigate(`/jobs/${j.id}`)}
-                />
-              ))}
-            </div>
-            {showPaginator ? (
-              <nav
-                aria-label="Job board pagination"
-                className="flex items-center justify-between gap-2 pt-2"
-              >
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() =>
-                    commitFilters({
-                      search: search || null,
-                      postcodeArea: postcodeArea || null,
-                      specialisationId: specialisationId,
-                      page: page - 1,
-                    })
-                  }
-                >
-                  <ChevronLeft />
-                  Previous
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">
+              Jobs you might like
+            </h2>
+            <p className="text-sm text-fg-muted">
+              {activeTab === 'best_matches'
+                ? 'Ranked by overlap with your specialisations. Switch to Most Recent when you want the freshest posts first.'
+                : 'Browse the freshest open jobs, newest first.'}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => {
+                if (isFeedTab(v)) {
+                  commitFilters({ tab: v === 'best_matches' ? null : v });
+                }
+              }}
+            >
+              <TabsList>
+                <TabsTrigger value="best_matches">Best Matches</TabsTrigger>
+                <TabsTrigger value="most_recent">Most Recent</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="lg:hidden">
+                  <Filter />
+                  Filters
+                  {activeFilterCount > 0 ? (
+                    <Badge variant="secondary" className="ml-1">
+                      {activeFilterCount}
+                    </Badge>
+                  ) : null}
                 </Button>
-                <span className="text-xs text-fg-muted">
-                  Page {page} of {totalPages}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() =>
-                    commitFilters({
-                      search: search || null,
-                      postcodeArea: postcodeArea || null,
-                      specialisationId: specialisationId,
-                      page: page + 1,
-                    })
-                  }
+              </SheetTrigger>
+              <SheetContent side="left" className="w-full overflow-y-auto sm:max-w-sm">
+                <SheetHeader>
+                  <SheetTitle>Filters</SheetTitle>
+                  <SheetDescription>
+                    Narrow the feed to jobs that match what you're looking for.
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="mt-4">{filterRail}</div>
+              </SheetContent>
+            </Sheet>
+          </div>
+
+          {visibleItems.length > 0 ? (
+            <>
+              <div className="flex items-center justify-between text-xs text-fg-muted">
+                <span>{list?.total ?? 0} open jobs</span>
+              </div>
+              <div className="space-y-3">
+                {visibleItems.map((j) => (
+                  <JobCard
+                    key={String(j.id)}
+                    job={j}
+                    onSelect={() => navigate(`/jobs/${j.id}`)}
+                  />
+                ))}
+              </div>
+              {showPaginator ? (
+                <nav
+                  aria-label="Job board pagination"
+                  className="flex items-center justify-between gap-2 pt-2"
                 >
-                  Next
-                  <ChevronRight />
-                </Button>
-              </nav>
-            ) : null}
-          </>
-        ) : list ? (
-          <EmptyState
-            icon={Briefcase}
-            title="No jobs found"
-            description="Try adjusting your filters or come back later."
-          />
-        ) : (
-          <p className="text-sm text-fg-muted">Loading…</p>
-        )}
-      </section>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() =>
+                      commitFilters({
+                        search: search || null,
+                        postcodeArea: postcodeArea || null,
+                        specialisationId,
+                        isUrgent: isUrgentOnly ? true : null,
+                        tab: activeTab === 'best_matches' ? null : activeTab,
+                        page: page - 1,
+                      })
+                    }
+                  >
+                    <ChevronLeft />
+                    Previous
+                  </Button>
+                  <span className="text-xs text-fg-muted">
+                    Page {page} of {totalPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= totalPages}
+                    onClick={() =>
+                      commitFilters({
+                        search: search || null,
+                        postcodeArea: postcodeArea || null,
+                        specialisationId,
+                        isUrgent: isUrgentOnly ? true : null,
+                        tab: activeTab === 'best_matches' ? null : activeTab,
+                        page: page + 1,
+                      })
+                    }
+                  >
+                    Next
+                    <ChevronRight />
+                  </Button>
+                </nav>
+              ) : null}
+            </>
+          ) : list ? (
+            <EmptyState
+              icon={Briefcase}
+              title="No jobs found"
+              description="Try adjusting your filters or come back later."
+            />
+          ) : (
+            <p className="text-sm text-fg-muted">Loading…</p>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

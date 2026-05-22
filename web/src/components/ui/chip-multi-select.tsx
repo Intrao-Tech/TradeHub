@@ -179,7 +179,7 @@ export function ChipMultiSelect({
           aria-autocomplete="list"
           autoComplete="off"
           disabled={disabled}
-          className="min-w-32 flex-1 bg-transparent px-1 text-sm text-fg placeholder:text-fg-subtle focus:outline-none"
+          className="min-w-32 flex-1 bg-transparent px-1 text-sm text-fg placeholder:text-fg-subtle outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0"
           placeholder={selectedOptions.length === 0 ? placeholder : ''}
           value={query}
           onChange={(e) => {

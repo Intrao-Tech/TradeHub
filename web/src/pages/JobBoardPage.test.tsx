@@ -72,7 +72,7 @@ describe('TEST-JOBS-101 JobBoardPage filter inputs (JOBS-003)', () => {
     // Submitting the form drops the search and refetches with status=OPEN
     // still applied (form-driven, not type-driven).
     await user.clear(screen.getByLabelText(/search title/i));
-    await user.click(screen.getByRole('button', { name: /apply/i }));
+    await user.click(screen.getByRole('button', { name: /^search$/i }));
     await waitFor(() => {
       expect(urls[urls.length - 1]).not.toContain('search=plumber');
     });
