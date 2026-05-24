@@ -20,6 +20,7 @@ export type JobCardData = {
   postcode_area?: string | null;
   duration_days?: number | null;
   is_urgent?: boolean;
+  is_saved?: boolean;
   status?: string;
   description?: string | null;
   created_at?: string | null;
@@ -41,6 +42,10 @@ type JobCardProps = {
   job: JobCardData;
   onSelect?: (job: JobCardData) => void;
   actions?: ReactNode;
+  // Rendered in the top-right of the header row (after the Urgent badge).
+  // Used by `/jobs` to mount the SaveJobButton — kept as an opt-in slot so
+  // unrelated screens (e.g. `MyJobsPage`) are not forced to add a save UI.
+  headerSlot?: ReactNode;
   selected?: boolean;
   className?: string;
 };
@@ -86,6 +91,7 @@ export function JobCard({
   job,
   onSelect,
   actions,
+  headerSlot,
   selected,
   className,
 }: JobCardProps) {
@@ -129,12 +135,15 @@ export function JobCard({
         {posted ? <span>Posted {posted}</span> : null}
         {posted ? <span aria-hidden="true">·</span> : null}
         <span>{proposals}</span>
-        {job.is_urgent ? (
-          <Badge variant="danger" className="ml-auto gap-1">
-            <AlertTriangle className="h-3 w-3" />
-            Urgent
-          </Badge>
-        ) : null}
+        <div className="ml-auto flex items-center gap-2">
+          {job.is_urgent ? (
+            <Badge variant="danger" className="gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              Urgent
+            </Badge>
+          ) : null}
+          {headerSlot}
+        </div>
       </div>
 
       <h3 className="text-lg font-semibold leading-tight text-fg">
