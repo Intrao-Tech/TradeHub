@@ -29,6 +29,7 @@ import {
   type Milestone,
   type MilestoneAttachment,
 } from './api';
+import { DisputeProposalView } from './DisputeProposalView';
 import { parseApiError } from '../../api';
 
 const API_BASE =
@@ -565,8 +566,8 @@ export function MilestoneRow({
           The employer released {fmt(milestone.amount)}, but we couldn't pay it
           out yet — your Stripe payout account isn't connected. Funds are held
           on the platform and will sweep to you the moment you finish setup.{' '}
-          <Link to="/wallet" className="font-medium underline">
-            Connect Stripe in Wallet →
+          <Link to="/payments" className="font-medium underline">
+            Connect Stripe in Payments →
           </Link>
         </div>
       ) : null}
@@ -644,7 +645,7 @@ export function MilestoneRow({
       {isReleaseFailed ? (
         <div className="mt-2 text-xs text-danger">
           Last payout attempt failed. Worker should fix their Stripe Connect
-          account at /wallet, then click Retry.
+          account at /payments, then click Retry.
         </div>
       ) : null}
 
@@ -702,6 +703,17 @@ export function MilestoneRow({
         <div role="alert" className="mt-2 text-xs text-danger">
           {error}
         </div>
+      ) : null}
+
+      {/* When in dispute, show the active mediator proposal and let the
+          party Accept/Reject. Filer can also cancel an OPEN dispute. */}
+      {milestone.status === 'DISPUTED' && milestone.dispute?.id ? (
+        <DisputeProposalView
+          disputeId={milestone.dispute.id}
+          myRole={isWorker ? 'WORKER' : isEmployer ? 'EMPLOYER' : null}
+          filedByRole={milestone.dispute.filed_by_role}
+          onCanceled={onChanged}
+        />
       ) : null}
     </div>
   );

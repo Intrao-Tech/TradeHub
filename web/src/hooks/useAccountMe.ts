@@ -74,6 +74,7 @@ export type ClientProfile = {
 export type StaffMember = {
   id: string | number;
   staff_role?: string;
+  member_roles?: { staff_role: { name: string } }[];
   [key: string]: unknown;
 };
 
@@ -86,6 +87,12 @@ export type AccountMe = {
   status: AccountStatus;
   client_profile: ClientProfile | null;
   staff_member: StaffMember | null;
+  /**
+   * Flat list of permission keys granted to the user via their roles.
+   * Populated from /account/me; empty array for non-staff. ADMIN role
+   * implicitly satisfies any permission — check `isAdmin` first.
+   */
+  permissions?: string[];
   [key: string]: unknown;
 };
 
@@ -152,6 +159,9 @@ export type UseAccountMe = {
   isWorker: boolean;
   isEmployer: boolean;
   isStaff: boolean;
+  isAdmin: boolean;
+  permissions: string[];
+  hasPermission: (key: string) => boolean;
   verificationState: AccountStatus | null;
   loading: boolean;
   error: string | null;
@@ -170,12 +180,18 @@ export function useAccountMe(): UseAccountMe {
   const account = snapshot.kind === 'ready' ? snapshot.account : null;
   const clientProfile = account?.client_profile ?? null;
 
+  const isAdmin = account?.staff_member?.staff_role === 'ADMIN';
+  const permissions = account?.permissions ?? [];
+
   return {
     account,
     clientProfile,
     isWorker: Boolean(clientProfile?.worker_profile),
     isEmployer: Boolean(clientProfile?.employer_profile),
     isStaff: Boolean(account?.staff_member),
+    isAdmin,
+    permissions,
+    hasPermission: (key: string) => isAdmin || permissions.includes(key),
     verificationState: account?.status ?? null,
     loading: snapshot.kind === 'loading' || snapshot.kind === 'idle',
     error: snapshot.kind === 'error' ? snapshot.error : null,

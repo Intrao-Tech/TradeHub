@@ -24,6 +24,18 @@ export {
   refundMilestone,
   resolveDispute,
   respondDispute,
+  // Dispute proposal flow
+  getDisputeProposals,
+  proposeResolution,
+  decideProposal,
+  escalateDispute,
+  cancelDispute,
+  type DisputeProposal,
+  type DisputeProposalView,
+  // Employer payments
+  getEmployerPayments,
+  type EmployerPaymentRow,
+  type EmployerPaymentsView,
   retryRelease,
   submitMilestone,
   updatePlatformSettings,

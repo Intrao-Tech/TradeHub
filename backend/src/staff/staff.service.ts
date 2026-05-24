@@ -15,6 +15,12 @@ import { CreateStaffDto } from './dto/create-staff.dto';
 
 const INVITE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
+// Single role per staff in MVP (multi-role supported by the junction schema —
+// add more rows to extend later).
+// Any role name resolved against staff_role table. Validation happens at
+// the service boundary — we no longer hardcode the union.
+export type StaffRoleName = string;
+
 @Injectable()
 export class StaffService {
   constructor(
@@ -24,6 +30,44 @@ export class StaffService {
     private readonly assignment: DocumentAssignmentService,
   ) {}
 
+  // ─── Role helpers (via staff_member_role junction) ─────────────
+
+  /** Get a staff member's primary role name, or null if no roles assigned. */
+  private async getRoleName(staffMemberId: bigint): Promise<StaffRoleName | null> {
+    const link = await this.prisma.staffMemberRole.findFirst({
+      where: { staff_member_id: staffMemberId },
+      include: { staff_role: { select: { name: true } } },
+      orderBy: { granted_at: 'asc' },
+    });
+    return (link?.staff_role.name as StaffRoleName | undefined) ?? null;
+  }
+
+  /**
+   * Replace all roles of a staff with one new role. Resolves the role lookup
+   * by name. Throws if the role name isn't seeded.
+   */
+  private async setRole(
+    staffMemberId: bigint,
+    roleName: StaffRoleName,
+    grantedByStaffId: bigint | null,
+  ): Promise<void> {
+    const role = await this.prisma.staffRole.findUniqueOrThrow({
+      where: { name: roleName },
+    });
+    await this.prisma.$transaction([
+      this.prisma.staffMemberRole.deleteMany({
+        where: { staff_member_id: staffMemberId },
+      }),
+      this.prisma.staffMemberRole.create({
+        data: {
+          staff_member_id: staffMemberId,
+          staff_role_id: role.id,
+          granted_by_staff_id: grantedByStaffId,
+        },
+      }),
+    ]);
+  }
+
   /** 16-char password meeting checkPasswordPolicy — used as initial password for fresh staff accounts. */
   private generateInitialPassword(): string {
     return generateInitialPassword();
@@ -31,26 +75,27 @@ export class StaffService {
 
   /**
    * Refuses to take an action that would leave zero active admins.
-   * Used by deactivate / role-change.
+   * Used by deactivate / role-change. Counts via staff_member_role junction.
    */
-  private async assertNotLastAdmin(targetAccountId: bigint, action: string) {
-    const activeAdmins = await this.prisma.staffMember.count({
+  private async assertNotLastAdmin(targetStaffId: bigint, action: string) {
+    const adminRole = await this.prisma.staffRole.findUniqueOrThrow({
+      where: { name: 'ADMIN' },
+    });
+    const activeAdmins = await this.prisma.staffMemberRole.count({
       where: {
-        staff_role: 'ADMIN',
-        account: { status: 'ACTIVE' },
+        staff_role_id: adminRole.id,
+        staff_member: { account: { status: 'ACTIVE' } },
       },
     });
     if (activeAdmins <= 1) {
-      // If the target IS the last admin, block.
-      const target = await this.prisma.staffMember.findUnique({
-        where: { id: targetAccountId },
-        include: { account: { select: { status: true } } },
+      const targetIsAdmin = await this.prisma.staffMemberRole.findFirst({
+        where: {
+          staff_member_id: targetStaffId,
+          staff_role_id: adminRole.id,
+          staff_member: { account: { status: 'ACTIVE' } },
+        },
       });
-      if (
-        target &&
-        target.staff_role === 'ADMIN' &&
-        target.account.status === 'ACTIVE'
-      ) {
+      if (targetIsAdmin) {
         throw new ForbiddenException({
           code: 'LAST_ADMIN',
           message: `Cannot ${action} the last active admin. Promote another staff member to admin first.`,
@@ -63,8 +108,8 @@ export class StaffService {
 
   /**
    * Toggle the caller's `is_on_duty` flag. When turning OFF, all of their
-   * open (PENDING / IN_REVIEW) document assignments are redistributed to
-   * the next available on-duty staff via DocumentAssignmentService.
+   * open document review assignments are redistributed to the next available
+   * on-duty staff via DocumentAssignmentService.
    */
   async setDuty(staffMemberId: bigint, onDuty: boolean, ip?: string) {
     const member = await this.prisma.staffMember.findUnique({
@@ -114,6 +159,10 @@ export class StaffService {
         account: {
           select: { email: true, status: true, last_login_at: true },
         },
+        member_roles: {
+          include: { staff_role: { select: { name: true } } },
+          orderBy: { granted_at: 'asc' },
+        },
       },
     });
     const now = Date.now();
@@ -125,17 +174,22 @@ export class StaffService {
         inviteExpiresAt.getTime() < now;
       const inviteActive =
         !!inviteExpiresAt && r.account.last_login_at == null && !inviteExpired;
+      const roleNames = r.member_roles.map((m) => m.staff_role.name);
+      // Primary role: ADMIN if present, else first one assigned.
+      const primary = roleNames.includes('ADMIN')
+        ? 'ADMIN'
+        : (roleNames[0] ?? null);
       return {
         id: r.id.toString(),
         email: r.account.email,
         display_name: r.display_name,
-        staff_role: r.staff_role,
+        staff_role: primary,
+        staff_roles: roleNames,
         status: r.account.status,
         is_on_duty: r.is_on_duty,
         last_login_at: r.account.last_login_at,
         created_at: r.created_at,
         invite_expires_at: inviteExpiresAt,
-        // UX hints — staff that never signed in
         invite_active: inviteActive,
         invite_expired: inviteExpired,
         has_signed_in: r.account.last_login_at != null,
@@ -151,8 +205,6 @@ export class StaffService {
       include: { staff_member: true },
     });
 
-    // Path A: email already belongs to a staff account → reject (admin should
-    // re-invite via the dedicated endpoint instead of creating a duplicate).
     if (existing && existing.staff_member) {
       throw new ConflictException({
         code: 'ALREADY_STAFF',
@@ -161,9 +213,7 @@ export class StaffService {
       });
     }
 
-    // Path B: email belongs to a marketplace client (worker / employer).
-    // Promote the existing account to also be staff — DO NOT change the user's
-    // password. The user keeps their existing client login + gains staff access.
+    // Path B: email belongs to a marketplace client — promote.
     if (existing) {
       if (existing.status === 'DEACTIVATED') {
         throw new ConflictException({
@@ -181,12 +231,11 @@ export class StaffService {
 
       const promoted = await this.prisma.staffMember.create({
         data: {
-          id: existing.id, // shared PK with account
+          id: existing.id,
           display_name: dto.display_name,
-          staff_role: dto.staff_role,
-          // No invite expiry needed — they already use this account.
         },
       });
+      await this.setRole(promoted.id, dto.staff_role, createdByAccountId);
 
       await this.audit.log(
         createdByAccountId,
@@ -212,13 +261,11 @@ export class StaffService {
       };
     }
 
-    // Path C: brand-new account. Generate password, time-limited invite.
+    // Path C: brand-new account.
     const initialPassword = this.generateInitialPassword();
     const passwordHash = await bcrypt.hash(initialPassword, 12);
     const inviteExpiresAt = new Date(Date.now() + INVITE_TTL_MS);
 
-    // Staff have no client_profile, hence no referral_code — account is a
-    // pure auth root.
     const account = await this.prisma.account.create({
       data: {
         email: dto.email,
@@ -228,13 +275,13 @@ export class StaffService {
         staff_member: {
           create: {
             display_name: dto.display_name,
-            staff_role: dto.staff_role,
             invite_expires_at: inviteExpiresAt,
           },
         },
       },
       include: { staff_member: true },
     });
+    await this.setRole(account.id, dto.staff_role, createdByAccountId);
 
     await this.audit.log(
       createdByAccountId,
@@ -287,7 +334,6 @@ export class StaffService {
       });
     }
 
-    // Generate a fresh password + bump expiry. Revoke any leftover refresh tokens.
     const initialPassword = this.generateInitialPassword();
     const passwordHash = await bcrypt.hash(initialPassword, 12);
     const inviteExpiresAt = new Date(Date.now() + INVITE_TTL_MS);
@@ -329,7 +375,7 @@ export class StaffService {
 
   async changeRole(
     staffMemberId: bigint,
-    newRole: 'ADMIN' | 'MODERATOR',
+    newRole: StaffRoleName,
     byAccountId: bigint,
     ip?: string,
   ) {
@@ -343,28 +389,24 @@ export class StaffService {
         message: 'Staff member not found.',
       });
     }
-    if (member.staff_role === newRole) {
+    const currentRole = await this.getRoleName(staffMemberId);
+    if (currentRole === newRole) {
       throw new BadRequestException({
         code: 'NO_CHANGE',
         message: `Already ${newRole}.`,
       });
     }
-    // Demoting yourself from admin would lock you out of admin actions.
     if (member.id === byAccountId && newRole !== 'ADMIN') {
       throw new ForbiddenException({
         code: 'CANNOT_DEMOTE_SELF',
         message: 'You cannot demote yourself from admin.',
       });
     }
-    // Demoting the last admin would lock everyone out.
-    if (member.staff_role === 'ADMIN' && newRole === 'MODERATOR') {
+    if (currentRole === 'ADMIN' && newRole === 'STAFF') {
       await this.assertNotLastAdmin(member.id, 'demote');
     }
 
-    const updated = await this.prisma.staffMember.update({
-      where: { id: staffMemberId },
-      data: { staff_role: newRole },
-    });
+    await this.setRole(staffMemberId, newRole, byAccountId);
 
     await this.audit.log(
       byAccountId,
@@ -373,15 +415,15 @@ export class StaffService {
       member.id,
       {
         target_email: member.account.email,
-        from: member.staff_role,
+        from: currentRole,
         to: newRole,
       },
       ip,
     );
 
     return {
-      id: updated.id.toString(),
-      staff_role: updated.staff_role,
+      id: member.id.toString(),
+      staff_role: newRole,
     };
   }
 
@@ -410,7 +452,8 @@ export class StaffService {
         message: 'This account is already deactivated.',
       });
     }
-    if (member.staff_role === 'ADMIN') {
+    const currentRole = await this.getRoleName(member.id);
+    if (currentRole === 'ADMIN') {
       await this.assertNotLastAdmin(member.id, 'deactivate');
     }
 
@@ -428,8 +471,6 @@ export class StaffService {
       }),
     ]);
 
-    // Redistribute their open verification queue to the next available
-    // on-duty staff (admin reassignment, audit-logged per doc).
     const reassigned = await this.assignment.reassignFromStaff(
       member.id,
       'admin_reassign',
@@ -443,7 +484,7 @@ export class StaffService {
       'account',
       member.id,
       {
-        staff_role: member.staff_role,
+        staff_role: currentRole,
         target_email: member.account.email,
         reassigned_count: reassigned,
       },
@@ -453,9 +494,7 @@ export class StaffService {
   }
 
   /**
-   * Admin force-reset of a staff member's password. Generates a fresh
-   * password, revokes all of their refresh tokens, and emails the new
-   * credentials. Used because staff cannot self-reset via /forgot-password.
+   * Admin force-reset of a staff member's password.
    */
   async resetPassword(staffMemberId: bigint, byAccountId: bigint, ip?: string) {
     const member = await this.prisma.staffMember.findUnique({
@@ -527,12 +566,13 @@ export class StaffService {
       where: { id: member.id },
       data: { status: 'ACTIVE' },
     });
+    const currentRole = await this.getRoleName(member.id);
     await this.audit.log(
       byAccountId,
       'staff.reactivated',
       'account',
       member.id,
-      { staff_role: member.staff_role, target_email: member.account.email },
+      { staff_role: currentRole, target_email: member.account.email },
       ip,
     );
     return { ok: true };

@@ -23,6 +23,8 @@ import { extname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../common/guards/roles.guard';
+import { PermissionsGuard } from '../common/guards/permissions.guard';
+import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import {
   AccountStateGuard,
   RequiresVerifiedEmail,
@@ -42,7 +44,13 @@ import {
 import { RefundMilestoneDto } from './dto/refund-milestone.dto';
 import { SubmitMilestoneDto } from './dto/submit-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
+import {
+  DecideProposalDto,
+  EscalateDisputeDto,
+  ProposeResolutionDto,
+} from './dto/dispute-proposal.dto';
 import { EscrowService } from './escrow.service';
+import { DisputeProposalService } from './dispute-proposal.service';
 
 const MILESTONE_ATTACHMENT_SUBDIR = 'uploads/milestone-attachments';
 const MILESTONE_ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
@@ -56,7 +64,10 @@ const MILESTONE_ATTACHMENT_ALLOWED_MIMES: readonly string[] = [
 @ApiTags('Escrow')
 @Controller('escrow')
 export class EscrowController {
-  constructor(private readonly escrowService: EscrowService) {}
+  constructor(
+    private readonly escrowService: EscrowService,
+    private readonly disputeProposals: DisputeProposalService,
+  ) {}
 
   // ─── Connect onboarding (Slice A) ──────────────────────────────
 
@@ -492,8 +503,8 @@ export class EscrowController {
   }
 
   @Get('admin/disputes')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('STAFF')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @RequirePermissions('escrow_disputes.read')
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'List open / unresolved disputes for the moderator queue.',
@@ -503,13 +514,14 @@ export class EscrowController {
   }
 
   @Post('admin/disputes/:disputeId/resolve')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('STAFF')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @RequirePermissions('disputes.propose')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Moderator resolves a dispute (binding split). worker_pct + employer_refund_pct must sum to 100.',
+      '[Legacy] Moderator force-resolves a dispute without party approval. Prefer POST /admin/disputes/:id/proposals which sends the split to both parties for acceptance.',
+    deprecated: true,
   })
   resolveDispute(
     @Param('disputeId', ParseBigIntPipe) disputeId: bigint,
@@ -524,6 +536,111 @@ export class EscrowController {
       dto.employer_refund_pct,
       dto.platform_kept_fee,
       dto.reasoning,
+      ip,
+    );
+  }
+
+  // ─── Dispute proposal flow (two-party approval) ────────────────────────
+
+  @Post('admin/disputes/:disputeId/proposals')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @RequirePermissions('disputes.propose')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Mediator proposes a worker/employer split. Both parties must Accept before money moves; any Reject closes the proposal (staff can propose again or escalate).',
+  })
+  proposeResolution(
+    @Param('disputeId', ParseBigIntPipe) disputeId: bigint,
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: ProposeResolutionDto,
+    @Ip() ip: string,
+  ) {
+    return this.disputeProposals.propose(disputeId, user.accountId, dto, ip);
+  }
+
+  @Get('disputes/:disputeId/proposals')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Read current proposal + history for this dispute. Visible to both parties + any staff.',
+  })
+  listProposals(@Param('disputeId', ParseBigIntPipe) disputeId: bigint) {
+    return this.disputeProposals.getCurrent(disputeId);
+  }
+
+  @Post('disputes/:disputeId/proposals/:proposalId/decision')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Worker or employer Accepts or Rejects a pending mediator proposal. When BOTH accept, the resolution executes automatically (release + refund per the split).',
+  })
+  decideProposal(
+    @Param('disputeId', ParseBigIntPipe) disputeId: bigint,
+    @Param('proposalId', ParseBigIntPipe) proposalId: bigint,
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: DecideProposalDto,
+    @Ip() ip: string,
+  ) {
+    if (user.clientProfileId == null) {
+      throw new BadRequestException({ code: 'NO_CLIENT_PROFILE' });
+    }
+    return this.disputeProposals.decide(
+      disputeId,
+      proposalId,
+      user.clientProfileId,
+      dto.decision,
+      dto.note,
+      ip,
+    );
+  }
+
+  @Post('admin/disputes/:disputeId/escalate')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @RequirePermissions('disputes.escalate')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Move dispute to ARBITRATION_PENDING when parties cannot agree on any proposal. In-platform mediation ends here; arbitration is handled out-of-platform.',
+  })
+  escalateDispute(
+    @Param('disputeId', ParseBigIntPipe) disputeId: bigint,
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: EscalateDisputeDto,
+    @Ip() ip: string,
+  ) {
+    return this.disputeProposals.escalate(
+      disputeId,
+      user.accountId,
+      dto.reason,
+      ip,
+    );
+  }
+
+  @Post('disputes/:disputeId/cancel')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Filer cancels a dispute they opened by mistake. Allowed only while status=OPEN (before the counter-party responds or staff proposes a resolution). Restores the milestone to its previous state (FUNDED or SUBMITTED).',
+  })
+  cancelDispute(
+    @Param('disputeId', ParseBigIntPipe) disputeId: bigint,
+    @CurrentUser() user: CurrentUserPayload,
+    @Ip() ip: string,
+  ) {
+    if (user.clientProfileId == null) {
+      throw new BadRequestException({ code: 'NO_CLIENT_PROFILE' });
+    }
+    return this.disputeProposals.cancelByFiler(
+      disputeId,
+      user.clientProfileId,
       ip,
     );
   }
@@ -619,6 +736,21 @@ export class EscrowController {
       throw new BadRequestException({ code: 'NO_CLIENT_PROFILE' });
     }
     return this.escrowService.getWallet(user.clientProfileId);
+  }
+
+  @Get('payments/me/employer')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('EMPLOYER')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      "Employer's payments view: CHARGE + REFUND history, totals by status, open disputes summary.",
+  })
+  getEmployerPayments(@CurrentUser() user: CurrentUserPayload) {
+    if (user.clientProfileId == null) {
+      throw new BadRequestException({ code: 'NO_CLIENT_PROFILE' });
+    }
+    return this.escrowService.getEmployerPayments(user.clientProfileId);
   }
 
   @Get('admin/settings/platform')

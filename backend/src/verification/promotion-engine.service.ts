@@ -159,8 +159,16 @@ export class PromotionEngine {
         where: { client_profile_id: clientProfileId },
         select: { milestone_type: true },
       }),
+      // After admin-panel refactor: document.client_profile_id moved to
+      // reviewable_item; document.status moved to review_item. A doc is
+      // "approved" when its latest review_item has status='APPROVED'.
       this.prisma.document.findMany({
-        where: { client_profile_id: clientProfileId, status: 'APPROVED' },
+        where: {
+          reviewable_item: {
+            client_profile_id: clientProfileId,
+            review_items: { some: { status: 'APPROVED' } },
+          },
+        },
         select: { doc_type: true },
       }),
     ]);

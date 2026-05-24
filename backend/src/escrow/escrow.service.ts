@@ -154,8 +154,8 @@ export class EscrowService {
 
     const link = await this.stripe.accountLinks.create({
       account: accountId,
-      return_url: `${frontendUrl}/wallet?onboarding=complete`,
-      refresh_url: `${frontendUrl}/wallet?onboarding=incomplete`,
+      return_url: `${frontendUrl}/payments?onboarding=complete`,
+      refresh_url: `${frontendUrl}/payments?onboarding=incomplete`,
       type: 'account_onboarding',
     });
 
@@ -586,6 +586,11 @@ export class EscrowService {
             size_bytes: true,
             created_at: true,
           },
+        },
+        // Surface the dispute id so the client UI can fetch its proposals.
+        // filed_by_role tells the UI which party can cancel an OPEN dispute.
+        dispute: {
+          select: { id: true, status: true, filed_by_role: true },
         },
       },
     });
@@ -2401,17 +2406,25 @@ export class EscrowService {
 
     const charge = await this.findChargePayment(milestone.id);
     if (employerRefundPence > 0 && charge?.stripe_id) {
+      // NOTE: we don't pass `refund_application_fee` — that's a Stripe Connect
+      // destination-charge option, but we use a regular PaymentIntent on the
+      // platform account plus separate `transfers.create()` calls for payouts.
+      // Whether the platform keeps or refunds its marketplace fee is an
+      // internal accounting concern (frozen_platform_fee on the milestone) —
+      // not something Stripe can do for us here. `platformKeptFee` is preserved
+      // in the audit row so finance can reconcile manually.
       refund = await this.stripe.refunds.create(
         {
           payment_intent: charge.stripe_id,
           amount: employerRefundPence,
-          refund_application_fee: !platformKeptFee,
         },
         {
           idempotencyKey: `escrow_dispute_${String(disputeId)}_resolve_employer${this.idemSuffix}`,
         },
       );
     }
+    // Suppress unused-param warning while we keep the audit semantics.
+    void platformKeptFee;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.escrowDispute.update({
@@ -2840,6 +2853,134 @@ export class EscrowService {
         amount: m.frozen_worker_payout?.toString() ?? m.amount.toString(),
         contract_id: String(m.contract_id),
         title: m.title,
+      })),
+    };
+  }
+
+  /**
+   * Employer-side payments view. Lists every CHARGE (funds they paid) and
+   * REFUND (returned to them) plus a short summary of their open disputes.
+   * Counterpart of `getWallet` for employers.
+   */
+  async getEmployerPayments(employerProfileId: bigint) {
+    const [payments, openDisputes, totals] = await Promise.all([
+      this.prisma.payment.findMany({
+        where: {
+          client_profile_id: employerProfileId,
+          type: { in: ['CHARGE', 'REFUND'] },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 200,
+        include: {
+          milestone: {
+            select: {
+              id: true,
+              title: true,
+              contract_id: true,
+              status: true,
+              contract: {
+                include: {
+                  collaboration: {
+                    select: {
+                      worker_id: true,
+                      worker: {
+                        include: {
+                          client_profile: {
+                            select: { display_name: true, slug: true },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.escrowDispute.findMany({
+        where: {
+          status: {
+            in: ['OPEN', 'RESPONDED', 'MEDIATION', 'ARBITRATION_PENDING'],
+          },
+          milestone: {
+            contract: {
+              collaboration: { employer_id: employerProfileId },
+            },
+          },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          status: true,
+          filed_by_role: true,
+          created_at: true,
+          milestone: {
+            select: {
+              id: true,
+              title: true,
+              amount: true,
+              contract_id: true,
+            },
+          },
+        },
+      }),
+      this.prisma.payment.groupBy({
+        by: ['type', 'status'],
+        where: {
+          client_profile_id: employerProfileId,
+          type: { in: ['CHARGE', 'REFUND'] },
+        },
+        _sum: { amount: true },
+        _count: true,
+      }),
+    ]);
+
+    return {
+      totals: totals.map((t) => ({
+        type: t.type,
+        status: t.status,
+        count: t._count,
+        amount: t._sum.amount?.toString() ?? '0',
+      })),
+      payments: payments.map((p) => ({
+        id: String(p.id),
+        type: p.type,
+        status: p.status,
+        amount: p.amount.toString(),
+        currency: p.currency,
+        stripe_id: p.stripe_id,
+        failure_reason: p.failure_reason,
+        created_at: p.created_at.toISOString(),
+        settled_at: p.settled_at?.toISOString() ?? null,
+        milestone: {
+          id: String(p.milestone.id),
+          title: p.milestone.title,
+          status: p.milestone.status,
+          contract_id: String(p.milestone.contract_id),
+        },
+        worker: {
+          id: String(
+            p.milestone.contract.collaboration.worker_id,
+          ),
+          display_name:
+            p.milestone.contract.collaboration.worker.client_profile
+              .display_name,
+          slug: p.milestone.contract.collaboration.worker.client_profile.slug,
+        },
+      })),
+      open_disputes: openDisputes.map((d) => ({
+        id: String(d.id),
+        status: d.status,
+        filed_by_role: d.filed_by_role,
+        created_at: d.created_at.toISOString(),
+        milestone: {
+          id: String(d.milestone.id),
+          title: d.milestone.title,
+          amount: d.milestone.amount.toString(),
+          contract_id: String(d.milestone.contract_id),
+        },
       })),
     };
   }

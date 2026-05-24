@@ -53,9 +53,18 @@ export class TestSeedController implements OnModuleInit {
         staff_member: {
           create: {
             display_name: 'PW Seed Admin',
-            staff_role: 'ADMIN',
           },
         },
+      },
+    });
+    // Admin panel: roles via staff_member_role junction.
+    const adminRole = await this.prisma.staffRole.findUniqueOrThrow({
+      where: { name: 'ADMIN' },
+    });
+    await this.prisma.staffMemberRole.create({
+      data: {
+        staff_member_id: account.id,
+        staff_role_id: adminRole.id,
       },
     });
     return {

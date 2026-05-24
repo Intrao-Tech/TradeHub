@@ -246,20 +246,36 @@ export class VerificationService {
           evidence_ref: true,
         },
       }),
-      this.prisma.document.findMany({
-        where: { client_profile_id: clientProfileId },
-        orderBy: { created_at: 'desc' },
-        select: {
-          id: true,
-          doc_type: true,
-          file_url: true,
-          status: true,
-          rejection_reason: true,
-          metadata: true,
-          created_at: true,
-          reviewed_at: true,
-        },
-      }),
+      // After admin-panel refactor: document.client_profile_id moved to
+      // parent reviewable_item; status/rejection_reason/reviewed_at moved
+      // to the latest review_item (or default PENDING if none).
+      this.prisma.document
+        .findMany({
+          where: { reviewable_item: { client_profile_id: clientProfileId } },
+          orderBy: { reviewable_item: { created_at: 'desc' } },
+          include: {
+            reviewable_item: {
+              include: {
+                review_items: { orderBy: { created_at: 'desc' }, take: 1 },
+              },
+            },
+          },
+        })
+        .then((docs) =>
+          docs.map((d) => {
+            const r = d.reviewable_item.review_items[0];
+            return {
+              id: d.id,
+              doc_type: d.doc_type,
+              file_url: d.file_url,
+              status: r?.status ?? 'PENDING',
+              rejection_reason: r?.rejection_reason ?? null,
+              metadata: d.metadata,
+              created_at: d.reviewable_item.created_at,
+              reviewed_at: r?.reviewed_at ?? null,
+            };
+          }),
+        ),
     ]);
     if (!profile) {
       throw new NotFoundException({ code: 'PROFILE_NOT_FOUND' });
@@ -267,7 +283,8 @@ export class VerificationService {
 
     const grouped = {
       pending: documents.filter((d) => d.status === 'PENDING'),
-      in_review: documents.filter((d) => d.status === 'IN_REVIEW'),
+      in_review: [] as typeof documents,
+      // 'IN_REVIEW' not used in v13 schema — kept as empty array for API shape compat
       approved: documents.filter((d) => d.status === 'APPROVED'),
       rejected: documents.filter((d) => d.status === 'REJECTED'),
     };
@@ -330,9 +347,16 @@ export class VerificationService {
       })
       .filter((id): id is bigint => id !== null);
 
+    // After admin-panel refactor: document.status moved to review_item.
+    // A cert is "APPROVED" when its latest review_item.status = APPROVED.
     const certifications = certificationDocIds.length
       ? await this.prisma.document.findMany({
-          where: { id: { in: certificationDocIds }, status: 'APPROVED' },
+          where: {
+            id: { in: certificationDocIds },
+            reviewable_item: {
+              review_items: { some: { status: 'APPROVED' } },
+            },
+          },
           select: { doc_type: true },
         })
       : [];
@@ -393,11 +417,31 @@ export class VerificationService {
         where: { client_profile_id: clientProfileId },
         orderBy: { achieved_at: 'desc' },
       }),
-      this.prisma.document.findMany({
-        where: { client_profile_id: clientProfileId },
-        orderBy: { created_at: 'desc' },
-        select: { id: true, doc_type: true, status: true },
-      }),
+      // After admin-panel refactor: document.client_profile_id moved to
+      // reviewable_item; doc.status comes from latest review_item.
+      this.prisma.document
+        .findMany({
+          where: { reviewable_item: { client_profile_id: clientProfileId } },
+          orderBy: { reviewable_item: { created_at: 'desc' } },
+          include: {
+            reviewable_item: {
+              include: {
+                review_items: {
+                  orderBy: { created_at: 'desc' },
+                  take: 1,
+                  select: { status: true },
+                },
+              },
+            },
+          },
+        })
+        .then((docs) =>
+          docs.map((d) => ({
+            id: d.id,
+            doc_type: d.doc_type,
+            status: d.reviewable_item.review_items[0]?.status ?? 'PENDING',
+          })),
+        ),
     ]);
     if (!profile) throw new NotFoundException({ code: 'PROFILE_NOT_FOUND' });
 

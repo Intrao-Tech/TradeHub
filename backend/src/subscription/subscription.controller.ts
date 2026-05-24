@@ -18,6 +18,8 @@ import type { CurrentUserPayload } from '../common/decorators/current-user.decor
 import { ParseBigIntPipe } from '../common/pipes/parse-bigint.pipe';
 import { Roles } from '../common/guards/roles.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { PermissionsGuard } from '../common/guards/permissions.guard';
+import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { CreatePlanDto } from './dto/create-plan.dto';
 import { SubscribeDto } from './dto/subscribe.dto';
 import { SubscriptionPlansQueryDto } from './dto/subscription-plans-query.dto';
@@ -36,8 +38,8 @@ export class SubscriptionController {
   }
 
   @Post('plans')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @RequirePermissions('plans.manage')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create subscription plan (admin)' })
   createPlan(@Body() dto: CreatePlanDto) {
@@ -45,8 +47,8 @@ export class SubscriptionController {
   }
 
   @Patch('plans/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @RequirePermissions('plans.manage')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update subscription plan (admin)' })
   updatePlan(

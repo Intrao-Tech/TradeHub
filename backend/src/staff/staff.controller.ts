@@ -10,19 +10,23 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsIn } from 'class-validator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../common/guards/roles.guard';
+import { PermissionsGuard } from '../common/guards/permissions.guard';
+import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ParseBigIntPipe } from '../common/pipes/parse-bigint.pipe';
+import { Matches } from 'class-validator';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { SetDutyDto } from './dto/set-duty.dto';
 import { StaffService } from './staff.service';
 
 class ChangeStaffRoleDto {
-  @IsIn(['ADMIN', 'MODERATOR'])
-  staff_role: 'ADMIN' | 'MODERATOR';
+  @Matches(/^[A-Z][A-Z0-9_]{1,39}$/, {
+    message: 'staff_role must be UPPER_SNAKE_CASE',
+  })
+  staff_role: string;
 }
 
 /**
@@ -36,7 +40,7 @@ class ChangeStaffRoleDto {
  */
 @ApiTags('Staff (admin only for mutations)')
 @Controller('staff')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
@@ -63,7 +67,7 @@ export class StaffController {
   }
 
   @Post()
-  @Roles('ADMIN')
+  @RequirePermissions('staff.invite')
   @ApiOperation({
     summary:
       'Create / invite a staff member. New email → fresh account + emailed password (24h validity). Existing client email → promote to staff (keeps their password).',
@@ -77,7 +81,7 @@ export class StaffController {
   }
 
   @Post(':id/reinvite')
-  @Roles('ADMIN')
+  @RequirePermissions('staff.invite')
   @ApiOperation({
     summary:
       'Resend the invite (regenerates password + 24h expiry). Only works while the staff member has never signed in.',
@@ -91,7 +95,7 @@ export class StaffController {
   }
 
   @Post(':id/reset-password')
-  @Roles('ADMIN')
+  @RequirePermissions('staff.reset_password')
   @ApiOperation({
     summary:
       "Force-reset a staff member's password (generates a new one, emails it, signs them out everywhere).",
@@ -105,9 +109,9 @@ export class StaffController {
   }
 
   @Patch(':id/role')
-  @Roles('ADMIN')
+  @RequirePermissions('staff.role_change')
   @ApiOperation({
-    summary: 'Promote / demote staff between ADMIN and MODERATOR',
+    summary: 'Change a staff member to any role (built-in or custom).',
   })
   changeRole(
     @Param('id', ParseBigIntPipe) id: bigint,
@@ -119,7 +123,7 @@ export class StaffController {
   }
 
   @Post(':id/reactivate')
-  @Roles('ADMIN')
+  @RequirePermissions('staff.deactivate')
   @ApiOperation({
     summary: 'Reactivate a previously deactivated staff account',
   })
@@ -132,7 +136,7 @@ export class StaffController {
   }
 
   @Delete(':id')
-  @Roles('ADMIN')
+  @RequirePermissions('staff.deactivate')
   @ApiOperation({ summary: 'Deactivate a staff account' })
   deactivate(
     @Param('id', ParseBigIntPipe) id: bigint,

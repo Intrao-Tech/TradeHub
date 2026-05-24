@@ -193,17 +193,18 @@ export class MailService implements OnModuleInit {
   async sendStaffPromotion(
     to: string,
     displayName: string,
-    staffRole: 'ADMIN' | 'MODERATOR',
+    staffRole: string,
   ): Promise<void> {
-    const subject = `You're now a TradeHub ${staffRole.toLowerCase()}`;
+    const roleLabel = staffRole.toLowerCase();
+    const subject = `You're now a TradeHub ${roleLabel}`;
     const staffUrl = (
       this.config.get<string>('STAFF_FRONTEND_URL') || this.frontendUrl
     ).replace(/\/$/, '');
     const html = `
       <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
-        <h2 style="color: #0f766e;">You've been promoted to ${escapeHtml(staffRole.toLowerCase())}</h2>
+        <h2 style="color: #0f766e;">You've been promoted to ${escapeHtml(roleLabel)}</h2>
         <p>Hi ${escapeHtml(displayName)},</p>
-        <p>An admin has granted your existing TradeHub account ${staffRole === 'ADMIN' ? 'admin' : 'moderator'} access. Your password is unchanged — keep using the one you already know.</p>
+        <p>An admin has granted your existing TradeHub account ${escapeHtml(roleLabel)} access. Your password is unchanged — keep using the one you already know.</p>
         <p>Sign in to the staff console at the link below.</p>
         <p><a href="${staffUrl}/login" style="display:inline-block;padding:10px 18px;background:#E07A3B;color:#fff;border-radius:6px;text-decoration:none;">Open staff console</a></p>
         <p style="color:#64748b;font-size:13px;margin-top:24px;">If you didn't expect this, contact the admin who granted access.</p>

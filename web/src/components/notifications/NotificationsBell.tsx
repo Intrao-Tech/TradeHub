@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Bell, X } from 'lucide-react';
 import { api, parseApiError } from '@/api';
+import { IS_STAFF_HOST } from '@/lib/host';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -181,7 +182,7 @@ export function NotificationsBell() {
         )}
         <DropdownMenuSeparator className="m-0" />
         <NavLink
-          to="/notifications"
+          to={IS_STAFF_HOST ? '/admin?tab=notifications' : '/notifications'}
           onClick={() => setOpen(false)}
           className="block px-3 py-2 text-center text-sm font-medium text-primary hover:bg-subtle"
         >

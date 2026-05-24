@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseIntPipe,
   Patch,
@@ -17,7 +19,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { Roles, RolesGuard } from '../common/guards/roles.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { PermissionsGuard } from '../common/guards/permissions.guard';
+import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { CreateSpecialisationDto } from './dto/create-specialisation.dto';
 import { UpdateSpecialisationDto } from './dto/update-specialisation.dto';
 import { WorkersBySpecialisationQueryDto } from './dto/workers-query.dto';
@@ -54,8 +58,8 @@ export class SpecialisationController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('STAFF')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @RequirePermissions('specialisations.manage')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create specialisation (staff)' })
   create(@Body() dto: CreateSpecialisationDto) {
@@ -63,8 +67,8 @@ export class SpecialisationController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('STAFF')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @RequirePermissions('specialisations.manage')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update specialisation (staff)' })
   update(
@@ -75,8 +79,9 @@ export class SpecialisationController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('STAFF')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @RequirePermissions('specialisations.manage')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete specialisation (staff)' })
   delete(@Param('id', ParseIntPipe) id: number) {
