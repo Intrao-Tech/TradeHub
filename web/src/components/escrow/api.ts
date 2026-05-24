@@ -54,6 +54,12 @@ export type Milestone = {
   created_at?: string;
   updated_at?: string;
   attachments?: MilestoneAttachment[];
+  /** Set when status=DISPUTED. Lets the client UI fetch dispute proposals. */
+  dispute?: {
+    id: string | number;
+    status: string;
+    filed_by_role: 'WORKER' | 'EMPLOYER';
+  } | null;
   /** True when this RELEASED milestone has a PENDING/FAILED worker payout
    * because the worker hadn't connected Stripe at release time. Funds are
    * held on the platform until they finish onboarding. */
@@ -250,6 +256,91 @@ export function resolveDispute(
   });
 }
 
+// ── Dispute proposal flow (two-party approval) ──────────────────────────
+
+export type DisputeProposal = {
+  id: string;
+  dispute_id: string;
+  worker_pct: number;
+  employer_refund_pct: number;
+  keep_platform_fee: boolean;
+  reasoning: string;
+  status:
+    | 'PENDING_RESPONSE'
+    | 'ACCEPTED'
+    | 'REJECTED'
+    | 'EXECUTED'
+    | 'SUPERSEDED';
+  worker_decision: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  worker_decided_at: string | null;
+  worker_decision_note: string | null;
+  employer_decision: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  employer_decided_at: string | null;
+  employer_decision_note: string | null;
+  proposed_at: string;
+  resolved_at: string | null;
+  proposed_by: { id: string; display_name: string };
+};
+
+export type DisputeProposalView = {
+  dispute_id: string;
+  dispute_status: string;
+  arbitration_required: boolean;
+  current: DisputeProposal | null;
+  history: DisputeProposal[];
+};
+
+export function getDisputeProposals(disputeId: string | number) {
+  return api<DisputeProposalView>(`/escrow/disputes/${disputeId}/proposals`);
+}
+
+export function proposeResolution(
+  disputeId: string | number,
+  body: {
+    worker_pct: number;
+    employer_refund_pct: number;
+    keep_platform_fee: boolean;
+    reasoning: string;
+  },
+) {
+  return api<DisputeProposalView>(
+    `/escrow/admin/disputes/${disputeId}/proposals`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export function decideProposal(
+  disputeId: string | number,
+  proposalId: string | number,
+  decision: 'ACCEPT' | 'REJECT',
+  note?: string,
+) {
+  return api<DisputeProposalView>(
+    `/escrow/disputes/${disputeId}/proposals/${proposalId}/decision`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ decision, note }),
+    },
+  );
+}
+
+export function escalateDispute(disputeId: string | number, reason: string) {
+  return api<{ ok: boolean }>(`/escrow/admin/disputes/${disputeId}/escalate`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function cancelDispute(disputeId: string | number) {
+  return api<{ ok: boolean; restored_status: string }>(
+    `/escrow/disputes/${disputeId}/cancel`,
+    { method: 'POST' },
+  );
+}
+
 // Post-CR refactor these now accept a CONTRACT id (not a collaboration id).
 // Routes still mounted under /escrow/collaboration/:id for URL back-compat;
 // the controller resolves :id → contract before delegating.
@@ -319,6 +410,46 @@ export type WalletData = {
 
 export function getWallet() {
   return api<WalletData>('/escrow/wallet/me');
+}
+
+export type EmployerPaymentRow = {
+  id: string;
+  type: 'CHARGE' | 'REFUND';
+  status: 'PENDING' | 'PAID' | 'FAILED' | 'CANCELED';
+  amount: string;
+  currency: string;
+  stripe_id: string | null;
+  failure_reason: string | null;
+  created_at: string;
+  settled_at: string | null;
+  milestone: {
+    id: string;
+    title: string;
+    status: string;
+    contract_id: string;
+  };
+  worker: { id: string; display_name: string; slug: string };
+};
+
+export type EmployerPaymentsView = {
+  totals: { type: string; status: string; count: number; amount: string }[];
+  payments: EmployerPaymentRow[];
+  open_disputes: {
+    id: string;
+    status: string;
+    filed_by_role: 'WORKER' | 'EMPLOYER';
+    created_at: string;
+    milestone: {
+      id: string;
+      title: string;
+      amount: string;
+      contract_id: string;
+    };
+  }[];
+};
+
+export function getEmployerPayments() {
+  return api<EmployerPaymentsView>('/escrow/payments/me/employer');
 }
 
 export type PlatformSettings = {

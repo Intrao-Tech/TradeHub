@@ -324,14 +324,24 @@ export class PortfolioService {
     workerId: bigint,
   ) {
     await this.assertWorkerOwns(portfolioItemId, workerId);
+    // After admin-panel refactor: doc.client_profile_id is on parent
+    // reviewable_item; doc.status is the latest review_item.status.
     const doc = await this.prisma.document.findUnique({
       where: { id: documentId },
+      include: {
+        reviewable_item: {
+          include: {
+            review_items: { orderBy: { created_at: 'desc' }, take: 1 },
+          },
+        },
+      },
     });
     if (!doc) throw new NotFoundException('Document not found');
-    if (doc.client_profile_id !== workerId) {
+    if (doc.reviewable_item.client_profile_id !== workerId) {
       throw new ForbiddenException('Document does not belong to this worker');
     }
-    if (doc.status !== 'APPROVED') {
+    const latestReview = doc.reviewable_item.review_items[0];
+    if (latestReview?.status !== 'APPROVED') {
       throw new BadRequestException({
         code: 'DOCUMENT_NOT_APPROVED',
         message: 'Only approved documents can be linked to a portfolio item.',

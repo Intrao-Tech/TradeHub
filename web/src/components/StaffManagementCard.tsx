@@ -31,7 +31,8 @@ type StaffRow = {
   id: string;
   email: string;
   display_name: string;
-  staff_role: 'ADMIN' | 'MODERATOR';
+  staff_role: string;
+  staff_roles?: string[];
   status: string;
   last_login_at: string | null;
   created_at: string;
@@ -46,19 +47,27 @@ type AccountMe = {
   staff_member?: { staff_role?: string } | null;
 };
 
+type RoleRow = {
+  id: number;
+  name: string;
+  description: string | null;
+  is_system: boolean;
+};
+
 export function StaffManagementCard() {
   const [me, setMe] = useState<AccountMe | null>(null);
   const isAdmin =
     typeof me?.staff_member?.staff_role === 'string' &&
     me.staff_member.staff_role === 'ADMIN';
   const [staff, setStaff] = useState<StaffRow[] | null>(null);
+  const [roles, setRoles] = useState<RoleRow[]>([]);
   const [loadError, setLoadError] = useState('');
 
   // Create form
   const [createOpen, setCreateOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [staffRole, setStaffRole] = useState<'ADMIN' | 'MODERATOR'>('MODERATOR');
+  const [staffRole, setStaffRole] = useState<string>('STAFF');
   const [submitting, setSubmitting] = useState(false);
   const [createResult, setCreateResult] = useState<
     | { ok: true; email: string; promoted: boolean }
@@ -90,6 +99,9 @@ export function StaffManagementCard() {
 
   useEffect(() => {
     void api<AccountMe>('/account/me').then(setMe).catch(() => setMe(null));
+    void api<RoleRow[]>('/admin/roles')
+      .then(setRoles)
+      .catch(() => setRoles([]));
     void load();
   }, []);
 
@@ -115,7 +127,7 @@ export function StaffManagementCard() {
       });
       setEmail('');
       setDisplayName('');
-      setStaffRole('MODERATOR');
+      setStaffRole('STAFF');
       setCreateOpen(false);
       await load();
     } catch (err) {
@@ -159,7 +171,7 @@ export function StaffManagementCard() {
     }
   }
 
-  function handleChangeRole(row: StaffRow, newRole: 'ADMIN' | 'MODERATOR') {
+  function handleChangeRole(row: StaffRow, newRole: string) {
     if (row.staff_role === newRole) return;
     void withRowAction(
       () =>
@@ -290,16 +302,23 @@ export function StaffManagementCard() {
               <Label htmlFor="staff-role">Role</Label>
               <Select
                 value={staffRole}
-                onValueChange={(v) =>
-                  setStaffRole(v as 'ADMIN' | 'MODERATOR')
-                }
+                onValueChange={setStaffRole}
               >
                 <SelectTrigger id="staff-role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="MODERATOR">Moderator</SelectItem>
-                  <SelectItem value="ADMIN">Admin</SelectItem>
+                  {(roles.length > 0
+                    ? roles
+                    : ([
+                        { id: 0, name: 'STAFF' } as RoleRow,
+                        { id: 1, name: 'ADMIN' } as RoleRow,
+                      ])
+                  ).map((r) => (
+                    <SelectItem key={r.name} value={r.name}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -373,15 +392,24 @@ export function StaffManagementCard() {
                           <Select
                             value={s.staff_role}
                             onValueChange={(v) =>
-                              handleChangeRole(s, v as 'ADMIN' | 'MODERATOR')
+                              handleChangeRole(s, v)
                             }
                           >
-                            <SelectTrigger className="h-8 w-32 text-xs">
+                            <SelectTrigger className="h-8 w-40 text-xs">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="MODERATOR">Moderator</SelectItem>
-                              <SelectItem value="ADMIN">Admin</SelectItem>
+                              {(roles.length > 0
+                                ? roles
+                                : ([
+                                    { id: 0, name: 'STAFF' } as RoleRow,
+                                    { id: 1, name: 'ADMIN' } as RoleRow,
+                                  ])
+                              ).map((r) => (
+                                <SelectItem key={r.name} value={r.name}>
+                                  {r.name}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
 

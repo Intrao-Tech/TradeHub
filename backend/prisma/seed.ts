@@ -105,11 +105,25 @@ async function main() {
       staff_member: {
         create: {
           display_name: 'Platform Admin',
-          staff_role: 'ADMIN',
           is_on_duty: true,
         },
       },
     },
+  });
+  // Assign ADMIN role via junction (staff_member.staff_role string was dropped in admin_panel migration)
+  const adminRole = await prisma.staffRole.findUniqueOrThrow({ where: { name: 'ADMIN' } });
+  await prisma.staffMemberRole.upsert({
+    where: {
+      staff_member_id_staff_role_id: {
+        staff_member_id: adminAccount.id,
+        staff_role_id: adminRole.id,
+      },
+    },
+    create: {
+      staff_member_id: adminAccount.id,
+      staff_role_id: adminRole.id,
+    },
+    update: {},
   });
   console.log(`  Admin: admin@tradehub.co.uk (id=${adminAccount.id})`);
 

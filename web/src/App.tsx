@@ -50,6 +50,7 @@ const MyJobApplicantsPage = lazy(() => import('./pages/MyJobApplicantsPage'));
 const EditJobPage = lazy(() => import('./pages/EditJobPage'));
 const MyApplicationsPage = lazy(() => import('./pages/MyApplicationsPage'));
 const InboxPage = lazy(() => import('./pages/InboxPage'));
+const SupportPage = lazy(() => import('./pages/SupportPage'));
 const RefLandingPage = lazy(() => import('./pages/RefLandingPage'));
 
 // ── Nav items ───────────────────────────────────────────────────────
@@ -66,15 +67,16 @@ const PUBLIC_NAV: NavItem[] = [
 const PRIVATE_NAV: NavItem[] = [
   { to: '/my-applications', label: 'Applications', requires: 'worker' },
   { to: '/my-jobs', label: 'Posted jobs', requires: 'employer' },
-  { to: '/collaborations', label: 'Work' },
-  { to: '/wallet', label: 'Wallet' },
+  { to: '/collaborations', label: 'Collaborations' },
+  { to: '/payments', label: 'Payments' },
   { to: '/referrals', label: 'Referrals' },
   { to: '/inbox', label: 'Inbox' },
+  { to: '/support', label: 'Support' },
 ];
 
-const STAFF_NAV: NavItem[] = [
-  { to: '/admin', label: 'Admin' },
-];
+// Staff app only has the /admin route — top-level nav chip is noise.
+// Navigation lives inside the AdminPage sidebar (Dashboard / Users / etc.).
+const STAFF_NAV: NavItem[] = [];
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -265,7 +267,9 @@ function MarketplaceRouter() {
           <Route path="/escrow/:id" element={<Protected loggedIn={loggedIn}><EscrowPlaceholderPage /></Protected>} />
           <Route path="/contracts/:contractId" element={<Protected loggedIn={loggedIn}><ContractDetailPage /></Protected>} />
           <Route path="/contracts/:contractId/escrow" element={<Protected loggedIn={loggedIn}><EscrowPlaceholderPage /></Protected>} />
-          <Route path="/wallet" element={<Protected loggedIn={loggedIn}><WalletPage /></Protected>} />
+          <Route path="/payments" element={<Protected loggedIn={loggedIn}><WalletPage /></Protected>} />
+          {/* Back-compat: old Stripe Connect return URLs and stale links */}
+          <Route path="/wallet" element={<Navigate to="/payments" replace />} />
           <Route path="/referrals" element={<Protected loggedIn={loggedIn}><ReferralsPage /></Protected>} />
           <Route path="/my-applications" element={<Protected loggedIn={loggedIn} requires="worker"><MyApplicationsPage /></Protected>} />
           <Route path="/my-jobs" element={<Protected loggedIn={loggedIn} requires="employer"><MyJobsPage /></Protected>} />
@@ -274,6 +278,7 @@ function MarketplaceRouter() {
           <Route path="/notifications" element={<Protected loggedIn={loggedIn}><NotificationsPage /></Protected>} />
           <Route path="/inbox" element={<Protected loggedIn={loggedIn}><InboxPage /></Protected>} />
           <Route path="/inbox/:conversationId" element={<Protected loggedIn={loggedIn}><InboxPage /></Protected>} />
+          <Route path="/support" element={<Protected loggedIn={loggedIn}><SupportPage /></Protected>} />
           <Route path="/settings/security" element={<Protected loggedIn={loggedIn}><SettingsSecurityPage /></Protected>} />
 
           {/* Marketplace stragglers landing on /internal/* — punt them to the staff subdomain */}
@@ -315,10 +320,12 @@ function StaffRouter() {
       publicNav={[]}
       privateNav={STAFF_NAV}
       onLogout={handleLogout}
+      hideFooter
     >
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/admin" element={<Protected loggedIn={loggedIn}><AdminPage /></Protected>} />
+          <Route path="/notifications" element={<Protected loggedIn={loggedIn}><NotificationsPage /></Protected>} />
           <Route path="/settings/security" element={<Protected loggedIn={loggedIn}><SettingsSecurityPage /></Protected>} />
           <Route path="/" element={<Navigate to={loggedIn ? '/admin' : '/login'} replace />} />
           {/* Anything else on staff host → 404-equivalent: go to admin or login */}

@@ -13,10 +13,10 @@ import { milestoneForDocType, type MilestoneType } from './constants';
 type Decision = 'APPROVE' | 'REJECT';
 
 /**
- * The single canonical staff decision pipeline. Replaces the legacy
- * `PATCH /documents/:id/status` endpoint by carrying both the decision
- * and the rejection reason in one operation, plus running the milestone
- * write + promotion engine inline.
+ * The single canonical staff decision pipeline. After the admin-panel
+ * refactor (v13): document review state lives on `review_item` (1:N with
+ * reviewable_item, partial UNIQUE on PENDING ensures one active review at
+ * a time). Document.id == reviewable_item.id (shared PK).
  */
 @Injectable()
 export class DocumentReviewService {
@@ -37,23 +37,42 @@ export class DocumentReviewService {
       ip?: string;
     },
   ) {
+    // Fetch document + parent (for client_profile_id) + latest PENDING review.
     const doc = await this.prisma.document.findUnique({
       where: { id: documentId },
+      include: {
+        reviewable_item: true,
+      },
     });
     if (!doc) {
       throw new NotFoundException({ code: 'DOCUMENT_NOT_FOUND' });
     }
-    if (doc.status === 'APPROVED' || doc.status === 'REJECTED') {
+
+    const review = await this.prisma.reviewItem.findFirst({
+      where: { reviewable_item_id: documentId, status: 'PENDING' },
+    });
+    if (!review) {
+      // No PENDING review — either already decided or never created.
+      const anyReview = await this.prisma.reviewItem.findFirst({
+        where: { reviewable_item_id: documentId },
+        orderBy: { created_at: 'desc' },
+      });
       throw new ConflictException({
         code: 'INVALID_TRANSITION',
-        message: `Document is already ${doc.status.toLowerCase()}.`,
+        message: anyReview
+          ? `Document is already ${anyReview.status.toLowerCase()}.`
+          : 'Document has no pending review.',
       });
     }
-    if (!actor.isAdmin && doc.assigned_to !== actor.staffMemberId) {
+
+    if (
+      !actor.isAdmin &&
+      review.assigned_to_staff_id !== actor.staffMemberId
+    ) {
       throw new ForbiddenException({
         code: 'NOT_ASSIGNEE',
         message:
-          doc.assigned_to == null
+          review.assigned_to_staff_id == null
             ? 'This document is unassigned. Claim it before reviewing.'
             : 'This document is assigned to another staff member.',
       });
@@ -74,18 +93,20 @@ export class DocumentReviewService {
     }
 
     const now = new Date();
+    const clientProfileId = doc.reviewable_item.client_profile_id;
+
     if (decision === 'REJECT') {
-      const updated = await this.prisma.document.update({
-        where: { id: documentId },
+      await this.prisma.reviewItem.update({
+        where: { id: review.id },
         data: {
           status: 'REJECTED',
           rejection_reason: reason!.trim(),
-          reviewed_by: actor.staffMemberId,
+          reviewed_by_staff_id: actor.staffMemberId,
           reviewed_at: now,
         },
       });
       await this.audit.log(
-        doc.client_profile_id,
+        clientProfileId,
         'verification.document.reviewed',
         'document',
         documentId,
@@ -95,31 +116,32 @@ export class DocumentReviewService {
           doc_type: doc.doc_type,
           reason: reason!.trim(),
           admin_override:
-            actor.isAdmin && doc.assigned_to !== actor.staffMemberId
+            actor.isAdmin &&
+            review.assigned_to_staff_id !== actor.staffMemberId
               ? true
               : undefined,
         },
         actor.ip,
       );
       return {
-        document: this.serializeDocument(updated),
+        document: await this.serializeDocument(documentId),
         level_changed: null,
         milestones_written: [],
       };
     }
 
     // decision === 'APPROVE'
-    const updated = await this.prisma.document.update({
-      where: { id: documentId },
+    await this.prisma.reviewItem.update({
+      where: { id: review.id },
       data: {
         status: 'APPROVED',
         rejection_reason: null,
-        reviewed_by: actor.staffMemberId,
+        reviewed_by_staff_id: actor.staffMemberId,
         reviewed_at: now,
       },
     });
     await this.audit.log(
-      doc.client_profile_id,
+      clientProfileId,
       'verification.document.reviewed',
       'document',
       documentId,
@@ -128,7 +150,7 @@ export class DocumentReviewService {
         document_id: String(documentId),
         doc_type: doc.doc_type,
         admin_override:
-          actor.isAdmin && doc.assigned_to !== actor.staffMemberId
+          actor.isAdmin && review.assigned_to_staff_id !== actor.staffMemberId
             ? true
             : undefined,
       },
@@ -141,7 +163,7 @@ export class DocumentReviewService {
     if (milestoneType !== null) {
       const milestone = await this.prisma.verificationMilestone.create({
         data: {
-          client_profile_id: doc.client_profile_id,
+          client_profile_id: clientProfileId,
           milestone_type: milestoneType,
           staff_member_id: actor.staffMemberId,
           evidence_ref: documentId.toString(),
@@ -153,7 +175,7 @@ export class DocumentReviewService {
       });
 
       const promotion = await this.promotionEngine.runPromotion(
-        doc.client_profile_id,
+        clientProfileId,
         {
           milestoneIds: [milestone.id],
           staffMemberId: actor.staffMemberId,
@@ -161,7 +183,7 @@ export class DocumentReviewService {
         },
       );
       return {
-        document: this.serializeDocument(updated),
+        document: await this.serializeDocument(documentId),
         level_changed: promotion,
         milestones_written: milestonesWritten,
       };
@@ -169,27 +191,44 @@ export class DocumentReviewService {
 
     // Approved doc with no milestone effect (e.g. OTHER)
     return {
-      document: this.serializeDocument(updated),
+      document: await this.serializeDocument(documentId),
       level_changed: null,
       milestones_written: [],
     };
   }
 
-  private serializeDocument(
-    doc: Awaited<ReturnType<PrismaService['document']['update']>>,
-  ) {
+  /**
+   * Aggregate document + parent + latest review_item into the API shape that
+   * callers (frontend, tests) expect — same fields as pre-refactor.
+   */
+  private async serializeDocument(documentId: bigint) {
+    const doc = await this.prisma.document.findUniqueOrThrow({
+      where: { id: documentId },
+      include: {
+        reviewable_item: {
+          include: {
+            review_items: { orderBy: { created_at: 'desc' }, take: 1 },
+          },
+        },
+      },
+    });
+    const review = doc.reviewable_item.review_items[0];
     return {
       id: doc.id.toString(),
-      client_profile_id: doc.client_profile_id.toString(),
+      client_profile_id: doc.reviewable_item.client_profile_id.toString(),
       doc_type: doc.doc_type,
       file_url: doc.file_url,
-      status: doc.status,
-      rejection_reason: doc.rejection_reason,
+      status: review?.status ?? 'PENDING',
+      rejection_reason: review?.rejection_reason ?? null,
       metadata: doc.metadata,
-      assigned_to: doc.assigned_to ? doc.assigned_to.toString() : null,
-      reviewed_by: doc.reviewed_by ? doc.reviewed_by.toString() : null,
-      reviewed_at: doc.reviewed_at,
-      created_at: doc.created_at,
+      assigned_to: review?.assigned_to_staff_id
+        ? review.assigned_to_staff_id.toString()
+        : null,
+      reviewed_by: review?.reviewed_by_staff_id
+        ? review.reviewed_by_staff_id.toString()
+        : null,
+      reviewed_at: review?.reviewed_at ?? null,
+      created_at: doc.reviewable_item.created_at,
     };
   }
 }

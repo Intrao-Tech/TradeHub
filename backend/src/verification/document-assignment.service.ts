@@ -18,17 +18,18 @@ type AssignReason =
 /**
  * Workload-balanced document assignment.
  *
- * On every upload, on duty-off, and on staff deactivation we pick the
- * next available reviewer using:
+ * After the admin-panel refactor (v13): assignment lives on `review_item`
+ * (the workflow row), not on `document` directly. document.id == reviewable_item.id,
+ * and each reviewable_item has at most ONE PENDING review_item (partial UNIQUE).
+ * Public method signatures still take `documentId` (== reviewable_item.id) for
+ * backwards compatibility with callers.
+ *
+ * Picks the next available reviewer using:
  *   1. eligible pool = staff_member where is_on_duty AND account.status='ACTIVE'
- *   2. pick the staff with the smallest count of open (PENDING|IN_REVIEW) docs
+ *   2. pick the staff with the smallest count of open (PENDING) review_items
  *      currently assigned to them
  *   3. tie-break: earliest `staff_member.created_at` (deterministic)
- *   4. if no eligible staff: leave assigned_to=null (unassigned bucket)
- *
- * The algorithm is intentionally simple and synchronous-feeling so that
- * unit-testing against truth tables is straightforward. Assignment writes
- * are wrapped in a single SQL `UPDATE` so concurrent uploads race-safely.
+ *   4. if no eligible staff: leave assigned_to_staff_id=null (unassigned bucket)
  */
 @Injectable()
 export class DocumentAssignmentService {
@@ -39,7 +40,7 @@ export class DocumentAssignmentService {
     private readonly audit: AuditService,
   ) {}
 
-  /** Pick the next on-duty staff with the lowest open-document count. */
+  /** Pick the next on-duty staff with the lowest open-review count. */
   async pickNextAssignee(): Promise<bigint | null> {
     const onDuty = await this.prisma.staffMember.findMany({
       where: {
@@ -51,8 +52,8 @@ export class DocumentAssignmentService {
         created_at: true,
         _count: {
           select: {
-            assigned_documents: {
-              where: { status: { in: ['PENDING', 'IN_REVIEW'] } },
+            assigned_reviews: {
+              where: { status: 'PENDING' },
             },
           },
         },
@@ -62,7 +63,7 @@ export class DocumentAssignmentService {
     if (onDuty.length === 0) return null;
 
     onDuty.sort((a, b) => {
-      const byLoad = a._count.assigned_documents - b._count.assigned_documents;
+      const byLoad = a._count.assigned_reviews - b._count.assigned_reviews;
       if (byLoad !== 0) return byLoad;
       return a.created_at.getTime() - b.created_at.getTime();
     });
@@ -71,9 +72,10 @@ export class DocumentAssignmentService {
   }
 
   /**
-   * Set `Document.assigned_to` to `nextAssignee`. Writes audit event
-   * `verification.document.assigned`. No-op if the assignment doesn't change.
-   * Returns the previous assignee for callers that want to log it.
+   * Set the latest PENDING `review_item.assigned_to_staff_id` for the given
+   * document (= reviewable_item.id). Writes audit event
+   * `verification.document.assigned`. No-op if assignment unchanged.
+   * Returns the previous assignee.
    */
   async setAssignment(
     documentId: bigint,
@@ -82,19 +84,23 @@ export class DocumentAssignmentService {
     actorAccountId: bigint | null,
     ip?: string,
   ): Promise<{ from: bigint | null; to: bigint | null; changed: boolean }> {
-    const doc = await this.prisma.document.findUnique({
-      where: { id: documentId },
-      select: { assigned_to: true, status: true },
+    const review = await this.prisma.reviewItem.findFirst({
+      where: { reviewable_item_id: documentId, status: 'PENDING' },
+      select: { id: true, assigned_to_staff_id: true },
     });
-    if (!doc) return { from: null, to: null, changed: false };
+    if (!review) return { from: null, to: null, changed: false };
 
-    if (doc.assigned_to === nextAssignee) {
-      return { from: doc.assigned_to, to: nextAssignee, changed: false };
+    if (review.assigned_to_staff_id === nextAssignee) {
+      return {
+        from: review.assigned_to_staff_id,
+        to: nextAssignee,
+        changed: false,
+      };
     }
 
-    await this.prisma.document.update({
-      where: { id: documentId },
-      data: { assigned_to: nextAssignee },
+    await this.prisma.reviewItem.update({
+      where: { id: review.id },
+      data: { assigned_to_staff_id: nextAssignee },
     });
 
     await this.audit.log(
@@ -103,14 +109,20 @@ export class DocumentAssignmentService {
       'document',
       documentId,
       {
-        from: doc.assigned_to ? String(doc.assigned_to) : null,
+        from: review.assigned_to_staff_id
+          ? String(review.assigned_to_staff_id)
+          : null,
         to: nextAssignee ? String(nextAssignee) : null,
         reason,
       },
       ip,
     );
 
-    return { from: doc.assigned_to, to: nextAssignee, changed: true };
+    return {
+      from: review.assigned_to_staff_id,
+      to: nextAssignee,
+      changed: true,
+    };
   }
 
   /** Convenience: pick and assign in one call (used on document upload). */
@@ -172,16 +184,35 @@ export class DocumentAssignmentService {
     claimingStaffId: bigint,
     ip?: string,
   ): Promise<void> {
-    const result = await this.prisma.document.updateMany({
-      where: { id: documentId, assigned_to: null },
-      data: { assigned_to: claimingStaffId },
+    // Atomic claim: update only if the latest PENDING review_item has no
+    // assignee. updateMany returns count for the race-safe path.
+    const result = await this.prisma.reviewItem.updateMany({
+      where: {
+        reviewable_item_id: documentId,
+        status: 'PENDING',
+        assigned_to_staff_id: null,
+      },
+      data: { assigned_to_staff_id: claimingStaffId },
     });
     if (result.count === 0) {
-      const doc = await this.prisma.document.findUnique({
-        where: { id: documentId },
-        select: { id: true, assigned_to: true },
+      const review = await this.prisma.reviewItem.findFirst({
+        where: { reviewable_item_id: documentId, status: 'PENDING' },
+        select: { id: true, assigned_to_staff_id: true },
       });
-      if (!doc) throw new NotFoundException({ code: 'DOCUMENT_NOT_FOUND' });
+      if (!review) {
+        // No pending review — either no document or already resolved.
+        const doc = await this.prisma.document.findUnique({
+          where: { id: documentId },
+          select: { id: true },
+        });
+        if (!doc) {
+          throw new NotFoundException({ code: 'DOCUMENT_NOT_FOUND' });
+        }
+        throw new ConflictException({
+          code: 'NOT_PENDING',
+          message: 'This document has no pending review to claim.',
+        });
+      }
       throw new ConflictException({
         code: 'ALREADY_ASSIGNED',
         message: 'This document is already assigned to another staff member.',
@@ -208,20 +239,20 @@ export class DocumentAssignmentService {
     actorAccountId: bigint | null,
     ip?: string,
   ): Promise<number> {
-    const docs = await this.prisma.document.findMany({
+    const reviews = await this.prisma.reviewItem.findMany({
       where: {
-        assigned_to: fromStaffId,
-        status: { in: ['PENDING', 'IN_REVIEW'] },
+        assigned_to_staff_id: fromStaffId,
+        status: 'PENDING',
       },
-      select: { id: true },
+      select: { reviewable_item_id: true },
     });
     let count = 0;
-    for (const doc of docs) {
+    for (const r of reviews) {
       const next = await this.pickNextAssignee();
       // Don't re-assign back to the same staff (e.g. only one on-duty).
       const target = next === fromStaffId ? null : next;
       const result = await this.setAssignment(
-        doc.id,
+        r.reviewable_item_id,
         target,
         reason,
         actorAccountId,

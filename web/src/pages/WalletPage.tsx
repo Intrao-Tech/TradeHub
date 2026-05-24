@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Wallet } from 'lucide-react';
+import { CreditCard, ScaleIcon, Wallet } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '../hooks/useAccountMe';
 import {
@@ -12,10 +12,25 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
   OnboardingBanner,
   type OnboardingStatus,
 } from '../components/wallet/OnboardingBanner';
-import { getWallet, type WalletData } from '../components/escrow';
+import {
+  getEmployerPayments,
+  getWallet,
+  type EmployerPaymentRow,
+  type EmployerPaymentsView as EmployerPaymentsData,
+  type WalletData,
+} from '../components/escrow';
+import { EmptyState } from '../components/EmptyState';
 
 const fmt = (s: string) =>
   new Intl.NumberFormat('en-GB', {
@@ -66,24 +81,18 @@ export default function WalletPage() {
   }, [justCompleted, isWorker, status?.payouts_enabled, refresh]);
 
   if (!isWorker) {
-    return (
-      <div className="space-y-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Wallet</h1>
-        <p className="text-sm text-fg-muted">
-          Wallet is for tradespeople receiving payouts via Stripe Connect.
-          As an employer, you don't need to set up anything here — when you
-          fund a milestone, Stripe Checkout collects your card directly.
-        </p>
-      </div>
-    );
+    return <EmployerPaymentsView />;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Wallet className="h-6 w-6 text-fg-muted" />
-        <h1 className="text-2xl font-semibold tracking-tight">Wallet</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Payments</h1>
       </div>
+      <p className="text-sm text-fg-muted">
+        Stripe Connect setup and every payout to your account.
+      </p>
 
       {error ? (
         <div
@@ -245,5 +254,220 @@ export default function WalletPage() {
         </Card>
       ) : null}
     </div>
+  );
+}
+
+function EmployerPaymentsView() {
+  const [data, setData] = useState<EmployerPaymentsData | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getEmployerPayments();
+        if (!cancelled) setData(res);
+      } catch (err) {
+        if (!cancelled) {
+          setError(parseApiError(err)?.message ?? 'Could not load payments.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const totals = (() => {
+    const byKey = new Map<string, { count: number; amount: number }>();
+    for (const t of data?.totals ?? []) {
+      byKey.set(`${t.type}:${t.status}`, {
+        count: t.count,
+        amount: Number(t.amount),
+      });
+    }
+    const get = (k: string) => byKey.get(k) ?? { count: 0, amount: 0 };
+    return {
+      chargesPaid: get('CHARGE:PAID'),
+      chargesPending: get('CHARGE:PENDING'),
+      chargesFailed: get('CHARGE:FAILED'),
+      refundsPaid: get('REFUND:PAID'),
+    };
+  })();
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <CreditCard className="h-6 w-6 text-fg-muted" />
+        <h1 className="text-2xl font-semibold tracking-tight">Payments</h1>
+      </div>
+      <p className="text-sm text-fg-muted">
+        Funds you've charged, refunds you've issued, and any open disputes on
+        your milestones.
+      </p>
+
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
+        >
+          {error}
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <SummaryCard label="Charged" {...totals.chargesPaid} />
+        <SummaryCard label="Pending" {...totals.chargesPending} />
+        <SummaryCard label="Failed" {...totals.chargesFailed} tone="danger" />
+        <SummaryCard label="Refunded" {...totals.refundsPaid} />
+      </div>
+
+      {data && data.open_disputes.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ScaleIcon className="h-4 w-4" />
+              Open disputes
+            </CardTitle>
+            <CardDescription>
+              Milestones currently under dispute. Click through to respond or
+              follow the resolution proposal.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {data.open_disputes.map((d) => (
+              <Link
+                key={d.id}
+                to={`/escrow/${d.milestone.contract_id}`}
+                className="flex items-center justify-between rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-warning hover:bg-warning-subtle/80"
+              >
+                <div>
+                  <div className="font-medium">{d.milestone.title}</div>
+                  <div className="text-xs opacity-80">
+                    Filed by {d.filed_by_role.toLowerCase()} on{' '}
+                    {new Date(d.created_at).toLocaleDateString()} — {d.status}
+                  </div>
+                </div>
+                <span className="font-semibold">{fmt(d.milestone.amount)}</span>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ledger</CardTitle>
+          <CardDescription>
+            Every charge and refund on your account, newest first.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <p className="text-sm text-fg-muted">Loading…</p>
+          ) : !data || data.payments.length === 0 ? (
+            <EmptyState
+              icon={Wallet}
+              title="No payments yet"
+              description="Fund your first milestone and it will show up here."
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Milestone</TableHead>
+                  <TableHead>Worker</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.payments.map((p) => (
+                  <PaymentRow key={p.id} payment={p} />
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function SummaryCard({
+  label,
+  amount,
+  count,
+  tone,
+}: {
+  label: string;
+  amount: number;
+  count: number;
+  tone?: 'danger';
+}) {
+  const toneCls = tone === 'danger' ? 'text-danger' : 'text-fg';
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardDescription>{label}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className={`text-2xl font-semibold ${toneCls}`}>
+          {fmt(String(amount))}
+        </div>
+        <div className="text-xs text-fg-muted">
+          {count} {count === 1 ? 'item' : 'items'}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PaymentRow({ payment: p }: { payment: EmployerPaymentRow }) {
+  const statusVariant: 'success' | 'warning' | 'danger' | 'secondary' =
+    p.status === 'PAID'
+      ? 'success'
+      : p.status === 'PENDING'
+        ? 'warning'
+        : p.status === 'FAILED'
+          ? 'danger'
+          : 'secondary';
+  return (
+    <TableRow>
+      <TableCell>
+        <Badge variant={p.type === 'REFUND' ? 'info' : 'default'}>
+          {p.type}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <Badge variant={statusVariant}>{p.status}</Badge>
+        {p.failure_reason ? (
+          <div className="mt-1 text-xs text-danger">{p.failure_reason}</div>
+        ) : null}
+      </TableCell>
+      <TableCell>
+        <Link
+          to={`/escrow/${p.milestone.contract_id}`}
+          className="font-medium hover:underline"
+        >
+          {p.milestone.title}
+        </Link>
+      </TableCell>
+      <TableCell className="text-fg-muted">{p.worker.display_name}</TableCell>
+      <TableCell className="text-fg-muted">
+        {new Date(p.created_at).toLocaleDateString()}
+      </TableCell>
+      <TableCell
+        className={`text-right font-semibold ${p.type === 'REFUND' ? 'text-warning' : ''}`}
+      >
+        {p.type === 'REFUND' ? '−' : ''}
+        {fmt(p.amount)}
+      </TableCell>
+    </TableRow>
   );
 }

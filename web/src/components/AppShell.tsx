@@ -1,6 +1,18 @@
 import { type ReactNode, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { Check, LogOut, Menu, Monitor, Moon, Settings, Sun, User, X } from "lucide-react";
+import {
+  Check,
+  LogOut,
+  Menu,
+  Monitor,
+  Moon,
+  Power,
+  Settings,
+  Sun,
+  User,
+  X,
+} from "lucide-react";
+import { api, parseApiError } from "@/api";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +63,11 @@ type AppShellProps = {
   publicNav: NavItem[];
   privateNav: NavItem[];
   onLogout: () => void;
+  /**
+   * Hide the marketing footer. Used by the staff app where the footer is
+   * irrelevant (no public CTAs, mobile-app links etc.).
+   */
+  hideFooter?: boolean;
   children: ReactNode;
 };
 
@@ -59,6 +76,7 @@ export function AppShell({
   publicNav,
   privateNav,
   onLogout,
+  hideFooter = false,
   children,
 }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -76,6 +94,15 @@ export function AppShell({
   // Surface the chat unread badge in the nav whenever the user is logged in.
   // Hook is no-op'd internally when there's no token.
   const { total: unreadTotal } = useUnreadCount();
+  // Staff role chip (e.g. ADMIN / STAFF / FINANCE_REVIEWER) next to the logo
+  // — only shown for staff accounts.
+  const { account } = useAccountMe();
+  const staffMember = account?.staff_member as
+    | { staff_role?: string; is_on_duty?: boolean }
+    | null
+    | undefined;
+  const staffRole = staffMember?.staff_role ?? null;
+  const isOnDuty = staffMember?.is_on_duty === true;
 
   return (
     <div className="min-h-screen bg-page text-fg">
@@ -90,6 +117,23 @@ export function AppShell({
             </span>
             <span>TradeHub</span>
           </NavLink>
+
+          {staffRole ? (
+            <Badge
+              variant={staffRole === 'ADMIN' ? 'default' : 'secondary'}
+              className="gap-1.5 text-[10px] uppercase tracking-wide"
+              aria-label={`Logged in as ${staffRole}${isOnDuty ? ', on duty' : ', off duty'}`}
+            >
+              <span
+                className={cn(
+                  'inline-block h-1.5 w-1.5 rounded-full',
+                  isOnDuty ? 'bg-success' : 'bg-fg-muted/50',
+                )}
+                aria-hidden
+              />
+              {staffRole}
+            </Badge>
+          ) : null}
 
           <nav className="hidden flex-1 items-center gap-1 md:flex">
             {items.map((n) => (
@@ -109,7 +153,7 @@ export function AppShell({
             {/* <ThemeToggle /> */}
             {loggedIn ? <NotificationsBell /> : null}
             {loggedIn ? (
-              <UserMenu onLogout={onLogout} />
+              <UserMenu onLogout={onLogout} isStaff={!!staffMember} isOnDuty={isOnDuty} />
             ) : (
               <div className="hidden items-center gap-2 sm:flex">
                 <Button size="sm" variant="ghost" asChild>
@@ -202,7 +246,7 @@ export function AppShell({
       >
         {children}
       </main>
-      {loggedIn ? <AuthFooter /> : <Footer />}
+      {hideFooter ? null : loggedIn ? <AuthFooter /> : <Footer />}
     </div>
   );
 }
@@ -240,8 +284,34 @@ function NavItemLink({
   );
 }
 
-function UserMenu({ onLogout }: { onLogout: () => void }) {
-  const { account, clientProfile } = useAccountMe();
+function UserMenu({
+  onLogout,
+  isStaff,
+  isOnDuty,
+}: {
+  onLogout: () => void;
+  isStaff: boolean;
+  isOnDuty: boolean;
+}) {
+  const { account, clientProfile, refetch } = useAccountMe();
+  const [dutyBusy, setDutyBusy] = useState(false);
+  const [dutyErr, setDutyErr] = useState('');
+  async function toggleDuty() {
+    if (!isStaff || dutyBusy) return;
+    setDutyBusy(true);
+    setDutyErr('');
+    try {
+      await api('/staff/me/duty', {
+        method: 'POST',
+        body: JSON.stringify({ on_duty: !isOnDuty }),
+      });
+      await refetch();
+    } catch (e) {
+      setDutyErr(parseApiError(e)?.message ?? 'Failed to toggle duty');
+    } finally {
+      setDutyBusy(false);
+    }
+  }
   const displayName =
     clientProfile?.display_name?.trim() ||
     account?.email?.split("@")[0] ||
@@ -282,12 +352,44 @@ function UserMenu({ onLogout }: { onLogout: () => void }) {
           ) : null}
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <NavLink to="/profile" className="flex items-center gap-2">
-            <User className="h-4 w-4" />
-            <span>Profile</span>
-          </NavLink>
-        </DropdownMenuItem>
+        {isStaff ? (
+          <DropdownMenuItem
+            onSelect={(e) => {
+              e.preventDefault();
+              void toggleDuty();
+            }}
+            disabled={dutyBusy}
+            className="flex items-center justify-between gap-2"
+          >
+            <span className="flex items-center gap-2">
+              <Power
+                className={cn(
+                  'h-4 w-4',
+                  isOnDuty ? 'text-success' : 'text-fg-muted',
+                )}
+              />
+              <span>{isOnDuty ? 'On duty' : 'Off duty'}</span>
+            </span>
+            <span className="text-xs text-fg-muted">
+              {dutyBusy
+                ? '…'
+                : isOnDuty
+                  ? 'Click to go off'
+                  : 'Click to go on'}
+            </span>
+          </DropdownMenuItem>
+        ) : null}
+        {isStaff && dutyErr ? (
+          <div className="px-2 py-1 text-[11px] text-danger">{dutyErr}</div>
+        ) : null}
+        {clientProfile ? (
+          <DropdownMenuItem asChild>
+            <NavLink to="/profile" className="flex items-center gap-2">
+              <User className="h-4 w-4" />
+              <span>Profile</span>
+            </NavLink>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem asChild>
           <NavLink to="/settings/security" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />

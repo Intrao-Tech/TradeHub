@@ -22,6 +22,18 @@ import {
 const UPLOAD_SUBDIR = 'uploads';
 const STRUCTURED_ONLY_DOC_TYPES = new Set(['HMRC_CIS_DOCUMENT']);
 
+// Shape we return on the API. Aggregated from reviewable_item (owner, created)
+// + document (file/metadata) + latest review_item (workflow state).
+type DocumentRow = Prisma.DocumentGetPayload<{
+  include: {
+    reviewable_item: {
+      include: {
+        review_items: { orderBy: { created_at: 'desc' }; take: 1 };
+      };
+    };
+  };
+}>;
+
 @Injectable()
 export class DocumentService implements OnModuleInit {
   private readonly logger = new Logger(DocumentService.name);
@@ -76,19 +88,40 @@ export class DocumentService implements OnModuleInit {
       ? '(structured-only)'
       : `/${UPLOAD_SUBDIR}/${file!.filename}`;
 
-    const created = await this.prisma.document.create({
-      data: {
-        client_profile_id: clientProfileId,
-        doc_type: dto.doc_type,
-        file_url,
-        status: 'PENDING',
-        metadata: validatedMetadata
-          ? (validatedMetadata as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-      },
+    // Upload creates: reviewable_item (parent, owns client_profile_id) +
+    // document (subtype, shared PK) + review_item (workflow, status=PENDING)
+    // in a single transaction. review_item's existence puts the document
+    // into the staff verification queue immediately.
+    const created = await this.prisma.$transaction(async (tx) => {
+      const reviewable = await tx.reviewableItem.create({
+        data: {
+          client_profile_id: clientProfileId,
+          kind: 'DOCUMENT',
+          document: {
+            create: {
+              doc_type: dto.doc_type,
+              file_url,
+              metadata: validatedMetadata
+                ? (validatedMetadata as Prisma.InputJsonValue)
+                : Prisma.JsonNull,
+            },
+          },
+          review_items: {
+            create: {
+              status: 'PENDING',
+            },
+          },
+        },
+        include: {
+          document: true,
+          review_items: { orderBy: { created_at: 'desc' }, take: 1 },
+        },
+      });
+      return reviewable;
     });
 
-    // Auto-assign to the next on-duty staff (or leave unassigned).
+    // Auto-assign to the next on-duty staff (or leave unassigned). Operates
+    // on review_item now (assigned_to_staff_id moved off document).
     await this.assignmentService.assignNext(created.id, ip);
 
     // Audit-log without leaking sensitive metadata (UTR / NI / share-code).
@@ -101,17 +134,22 @@ export class DocumentService implements OnModuleInit {
       ip,
     );
 
-    return this.serialize(
-      await this.prisma.document.findUniqueOrThrow({
-        where: { id: created.id },
-      }),
-    );
+    const row = await this.findByIdWithReview(created.id);
+    // We just created it in the transaction above — must exist.
+    return this.serialize(row!);
   }
 
   async getByClientProfile(clientProfileId: bigint) {
     const docs = await this.prisma.document.findMany({
-      where: { client_profile_id: clientProfileId },
-      orderBy: { created_at: 'desc' },
+      where: { reviewable_item: { client_profile_id: clientProfileId } },
+      include: {
+        reviewable_item: {
+          include: {
+            review_items: { orderBy: { created_at: 'desc' }, take: 1 },
+          },
+        },
+      },
+      orderBy: { reviewable_item: { created_at: 'desc' } },
     });
     return docs.map((d) => this.serialize(d));
   }
@@ -121,10 +159,11 @@ export class DocumentService implements OnModuleInit {
     clientProfileId: bigint | null,
     isStaff: boolean,
   ) {
-    const doc = await this.prisma.document.findUnique({ where: { id } });
+    const doc = await this.findByIdWithReview(id);
     if (!doc) throw new NotFoundException({ code: 'DOCUMENT_NOT_FOUND' });
     const isOwner =
-      clientProfileId !== null && doc.client_profile_id === clientProfileId;
+      clientProfileId !== null &&
+      doc.reviewable_item.client_profile_id === clientProfileId;
     if (!isOwner && !isStaff) {
       throw new ForbiddenException({
         code: 'FORBIDDEN',
@@ -135,42 +174,68 @@ export class DocumentService implements OnModuleInit {
   }
 
   async deleteDocument(id: bigint, clientProfileId: bigint) {
-    const doc = await this.prisma.document.findUnique({ where: { id } });
+    const doc = await this.findByIdWithReview(id);
     if (!doc) throw new NotFoundException({ code: 'DOCUMENT_NOT_FOUND' });
-    if (doc.client_profile_id !== clientProfileId) {
+    if (doc.reviewable_item.client_profile_id !== clientProfileId) {
       throw new ForbiddenException({
         code: 'FORBIDDEN',
         message: 'Cannot delete this document.',
       });
     }
-    if (doc.status !== 'PENDING') {
+    const latestReview = doc.reviewable_item.review_items[0];
+    // Only allow delete while the doc is still PENDING (or has no review yet
+    // — though current upload flow always creates a PENDING review_item).
+    if (latestReview && latestReview.status !== 'PENDING') {
       throw new BadRequestException({
         code: 'INVALID_TRANSITION',
         message: 'Only documents in PENDING status can be deleted.',
       });
     }
-    await this.prisma.document.delete({ where: { id } });
+    // Deleting the parent reviewable_item cascades to document + review_items.
+    await this.prisma.reviewableItem.delete({ where: { id } });
   }
 
   /**
-   * Serialised view for the API. Strips sensitive metadata fields so they
-   * never leak via the document-list endpoints. Staff queue endpoints use
-   * `QueueService` which has its own serialisation.
+   * Internal helper: load a document by id with the parent + latest review.
    */
-  private serialize(doc: Prisma.DocumentGetPayload<Record<string, never>>) {
+  private async findByIdWithReview(id: bigint): Promise<DocumentRow | null> {
+    return this.prisma.document.findUnique({
+      where: { id },
+      include: {
+        reviewable_item: {
+          include: {
+            review_items: { orderBy: { created_at: 'desc' }, take: 1 },
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Serialised view for the API. Keeps the same shape as before the
+   * reviewable_item refactor — aggregates fields from parent + subtype +
+   * latest review_item. Strips sensitive metadata.
+   */
+  private serialize(doc: DocumentRow) {
+    const ri = doc.reviewable_item;
+    const review = ri.review_items[0]; // latest or undefined
     const safeMetadata = redactSensitiveMetadata(doc.doc_type, doc.metadata);
     return {
       id: doc.id.toString(),
-      client_profile_id: doc.client_profile_id.toString(),
+      client_profile_id: ri.client_profile_id.toString(),
       doc_type: doc.doc_type,
       file_url: doc.file_url,
-      status: doc.status,
-      rejection_reason: doc.rejection_reason,
+      status: review?.status ?? 'PENDING',
+      rejection_reason: review?.rejection_reason ?? null,
       metadata: safeMetadata,
-      assigned_to: doc.assigned_to ? doc.assigned_to.toString() : null,
-      reviewed_by: doc.reviewed_by ? doc.reviewed_by.toString() : null,
-      reviewed_at: doc.reviewed_at,
-      created_at: doc.created_at,
+      assigned_to: review?.assigned_to_staff_id
+        ? review.assigned_to_staff_id.toString()
+        : null,
+      reviewed_by: review?.reviewed_by_staff_id
+        ? review.reviewed_by_staff_id.toString()
+        : null,
+      reviewed_at: review?.reviewed_at ?? null,
+      created_at: ri.created_at,
     };
   }
 }

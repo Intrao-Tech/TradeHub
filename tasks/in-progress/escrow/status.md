@@ -36,6 +36,12 @@
 - **Slice plan**: 6 slices over ~3 weeks of dev. A — schema + Connect onboarding; B — milestones + fund; C — submit + release + auto-release; D — refund + dispute + cancel; E — wallet + admin settings + system chat msgs; F — audit + cleanup + provider flag.
 - **Tests counterpart**: `tests-escrow/` opens parallel to Slice A; coverage drives `TEST-ESCROW-NNN` 1:1 against `ESCROW-NNN`. Real Stripe API never used in tests — `stripe-mock` Docker container or in-memory mock.
 - **Webhook setup verified 2026-05-09**: `stripe listen --forward-to ... --forward-connect-to ...` running, both `STRIPE_WEBHOOK_SECRET` and `STRIPE_CONNECT_WEBHOOK_SECRET` set in `.env`, `payment_intent.succeeded` test trigger returned `[200]` from local backend. Connect activated in Stripe sandbox via Marketplace business model. Test connected account auto-created (acct_1TVGTqEJxf4yoGty).
+- **2026-05-24 dispute proposal flow + employer payments view + `/wallet` → `/payments` rename** (during the admin-panel iteration — see `tasks/in-progress/admin-panel/spec.md` for the cross-feature context):
+  - New table `escrow_dispute_proposal` (migration `20260524210000_dispute_proposal_and_perms`) — staff proposes a split, both parties must accept before execution; partial UNIQUE blocks concurrent in-flight proposals on the same dispute. CHECK constraint on `worker_pct + employer_refund_pct = 100`. See ESCROW-160…167.
+  - New endpoints: propose / decide / escalate / cancel-by-filer. Existing `resolveDispute` becomes the execution path under the proposal layer.
+  - Frontend `DisputeProposalView` shared across worker, employer, and admin surfaces.
+  - Stripe refund call drops `refund_application_fee` (incompatible with separate-transfer flow — runtime crash fixed).
+  - Marketplace route `/wallet` renamed to `/payments` for both surfaces; old URL retained as redirect for Stripe Connect return URLs. New employer view at `/payments` driven by `GET /escrow/payments/me/employer` returning totals + ledger + open disputes (ESCROW-170…174).
 - **2026-05-10 milestone-detail features added** (migration `milestone_request_attachments_worker_payout`):
   - REQUESTED + DECLINED milestone states (worker can request milestones; employer approves or declines, declined preserves the row).
   - `description` field on milestones (≤2000 chars).

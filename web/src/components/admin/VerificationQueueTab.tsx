@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, parseApiError } from '../../api';
+import { useAccountMe } from '../../hooks/useAccountMe';
 import { publicFileUrl } from '../../lib/files';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -64,11 +65,13 @@ const ASSIGNMENT_FILTERS = [
 ] as const;
 
 export function VerificationQueueTab() {
+  const { isAdmin } = useAccountMe();
   const [data, setData] = useState<QueueResponse | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('PENDING,IN_REVIEW');
-  const [assignment, setAssignment] = useState<string>('all');
+  // Non-admins can't list 'all' — default to 'mine'. Admins keep the broad view.
+  const [assignment, setAssignment] = useState<string>(isAdmin ? 'all' : 'mine');
   const [rejecting, setRejecting] = useState<{
     docId: string;
     reason: string;
@@ -98,6 +101,14 @@ export function VerificationQueueTab() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // If account loads and reveals the user is non-admin, swap 'all' → 'mine'
+  // so the next fetch doesn't trip the backend 403.
+  useEffect(() => {
+    if (!isAdmin && assignment === 'all') {
+      setAssignment('mine');
+    }
+  }, [isAdmin, assignment]);
 
   async function approve(documentId: string) {
     setActionErr('');
@@ -207,7 +218,9 @@ export function VerificationQueueTab() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ASSIGNMENT_FILTERS.map((f) => (
+                {ASSIGNMENT_FILTERS.filter(
+                  (f) => f.value !== 'all' || isAdmin,
+                ).map((f) => (
                   <SelectItem key={f.value} value={f.value}>
                     {f.label}
                   </SelectItem>
