@@ -26,6 +26,7 @@ import { ApplicationStatusBadge } from '@/components/jobs/ApplicationStatusBadge
 import { ApplyJobSheet } from '@/components/jobs/ApplyJobSheet';
 import { AttachmentList } from '@/components/jobs/AttachmentList';
 import { formatPay } from '@/components/jobs/PayLine';
+import { SaveJobButton } from '@/components/jobs/SaveJobButton';
 import { formatRelative } from '@/lib/relative-time';
 import { toast } from '@/components/ui/toast';
 import { ShareForCommissionButton } from '@/components/referral/ShareForCommissionButton';
@@ -53,6 +54,7 @@ type JobDetail = {
   start_date?: string | null;
   status?: string;
   is_urgent?: boolean;
+  is_saved?: boolean;
   expires_at?: string | null;
   created_at?: string;
   employer?: {
@@ -346,6 +348,7 @@ export default function AuthJobDetailPage() {
             nextHref={nextHref}
             jobId={String(id)}
             jobTitle={detail.title}
+            initialSaved={!!detail.is_saved}
             onApply={() => setApplyOpen(true)}
           />
 
@@ -472,6 +475,7 @@ type ActionCardProps = {
   nextHref: string;
   jobId: string;
   jobTitle: string;
+  initialSaved: boolean;
   onApply: () => void;
 };
 
@@ -486,6 +490,7 @@ function ActionCard({
   nextHref,
   jobId,
   jobTitle,
+  initialSaved,
   onApply,
 }: ActionCardProps) {
   // Employer-other: keep the existing behaviour of rendering nothing — but
@@ -508,6 +513,13 @@ function ActionCard({
     <Card>
       <CardContent className="space-y-3 p-5">
         {body}
+        {loggedIn && isWorker ? (
+          <SaveJobButton
+            jobId={jobId}
+            initialSaved={initialSaved}
+            variant="pill"
+          />
+        ) : null}
         {loggedIn && isWorker ? (
           <ShareForCommissionButton
             kind="JOB"

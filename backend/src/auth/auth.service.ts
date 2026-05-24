@@ -533,20 +533,21 @@ export class AuthService {
   async refreshTokens(refreshToken: string | undefined) {
     const payload = this.verifyRefreshToken(refreshToken);
 
-    const stored = await this.prisma.refreshToken.findFirst({
+    // Atomic rotate: one query consumes the token. If a concurrent refresh
+    // already consumed it, count=0 and we return a clean 401 instead of
+    // racing into a P2025 from a separate findFirst+delete pair.
+    const { count } = await this.prisma.refreshToken.deleteMany({
       where: {
         token: refreshToken,
         account_id: BigInt(payload.sub),
         expires_at: { gt: new Date() },
       },
     });
-    if (!stored)
+    if (count === 0)
       throw new UnauthorizedException({
         code: 'REFRESH_INVALID',
         message: 'Session expired. Please sign in again.',
       });
-
-    await this.prisma.refreshToken.delete({ where: { id: stored.id } });
 
     const account = await this.prisma.account.findUniqueOrThrow({
       where: { id: BigInt(payload.sub) },

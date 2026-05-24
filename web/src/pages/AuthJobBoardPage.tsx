@@ -13,6 +13,7 @@ import { api, parseApiError } from '../api';
 import { useAccountMe } from '@/hooks/useAccountMe';
 import { useSpecialisations } from '@/hooks/useSpecialisations';
 import { JobCard, type JobCardData } from '@/components/JobCard';
+import { SaveJobButton } from '@/components/jobs/SaveJobButton';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,17 +50,32 @@ type JobListResponse = {
   limit: number;
 };
 
+// /api/saved-jobs returns rows shaped as `{ job_post: <JobPost>, created_at }`.
+// We unwrap to JobPostRow before rendering so the rest of the page works
+// against a single item shape.
+type SavedJobRow = {
+  job_post: JobPostRow;
+  created_at?: string;
+};
+type SavedJobsResponse = {
+  items: SavedJobRow[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
 const PAGE_SIZE = 20;
 
-type FeedTab = 'best_matches' | 'most_recent';
+type FeedTab = 'best_matches' | 'most_recent' | 'saved';
 
 function isFeedTab(v: string | null): v is FeedTab {
-  return v === 'best_matches' || v === 'most_recent';
+  return v === 'best_matches' || v === 'most_recent' || v === 'saved';
 }
 
 export default function AuthJobBoardPage() {
   const navigate = useNavigate();
-  const { isEmployer, verificationState, clientProfile } = useAccountMe();
+  const { isWorker, isEmployer, verificationState, clientProfile } =
+    useAccountMe();
   const canPostJob = isEmployer && verificationState === 'ACTIVE';
 
   // Worker's own specialisations — used for Best Matches re-ranking. Real
@@ -103,7 +119,15 @@ export default function AuthJobBoardPage() {
   const [listError, setListError] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
 
+  // Saved tab uses a separate, simpler query (no filters / search) since the
+  // backend endpoint only paginates a worker's bookmarks.
   const querySuffix = useMemo(() => {
+    if (activeTab === 'saved') {
+      const p = new URLSearchParams();
+      p.set('page', String(page));
+      p.set('limit', String(PAGE_SIZE));
+      return `?${p.toString()}`;
+    }
     const p = new URLSearchParams();
     p.set('status', 'OPEN');
     p.set('page', String(page));
@@ -115,22 +139,58 @@ export default function AuthJobBoardPage() {
     }
     if (isUrgentOnly) p.set('is_urgent', 'true');
     return `?${p.toString()}`;
-  }, [search, postcodeArea, specialisationId, isUrgentOnly, page]);
+  }, [activeTab, search, postcodeArea, specialisationId, isUrgentOnly, page]);
 
   const loadJobs = useCallback(async () => {
     setListError('');
     try {
-      const data = await api<JobListResponse>(`/job-posts${querySuffix}`);
-      setList(data);
+      if (activeTab === 'saved') {
+        const data = await api<SavedJobsResponse>(`/saved-jobs${querySuffix}`);
+        // Unwrap { job_post, created_at } → JobPostRow and force is_saved=true
+        // (the server doesn't currently echo it on the saved-jobs endpoint, and
+        // by definition every row here is saved).
+        setList({
+          items: data.items.map((row) => ({ ...row.job_post, is_saved: true })),
+          total: data.total,
+          page: data.page,
+          limit: data.limit,
+        });
+      } else {
+        const data = await api<JobListResponse>(`/job-posts${querySuffix}`);
+        setList(data);
+      }
     } catch (e) {
       setListError(parseApiError(e)?.message ?? 'Could not load jobs.');
       setList(null);
     }
-  }, [querySuffix]);
+  }, [activeTab, querySuffix]);
 
   useEffect(() => {
     void loadJobs();
   }, [loadJobs]);
+
+  // When the user unsaves a row from the Saved tab, remove it from the local
+  // list immediately so it disappears without a refetch. On the other tabs
+  // toggling the icon just flips the in-memory `is_saved` flag so the icon
+  // state matches what the user just clicked.
+  function handleSaveToggle(jobId: string | number, nowSaved: boolean) {
+    setList((prev) => {
+      if (!prev) return prev;
+      if (activeTab === 'saved' && !nowSaved) {
+        return {
+          ...prev,
+          items: prev.items.filter((it) => String(it.id) !== String(jobId)),
+          total: Math.max(0, prev.total - 1),
+        };
+      }
+      return {
+        ...prev,
+        items: prev.items.map((it) =>
+          String(it.id) === String(jobId) ? { ...it, is_saved: nowSaved } : it,
+        ),
+      };
+    });
+  }
 
   // Best-matches re-rank: count overlapping specialisations between the
   // current worker and each returned job; ties broken by server order
@@ -407,7 +467,9 @@ export default function AuthJobBoardPage() {
             <p className="text-sm text-fg-muted">
               {activeTab === 'best_matches'
                 ? 'Ranked by overlap with your specialisations. Switch to Most Recent when you want the freshest posts first.'
-                : 'Browse the freshest open jobs, newest first.'}
+                : activeTab === 'most_recent'
+                  ? 'Browse the freshest open jobs, newest first.'
+                  : 'Jobs you bookmarked. Tap the icon again to remove a job from this list.'}
             </p>
           </div>
 
@@ -423,6 +485,9 @@ export default function AuthJobBoardPage() {
               <TabsList>
                 <TabsTrigger value="best_matches">Best Matches</TabsTrigger>
                 <TabsTrigger value="most_recent">Most Recent</TabsTrigger>
+                {isWorker ? (
+                  <TabsTrigger value="saved">Saved</TabsTrigger>
+                ) : null}
               </TabsList>
             </Tabs>
 
@@ -461,6 +526,15 @@ export default function AuthJobBoardPage() {
                     key={String(j.id)}
                     job={j}
                     onSelect={() => navigate(`/jobs/${j.id}`)}
+                    headerSlot={
+                      isWorker ? (
+                        <SaveJobButton
+                          jobId={j.id}
+                          initialSaved={!!j.is_saved}
+                          onChange={(saved) => handleSaveToggle(j.id, saved)}
+                        />
+                      ) : null
+                    }
                   />
                 ))}
               </div>

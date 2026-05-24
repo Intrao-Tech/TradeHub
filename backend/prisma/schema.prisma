@@ -164,6 +164,7 @@ model WorkerProfile {
   worker_tags              WorkerTag[]
   job_applications         JobApplication[]
   referral_intents         ReferralIntent[]
+  saved_jobs               SavedJob[]
 
   @@index([is_available, available_from])
   @@index([rating_avg(sort: Desc), rating_count(sort: Desc)])
@@ -813,6 +814,7 @@ model JobPost {
   contracts        Contract[]
   attachments      JobAttachment[]
   referral_intents ReferralIntent[]
+  saved_by         SavedJob[]
 
   @@index([employer_id])
   @@index([status, postcode_area])
@@ -899,6 +901,27 @@ model JobAttachment {
   @@index([job_application_id])
   @@index([created_at])
   @@map("job_attachment")
+}
+
+// ============================================
+// 32B. SAVED JOB (worker bookmarks a JobPost — Upwork-style "Saved jobs")
+// Composite PK guarantees a worker can save the same post at most once.
+// Cascade on both sides: deleting the worker_profile or the job_post
+// removes the bookmark row.
+// ============================================
+
+model SavedJob {
+  worker_id   BigInt
+  job_post_id BigInt
+  created_at  DateTime @default(now()) @db.Timestamptz()
+
+  worker_profile WorkerProfile @relation(fields: [worker_id], references: [id], onDelete: Cascade)
+  job_post       JobPost       @relation(fields: [job_post_id], references: [id], onDelete: Cascade)
+
+  @@id([worker_id, job_post_id])
+  @@index([job_post_id])
+  @@index([worker_id, created_at(sort: Desc)])
+  @@map("saved_job")
 }
 
 // ============================================
