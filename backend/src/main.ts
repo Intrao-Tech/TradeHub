@@ -69,9 +69,9 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
-  console.log(`TradeHub API running on http://localhost:${port}/api`);
-  console.log(`Swagger docs: http://localhost:${port}/api/docs`);
-  console.log(`WebSocket chat: ws://localhost:${port}/chat`);
+  console.log(`TradeHub API listening on port ${port} (prefix /api)`);
+  console.log(`Swagger docs at /api/docs`);
+  console.log(`WebSocket chat at /chat`);
 }
 
 void bootstrap();
