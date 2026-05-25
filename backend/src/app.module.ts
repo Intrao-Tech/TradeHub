@@ -24,6 +24,7 @@ import { JobPostModule } from './job-post/job-post.module';
 import { JobApplicationModule } from './job-application/job-application.module';
 import { JobAttachmentModule } from './job-attachment/job-attachment.module';
 import { SavedJobModule } from './saved-job/saved-job.module';
+import { SavedWorkerModule } from './saved-worker/saved-worker.module';
 import { ConversationModule } from './conversation/conversation.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
@@ -69,6 +70,7 @@ const baseImports = [
   JobApplicationModule,
   JobAttachmentModule,
   SavedJobModule,
+  SavedWorkerModule,
   ConversationModule,
   VerificationModule,
   WebhooksModule,

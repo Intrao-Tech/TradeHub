@@ -21,6 +21,7 @@ import { ShareForCommissionButton } from '@/components/referral/ShareForCommissi
 import { useRefAttribution } from '@/components/referral/useRefAttribution';
 import { useAccountMe } from '@/hooks/useAccountMe';
 import { InviteToJobButton } from '@/components/workers/InviteToJobButton';
+import { SaveWorkerButton } from '@/components/workers/SaveWorkerButton';
 
 type Specialisation = {
   specialisation_id?: string | number;
@@ -55,6 +56,7 @@ type WorkerDetail = {
   day_rate_max?: string | number | null;
   available_from?: string | null;
   is_available?: boolean;
+  is_saved?: boolean;
   rating_avg?: string | number | null;
   rating_count?: number | null;
   languages?: string[];
@@ -187,6 +189,12 @@ export default function WorkerDetailPage() {
         </div>
         {loggedIn && isEmployer && id ? (
           <div className="flex flex-wrap items-center gap-2">
+            <SaveWorkerButton
+              workerId={id}
+              initialSaved={!!worker.is_saved}
+              variant="pill"
+              className="w-auto"
+            />
             <ShareForCommissionButton
               kind="WORKER"
               targetId={id}

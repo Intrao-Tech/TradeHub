@@ -13,6 +13,7 @@ import { useSpecialisations } from '@/hooks/useSpecialisations';
 import { WorkerCard, type WorkerCardData } from '@/components/WorkerCard';
 import { EmptyState } from '@/components/EmptyState';
 import { InviteToJobButton } from '@/components/workers/InviteToJobButton';
+import { SaveWorkerButton } from '@/components/workers/SaveWorkerButton';
 import { StarRating } from '@/components/StarRating';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type WorkerRow = WorkerCardData & {
   worker_specialisations?: WorkerCardData['worker_specialisations'];
@@ -45,7 +47,27 @@ type WorkerSearchResponse = {
   limit: number;
 };
 
+// /api/saved-workers returns rows shaped as `{ worker_profile, created_at }`.
+// We unwrap to WorkerRow before rendering so the rest of the page works
+// against a single item shape.
+type SavedWorkerRow = {
+  worker_profile: WorkerRow;
+  created_at?: string;
+};
+type SavedWorkersResponse = {
+  items: SavedWorkerRow[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
 const PAGE_SIZE = 10;
+
+type Tab = 'all' | 'saved';
+
+function isTab(v: string | null): v is Tab {
+  return v === 'all' || v === 'saved';
+}
 
 export default function AuthWorkerSearchPage() {
   const navigate = useNavigate();
@@ -65,6 +87,8 @@ export default function AuthWorkerSearchPage() {
   const dayRateMinParam = params.get('day_rate_min');
   const dayRateMaxParam = params.get('day_rate_max');
   const page = Math.max(1, Number(params.get('page') ?? '1') || 1);
+  const tabParam = params.get('tab');
+  const activeTab: Tab = isTab(tabParam) ? tabParam : 'all';
 
   const [postcodeInput, setPostcodeInput] = useState(postcodeArea);
   const [rateMinInput, setRateMinInput] = useState(dayRateMinParam ?? '');
@@ -84,7 +108,15 @@ export default function AuthWorkerSearchPage() {
   const [results, setResults] = useState<WorkerSearchResponse | null>(null);
   const [error, setError] = useState('');
 
+  // Saved tab uses a simpler query (no filters); the endpoint only paginates
+  // the employer's bookmarks.
   const querySuffix = useMemo(() => {
+    if (activeTab === 'saved') {
+      const sp = new URLSearchParams();
+      sp.set('page', String(page));
+      sp.set('limit', String(PAGE_SIZE));
+      return `?${sp.toString()}`;
+    }
     const sp = new URLSearchParams();
     sp.set('page', String(page));
     sp.set('limit', String(PAGE_SIZE));
@@ -104,6 +136,7 @@ export default function AuthWorkerSearchPage() {
     }
     return `?${sp.toString()}`;
   }, [
+    activeTab,
     page,
     postcodeArea,
     specialisationId,
@@ -116,19 +149,61 @@ export default function AuthWorkerSearchPage() {
   const loadWorkers = useCallback(async () => {
     setError('');
     try {
-      const data = await api<WorkerSearchResponse>(
-        `/worker-profiles${querySuffix}`,
-      );
-      setResults(data);
+      if (activeTab === 'saved') {
+        const data = await api<SavedWorkersResponse>(
+          `/saved-workers${querySuffix}`,
+        );
+        // Unwrap { worker_profile, created_at } → WorkerRow and force is_saved
+        // true (by definition every row here is saved).
+        setResults({
+          data: data.items.map((row) => ({
+            ...row.worker_profile,
+            is_saved: true,
+          })),
+          total: data.total,
+          page: data.page,
+          limit: data.limit,
+        });
+      } else {
+        const data = await api<WorkerSearchResponse>(
+          `/worker-profiles${querySuffix}`,
+        );
+        setResults(data);
+      }
     } catch (e) {
       setError(parseApiError(e)?.message ?? 'Could not load workers.');
       setResults(null);
     }
-  }, [querySuffix]);
+  }, [activeTab, querySuffix]);
 
   useEffect(() => {
     void loadWorkers();
   }, [loadWorkers]);
+
+  // When the employer unsaves a worker from the Saved tab, remove them from
+  // the local list immediately so they disappear without a refetch. On the
+  // other tab toggling the icon flips the in-memory is_saved flag so the icon
+  // state matches what the user just clicked.
+  function handleSaveToggle(workerId: string | number, nowSaved: boolean) {
+    setResults((prev) => {
+      if (!prev) return prev;
+      if (activeTab === 'saved' && !nowSaved) {
+        return {
+          ...prev,
+          data: prev.data.filter((it) => String(it.id) !== String(workerId)),
+          total: Math.max(0, prev.total - 1),
+        };
+      }
+      return {
+        ...prev,
+        data: prev.data.map((it) =>
+          String(it.id) === String(workerId)
+            ? { ...it, is_saved: nowSaved }
+            : it,
+        ),
+      };
+    });
+  }
 
   function commitFilters(next: {
     postcodeArea?: string | null;
@@ -137,9 +212,14 @@ export default function AuthWorkerSearchPage() {
     minRating?: number | null;
     dayRateMin?: string | null;
     dayRateMax?: string | null;
+    tab?: Tab | null;
     page?: number | null;
   }) {
     const merged = new URLSearchParams(params);
+    if (next.tab !== undefined) {
+      if (next.tab) merged.set('tab', next.tab);
+      else merged.delete('tab');
+    }
     if (next.postcodeArea !== undefined) {
       if (next.postcodeArea) merged.set('postcode_area', next.postcodeArea);
       else merged.delete('postcode_area');
@@ -352,9 +432,27 @@ export default function AuthWorkerSearchPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Find workers</h1>
         <p className="text-sm text-fg-muted">
-          Browse verified tradespeople and invite them to one of your open jobs.
+          {activeTab === 'saved'
+            ? 'Workers you bookmarked. Tap the icon again to remove a worker from this list.'
+            : 'Browse verified tradespeople and invite them to one of your open jobs.'}
         </p>
       </div>
+
+      {isEmployer ? (
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => {
+            if (isTab(v)) {
+              commitFilters({ tab: v === 'all' ? null : v, page: null });
+            }
+          }}
+        >
+          <TabsList>
+            <TabsTrigger value="all">All workers</TabsTrigger>
+            <TabsTrigger value="saved">Saved</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      ) : null}
 
       {error ? (
         <div
@@ -428,6 +526,15 @@ export default function AuthWorkerSearchPage() {
                       worker={w}
                       onSelect={(picked) =>
                         navigate(`/workers/${String(picked.id)}`)
+                      }
+                      headerSlot={
+                        isEmployer ? (
+                          <SaveWorkerButton
+                            workerId={w.id}
+                            initialSaved={!!w.is_saved}
+                            onChange={(saved) => handleSaveToggle(w.id, saved)}
+                          />
+                        ) : null
                       }
                       actions={
                         isEmployer ? (
