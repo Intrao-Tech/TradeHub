@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Info } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, ChevronDown, Info } from 'lucide-react';
 import { api, parseApiError } from '../../api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -395,22 +395,14 @@ export function JobPostForm({
           frozen={isFrozen('postcode_area')}
           freezeReason={freezeReason}
         >
-          <Input
+          <PostcodeAreaSelect
             id="job-postcode"
-            list="job-postcode-suggestions"
             value={values.postcode_area}
-            onChange={(e) =>
-              setValue('postcode_area', e.target.value.toUpperCase())
-            }
-            placeholder="e.g. SW1"
-            maxLength={10}
+            onChange={(v) => setValue('postcode_area', v.toUpperCase())}
+            options={POSTCODE_AREAS}
             disabled={isFrozen('postcode_area')}
+            invalid={Boolean(errors.postcode_area)}
           />
-          <datalist id="job-postcode-suggestions">
-            {POSTCODE_AREAS.map((p) => (
-              <option key={p} value={p} />
-            ))}
-          </datalist>
         </Field>
         <Field
           label="Duration (days)"
@@ -547,6 +539,165 @@ export function JobPostForm({
   );
 }
 JobPostForm.displayName = 'JobPostForm';
+
+function PostcodeAreaSelect({
+  id,
+  value,
+  onChange,
+  options,
+  disabled,
+  invalid,
+}: {
+  id: string;
+  value: string;
+  onChange: (next: string) => void;
+  options: string[];
+  disabled?: boolean;
+  invalid?: boolean;
+}) {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const filtered = useMemo(() => {
+    const q = value.trim().toUpperCase();
+    if (!q) return options;
+    return options.filter((p) => p.includes(q));
+  }, [options, value]);
+
+  useEffect(() => {
+    if (activeIndex >= filtered.length) setActiveIndex(0);
+  }, [filtered.length, activeIndex]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  function commit(next: string) {
+    onChange(next);
+    setOpen(false);
+    inputRef.current?.blur();
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setOpen(true);
+      setActiveIndex((i) => Math.min(i + 1, Math.max(0, filtered.length - 1)));
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setOpen(true);
+      setActiveIndex((i) => Math.max(0, i - 1));
+      return;
+    }
+    if (e.key === 'Enter') {
+      if (open && filtered[activeIndex]) {
+        e.preventDefault();
+        commit(filtered[activeIndex]);
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      setOpen(false);
+    }
+  }
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <div className="relative">
+        <Input
+          id={id}
+          ref={inputRef}
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={`${id}-list`}
+          aria-autocomplete="list"
+          autoComplete="off"
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value.toUpperCase());
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder="e.g. SW1"
+          maxLength={10}
+          disabled={disabled}
+          aria-invalid={invalid || undefined}
+          className="pr-9 uppercase"
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={open ? 'Close postcode list' : 'Open postcode list'}
+          disabled={disabled}
+          onClick={() => {
+            if (disabled) return;
+            setOpen((v) => !v);
+            inputRef.current?.focus();
+          }}
+          className="absolute inset-y-0 right-0 flex items-center px-2 text-fg-muted hover:text-fg disabled:opacity-50"
+        >
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 transition-transform',
+              open && 'rotate-180',
+            )}
+          />
+        </button>
+      </div>
+      {open && !disabled ? (
+        <div
+          id={`${id}-list`}
+          role="listbox"
+          className="absolute left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-md border border-border-default bg-raised shadow-lg"
+        >
+          {filtered.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-fg-muted">No matches.</p>
+          ) : (
+            <ul className="py-1">
+              {filtered.map((opt, idx) => {
+                const isActive = idx === activeIndex;
+                const isSelected = opt === value.trim().toUpperCase();
+                return (
+                  <li
+                    key={opt}
+                    role="option"
+                    aria-selected={isSelected}
+                    onMouseEnter={() => setActiveIndex(idx)}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      commit(opt);
+                    }}
+                    className={cn(
+                      'flex min-h-10 cursor-pointer items-center justify-between gap-2 px-3 py-1.5 text-sm text-fg',
+                      isActive && 'bg-subtle',
+                      isSelected && 'font-medium',
+                    )}
+                  >
+                    <span>{opt}</span>
+                    {isSelected ? (
+                      <Check className="h-4 w-4 text-primary" />
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function Field({
   label,

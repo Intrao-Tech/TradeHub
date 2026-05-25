@@ -180,7 +180,7 @@ export default function MyJobsPage() {
                 onSuccess={(created) => {
                   toast.success('Job posted');
                   setCreateOpen(false);
-                  if (created?.id != null) navigate(`/my-jobs/${created.id}/applicants`);
+                  if (created?.id != null) navigate(`/jobs/${created.id}`);
                   else void load();
                 }}
                 onCancel={() => setCreateOpen(false)}

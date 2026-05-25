@@ -68,7 +68,10 @@ const PRIVATE_NAV: NavItem[] = [
   { to: '/my-applications', label: 'Applications', requires: 'worker' },
   { to: '/my-jobs', label: 'Posted jobs', requires: 'employer' },
   { to: '/collaborations', label: 'Collaborations' },
-  { to: '/payments', label: 'Payments' },
+  // Employers don't have a payout wallet — their billing activity lives in
+  // the contract / escrow flow. The page itself is still reachable by URL
+  // (back-compat for old Stripe Connect return links) but we keep it off the nav.
+  { to: '/payments', label: 'Payments', hideForRole: 'employer' },
   { to: '/referrals', label: 'Referrals' },
   { to: '/inbox', label: 'Inbox' },
   { to: '/support', label: 'Support' },

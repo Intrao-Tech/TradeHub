@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Check,
@@ -81,6 +81,11 @@ export function AppShell({
 }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  // Reset scroll on route change — without this the browser keeps the
+  // previous page's scroll Y, dropping users into the middle of the next page.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname]);
   // Role-based filter for private nav items. Public items are always shown.
   // We read account roles here (hook is no-op'd when there's no token).
   const { isWorker, isEmployer } = useAccountMe();
