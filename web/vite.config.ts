@@ -18,6 +18,14 @@ export default defineConfig({
     // `server.host: 'localhost'` rejects non-localhost requests.
     host: true,
   },
+  preview: {
+    port: 3000,
+    host: true,
+    // Vite preview defaults to a strict Host-header allowlist (403 on miss).
+    // For Railway-default *.up.railway.app hostnames we don't know the host
+    // at build time, so allow all.
+    allowedHosts: true,
+  },
   test: {
     globals: true,
     environment: 'jsdom',
