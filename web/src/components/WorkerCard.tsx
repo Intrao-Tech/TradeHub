@@ -17,6 +17,7 @@ export type WorkerCardData = {
   day_rate_max?: string | number | null;
   years_experience?: number | null;
   is_available?: boolean;
+  is_saved?: boolean;
   postcode_area?: string | null;
   avatar_url?: string | null;
   rating_avg?: string | number | null;
@@ -41,6 +42,10 @@ type WorkerCardProps = {
   worker: WorkerCardData;
   onSelect?: (worker: WorkerCardData) => void;
   actions?: ReactNode;
+  // Rendered in the top-right of the card next to `actions`. Used by /workers
+  // to mount the SaveWorkerButton — kept as an opt-in slot so unrelated
+  // screens (e.g. WorkerDirectoryPage) are not forced to add a save UI.
+  headerSlot?: ReactNode;
   selected?: boolean;
   className?: string;
 };
@@ -71,6 +76,7 @@ export function WorkerCard({
   worker,
   onSelect,
   actions,
+  headerSlot,
   selected,
   className,
 }: WorkerCardProps) {
@@ -159,7 +165,12 @@ export function WorkerCard({
             ) : null}
           </div>
         </div>
-        {actions ?? null}
+        {headerSlot || actions ? (
+          <div className="flex items-start gap-2 shrink-0">
+            {headerSlot}
+            {actions}
+          </div>
+        ) : null}
       </div>
 
       {rate || showRating || years != null ? (
