@@ -59,7 +59,9 @@ async function bootstrap() {
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('TradeHub UK API')
-    .setDescription('B2B platform for UK construction tradespeople')
+    .setDescription(
+      'B2B platform for UK construction tradespeople — jobs, escrow, reviews, and KYC.',
+    )
     .setVersion('1.0')
     .addBearerAuth()
     .build();
