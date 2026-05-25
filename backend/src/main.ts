@@ -70,8 +70,8 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
   await app.listen(port);
   console.log(`TradeHub API listening on port ${port} (prefix /api)`);
-  console.log(`Swagger docs at /api/docs`);
-  console.log(`WebSocket chat at /chat`);
+  console.log(`Swagger docs available at /api/docs`);
+  console.log(`WebSocket chat available at /chat`);
 }
 
 void bootstrap();
