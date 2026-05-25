@@ -10,7 +10,6 @@ import {
   Settings,
   Sun,
   User,
-  X,
 } from "lucide-react";
 import { api, parseApiError } from "@/api";
 import { cn } from "@/lib/utils";
@@ -185,17 +184,7 @@ export function AppShell({
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="w-72 p-0">
           <SheetHeader className="border-b border-border-default px-4 py-3">
-            <SheetTitle className="flex items-center justify-between">
-              <span>Menu</span>
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label="Close menu"
-                onClick={() => setMobileOpen(false)}
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </SheetTitle>
+            <SheetTitle>Menu</SheetTitle>
           </SheetHeader>
           <nav className="flex flex-col gap-1 p-3">
             {items.map((n) => (
