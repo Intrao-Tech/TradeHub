@@ -11,16 +11,22 @@ export class EmployerProfileService {
   async getById(id: bigint) {
     const profile = await this.prisma.employerProfile.findUnique({
       where: { id },
-      include: { client_profile: true },
+      include: {
+        client_profile: { include: { account: { select: { status: true } } } },
+      },
     });
-    if (!profile) throw new NotFoundException('Employer profile not found');
-    return profile;
+    if (!profile || profile.client_profile.account.status !== 'ACTIVE') {
+      throw new NotFoundException('Employer profile not found');
+    }
+    const { account: _account, ...client_profile } = profile.client_profile;
+    return { ...profile, client_profile };
   }
 
   async update(id: bigint, dto: UpdateEmployerProfileDto) {
     const data: Prisma.EmployerProfileUpdateInput = {};
     if (dto.company_name !== undefined) data.company_name = dto.company_name;
-    if (dto.company_number !== undefined) data.company_number = dto.company_number;
+    if (dto.company_number !== undefined)
+      data.company_number = dto.company_number;
     if (dto.team_size !== undefined) data.team_size = dto.team_size;
 
     try {

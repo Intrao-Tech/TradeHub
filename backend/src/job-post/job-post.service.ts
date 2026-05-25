@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -13,6 +14,7 @@ const jobPostInclude = {
   employer: { include: { client_profile: true } },
   specialisations: { include: { specialisation: true } },
   tags: { include: { tag: true } },
+  attachments: { orderBy: { created_at: 'asc' } },
   _count: { select: { applications: true } },
 } satisfies Prisma.JobPostInclude;
 
@@ -21,7 +23,7 @@ export class JobPostService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateJobPostDto, employerId: bigint) {
-    return this.prisma.jobPost.create({
+    const created = await this.prisma.jobPost.create({
       data: {
         employer_id: employerId,
         title: dto.title,
@@ -38,15 +40,11 @@ export class JobPostService {
             ? new Prisma.Decimal(dto.day_rate_max)
             : null,
         fixed_price:
-          dto.fixed_price != null
-            ? new Prisma.Decimal(dto.fixed_price)
-            : null,
+          dto.fixed_price != null ? new Prisma.Decimal(dto.fixed_price) : null,
         duration_days: dto.duration_days ?? null,
-        start_date:
-          dto.start_date != null ? new Date(dto.start_date) : null,
+        start_date: dto.start_date != null ? new Date(dto.start_date) : null,
         is_urgent: dto.is_urgent ?? false,
-        expires_at:
-          dto.expires_at != null ? new Date(dto.expires_at) : null,
+        expires_at: dto.expires_at != null ? new Date(dto.expires_at) : null,
         specialisations: {
           create:
             dto.specialisation_ids?.map((id) => ({
@@ -62,6 +60,8 @@ export class JobPostService {
       },
       include: jobPostInclude,
     });
+
+    return created;
   }
 
   async findAll(query: JobPostQueryDto) {
@@ -69,7 +69,13 @@ export class JobPostService {
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    const where = this.buildWhere(query);
+    // JOBS-002: anonymous browse defaults to OPEN. Callers that genuinely
+    // want CLOSED / FILLED / CANCELLED rows must opt in by setting `status`
+    // explicitly (any value, including the literal string "ALL", which the
+    // service treats as "no status filter").
+    const effectiveQuery: JobPostQueryDto =
+      query.status == null ? { ...query, status: 'OPEN' } : query;
+    const where = this.buildWhere(effectiveQuery);
 
     const [items, total] = await Promise.all([
       this.prisma.jobPost.findMany({
@@ -170,10 +176,17 @@ export class JobPostService {
   async delete(id: bigint, employerId: bigint) {
     const existing = await this.prisma.jobPost.findUnique({
       where: { id },
+      include: { _count: { select: { applications: true } } },
     });
     if (!existing) throw new NotFoundException('Job post not found');
     if (existing.employer_id !== employerId) {
       throw new ForbiddenException('Only the owner can delete this job post');
+    }
+    if (existing._count.applications > 0) {
+      throw new ConflictException({
+        code: 'HAS_APPLICATIONS',
+        message: 'Close this job instead — applicants would lose their record.',
+      });
     }
 
     await this.prisma.jobPost.delete({ where: { id } });
@@ -185,8 +198,14 @@ export class JobPostService {
         ? query.search.trim()
         : null;
 
+    // `status: 'ALL'` is the explicit opt-out for anonymous + employer
+    // dashboards that need to see every status.
+    const status =
+      query.status != null && query.status.toUpperCase() !== 'ALL'
+        ? query.status
+        : null;
     return {
-      ...(query.status != null ? { status: query.status } : {}),
+      ...(status != null ? { status } : {}),
       ...(query.postcode_area != null
         ? { postcode_area: query.postcode_area }
         : {}),
@@ -213,9 +232,7 @@ export class JobPostService {
     };
   }
 
-  private buildUpdateData(
-    dto: UpdateJobPostDto,
-  ): Prisma.JobPostUpdateInput {
+  private buildUpdateData(dto: UpdateJobPostDto): Prisma.JobPostUpdateInput {
     const data: Prisma.JobPostUpdateInput = {};
 
     if (dto.title !== undefined) data.title = dto.title;
@@ -231,21 +248,15 @@ export class JobPostService {
     if (dto.pay_type !== undefined) data.pay_type = dto.pay_type;
     if (dto.day_rate_min !== undefined) {
       data.day_rate_min =
-        dto.day_rate_min != null
-          ? new Prisma.Decimal(dto.day_rate_min)
-          : null;
+        dto.day_rate_min != null ? new Prisma.Decimal(dto.day_rate_min) : null;
     }
     if (dto.day_rate_max !== undefined) {
       data.day_rate_max =
-        dto.day_rate_max != null
-          ? new Prisma.Decimal(dto.day_rate_max)
-          : null;
+        dto.day_rate_max != null ? new Prisma.Decimal(dto.day_rate_max) : null;
     }
     if (dto.fixed_price !== undefined) {
       data.fixed_price =
-        dto.fixed_price != null
-          ? new Prisma.Decimal(dto.fixed_price)
-          : null;
+        dto.fixed_price != null ? new Prisma.Decimal(dto.fixed_price) : null;
     }
     if (dto.duration_days !== undefined) {
       data.duration_days = dto.duration_days;

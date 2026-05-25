@@ -1,16 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Bell } from 'lucide-react';
-import { api } from '../api';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useCallback, useEffect, useState } from 'react';
+import { Bell, X } from 'lucide-react';
+import { api, parseApiError } from '../api';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { EmptyState } from '@/components/EmptyState';
 
 const LIMIT = 20;
-
-function errMsg(e: unknown) {
-  return e instanceof Error ? e.message : String(e);
-}
 
 type NotificationRow = {
   id: string | number;
@@ -19,6 +20,7 @@ type NotificationRow = {
   body: string | null;
   channel: string;
   read_at: string | null;
+  created_at?: string;
 };
 
 type ListResponse = {
@@ -28,177 +30,167 @@ type ListResponse = {
   limit: number;
 };
 
+function formatWhen(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export default function NotificationsPage() {
   const [page, setPage] = useState(1);
-  const [listRes, setListRes] = useState<ListResponse | null>(null);
-  const [unreadCount, setUnreadCount] = useState<number | null>(null);
-  const [listErr, setListErr] = useState('');
-  const [countErr, setCountErr] = useState('');
-  const [actionErr, setActionErr] = useState('');
-  const [rowErr, setRowErr] = useState<Record<string, string>>({});
+  const [res, setRes] = useState<ListResponse | null>(null);
+  const [error, setError] = useState('');
 
-  const loadList = useCallback(async (p: number) => {
-    setListErr('');
+  const load = useCallback(async (p: number) => {
+    setError('');
     try {
-      const q = new URLSearchParams();
-      q.set('page', String(p));
-      q.set('limit', String(LIMIT));
+      const q = new URLSearchParams({
+        page: String(p),
+        limit: String(LIMIT),
+      });
       const data = await api<ListResponse>(`/notifications?${q.toString()}`);
-      setListRes(data);
+      setRes(data);
     } catch (e) {
-      setListErr(errMsg(e));
-    }
-  }, []);
-
-  const loadUnread = useCallback(async () => {
-    setCountErr('');
-    try {
-      const n = await api<number>('/notifications/unread-count');
-      setUnreadCount(typeof n === 'number' ? n : Number(n));
-    } catch (e) {
-      setCountErr(errMsg(e));
+      const parsed = parseApiError(e);
+      setError(parsed?.message ?? 'Could not load notifications.');
     }
   }, []);
 
   useEffect(() => {
-    void loadList(page);
-    void loadUnread();
-  }, [page, loadList, loadUnread]);
+    void load(page);
+  }, [page, load]);
 
   async function markRead(id: string | number) {
-    const key = String(id);
-    setRowErr((prev) => ({ ...prev, [key]: '' }));
-    setActionErr('');
     try {
-      await api(`/notifications/${encodeURIComponent(key)}/read`, {
+      await api(`/notifications/${encodeURIComponent(String(id))}/read`, {
         method: 'PATCH',
       });
-      await loadList(page);
-      await loadUnread();
+      await load(page);
     } catch (e) {
-      setRowErr((prev) => ({ ...prev, [key]: errMsg(e) }));
+      const parsed = parseApiError(e);
+      setError(parsed?.message ?? 'Could not mark notification as read.');
     }
   }
 
   async function markAllRead() {
-    setActionErr('');
     try {
       await api('/notifications/read-all', { method: 'PATCH' });
-      await loadList(page);
-      await loadUnread();
+      await load(page);
     } catch (e) {
-      setActionErr(errMsg(e));
+      const parsed = parseApiError(e);
+      setError(parsed?.message ?? 'Could not mark all as read.');
     }
   }
 
-  const total = listRes?.total ?? 0;
-  const lastPage = Math.max(1, Math.ceil(total / LIMIT));
-  const items = listRes?.data ?? [];
+  const rows = res?.data ?? [];
+  const total = res?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+  const hasUnread = rows.some((r) => !r.read_at);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-fg">Notifications</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">
+            Notifications
+          </h1>
           <p className="text-sm text-fg-muted">
-            Unread:{' '}
-            {unreadCount === null ? (
-              <span className="text-fg-subtle">…</span>
-            ) : (
-              <Badge variant={unreadCount > 0 ? 'warning' : 'outline'}>{unreadCount}</Badge>
-            )}
+            Job invites, milestone updates, and platform alerts.
           </p>
         </div>
-        <Button type="button" onClick={() => void markAllRead()} variant="outline">
-          Mark all read
-        </Button>
+        {hasUnread ? (
+          <Button type="button" variant="outline" size="sm" onClick={() => void markAllRead()}>
+            Mark all read
+          </Button>
+        ) : null}
       </div>
 
-      {listErr ? (
+      {error ? (
         <div
           role="alert"
           className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
         >
-          {listErr}
-        </div>
-      ) : null}
-      {countErr ? (
-        <div
-          role="alert"
-          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
-        >
-          {countErr}
-        </div>
-      ) : null}
-      {actionErr ? (
-        <div
-          role="alert"
-          className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
-        >
-          {actionErr}
+          {error}
         </div>
       ) : null}
 
       <Card>
-        <CardHeader>
-          <CardTitle>Inbox</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Activity</CardTitle>
           <CardDescription>
-            Page {page} of {lastPage} · total {total}
+            {total > 0
+              ? `${total} notification${total === 1 ? '' : 's'}`
+              : 'No notifications yet'}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {items.length === 0 ? (
-            <EmptyState
-              icon={Bell}
-              title="No notifications"
-              description="You're all caught up."
-            />
+        <CardContent className="p-0">
+          {res == null ? (
+            <p className="px-4 py-8 text-center text-sm text-fg-muted">
+              Loading…
+            </p>
+          ) : rows.length === 0 ? (
+            <div className="px-4 py-8">
+              <EmptyState
+                icon={Bell}
+                title="No notifications yet"
+                description="When platform events happen on your account, they'll appear here."
+              />
+            </div>
           ) : (
             <ul className="divide-y divide-border-default">
-              {items.map((n) => {
-                const isUnread = n.read_at == null;
-                return (
-                  <li
-                    key={String(n.id)}
-                    className={
-                      'flex flex-col gap-2 px-3 py-4 sm:flex-row sm:items-start sm:justify-between ' +
-                      (isUnread ? 'bg-subtle rounded-md' : '')
-                    }
-                  >
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium text-fg">{n.title}</span>
-                        {isUnread ? <Badge variant="warning">Unread</Badge> : null}
-                        <Badge variant="outline">{n.type}</Badge>
-                        <Badge variant="outline">{n.channel}</Badge>
-                      </div>
-                      {n.body ? (
-                        <p className="text-sm text-fg-muted">{n.body}</p>
-                      ) : null}
-                      <p className="text-xs text-fg-subtle">
-                        id {String(n.id)} · {n.read_at ?? 'unread'}
-                      </p>
-                      {rowErr[String(n.id)] ? (
-                        <p className="text-xs text-danger">{rowErr[String(n.id)]}</p>
-                      ) : null}
-                    </div>
-                    {isUnread ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void markRead(n.id)}
-                      >
-                        Mark read
-                      </Button>
+              {rows.map((n) => (
+                <li
+                  key={String(n.id)}
+                  className={`flex items-start gap-3 px-4 py-3 ${
+                    n.read_at ? '' : 'bg-subtle'
+                  }`}
+                >
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-raised text-fg-muted">
+                    <Bell className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-fg">{n.title}</p>
+                    {n.body ? (
+                      <p className="mt-0.5 text-sm text-fg-muted">{n.body}</p>
                     ) : null}
-                  </li>
-                );
-              })}
+                    {n.created_at ? (
+                      <p className="mt-1 text-xs text-fg-muted">
+                        {formatWhen(n.created_at)}
+                      </p>
+                    ) : null}
+                  </div>
+                  {!n.read_at ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0"
+                      aria-label="Mark read"
+                      onClick={() => void markRead(n.id)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  ) : null}
+                </li>
+              ))}
             </ul>
           )}
+        </CardContent>
+      </Card>
 
-          <div className="flex items-center justify-between gap-2 pt-2">
+      {total > LIMIT ? (
+        <div className="flex items-center justify-between text-sm text-fg-muted">
+          <span>
+            Page {page} of {totalPages}
+          </span>
+          <div className="flex gap-2">
             <Button
               type="button"
               variant="outline"
@@ -208,33 +200,18 @@ export default function NotificationsPage() {
             >
               Previous
             </Button>
-            <span className="text-xs text-fg-muted">
-              Page {page} of {lastPage}
-            </span>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              disabled={page >= lastPage}
-              onClick={() => setPage((p) => p + 1)}
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             >
               Next
             </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Raw list response</CardTitle>
-          <CardDescription>Debug view</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
-            {JSON.stringify(listRes, null, 2)}
-          </pre>
-        </CardContent>
-      </Card>
+        </div>
+      ) : null}
     </div>
   );
 }

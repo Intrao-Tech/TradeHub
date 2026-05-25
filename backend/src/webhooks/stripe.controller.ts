@@ -32,14 +32,17 @@ export class StripeWebhookController {
       throw new BadRequestException('Missing stripe-signature header');
     }
     if (!req.rawBody) {
-      throw new BadRequestException('Missing raw body — rawBody must be enabled in main.ts');
+      throw new BadRequestException(
+        'Missing raw body — rawBody must be enabled in main.ts',
+      );
     }
 
     let event;
     try {
       event = this.service.constructEvent(req.rawBody, signature);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Signature verification failed';
+      const message =
+        err instanceof Error ? err.message : 'Signature verification failed';
       this.logger.warn(`Stripe signature verification failed: ${message}`);
       throw new BadRequestException(`Webhook Error: ${message}`);
     }

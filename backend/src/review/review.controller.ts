@@ -9,13 +9,13 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../common/guards/roles.guard';
+import {
+  AccountStateGuard,
+  RequiresVerifiedEmail,
+} from '../common/guards/account-state.guard';
 import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
@@ -30,7 +30,8 @@ export class ReviewController {
   constructor(private readonly reviewService: ReviewService) {}
 
   @Post('collaboration/:collaborationId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AccountStateGuard)
+  @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a review for a completed collaboration' })
   async create(
@@ -41,7 +42,7 @@ export class ReviewController {
     if (user.clientProfileId == null) {
       throw new BadRequestException('No client profile for this account');
     }
-    return this.reviewService.create(
+    return this.reviewService.createForCollaboration(
       collaborationId,
       user.clientProfileId,
       dto,
@@ -63,8 +64,19 @@ export class ReviewController {
     return this.reviewService.getByCollaboration(collaborationId);
   }
 
+  @Get('unpublished')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STAFF')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List unpublished reviews (staff publish queue)' })
+  getUnpublished(@Query() query: ReviewQueryDto) {
+    return this.reviewService.getUnpublished(query);
+  }
+
   @Get('worker/:workerId')
-  @ApiOperation({ summary: 'Published reviews about a worker (from employers)' })
+  @ApiOperation({
+    summary: 'Published reviews about a worker (from employers)',
+  })
   getForWorker(
     @Param('workerId', ParseBigIntPipe) workerId: bigint,
     @Query() query: ReviewQueryDto,
@@ -73,7 +85,9 @@ export class ReviewController {
   }
 
   @Get('employer/:employerId')
-  @ApiOperation({ summary: 'Published reviews about an employer (from workers)' })
+  @ApiOperation({
+    summary: 'Published reviews about an employer (from workers)',
+  })
   getForEmployer(
     @Param('employerId', ParseBigIntPipe) employerId: bigint,
     @Query() query: ReviewQueryDto,

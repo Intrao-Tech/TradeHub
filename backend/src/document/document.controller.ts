@@ -7,8 +7,8 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Ip,
   Param,
-  Patch,
   Post,
   UploadedFile,
   UseGuards,
@@ -30,11 +30,20 @@ import {
   CurrentUser,
   type CurrentUserPayload,
 } from '../common/decorators/current-user.decorator';
-import { Roles, RolesGuard } from '../common/guards/roles.guard';
 import { ParseBigIntPipe } from '../common/pipes/parse-bigint.pipe';
 import { DocumentService } from './document.service';
-import { UpdateDocumentStatusDto } from './dto/update-document-status.dto';
-import { UploadDocumentDto } from './dto/upload-document.dto';
+import {
+  DOCUMENT_DOC_TYPES,
+  UploadDocumentDto,
+} from './dto/upload-document.dto';
+
+const DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
+const DOCUMENT_ALLOWED_MIMES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+];
 
 @ApiTags('Documents')
 @Controller('documents')
@@ -48,27 +57,30 @@ export class DocumentController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['file', 'doc_type'],
+      required: ['doc_type'],
       properties: {
-        file: { type: 'string', format: 'binary' },
+        file: {
+          type: 'string',
+          format: 'binary',
+          description:
+            'File payload. Required for most doc types; omit for structured-only types like HMRC_CIS_DOCUMENT.',
+        },
         doc_type: {
           type: 'string',
-          enum: [
-            'ID_PHOTO',
-            'SELFIE',
-            'INSURANCE',
-            'CSCS_CARD',
-            'GAS_SAFE_CERT',
-            'NICEIC_CERT',
-            'COMPANY_LETTERHEAD',
-            'PROJECT_PHOTO',
-            'OTHER',
-          ],
+          enum: [...DOCUMENT_DOC_TYPES],
+        },
+        metadata: {
+          type: 'string',
+          description:
+            'Per-doc-type structured metadata as a JSON string (e.g. `{"share_code":"W12 ABC 345"}` for RIGHT_TO_WORK_SHARE_CODE).',
         },
       },
     },
   })
-  @ApiOperation({ summary: 'Upload a verification document' })
+  @ApiOperation({
+    summary:
+      'Upload a verification document (file + metadata) or submit a structured-only credential (HMRC CIS).',
+  })
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -77,17 +89,35 @@ export class DocumentController {
           cb(null, `${randomUUID()}${extname(file.originalname)}`);
         },
       }),
+      limits: { fileSize: DOCUMENT_MAX_BYTES },
+      fileFilter: (_req, file, cb) => {
+        if (!DOCUMENT_ALLOWED_MIMES.includes(file.mimetype)) {
+          cb(
+            new BadRequestException({
+              code: 'INVALID_MIME',
+              message: 'Use a PDF, JPEG, PNG, or WebP file.',
+            }),
+            false,
+          );
+          return;
+        }
+        cb(null, true);
+      },
     }),
   )
   async upload(
     @CurrentUser() user: CurrentUserPayload,
     @Body() dto: UploadDocumentDto,
     @UploadedFile() file: Express.Multer.File | undefined,
+    @Ip() ip: string,
   ) {
     if (user.clientProfileId === null) {
-      throw new BadRequestException('Client profile required');
+      throw new BadRequestException({
+        code: 'NO_CLIENT_PROFILE',
+        message: 'Client profile required.',
+      });
     }
-    return this.documentService.upload(user.clientProfileId, dto, file);
+    return this.documentService.upload(user.clientProfileId, dto, file, ip);
   }
 
   @Get('me')
@@ -113,23 +143,6 @@ export class DocumentController {
       id,
       user.clientProfileId,
       user.isStaff,
-    );
-  }
-
-  @Patch(':id/status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('STAFF')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update document review status (staff)' })
-  async updateStatus(
-    @Param('id', ParseBigIntPipe) id: bigint,
-    @Body() dto: UpdateDocumentStatusDto,
-    @CurrentUser() user: CurrentUserPayload,
-  ) {
-    return this.documentService.updateStatus(
-      id,
-      dto.status,
-      user.accountId,
     );
   }
 

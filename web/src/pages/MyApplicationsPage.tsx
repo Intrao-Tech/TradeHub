@@ -1,461 +1,331 @@
-import { useState, useEffect } from 'react';
-import { Briefcase, Inbox } from 'lucide-react';
-import { api } from '../api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Briefcase, Inbox, MapPin } from 'lucide-react';
+import { api, parseApiError } from '../api';
+import { useAccountMe } from '@/hooks/useAccountMe';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/EmptyState';
+import { JobStatusBadge } from '@/components/jobs/JobStatusBadge';
+import { ApplicationStatusBadge } from '@/components/jobs/ApplicationStatusBadge';
+import { AttachmentList } from '@/components/jobs/AttachmentList';
+import { EmployerChip } from '@/components/jobs/EmployerChip';
+import { formatPay } from '@/components/jobs/PayLine';
+import { ConfirmDialog } from '@/components/jobs/ConfirmDialog';
+import { toast } from '@/components/ui/toast';
+import { formatRelative } from '@/lib/relative-time';
 
-type ApplicationRow = {
+type WorkerApplication = {
   id: string | number;
   status: string;
   initiated_by: string;
   proposed_rate?: string | number | null;
-  job_post?: { title?: string; id?: string | number } | null;
+  cover_message?: string | null;
+  created_at?: string;
+  job_post?: {
+    id?: string | number;
+    title?: string;
+    status?: string;
+    pay_type?: string;
+    day_rate_min?: string | number | null;
+    day_rate_max?: string | number | null;
+    fixed_price?: string | number | null;
+    postcode_area?: string | null;
+    is_urgent?: boolean;
+    employer?: {
+      id?: string | number;
+      company_name?: string | null;
+      client_profile?: {
+        display_name?: string | null;
+        verification_level?: string | null;
+      } | null;
+    } | null;
+  } | null;
+  attachments?: Array<{
+    id: string | number;
+    original_name: string;
+    mime_type: string;
+    size_bytes: number;
+  }>;
 };
 
-type AppListResponse = {
-  items: ApplicationRow[];
+type ApplicationsResponse = {
+  items: WorkerApplication[];
   total: number;
-  page: number;
-  limit: number;
 };
 
-type JobPostRow = {
-  id: string | number;
-  title: string;
-  status?: string;
+type StatusTab =
+  | 'ALL'
+  | 'PENDING'
+  | 'REVIEWED'
+  | 'SHORTLISTED'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | 'WITHDRAWN';
+
+const TAB_ORDER: StatusTab[] = [
+  'ALL',
+  'PENDING',
+  'REVIEWED',
+  'SHORTLISTED',
+  'ACCEPTED',
+  'REJECTED',
+  'WITHDRAWN',
+];
+
+const TAB_LABEL: Record<StatusTab, string> = {
+  ALL: 'All',
+  PENDING: 'Pending',
+  REVIEWED: 'Reviewed',
+  SHORTLISTED: 'Shortlisted',
+  ACCEPTED: 'Accepted',
+  REJECTED: 'Rejected',
+  WITHDRAWN: 'Withdrawn',
 };
 
-type JobListResponse = {
-  items: JobPostRow[];
-  total: number;
-  page: number;
-  limit: number;
-};
-
-type BadgeVariant = 'default' | 'secondary' | 'outline' | 'success' | 'warning' | 'danger' | 'info';
-
-function statusBadgeVariant(status: string): BadgeVariant {
-  const s = status.toUpperCase();
-  if (s === 'ACCEPTED') return 'success';
-  if (s === 'PENDING' || s === 'INVITED' || s === 'REVIEWED' || s === 'SHORTLISTED') return 'warning';
-  if (s === 'REJECTED' || s === 'WITHDRAWN') return 'danger';
-  return 'outline';
-}
+const WITHDRAWABLE = new Set(['PENDING', 'REVIEWED', 'SHORTLISTED']);
 
 export default function MyApplicationsPage() {
-  const [workerList, setWorkerList] = useState<AppListResponse | null>(null);
-  const [workerError, setWorkerError] = useState('');
-  const [employerPosts, setEmployerPosts] = useState<JobListResponse | null>(null);
-  const [employerError, setEmployerError] = useState('');
-  const [actionError, setActionError] = useState('');
-  const [lastActionJson, setLastActionJson] = useState<unknown>(null);
+  const navigate = useNavigate();
+  const { isWorker, loading: accountLoading } = useAccountMe();
 
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const [jobApps, setJobApps] = useState<AppListResponse | null>(null);
-  const [jobAppsError, setJobAppsError] = useState('');
+  const [data, setData] = useState<WorkerApplication[]>([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<StatusTab>('ALL');
+  const [withdrawTarget, setWithdrawTarget] = useState<WorkerApplication | null>(
+    null,
+  );
 
-  const [inviteWorkerId, setInviteWorkerId] = useState('');
-  const [inviteMessage, setInviteMessage] = useState('');
-
-  async function loadWorkerApps() {
-    setWorkerError('');
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
     try {
-      const data = await api<AppListResponse>('/job-applications/me?page=1&limit=50');
-      setWorkerList(data);
-    } catch (e) {
-      setWorkerError(e instanceof Error ? e.message : String(e));
-      setWorkerList(null);
+      const res = await api<ApplicationsResponse>(
+        '/job-applications/me?page=1&limit=100',
+      );
+      setData(res.items ?? []);
+    } catch (err) {
+      setError(parseApiError(err)?.message ?? 'Could not load your applications.');
+    } finally {
+      setLoading(false);
     }
-  }
-
-  async function loadEmployerPosts() {
-    setEmployerError('');
-    try {
-      const data = await api<JobListResponse>('/job-posts/me?page=1&limit=50');
-      setEmployerPosts(data);
-    } catch (e) {
-      setEmployerError(e instanceof Error ? e.message : String(e));
-      setEmployerPosts(null);
-    }
-  }
-
-  useEffect(() => {
-    void loadWorkerApps();
-    void loadEmployerPosts();
   }, []);
 
-  async function loadApplicationsForJob(jobId: string | number) {
-    const sid = String(jobId);
-    setSelectedJobId(sid);
-    setJobApps(null);
-    setJobAppsError('');
-    try {
-      const data = await api<AppListResponse>(`/job-applications/jobs/${sid}?page=1&limit=50`);
-      setJobApps(data);
-    } catch (e) {
-      setJobAppsError(e instanceof Error ? e.message : String(e));
-    }
-  }
+  useEffect(() => {
+    if (!accountLoading) void load();
+  }, [accountLoading, load]);
 
-  async function patchAppStatus(id: string | number, status: string) {
-    setActionError('');
-    setLastActionJson(null);
+  const counts = useMemo(() => {
+    const c: Record<StatusTab, number> = {
+      ALL: 0,
+      PENDING: 0,
+      REVIEWED: 0,
+      SHORTLISTED: 0,
+      ACCEPTED: 0,
+      REJECTED: 0,
+      WITHDRAWN: 0,
+    };
+    for (const row of data) {
+      c.ALL += 1;
+      const k = (row.status ?? '').toUpperCase() as StatusTab;
+      if (k in c) c[k] += 1;
+    }
+    return c;
+  }, [data]);
+
+  const visible = useMemo(() => {
+    if (tab === 'ALL') return data;
+    return data.filter((d) => (d.status ?? '').toUpperCase() === tab);
+  }, [data, tab]);
+
+  const invitations = useMemo(
+    () => data.filter((d) => d.initiated_by === 'EMPLOYER' && d.status === 'PENDING'),
+    [data],
+  );
+
+  async function withdraw(application: WorkerApplication) {
     try {
-      const out = await api(`/job-applications/${id}/status`, {
+      await api(`/job-applications/${application.id}/status`, {
         method: 'PATCH',
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status: 'WITHDRAWN' }),
       });
-      setLastActionJson(out);
-      await loadWorkerApps();
-      if (selectedJobId) void loadApplicationsForJob(selectedJobId);
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
+      toast.success('Application withdrawn');
+      await load();
+    } catch (err) {
+      toast.error(parseApiError(err)?.message ?? 'Could not withdraw application.');
     }
   }
 
-  async function toCollaboration(id: string | number) {
-    setActionError('');
-    setLastActionJson(null);
-    try {
-      const out = await api(`/job-applications/${id}/to-collaboration`, { method: 'POST' });
-      setLastActionJson(out);
-      if (selectedJobId) void loadApplicationsForJob(selectedJobId);
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  async function inviteWorker(jobPostId: string) {
-    setActionError('');
-    setLastActionJson(null);
-    if (!inviteWorkerId.trim()) {
-      setActionError('worker_id required');
-      return;
-    }
-    try {
-      const out = await api(`/job-applications/jobs/${jobPostId}/invite`, {
-        method: 'POST',
-        body: JSON.stringify({
-          worker_id: Number(inviteWorkerId),
-          message: inviteMessage.trim() || undefined,
-        }),
-      });
-      setLastActionJson(out);
-      setInviteWorkerId('');
-      setInviteMessage('');
-      void loadApplicationsForJob(jobPostId);
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
-    }
+  if (!accountLoading && !isWorker) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">My applications</h1>
+        <EmptyState
+          icon={Inbox}
+          title="No applications"
+          description="Only worker accounts can apply to jobs."
+        />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">My applications</h1>
-        <p className="text-sm text-fg-muted">Track your applications and manage invitations.</p>
+        <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">My applications</h1>
+        <p className="text-sm text-fg-muted">
+          Track every application you've sent and every invitation you've received.
+        </p>
       </div>
 
-      {actionError ? (
+      {error ? (
         <div
           role="alert"
           className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
         >
-          {actionError}
+          {error}
         </div>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Worker: my applications</CardTitle>
-              <CardDescription>Applications you've submitted or been invited to.</CardDescription>
-            </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => void loadWorkerApps()}>
-              Refresh worker list
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {workerError ? (
-            <div
-              role="alert"
-              className="rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-warning"
-            >
-              {workerError}
-            </div>
-          ) : null}
-
-          {workerList?.items?.length ? (
-            <ul className="space-y-2">
-              {workerList.items.map((a) => {
-                const id = String(a.id);
-                return (
-                  <li
-                    key={id}
-                    className="flex flex-col gap-3 rounded-md border border-border-default bg-raised p-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium text-fg">
-                          {a.job_post?.title ?? String(a.job_post?.id ?? '—')}
-                        </span>
-                        <Badge variant={statusBadgeVariant(a.status)}>{a.status}</Badge>
-                        <Badge variant="outline">{a.initiated_by}</Badge>
-                      </div>
-                      <p className="text-xs text-fg-muted">
-                        Proposed rate:{' '}
-                        {a.proposed_rate != null ? String(a.proposed_rate) : '—'}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void patchAppStatus(a.id, 'WITHDRAWN')}
-                      >
-                        Withdraw
-                      </Button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : workerList ? (
-            <EmptyState
-              icon={Inbox}
-              title="No applications"
-              description="No applications (or not a worker)."
-            />
-          ) : (
-            <p className="text-sm text-fg-muted">…</p>
-          )}
-
-          <details className="text-xs text-fg-muted">
-            <summary className="cursor-pointer">Raw JSON</summary>
-            <pre className="mt-2 rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
-              {workerList == null ? '' : JSON.stringify(workerList, null, 2)}
-            </pre>
-          </details>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Employer: my job posts</CardTitle>
-              <CardDescription>Select a post to view applicants.</CardDescription>
-            </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => void loadEmployerPosts()}>
-              Refresh employer posts
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {employerError ? (
-            <div
-              role="alert"
-              className="rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-warning"
-            >
-              {employerError}
-            </div>
-          ) : null}
-
-          {employerPosts?.items?.length ? (
-            <ul className="space-y-2">
-              {employerPosts.items.map((p) => {
-                const isSelected = selectedJobId === String(p.id);
-                return (
-                  <li key={String(p.id)}>
-                    <button
-                      type="button"
-                      onClick={() => void loadApplicationsForJob(p.id)}
-                      className={
-                        'flex w-full flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
-                        (isSelected
-                          ? 'border-border-strong bg-subtle'
-                          : 'border-border-default bg-raised hover:bg-subtle')
-                      }
-                    >
-                      <span className="font-medium text-fg">{p.title}</span>
-                      {p.status ? <Badge variant="outline">{p.status}</Badge> : null}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : employerPosts ? (
-            <EmptyState
-              icon={Briefcase}
-              title="No job posts"
-              description="No job posts (or not an employer)."
-            />
-          ) : (
-            <p className="text-sm text-fg-muted">…</p>
-          )}
-
-          <details className="text-xs text-fg-muted">
-            <summary className="cursor-pointer">Raw JSON</summary>
-            <pre className="mt-2 rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
-              {employerPosts == null ? '' : JSON.stringify(employerPosts, null, 2)}
-            </pre>
-          </details>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Applications for selected job</CardTitle>
-          <CardDescription>
-            {selectedJobId ? `job_post_id: ${selectedJobId}` : 'Select a job post above.'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {jobAppsError ? (
-            <div
-              role="alert"
-              className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
-            >
-              {jobAppsError}
-            </div>
-          ) : null}
-
-          {jobApps?.items?.length ? (
-            <ul className="space-y-2">
-              {jobApps.items.map((a) => {
-                const id = String(a.id);
-                return (
-                  <li
-                    key={id}
-                    className="space-y-3 rounded-md border border-border-default bg-raised p-3"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-fg">application id {id}</span>
-                      <Badge variant={statusBadgeVariant(a.status)}>{a.status}</Badge>
-                      <Badge variant="outline">{a.initiated_by}</Badge>
-                      {a.proposed_rate != null ? (
-                        <span className="text-xs text-fg-muted">
-                          rate: {String(a.proposed_rate)}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void patchAppStatus(a.id, 'REVIEWED')}
-                      >
-                        Review
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void patchAppStatus(a.id, 'SHORTLISTED')}
-                      >
-                        Shortlist
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => void patchAppStatus(a.id, 'ACCEPTED')}
-                      >
-                        Accept
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void patchAppStatus(a.id, 'REJECTED')}
-                      >
-                        Reject
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void toCollaboration(a.id)}
-                      >
-                        Convert to Collaboration
-                      </Button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : selectedJobId && !jobAppsError ? (
-            jobApps ? (
-              <EmptyState
-                icon={Inbox}
-                title="No applications"
-                description="This job post has no applications yet."
+      {invitations.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="text-base font-semibold text-fg">Invitations</h2>
+          <ul className="space-y-2">
+            {invitations.map((inv) => (
+              <ApplicationRow
+                key={`inv-${String(inv.id)}`}
+                application={inv}
+                isInvitation
+                onWithdraw={() => setWithdrawTarget(inv)}
               />
-            ) : (
-              <p className="text-sm text-fg-muted">Loading…</p>
-            )
-          ) : null}
-
-          <details className="text-xs text-fg-muted">
-            <summary className="cursor-pointer">Raw JSON</summary>
-            <pre className="mt-2 rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
-              {jobApps == null ? '' : JSON.stringify(jobApps, null, 2)}
-            </pre>
-          </details>
-        </CardContent>
-      </Card>
-
-      {selectedJobId ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Invite worker to this job</CardTitle>
-            <CardDescription>Send an invitation to a specific worker.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="invite-worker-id">worker_id</Label>
-              <Input
-                id="invite-worker-id"
-                type="number"
-                value={inviteWorkerId}
-                onChange={(e) => setInviteWorkerId(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="invite-message">Message (optional)</Label>
-              <Textarea
-                id="invite-message"
-                value={inviteMessage}
-                onChange={(e) => setInviteMessage(e.target.value)}
-                rows={2}
-              />
-            </div>
-            <Button type="button" onClick={() => void inviteWorker(selectedJobId)}>
-              Invite Worker
-            </Button>
-          </CardContent>
-        </Card>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Last mutation response</CardTitle>
-          <CardDescription>Debug view of the most recent API response.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <pre className="rounded-md bg-subtle text-fg p-3 text-xs overflow-auto">
-            {lastActionJson == null ? '' : JSON.stringify(lastActionJson, null, 2)}
-          </pre>
-        </CardContent>
-      </Card>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as StatusTab)}>
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-subtle p-1 sm:w-auto">
+          {TAB_ORDER.map((t) => (
+            <TabsTrigger key={t} value={t} className="gap-2">
+              {TAB_LABEL[t]}
+              <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+                {counts[t]}
+              </Badge>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      {loading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      ) : visible.length === 0 ? (
+        <EmptyState
+          icon={Briefcase}
+          title="No applications yet"
+          description="Browse jobs to find one to apply to."
+          action={
+            <Button onClick={() => navigate('/jobs')}>Browse jobs</Button>
+          }
+        />
+      ) : (
+        <ul className="space-y-2">
+          {visible.map((row) => (
+            <ApplicationRow
+              key={String(row.id)}
+              application={row}
+              onWithdraw={() => setWithdrawTarget(row)}
+            />
+          ))}
+        </ul>
+      )}
+
+      <ConfirmDialog
+        open={withdrawTarget != null}
+        onOpenChange={(o) => !o && setWithdrawTarget(null)}
+        title="Withdraw this application?"
+        description="Withdrawing is permanent for this job — you won't be able to apply again unless the employer reopens the post."
+        confirmLabel="Withdraw"
+        destructive
+        onConfirm={async () => {
+          if (withdrawTarget) await withdraw(withdrawTarget);
+          setWithdrawTarget(null);
+        }}
+      />
     </div>
+  );
+}
+
+function ApplicationRow({
+  application,
+  isInvitation = false,
+  onWithdraw,
+}: {
+  application: WorkerApplication;
+  isInvitation?: boolean;
+  onWithdraw: () => void;
+}) {
+  const post = application.job_post ?? null;
+  const status = (application.status ?? '').toUpperCase();
+  const canWithdraw = WITHDRAWABLE.has(status);
+
+  return (
+    <li className="flex flex-col gap-3 rounded-md border border-border-default bg-raised p-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {post?.id != null && post.title ? (
+            <Link
+              to={`/jobs/${post.id}`}
+              className="font-medium text-fg underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {post.title}
+            </Link>
+          ) : (
+            <span className="font-medium text-fg">{post?.title ?? 'Untitled job'}</span>
+          )}
+          <ApplicationStatusBadge status={application.status} />
+          <JobStatusBadge status={post?.status} />
+          {isInvitation ? <Badge variant="info">Invitation</Badge> : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
+          <EmployerChip employer={post?.employer ?? null} showBadge={false} />
+          {post?.postcode_area ? (
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-3 w-3" />
+              {post.postcode_area}
+            </span>
+          ) : null}
+          {post ? <span>{formatPay(post)}</span> : null}
+          {application.created_at ? (
+            <span>Applied {formatRelative(application.created_at)}</span>
+          ) : null}
+          {application.proposed_rate != null ? (
+            <span>Proposed: £{String(application.proposed_rate)}</span>
+          ) : null}
+        </div>
+        <AttachmentList
+          heading="Your attachments"
+          attachments={application.attachments}
+          previewImages
+        />
+      </div>
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+        {isInvitation && post?.id != null ? (
+          <Button asChild size="sm">
+            <Link to={`/jobs/${post.id}`}>View job</Link>
+          </Button>
+        ) : null}
+        {canWithdraw ? (
+          <Button type="button" size="sm" variant="outline" onClick={onWithdraw}>
+            Withdraw
+          </Button>
+        ) : null}
+      </div>
+    </li>
   );
 }

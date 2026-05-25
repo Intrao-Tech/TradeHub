@@ -30,6 +30,19 @@ npm-debug.log*
 # Prisma
 backend/prisma/migrations/**/migration_lock.toml
 
+# Local pg_dump output — schema source-of-truth is Prisma migrations.
+backend/*.sql
+
+# Ad-hoc dev/debug scripts (db dumps, ad-hoc one-shot probes). Application
+# scripts that need to ship belong somewhere else (e.g. backend/src/scripts).
+backend/scripts/
+
+# Working DB artifacts inside a tasks/<feature>/ folder. The schema source-
+# of-truth is Prisma migrations + DATA-MODEL.md; per-feature DDL dumps are
+# scratchpads, not specs.
+tasks/**/db-current.sql
+tasks/**/db-schema-proposal.sql
+
 # Docker
 docker-data/
 
@@ -43,3 +56,6 @@ page_*.png
 *.docx
 *.pdf
 *.doc
+
+# Local dev / planning notes (not for the repo)
+.dev-notes/

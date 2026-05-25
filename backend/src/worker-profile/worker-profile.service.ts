@@ -12,12 +12,46 @@ export class WorkerProfileService {
     const profile = await this.prisma.workerProfile.findUnique({
       where: { id },
       include: {
+        client_profile: { include: { account: { select: { status: true } } } },
         worker_specialisations: { include: { specialisation: true } },
         portfolio_items: true,
       },
     });
-    if (!profile) throw new NotFoundException('Worker profile not found');
-    return profile;
+    if (!profile || profile.client_profile.account.status !== 'ACTIVE') {
+      throw new NotFoundException('Worker profile not found');
+    }
+    const { account: _account, ...client_profile } = profile.client_profile;
+    return { ...profile, client_profile };
+  }
+
+  async linkSpecialisation(
+    workerId: bigint,
+    specialisationId: number,
+    isPrimary: boolean,
+  ) {
+    return this.prisma.workerSpecialisation.upsert({
+      where: {
+        worker_id_specialisation_id: {
+          worker_id: workerId,
+          specialisation_id: specialisationId,
+        },
+      },
+      create: {
+        worker_id: workerId,
+        specialisation_id: specialisationId,
+        is_primary: isPrimary,
+      },
+      update: { is_primary: isPrimary },
+    });
+  }
+
+  async unlinkSpecialisation(workerId: bigint, specialisationId: number) {
+    await this.prisma.workerSpecialisation.deleteMany({
+      where: {
+        worker_id: workerId,
+        specialisation_id: specialisationId,
+      },
+    });
   }
 
   async update(id: bigint, dto: UpdateWorkerProfileDto) {
@@ -28,17 +62,34 @@ export class WorkerProfileService {
       data.day_rate_min = new Prisma.Decimal(dto.day_rate_min);
     if (dto.day_rate_max !== undefined)
       data.day_rate_max = new Prisma.Decimal(dto.day_rate_max);
-    if (dto.available_from !== undefined) data.available_from = dto.available_from;
+    if (dto.available_from !== undefined)
+      data.available_from = dto.available_from;
     if (dto.is_available !== undefined) data.is_available = dto.is_available;
 
     try {
-      return await this.prisma.workerProfile.update({
-        where: { id },
-        data,
-        include: {
-          worker_specialisations: { include: { specialisation: true } },
-          portfolio_items: true,
-        },
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.workerProfile.update({ where: { id }, data });
+        // Languages are a worker_language junction now — replace the set.
+        if (dto.languages !== undefined) {
+          await tx.workerLanguage.deleteMany({ where: { worker_id: id } });
+          if (dto.languages.length > 0) {
+            await tx.workerLanguage.createMany({
+              data: dto.languages.map((code) => ({
+                worker_id: id,
+                language_code: code,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        }
+        return tx.workerProfile.findUniqueOrThrow({
+          where: { id },
+          include: {
+            worker_specialisations: { include: { specialisation: true } },
+            worker_languages: true,
+            portfolio_items: true,
+          },
+        });
       });
     } catch {
       throw new NotFoundException('Worker profile not found');
@@ -53,17 +104,25 @@ export class WorkerProfileService {
     const rateFilters: Prisma.WorkerProfileWhereInput[] = [];
     if (query.day_rate_min !== undefined) {
       rateFilters.push({
-        OR: [{ day_rate_max: null }, { day_rate_max: { gte: query.day_rate_min } }],
+        OR: [
+          { day_rate_max: null },
+          { day_rate_max: { gte: query.day_rate_min } },
+        ],
       });
     }
     if (query.day_rate_max !== undefined) {
       rateFilters.push({
-        OR: [{ day_rate_min: null }, { day_rate_min: { lte: query.day_rate_max } }],
+        OR: [
+          { day_rate_min: null },
+          { day_rate_min: { lte: query.day_rate_max } },
+        ],
       });
     }
 
     const where: Prisma.WorkerProfileWhereInput = {
-      ...(query.is_available !== undefined ? { is_available: query.is_available } : {}),
+      ...(query.is_available !== undefined
+        ? { is_available: query.is_available }
+        : {}),
       ...(query.min_rating !== undefined
         ? { rating_avg: { gte: new Prisma.Decimal(query.min_rating) } }
         : {}),

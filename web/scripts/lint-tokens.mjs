@@ -52,7 +52,16 @@ function walk(dir) {
     const full = join(dir, entry)
     const s = statSync(full)
     if (s.isDirectory()) out.push(...walk(full))
-    else if (EXTENSIONS.has(full.slice(full.lastIndexOf('.')))) out.push(full)
+    else if (
+      EXTENSIONS.has(full.slice(full.lastIndexOf('.'))) &&
+      // Skip test files (per TEST-AUTH-003) — they may colocate inside
+      // components/** but are not production code and frequently use
+      // raw color literals in fixture data.
+      !full.endsWith('.test.tsx') &&
+      !full.endsWith('.test.ts')
+    ) {
+      out.push(full)
+    }
   }
   return out
 }

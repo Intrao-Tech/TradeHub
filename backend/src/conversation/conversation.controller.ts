@@ -8,38 +8,32 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   CurrentUser,
   type CurrentUserPayload,
 } from '../common/decorators/current-user.decorator';
+import {
+  AccountStateGuard,
+  RequiresVerifiedEmail,
+} from '../common/guards/account-state.guard';
 import { ParseBigIntPipe } from '../common/pipes/parse-bigint.pipe';
 import { ConversationService } from './conversation.service';
 import { ConversationQueryDto } from './dto/conversation-query.dto';
 import { MessageQueryDto } from './dto/message-query.dto';
 import { SendMessageDto } from './dto/send-message.dto';
-import { StartConversationDto } from './dto/start-conversation.dto';
 
 @ApiTags('Conversations')
 @Controller('conversations')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, AccountStateGuard)
 export class ConversationController {
   constructor(private readonly conversationService: ConversationService) {}
 
-  @Post()
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Start or continue a direct conversation' })
-  start(
-    @CurrentUser() user: CurrentUserPayload,
-    @Body() dto: StartConversationDto,
-  ) {
-    return this.conversationService.startConversation(user.accountId, dto);
-  }
+  // Conversations are no longer started ad-hoc — each is a strict 1:1 with a
+  // collaboration and is spun up automatically when the relationship forms
+  // (collaboration creation / accepted application / employer invite).
 
   @Get()
   @ApiBearerAuth()
@@ -58,6 +52,16 @@ export class ConversationController {
     return this.conversationService.getUnreadCount(user.accountId);
   }
 
+  @Get(':id')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Single conversation (participant-only)' })
+  getOne(
+    @Param('id', ParseBigIntPipe) id: bigint,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    return this.conversationService.getById(id, user.accountId);
+  }
+
   @Get(':id/messages')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Messages in a conversation (newest first)' })
@@ -69,7 +73,10 @@ export class ConversationController {
     return this.conversationService.getMessages(id, user.accountId, query);
   }
 
+  // CHAT-021 — match the WS rate limit (10 sends per 10 s).
   @Post(':id/messages')
+  @RequiresVerifiedEmail()
+  @Throttle({ default: { limit: 10, ttl: 10_000 } })
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Send a message' })
   sendMessage(

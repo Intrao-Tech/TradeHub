@@ -2,164 +2,109 @@ import {
   BadRequestException,
   Body,
   Controller,
-  Delete,
   Get,
   Param,
-  Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { Roles, RolesGuard } from '../common/guards/roles.guard';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
-import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
-import { ParseBigIntPipe } from '../common/pipes/parse-bigint.pipe';
-import { CreateReferralDto } from './dto/create-referral.dto';
-import { CreateReferralOfferDto } from './dto/create-referral-offer.dto';
-import { ReferralSearchDto } from './dto/referral-search.dto';
-import { RespondToOfferDto } from './dto/respond-to-offer.dto';
-import { UpdateReferralDto } from './dto/update-referral.dto';
+import {
+  CurrentUser,
+  type CurrentUserPayload,
+} from '../common/decorators/current-user.decorator';
 import { ReferralService } from './referral.service';
+import { TrackClickDto } from './dto/track-click.dto';
+import { REFERRAL_CODE_REGEX } from './referral.constants';
+import { ConfigService } from '@nestjs/config';
 
-@ApiTags('Referrals')
-@Controller('referrals')
+@Controller()
 export class ReferralController {
-  constructor(private readonly referralService: ReferralService) {}
+  constructor(
+    private readonly service: ReferralService,
+    private readonly config: ConfigService,
+  ) {}
 
-  @Post()
+  /**
+   * Account-ref share link. Bounces the recipient to the register page
+   * with `?ref=CODE` so the form can persist `account.referred_by_id`
+   * directly on signup. Pure URL flow — no cookies.
+   */
+  @Get('r/:code')
+  hitRefLink(@Param('code') code: string, @Res() res: Response) {
+    const base =
+      this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    if (REFERRAL_CODE_REGEX.test(code)) {
+      return res.redirect(`${base}/register?ref=${encodeURIComponent(code)}`);
+    }
+    return res.redirect(base);
+  }
+
+  // Public: lightweight name lookup for "you were referred by X" UI.
+  @Get('referral/who-referred')
+  async whoReferred(@Query('code') code: string) {
+    if (!code) throw new BadRequestException('code required');
+    const r = await this.service.lookupReferrerByCode(code);
+    if (!r) return { display_name: null };
+    return { display_name: r.display_name };
+  }
+
+  /**
+   * Called by frontend on `/jobs/:id?ref=` and `/workers/:id?ref=` page
+   * mounts to record server-side click intent. Auth-required: anonymous
+   * traffic is ignored on these pages (anonymous users hit `/r/:code`
+   * for the account-ref flow instead).
+   */
+  @Post('referral/intent')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a referral' })
-  create(
+  async recordIntent(
+    @Body() dto: TrackClickDto,
     @CurrentUser() user: CurrentUserPayload,
-    @Body() dto: CreateReferralDto,
   ) {
-    if (user.clientProfileId == null) {
-      throw new BadRequestException('No client profile for this account');
-    }
-    return this.referralService.create(user.clientProfileId, dto);
+    return this.service.recordProjectIntent({
+      code: dto.code.toUpperCase(),
+      actor_client_profile_id: user.accountId,
+      target_id: BigInt(dto.target_id),
+      target_role: dto.target_role,
+    });
   }
 
-  @Get()
-  @ApiOperation({ summary: 'Search referrals (public)' })
-  search(@Query() query: ReferralSearchDto) {
-    return this.referralService.search(query);
-  }
-
-  @Get('me')
+  // Authed: own ref code + share link.
+  @Get('referrals/code')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'List referrals created by the current user' })
-  myReferrals(
-    @CurrentUser() user: CurrentUserPayload,
-    @Query() query: ReferralSearchDto,
-  ) {
-    if (user.clientProfileId == null) {
-      throw new BadRequestException('No client profile for this account');
-    }
-    return this.referralService.getByReferrer(user.clientProfileId, query);
+  async getOwnCode(@CurrentUser() user: CurrentUserPayload) {
+    const { code } = await this.service.getOwnCode(user.accountId);
+    const base =
+      this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    return { code, link: `${base}/r/${code}` };
   }
 
-  @Get('offers/me')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('WORKER')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Offers received by the current worker' })
-  myOffers(
-    @CurrentUser() user: CurrentUserPayload,
-    @Query() query: ReferralSearchDto,
-  ) {
-    if (user.clientProfileId == null) {
-      throw new BadRequestException('No client profile for this account');
-    }
-    return this.referralService.getOffersForWorker(
-      user.clientProfileId,
-      query,
-    );
-  }
-
-  @Get(':id')
+  @Get('referrals/account-stats')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get referral with offers' })
-  getById(
-    @Param('id', ParseBigIntPipe) id: bigint,
-    @CurrentUser() user: CurrentUserPayload,
-  ) {
-    return this.referralService.getById(id, user);
+  async accountStats(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getAccountStats(user.accountId);
   }
 
-  @Patch(':id')
+  @Get('referrals/project-shares')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update own open referral' })
-  update(
-    @Param('id', ParseBigIntPipe) id: bigint,
-    @CurrentUser() user: CurrentUserPayload,
-    @Body() dto: UpdateReferralDto,
-  ) {
-    if (user.clientProfileId == null) {
-      throw new BadRequestException('No client profile for this account');
-    }
-    return this.referralService.update(id, user.clientProfileId, dto);
+  async projectShares(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getProjectShares(user.accountId);
   }
 
-  @Delete(':id')
+  @Get('referrals/incoming')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Cancel own referral' })
-  cancel(
-    @Param('id', ParseBigIntPipe) id: bigint,
-    @CurrentUser() user: CurrentUserPayload,
-  ) {
-    if (user.clientProfileId == null) {
-      throw new BadRequestException('No client profile for this account');
-    }
-    return this.referralService.cancel(id, user.clientProfileId);
+  async incoming(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getIncomingAttribution(user.accountId);
   }
 
-  @Post(':id/offers')
+  // Referral-commission payments for the current user (any status). Held
+  // commissions (status PENDING) are swept by the escrow `account.updated`
+  // handler when the referrer completes Stripe onboarding.
+  @Get('referrals/payments')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Send offer to a worker' })
-  createOffer(
-    @Param('id', ParseBigIntPipe) referralId: bigint,
-    @CurrentUser() user: CurrentUserPayload,
-    @Body() dto: CreateReferralOfferDto,
-  ) {
-    if (user.clientProfileId == null) {
-      throw new BadRequestException('No client profile for this account');
-    }
-    return this.referralService.createOffer(
-      referralId,
-      user.clientProfileId,
-      dto,
-    );
-  }
-
-  @Patch('offers/:offerId/respond')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('WORKER')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Accept or decline a referral offer' })
-  respondToOffer(
-    @Param('offerId', ParseBigIntPipe) offerId: bigint,
-    @CurrentUser() user: CurrentUserPayload,
-    @Body() dto: RespondToOfferDto,
-  ) {
-    if (user.clientProfileId == null) {
-      throw new BadRequestException('No client profile for this account');
-    }
-    return this.referralService.respondToOffer(
-      offerId,
-      user.clientProfileId,
-      dto,
-    );
+  async referralPayments(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getReferralPayments(user.accountId);
   }
 }

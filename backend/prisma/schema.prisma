@@ -7,33 +7,79 @@ datasource db {
 }
 
 // ============================================
-// 1. ACCOUNT (auth base for everyone)
+// 1. ACCOUNT (auth root only)
+// Pure authentication identity. NO business relations point here — those
+// point to client_profile / worker_profile / employer_profile / staff_member.
+// Only auth-children (tokens) and cross-cutting identity records
+// (notification, audit_log) reference account.
 // ============================================
 
 model Account {
-  id             BigInt    @id @default(autoincrement())
-  email          String    @unique @db.VarChar(255)
-  password_hash  String?   @db.VarChar(255)
-  google_id      String?   @unique @db.VarChar(100)
-  phone          String?   @db.VarChar(20)
-  phone_verified Boolean   @default(false)
-  status         String    @default("ACTIVE") @db.VarChar(20)
-  created_at     DateTime  @default(now()) @db.Timestamptz()
-  updated_at     DateTime  @updatedAt @db.Timestamptz()
-  last_login_at  DateTime? @db.Timestamptz()
+  id                BigInt    @id @default(autoincrement())
+  email             String    @unique @db.VarChar(255)
+  password_hash     String?   @db.VarChar(255)
+  google_id         String?   @unique @db.VarChar(100)
+  phone             String?   @db.VarChar(20)
+  phone_verified    Boolean   @default(false)
+  status            String    @default("PENDING_EMAIL_VERIFICATION") @db.VarChar(30)
+  email_verified_at DateTime? @db.Timestamptz()
+  created_at        DateTime  @default(now()) @db.Timestamptz()
+  updated_at        DateTime  @updatedAt @db.Timestamptz()
+  last_login_at     DateTime? @db.Timestamptz()
 
-  client_profile ClientProfile?
-  staff_member   StaffMember?
-  refresh_tokens RefreshToken[]
-  notifications  Notification[]
-  audit_logs     AuditLog[]
-  conversation_participants ConversationParticipant[]
+  client_profile            ClientProfile?
+  staff_member              StaffMember?
+  refresh_tokens            RefreshToken[]
+  notifications             Notification[]
+  audit_logs                AuditLog[]
+  email_verification_tokens EmailVerificationToken[]
+  password_reset_tokens     PasswordResetToken[]
+  // Admin panel: message.sender_id retargeted from client_profile to account
+  // (works for both client and staff senders via shared PK with account).
+  sent_messages             Message[]
 
+  @@index([status])
   @@map("account")
 }
 
 // ============================================
-// 2. REFRESH TOKEN
+// 2A. EMAIL VERIFICATION TOKEN
+// ============================================
+
+model EmailVerificationToken {
+  id          BigInt    @id @default(autoincrement())
+  account_id  BigInt
+  token_hash  String    @unique @db.VarChar(64)
+  expires_at  DateTime  @db.Timestamptz()
+  consumed_at DateTime? @db.Timestamptz()
+  created_at  DateTime  @default(now()) @db.Timestamptz()
+
+  account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
+
+  @@index([account_id])
+  @@map("email_verification_token")
+}
+
+// ============================================
+// 2B. PASSWORD RESET TOKEN
+// ============================================
+
+model PasswordResetToken {
+  id          BigInt    @id @default(autoincrement())
+  account_id  BigInt
+  token_hash  String    @unique @db.VarChar(64)
+  expires_at  DateTime  @db.Timestamptz()
+  consumed_at DateTime? @db.Timestamptz()
+  created_at  DateTime  @default(now()) @db.Timestamptz()
+
+  account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
+
+  @@index([account_id])
+  @@map("password_reset_token")
+}
+
+// ============================================
+// 2C. REFRESH TOKEN
 // ============================================
 
 model RefreshToken {
@@ -51,32 +97,51 @@ model RefreshToken {
 
 // ============================================
 // 3. CLIENT PROFILE (shared PK = account.id)
+// The business identity. Workers, employers and the referral system all
+// hang off this — account stays a pure auth root. referral_code lives here
+// (staff don't refer); referred_by_id is a self-FK = the account referrer.
 // ============================================
 
 model ClientProfile {
-  id                         BigInt   @id
-  display_name               String   @db.VarChar(150)
-  slug                       String   @unique @db.VarChar(150)
-  avatar_url                 String?  @db.VarChar(500)
+  id                         BigInt    @id
+  display_name               String    @db.VarChar(150)
+  slug                       String    @unique @db.VarChar(150)
+  avatar_url                 String?   @db.VarChar(500)
   bio                        String?
-  city                       String?  @db.VarChar(100)
-  postcode_area              String?  @db.VarChar(10)
-  verification_level         String   @default("UNVERIFIED") @db.VarChar(30)
-  stripe_connect_account_id  String?  @db.VarChar(200)
-  stripe_onboarding_complete Boolean  @default(false)
-  created_at                 DateTime @default(now()) @db.Timestamptz()
-  updated_at                 DateTime @updatedAt @db.Timestamptz()
+  city                       String?   @db.VarChar(100)
+  postcode_area              String?   @db.VarChar(10)
+  verification_level         String    @default("UNVERIFIED") @db.VarChar(30)
+  stripe_connect_account_id  String?   @db.VarChar(200)
+  stripe_onboarding_complete Boolean   @default(false)
+  connect_charges_enabled    Boolean   @default(false)
+  connect_payouts_enabled    Boolean   @default(false)
+  referral_code              String    @unique @db.VarChar(16)
+  referred_by_id             BigInt?
+  referred_at                DateTime? @db.Timestamptz()
+  created_at                 DateTime  @default(now()) @db.Timestamptz()
+  updated_at                 DateTime  @updatedAt @db.Timestamptz()
 
-  account          Account          @relation(fields: [id], references: [id], onDelete: Cascade)
+  account          Account         @relation(fields: [id], references: [id], onDelete: Cascade)
   worker_profile   WorkerProfile?
   employer_profile EmployerProfile?
+  referrer         ClientProfile?  @relation("ClientReferrer", fields: [referred_by_id], references: [id], onDelete: SetNull)
+  referred_clients ClientProfile[] @relation("ClientReferrer")
 
-  documents               Document[]
-  verification_milestones VerificationMilestone[]
-  referrals               Referral[]
-  user_subscriptions      UserSubscription[]
+  verification_milestones   VerificationMilestone[]
+  user_subscriptions        UserSubscription[]
+  contract_project_refs     Contract[]       @relation("ContractProjectReferrer")
+  job_application_refs      JobApplication[] @relation("ApplicationProjectReferrer")
+  referral_intents_actor    ReferralIntent[] @relation("ReferralIntentActor")
+  referral_intents_referrer ReferralIntent[] @relation("ReferralIntentReferrer")
+  payments                  Payment[]
+
+  // Admin panel: reviewable items (documents and future checks) are owned by client_profile via reviewable_item parent.
+  // (Direct `documents Document[]` relation removed — go through reviewable_items.)
+  reviewable_items      ReviewableItem[]
+  support_collaboration SupportCollaboration?
 
   @@index([postcode_area])
+  @@index([referred_by_id])
   @@map("client_profile")
 }
 
@@ -98,12 +163,15 @@ model WorkerProfile {
 
   client_profile ClientProfile @relation(fields: [id], references: [id], onDelete: Cascade)
 
-  worker_specialisations WorkerSpecialisation[]
-  portfolio_items        PortfolioItem[]
-  referral_offers        ReferralOffer[]
-  collaborations_as_worker Collaboration[] @relation("CollabWorker")
+  worker_specialisations   WorkerSpecialisation[]
+  worker_languages         WorkerLanguage[]
+  portfolio_items          PortfolioItem[]
+  collaborations_as_worker Collaboration[]        @relation("CollabWorker")
   worker_tags              WorkerTag[]
   job_applications         JobApplication[]
+  referral_intents         ReferralIntent[]
+  saved_jobs               SavedJob[]
+  saved_by                 SavedWorker[]
 
   @@index([is_available, available_from])
   @@index([rating_avg(sort: Desc), rating_count(sort: Desc)])
@@ -128,7 +196,9 @@ model EmployerProfile {
 
   collaborations_as_employer Collaboration[] @relation("CollabEmployer")
   job_posts                  JobPost[]
+  saved_workers              SavedWorker[]
 
+  @@index([rating_avg(sort: Desc), rating_count(sort: Desc)])
   @@map("employer_profile")
 }
 
@@ -137,14 +207,35 @@ model EmployerProfile {
 // ============================================
 
 model StaffMember {
-  id           BigInt   @id
-  display_name String   @db.VarChar(100)
-  staff_role   String   @db.VarChar(20)
-  created_at   DateTime @default(now()) @db.Timestamptz()
+  id                BigInt    @id
+  display_name      String    @db.VarChar(100)
+  is_on_duty        Boolean   @default(false)
+  invite_expires_at DateTime? @db.Timestamptz()
+  created_at        DateTime  @default(now()) @db.Timestamptz()
 
-  account            Account            @relation(fields: [id], references: [id], onDelete: Cascade)
-  moderation_actions ModerationAction[]
+  account              Account                 @relation(fields: [id], references: [id], onDelete: Cascade)
+  verification_actions VerificationMilestone[]
+  resolved_disputes    EscrowDispute[]         @relation("DisputeResolver")
+  assigned_disputes    EscrowDispute[]         @relation("DisputeAssignee")
+  dispute_proposals    EscrowDisputeProposal[] @relation("DisputeProposalAuthor")
+  platform_settings    PlatformSetting[]
 
+  // Admin panel — staff roles via junction (replaces legacy staff_role string column)
+  member_roles                    StaffMemberRole[]      @relation("StaffMemberRoles")
+  granted_roles                   StaffMemberRole[]      @relation("StaffMemberRoleGrantedBy")
+  // Review workflow (assigned/reviewer on review_item, replaces former document.assigned_to/reviewed_by)
+  assigned_reviews                ReviewItem[]           @relation("ReviewItemAssignee")
+  reviewed_reviews                ReviewItem[]           @relation("ReviewItemReviewer")
+  // Approval engine
+  approval_rules_created          StaffApprovalRule[]    @relation("StaffApprovalRuleCreatedBy")
+  action_approvals_requested      StaffActionApproval[]  @relation("StaffActionApprovalRequestedBy")
+  action_approvals_approved       StaffActionApproval[]  @relation("StaffActionApprovalApprovedBy")
+  // SLA engine
+  sla_rules_created               StaffSlaRule[]         @relation("StaffSlaRuleCreatedBy")
+  // Support chat
+  support_collaborations_assigned SupportCollaboration[] @relation("SupportCollaborationAssignee")
+
+  @@index([is_on_duty])
   @@map("staff_member")
 }
 
@@ -152,67 +243,26 @@ model StaffMember {
 // 7. DOCUMENT (file storage -> client_profile)
 // ============================================
 
+// REFACTOR (admin panel v13): document is now a SUBTYPE of `reviewable_item`
+// (shared PK like client_profile.id → account.id). Owner (client_profile_id)
+// lives on the parent reviewable_item. Review workflow (status, assigned_to,
+// reviewed_by, reviewed_at, rejection_reason) lives on `review_item` and is
+// OPTIONAL — document can exist without a review.
 model Document {
-  id                BigInt    @id @default(autoincrement())
-  client_profile_id BigInt
-  doc_type          String    @db.VarChar(30)
-  file_url          String    @db.VarChar(500)
-  status            String    @default("PENDING") @db.VarChar(20)
-  reviewed_at       DateTime? @db.Timestamptz()
-  created_at        DateTime  @default(now()) @db.Timestamptz()
+  id            BigInt @id
+  doc_type      String @db.VarChar(40)
+  file_url      String @db.VarChar(500)
+  metadata      Json?
 
-  client_profile           ClientProfile          @relation(fields: [client_profile_id], references: [id], onDelete: Cascade)
-  moderation_items         ModerationItem[]
+  reviewable_item          ReviewableItem          @relation(fields: [id], references: [id], onDelete: Cascade)
   portfolio_item_documents PortfolioItemDocument[]
 
-  @@index([client_profile_id, status])
+  @@index([doc_type])
   @@map("document")
 }
 
 // ============================================
-// 8. MODERATION ITEM (staff work queue)
-// ============================================
-
-model ModerationItem {
-  id          BigInt   @id @default(autoincrement())
-  document_id BigInt?
-  entity_type String   @db.VarChar(30)
-  entity_id   BigInt
-  queue_type  String   @db.VarChar(20)
-  priority    Int      @default(5) @db.SmallInt
-  status      String   @default("OPEN") @db.VarChar(20)
-  created_at  DateTime @default(now()) @db.Timestamptz()
-  updated_at  DateTime @updatedAt @db.Timestamptz()
-
-  document           Document?          @relation(fields: [document_id], references: [id])
-  moderation_actions ModerationAction[]
-
-  @@index([queue_type, status, priority])
-  @@index([entity_type, entity_id])
-  @@map("moderation_item")
-}
-
-// ============================================
-// 9. MODERATION ACTION (audit trail)
-// ============================================
-
-model ModerationAction {
-  id                 BigInt   @id @default(autoincrement())
-  moderation_item_id BigInt
-  staff_member_id    BigInt
-  action_type        String   @db.VarChar(20)
-  notes              String?
-  created_at         DateTime @default(now()) @db.Timestamptz()
-
-  moderation_item ModerationItem @relation(fields: [moderation_item_id], references: [id], onDelete: Cascade)
-  staff_member    StaffMember    @relation(fields: [staff_member_id], references: [id])
-
-  @@index([moderation_item_id])
-  @@map("moderation_action")
-}
-
-// ============================================
-// 10. SPECIALISATION (reference data)
+// 8. SPECIALISATION (reference data)
 // ============================================
 
 model Specialisation {
@@ -220,8 +270,8 @@ model Specialisation {
   name String @unique @db.VarChar(100)
   slug String @unique @db.VarChar(100)
 
-  worker_specialisations     WorkerSpecialisation[]
-  job_post_specialisations   JobPostSpecialisation[]
+  worker_specialisations   WorkerSpecialisation[]
+  job_post_specialisations JobPostSpecialisation[]
 
   @@map("specialisation")
 }
@@ -240,7 +290,23 @@ model WorkerSpecialisation {
 }
 
 // ============================================
-// 11. PORTFOLIO ITEM (base for subtypes)
+// 9. WORKER LANGUAGE (M:N — ISO 639-1 codes, PROF-055)
+// ============================================
+
+model WorkerLanguage {
+  worker_id     BigInt
+  language_code String @db.VarChar(10)
+  // ISO 639-1 (e.g. 'en', 'pl', 'uk')
+
+  worker_profile WorkerProfile @relation(fields: [worker_id], references: [id], onDelete: Cascade)
+
+  @@id([worker_id, language_code])
+  @@index([language_code])
+  @@map("worker_language")
+}
+
+// ============================================
+// 10. PORTFOLIO ITEM (base for subtypes)
 // ============================================
 
 model PortfolioItem {
@@ -251,7 +317,6 @@ model PortfolioItem {
   description String?
   sort_order  Int       @default(0) @db.SmallInt
   verified    Boolean   @default(false)
-  verified_by String?   @db.VarChar(20)
   verified_at DateTime? @db.Timestamptz()
   created_at  DateTime  @default(now()) @db.Timestamptz()
   updated_at  DateTime  @updatedAt @db.Timestamptz()
@@ -269,7 +334,7 @@ model PortfolioItem {
 }
 
 // ============================================
-// 12. EXPERIENCE DETAIL (shared PK = portfolio_item.id)
+// 11. EXPERIENCE DETAIL (shared PK = portfolio_item.id)
 // ============================================
 
 model ExperienceDetail {
@@ -285,7 +350,7 @@ model ExperienceDetail {
 }
 
 // ============================================
-// 13. PROJECT DETAIL (shared PK = portfolio_item.id)
+// 12. PROJECT DETAIL (shared PK = portfolio_item.id)
 // ============================================
 
 model ProjectDetail {
@@ -301,7 +366,7 @@ model ProjectDetail {
 }
 
 // ============================================
-// 14. CERTIFICATION DETAIL (shared PK = portfolio_item.id)
+// 13. CERTIFICATION DETAIL (shared PK = portfolio_item.id)
 // ============================================
 
 model CertificationDetail {
@@ -318,7 +383,7 @@ model CertificationDetail {
 }
 
 // ============================================
-// 15. PORTFOLIO MEDIA
+// 14. PORTFOLIO MEDIA
 // ============================================
 
 model PortfolioMedia {
@@ -336,7 +401,7 @@ model PortfolioMedia {
 }
 
 // ============================================
-// 16. PORTFOLIO ITEM DOCUMENT (M:M junction)
+// 15. PORTFOLIO ITEM DOCUMENT (M:N junction)
 // ============================================
 
 model PortfolioItemDocument {
@@ -347,17 +412,19 @@ model PortfolioItemDocument {
   document       Document      @relation(fields: [document_id], references: [id], onDelete: Cascade)
 
   @@id([portfolio_item_id, document_id])
+  @@index([document_id])
   @@map("portfolio_item_document")
 }
 
 // ============================================
-// 17. VERIFICATION MILESTONE
+// 16. VERIFICATION MILESTONE
 // ============================================
 
 model VerificationMilestone {
   id                BigInt    @id @default(autoincrement())
   client_profile_id BigInt
-  milestone_type    String    @db.VarChar(30)
+  milestone_type    String    @db.VarChar(40)
+  staff_member_id   BigInt?
   achieved_at       DateTime  @default(now()) @db.Timestamptz()
   expires_at        DateTime? @db.Timestamptz()
   evidence_ref      String?   @db.VarChar(500)
@@ -365,106 +432,81 @@ model VerificationMilestone {
   created_at        DateTime  @default(now()) @db.Timestamptz()
 
   client_profile ClientProfile @relation(fields: [client_profile_id], references: [id], onDelete: Cascade)
+  actor          StaffMember?  @relation(fields: [staff_member_id], references: [id], onDelete: SetNull)
 
-  @@index([client_profile_id])
+  @@index([client_profile_id, milestone_type])
   @@map("verification_milestone")
 }
 
 // ============================================
-// 18. REFERRAL
-// ============================================
-
-model Referral {
-  id               BigInt    @id @default(autoincrement())
-  referrer_id      BigInt
-  status           String    @default("OPEN") @db.VarChar(20)
-  title            String    @db.VarChar(200)
-  description      String?
-  project_type     String?   @db.VarChar(100)
-  postcode_area    String?   @db.VarChar(10)
-  estimated_value  Decimal?  @db.Decimal(12, 2)
-  commission_pct   Decimal?  @db.Decimal(5, 2)
-  platform_fee_pct Decimal   @default(2.00) @db.Decimal(5, 2)
-  client_name      String?   @db.VarChar(200)
-  client_phone     String?   @db.VarChar(20)
-  client_email     String?   @db.VarChar(255)
-  created_at       DateTime  @default(now()) @db.Timestamptz()
-  updated_at       DateTime  @updatedAt @db.Timestamptz()
-
-  referrer       ClientProfile   @relation(fields: [referrer_id], references: [id])
-  referral_offers ReferralOffer[]
-  collaborations  Collaboration[]
-
-  @@index([referrer_id])
-  @@index([status, postcode_area])
-  @@map("referral")
-}
-
-// ============================================
-// 19. REFERRAL OFFER
-// ============================================
-
-model ReferralOffer {
-  id           BigInt    @id @default(autoincrement())
-  referral_id  BigInt
-  recipient_id BigInt
-  status       String    @default("PENDING") @db.VarChar(20)
-  message      String?
-  responded_at DateTime? @db.Timestamptz()
-  created_at   DateTime  @default(now()) @db.Timestamptz()
-
-  referral  Referral      @relation(fields: [referral_id], references: [id], onDelete: Cascade)
-  recipient WorkerProfile @relation(fields: [recipient_id], references: [id])
-
-  @@unique([referral_id, recipient_id])
-  @@index([recipient_id, status])
-  @@map("referral_offer")
-}
-
-// ============================================
-// 20. COLLABORATION
+// 17. COLLABORATION (worker <-> employer relationship binding)
 // ============================================
 
 model Collaboration {
-  id            BigInt    @id @default(autoincrement())
-  worker_id     BigInt
-  employer_id   BigInt
-  initiated_by  String    @db.VarChar(10)
-  referral_id   BigInt?
-  job_post_id   BigInt?
-  status        String    @default("PENDING") @db.VarChar(20)
-  project_type  String?   @db.VarChar(100)
-  site_postcode String?   @db.VarChar(10)
-  agreed_amount Decimal?  @db.Decimal(12, 2)
-  started_at    DateTime? @db.Timestamptz()
-  ended_at      DateTime? @db.Timestamptz()
-  flagged       Boolean   @default(false)
-  flag_reason   String?   @db.VarChar(300)
-  confirmed_at  DateTime? @db.Timestamptz()
-  created_at    DateTime  @default(now()) @db.Timestamptz()
-  updated_at    DateTime  @updatedAt @db.Timestamptz()
+  id                  BigInt    @id @default(autoincrement())
+  worker_id           BigInt
+  employer_id         BigInt
+  first_contracted_at DateTime? @db.Timestamptz()
+  created_at          DateTime  @default(now()) @db.Timestamptz()
+  updated_at          DateTime  @updatedAt @db.Timestamptz()
 
-  worker   WorkerProfile   @relation("CollabWorker", fields: [worker_id], references: [id])
-  employer EmployerProfile @relation("CollabEmployer", fields: [employer_id], references: [id])
-  referral Referral?       @relation(fields: [referral_id], references: [id])
-  job_post JobPost?        @relation(fields: [job_post_id], references: [id])
+  worker   WorkerProfile   @relation("CollabWorker", fields: [worker_id], references: [id], onDelete: Restrict)
+  employer EmployerProfile @relation("CollabEmployer", fields: [employer_id], references: [id], onDelete: Restrict)
 
-  reviews            Review[]
-  escrow_transaction EscrowTransaction?
+  contracts    Contract[]
+  conversation Conversation?
 
   @@index([worker_id])
   @@index([employer_id])
-  @@index([status])
   @@map("collaboration")
 }
 
 // ============================================
-// 21. REVIEW (max 2 per collaboration)
+// 18. CONTRACT (lifecycle entity, N per Collaboration)
+// Owns its milestones directly — there is no separate "escrow" row.
+// ============================================
+
+model Contract {
+  id                    BigInt    @id @default(autoincrement())
+  collaboration_id      BigInt
+  position              Int
+  status                String    @default("DRAFT") @db.VarChar(20)
+  // DRAFT / PROPOSED / ACTIVE / ENDED
+  end_reason            String?   @db.VarChar(20)
+  // COMPLETED / CANCELED / ABANDONED / DISPUTED_LOST (set only when status=ENDED)
+  agreed_amount         Decimal?  @db.Decimal(12, 2)
+  project_type          String?   @db.VarChar(100)
+  site_postcode         String?   @db.VarChar(10)
+  job_post_id           BigInt?
+  initiated_by          String    @db.VarChar(10)
+  project_referrer_id   BigInt?
+  project_referrer_role String?   @db.VarChar(10)
+  // WORKER (W2W) | EMPLOYER (E2E)
+  started_at            DateTime? @db.Timestamptz()
+  ended_at              DateTime? @db.Timestamptz()
+  created_at            DateTime  @default(now()) @db.Timestamptz()
+  updated_at            DateTime  @updatedAt @db.Timestamptz()
+
+  collaboration    Collaboration  @relation(fields: [collaboration_id], references: [id], onDelete: Restrict)
+  job_post         JobPost?       @relation(fields: [job_post_id], references: [id], onDelete: SetNull)
+  project_referrer ClientProfile? @relation("ContractProjectReferrer", fields: [project_referrer_id], references: [id], onDelete: SetNull)
+
+  reviews    Review[]
+  milestones EscrowMilestone[]
+
+  @@unique([collaboration_id, position])
+  @@index([status])
+  @@index([project_referrer_id])
+  @@map("contract")
+}
+
+// ============================================
+// 19. REVIEW (max 2 per contract — one per reviewer role)
 // ============================================
 
 model Review {
   id                   BigInt    @id @default(autoincrement())
-  collaboration_id     BigInt
+  contract_id          BigInt
   reviewer_role        String    @db.VarChar(10)
   overall_rating       Int       @db.SmallInt
   quality_rating       Int?      @db.SmallInt
@@ -477,44 +519,228 @@ model Review {
   published_at         DateTime? @db.Timestamptz()
   created_at           DateTime  @default(now()) @db.Timestamptz()
 
-  collaboration Collaboration @relation(fields: [collaboration_id], references: [id])
+  contract Contract @relation(fields: [contract_id], references: [id], onDelete: Restrict)
 
-  @@unique([collaboration_id, reviewer_role])
-  @@index([collaboration_id])
+  // [contract_id] alone is covered by the @@unique prefix.
+  @@unique([contract_id, reviewer_role])
   @@map("review")
 }
 
 // ============================================
-// 22. ESCROW TRANSACTION (1:0..1 with collaboration)
+// 20. ESCROW MILESTONE (Upwork-style milestone — N per Contract)
+// One milestone = one funding charge + one release transfer; the Stripe
+// IDs for that single transaction live on this row.
 // ============================================
 
-model EscrowTransaction {
-  id                       BigInt    @id @default(autoincrement())
-  collaboration_id         BigInt    @unique
-  status                   String    @default("CREATED") @db.VarChar(20)
-  job_amount               Decimal   @db.Decimal(12, 2)
-  platform_fee             Decimal   @db.Decimal(12, 2)
-  referral_commission      Decimal   @default(0) @db.Decimal(12, 2)
-  worker_payout            Decimal   @db.Decimal(12, 2)
-  currency                 String    @default("GBP") @db.VarChar(3)
-  stripe_payment_intent_id String?   @unique @db.VarChar(200)
-  stripe_charge_id         String?   @unique @db.VarChar(200)
-  stripe_transfer_id       String?   @unique @db.VarChar(200)
-  stripe_refund_id         String?   @db.VarChar(200)
-  deposit_confirmed_at     DateTime? @db.Timestamptz()
-  released_at              DateTime? @db.Timestamptz()
-  refunded_at              DateTime? @db.Timestamptz()
-  disputed_at              DateTime? @db.Timestamptz()
-  created_at               DateTime  @default(now()) @db.Timestamptz()
-  updated_at               DateTime  @updatedAt @db.Timestamptz()
+model EscrowMilestone {
+  id                   BigInt    @id @default(autoincrement())
+  contract_id          BigInt
+  position             Int
+  title                String    @db.VarChar(200)
+  description          String?   @db.VarChar(2000)
+  amount               Decimal   @db.Decimal(12, 2)
+  status               String    @default("PENDING") @db.VarChar(20)
+  // REQUESTED (worker proposed, awaiting employer approval) / PENDING (approved, employer can fund)
+  // / FUNDED / SUBMITTED / RELEASED / DISPUTED / REFUNDED / CANCELED / DECLINED / RELEASE_FAILED
+  created_by_role      String    @default("EMPLOYER") @db.VarChar(10)
+  // EMPLOYER (default) | WORKER (worker requested)
+  submission_message   String?   @db.VarChar(2000)
+  worker_submitted_at  DateTime? @db.Timestamptz()
+  employer_approved_at DateTime? @db.Timestamptz()
+  released_at          DateTime? @db.Timestamptz()
+  refunded_at          DateTime? @db.Timestamptz()
+  disputed_at          DateTime? @db.Timestamptz()
+  release_attempts     Int       @default(0)
+  refund_reason        String?   @db.VarChar(500)
+  // Frozen at fund-time (so admin fee changes don't retroactively change in-flight)
+  frozen_client_fee_pct      Decimal? @db.Decimal(5, 2)
+  frozen_freelancer_fee_pct  Decimal? @db.Decimal(5, 2)
+  frozen_referral_fee_pct    Decimal? @db.Decimal(5, 2)
+  frozen_worker_payout       Decimal? @db.Decimal(12, 2)
+  frozen_referral_commission Decimal? @db.Decimal(12, 2)
+  frozen_platform_fee        Decimal? @db.Decimal(12, 2)
+  created_at           DateTime  @default(now()) @db.Timestamptz()
+  updated_at           DateTime  @updatedAt @db.Timestamptz()
+  // All Stripe object ids + money amounts live in the `payment` ledger.
 
-  collaboration Collaboration @relation(fields: [collaboration_id], references: [id])
+  contract    Contract                   @relation(fields: [contract_id], references: [id], onDelete: Restrict)
+  dispute     EscrowDispute?
+  attachments EscrowMilestoneAttachment[]
+  payments    Payment[]
 
-  @@map("escrow_transaction")
+  // [contract_id] alone is covered by the @@unique prefix.
+  @@unique([contract_id, position])
+  @@index([status])
+  @@map("escrow_milestone")
 }
 
 // ============================================
-// 23. SUBSCRIPTION PLAN (inactive by default)
+// 21. ESCROW MILESTONE ATTACHMENT
+// Up to 3 attachments per milestone per phase. The uploader is NOT stored —
+// it is derived: SUBMISSION => the contract's worker; CREATION => whichever
+// party `escrow_milestone.created_by_role` names.
+// ============================================
+
+model EscrowMilestoneAttachment {
+  id            BigInt   @id @default(autoincrement())
+  milestone_id  BigInt
+  phase         String   @db.VarChar(15)
+  // CREATION | SUBMISSION
+  file_url      String   @db.VarChar(500)
+  original_name String   @db.VarChar(255)
+  mime_type     String   @db.VarChar(100)
+  size_bytes    Int
+  created_at    DateTime @default(now()) @db.Timestamptz()
+
+  milestone EscrowMilestone @relation(fields: [milestone_id], references: [id], onDelete: Cascade)
+
+  @@index([milestone_id])
+  @@map("escrow_milestone_attachment")
+}
+
+// ============================================
+// 22. PAYMENT (full money-movement ledger)
+// Every money movement tied to a milestone — inbound and outbound — is one
+// row here, carrying a status. "Pending" is just status='PENDING', not a
+// separate table; this gives a complete payment history per client_profile.
+//   type = CHARGE         => employer funds the milestone (inbound)
+//   type = WORKER_PAYOUT  => release to the worker
+//   type = REFERRAL_ACCOUNT / REFERRAL_W2W / REFERRAL_E2E => referral commission
+//   type = REFUND         => money returned to the employer
+// One milestone => 1 CHARGE, then N payout rows on release OR 1 REFUND.
+// client_profile_id is the counterparty: employer for CHARGE/REFUND, worker
+// for WORKER_PAYOUT, referrer for REFERRAL_*.
+// ============================================
+
+model Payment {
+  id                BigInt    @id @default(autoincrement())
+  milestone_id      BigInt
+  client_profile_id BigInt
+  type              String    @db.VarChar(20)
+  // CHARGE / WORKER_PAYOUT / REFERRAL_ACCOUNT / REFERRAL_W2W / REFERRAL_E2E / REFUND
+  amount            Decimal   @db.Decimal(12, 2)
+  currency          String    @default("GBP") @db.VarChar(3)
+  status            String    @default("PENDING") @db.VarChar(20)
+  // PENDING / PAID / FAILED / CANCELED
+  stripe_id         String?   @unique @db.VarChar(200)
+  // Stripe PaymentIntent (CHARGE) / Transfer (payouts) / Refund (REFUND)
+  failure_reason    String?   @db.VarChar(500)
+  created_at        DateTime  @default(now()) @db.Timestamptz()
+  settled_at        DateTime? @db.Timestamptz()
+
+  milestone      EscrowMilestone @relation(fields: [milestone_id], references: [id], onDelete: Restrict)
+  client_profile ClientProfile   @relation(fields: [client_profile_id], references: [id], onDelete: Restrict)
+
+  @@index([client_profile_id, status])
+  @@index([milestone_id])
+  @@map("payment")
+}
+
+// ============================================
+// 23. PLATFORM SETTING (singleton row, admin-controlled fees)
+// ============================================
+
+model PlatformSetting {
+  id                             Int      @id @default(1)
+  client_marketplace_fee_percent Decimal  @default(5.0) @db.Decimal(5, 2)
+  freelancer_service_fee_percent Decimal  @default(10.0) @db.Decimal(5, 2)
+  account_referral_pct           Decimal  @default(10.00) @db.Decimal(5, 2)
+  account_referral_window_months Int?     @default(12)
+  // NULL = lifetime
+  project_referral_w2w_pct       Decimal  @default(2.00) @db.Decimal(5, 2)
+  project_referral_e2e_pct       Decimal  @default(2.00) @db.Decimal(5, 2)
+  stripe_fee_passthrough         String   @default("EMPLOYER_PAYS") @db.VarChar(20)
+  // EMPLOYER_PAYS / PLATFORM_ABSORBS / WORKER_ABSORBS
+  updated_at                     DateTime @updatedAt @db.Timestamptz()
+  updated_by                     BigInt?
+
+  updater StaffMember? @relation(fields: [updated_by], references: [id], onDelete: SetNull)
+
+  @@map("platform_setting")
+}
+
+// ============================================
+// 24. ESCROW DISPUTE (per-milestone, 1:0..1)
+// filed_by_role identifies the filing party (WORKER | EMPLOYER); the actual
+// client_profile is derived via milestone -> contract -> collaboration.
+// ============================================
+
+model EscrowDispute {
+  id                   BigInt    @id @default(autoincrement())
+  milestone_id         BigInt    @unique
+  filed_by_role        String    @db.VarChar(10)
+  // WORKER | EMPLOYER
+  reason               String    @db.VarChar(2000)
+  status               String    @default("OPEN") @db.VarChar(20)
+  // OPEN / RESPONDED / MEDIATION / RESOLVED / ARBITRATION_PENDING (extensibility for CIArb)
+  response             String?   @db.VarChar(2000)
+  responded_at         DateTime? @db.Timestamptz()
+  resolution           Json?
+  arbitration_required Boolean   @default(false)
+  resolved_by          BigInt?
+  // Admin panel: who's currently working this dispute (may differ from resolver)
+  assigned_to_staff_id BigInt?
+  resolved_at          DateTime? @db.Timestamptz()
+  resolution_reasoning String?   @db.VarChar(2000)
+  created_at           DateTime  @default(now()) @db.Timestamptz()
+  updated_at           DateTime  @updatedAt @db.Timestamptz()
+
+  milestone EscrowMilestone @relation(fields: [milestone_id], references: [id], onDelete: Cascade)
+  resolver  StaffMember?    @relation("DisputeResolver", fields: [resolved_by], references: [id], onDelete: SetNull)
+  assignee  StaffMember?    @relation("DisputeAssignee", fields: [assigned_to_staff_id], references: [id], onDelete: SetNull)
+  proposals EscrowDisputeProposal[]
+
+  @@index([status])
+  @@index([assigned_to_staff_id, status])
+  @@map("escrow_dispute")
+}
+
+// ============================================
+// 24b. ESCROW DISPUTE PROPOSAL
+// Staff proposes a split (worker% / employer-refund% / platform fee kept?).
+// Both parties must accept before the proposal is executed (release + refund
+// per the existing resolveDispute flow). If either rejects, staff can either
+// propose again or escalate the dispute to ARBITRATION_PENDING.
+// Multiple historic proposals are kept; at most one PENDING_RESPONSE at a
+// time per dispute is enforced via the partial UNIQUE index defined in the
+// migration (Prisma can't express partial uniques in @@unique).
+// ============================================
+
+model EscrowDisputeProposal {
+  id                     BigInt    @id @default(autoincrement())
+  dispute_id             BigInt
+  proposed_by_staff_id   BigInt
+  worker_pct             Int
+  employer_refund_pct    Int
+  keep_platform_fee      Boolean   @default(true)
+  reasoning              String    @db.VarChar(2000)
+  status                 String    @default("PENDING_RESPONSE") @db.VarChar(20)
+  // PENDING_RESPONSE | ACCEPTED | REJECTED | EXECUTED | SUPERSEDED
+  worker_decision        String    @default("PENDING") @db.VarChar(20)
+  // PENDING | ACCEPTED | REJECTED
+  worker_decided_at      DateTime? @db.Timestamptz()
+  worker_decision_note   String?   @db.VarChar(500)
+  employer_decision      String    @default("PENDING") @db.VarChar(20)
+  employer_decided_at    DateTime? @db.Timestamptz()
+  employer_decision_note String?   @db.VarChar(500)
+  proposed_at            DateTime  @default(now()) @db.Timestamptz()
+  resolved_at            DateTime? @db.Timestamptz()
+  // Set when proposal status leaves PENDING_RESPONSE.
+  execution_audit_id     BigInt?
+  // Filled when status=EXECUTED — points to the audit log row written by
+  // escrow.dispute_resolved.
+
+  dispute     EscrowDispute @relation(fields: [dispute_id], references: [id], onDelete: Cascade)
+  proposed_by StaffMember   @relation("DisputeProposalAuthor", fields: [proposed_by_staff_id], references: [id], onDelete: Restrict)
+  audit       AuditLog?     @relation("DisputeProposalAudit", fields: [execution_audit_id], references: [id], onDelete: SetNull)
+
+  @@index([dispute_id, status])
+  @@index([proposed_by_staff_id])
+  @@map("escrow_dispute_proposal")
+}
+
+// ============================================
+// 25. SUBSCRIPTION PLAN (inactive by default)
 // ============================================
 
 model SubscriptionPlan {
@@ -532,7 +758,7 @@ model SubscriptionPlan {
 }
 
 // ============================================
-// 24. USER SUBSCRIPTION
+// 26. USER SUBSCRIPTION
 // ============================================
 
 model UserSubscription {
@@ -547,14 +773,14 @@ model UserSubscription {
   created_at           DateTime  @default(now()) @db.Timestamptz()
 
   client_profile ClientProfile    @relation(fields: [client_profile_id], references: [id], onDelete: Cascade)
-  plan           SubscriptionPlan @relation(fields: [plan_id], references: [id])
+  plan           SubscriptionPlan @relation(fields: [plan_id], references: [id], onDelete: Restrict)
 
   @@index([client_profile_id, is_current])
   @@map("user_subscription")
 }
 
 // ============================================
-// 25. NOTIFICATION
+// 27. NOTIFICATION (per-identity — recipient may be client or staff)
 // ============================================
 
 model Notification {
@@ -576,7 +802,7 @@ model Notification {
 }
 
 // ============================================
-// 26. AUDIT LOG
+// 28. AUDIT LOG (per-identity — actor may be client, staff or system)
 // ============================================
 
 model AuditLog {
@@ -589,14 +815,19 @@ model AuditLog {
   ip_address  String?  @db.VarChar(45)
   created_at  DateTime @default(now()) @db.Timestamptz()
 
-  account Account? @relation(fields: [account_id], references: [id])
+  account                     Account?                @relation(fields: [account_id], references: [id], onDelete: SetNull)
+  // Admin panel: staff_action_approval.execution_audit_id references this row
+  // when the deferred action actually executed.
+  action_approval_executions  StaffActionApproval[]
+  dispute_proposal_executions EscrowDisputeProposal[] @relation("DisputeProposalAudit")
 
   @@index([account_id, created_at(sort: Desc)])
+  @@index([entity_type, entity_id])
   @@map("audit_log")
 }
 
 // ============================================
-// 27. TAG (reference data)
+// 29. TAG (reference data)
 // ============================================
 
 model Tag {
@@ -623,7 +854,7 @@ model WorkerTag {
 }
 
 // ============================================
-// 28. JOB POST
+// 30. JOB POST
 // ============================================
 
 model JobPost {
@@ -645,11 +876,14 @@ model JobPost {
   created_at    DateTime  @default(now()) @db.Timestamptz()
   updated_at    DateTime  @updatedAt @db.Timestamptz()
 
-  employer         EmployerProfile         @relation(fields: [employer_id], references: [id])
+  employer         EmployerProfile         @relation(fields: [employer_id], references: [id], onDelete: Restrict)
   specialisations  JobPostSpecialisation[]
   tags             JobPostTag[]
   applications     JobApplication[]
-  collaborations   Collaboration[]
+  contracts        Contract[]
+  attachments      JobAttachment[]
+  referral_intents ReferralIntent[]
+  saved_by         SavedJob[]
 
   @@index([employer_id])
   @@index([status, postcode_area])
@@ -681,73 +915,597 @@ model JobPostTag {
 }
 
 // ============================================
-// 29. JOB APPLICATION
+// 31. JOB APPLICATION
 // ============================================
 
 model JobApplication {
-  id            BigInt    @id @default(autoincrement())
-  job_post_id   BigInt
-  worker_id     BigInt
-  initiated_by  String    @db.VarChar(10)
-  status        String    @default("PENDING") @db.VarChar(20)
-  cover_message String?
-  proposed_rate Decimal?  @db.Decimal(8, 2)
-  responded_at  DateTime? @db.Timestamptz()
-  created_at    DateTime  @default(now()) @db.Timestamptz()
-  updated_at    DateTime  @updatedAt @db.Timestamptz()
+  id                    BigInt    @id @default(autoincrement())
+  job_post_id           BigInt
+  worker_id             BigInt
+  initiated_by          String    @db.VarChar(10)
+  status                String    @default("PENDING") @db.VarChar(20)
+  cover_message         String?
+  proposed_rate         Decimal?  @db.Decimal(8, 2)
+  project_referrer_id   BigInt?
+  project_referrer_role String?   @db.VarChar(10)
+  responded_at          DateTime? @db.Timestamptz()
+  created_at            DateTime  @default(now()) @db.Timestamptz()
+  updated_at            DateTime  @updatedAt @db.Timestamptz()
 
-  job_post       JobPost       @relation(fields: [job_post_id], references: [id], onDelete: Cascade)
-  worker_profile WorkerProfile @relation(fields: [worker_id], references: [id])
+  job_post         JobPost         @relation(fields: [job_post_id], references: [id], onDelete: Cascade)
+  worker_profile   WorkerProfile   @relation(fields: [worker_id], references: [id], onDelete: Restrict)
+  project_referrer ClientProfile?  @relation("ApplicationProjectReferrer", fields: [project_referrer_id], references: [id], onDelete: SetNull)
+  attachments      JobAttachment[]
 
   @@unique([job_post_id, worker_id])
   @@index([job_post_id, status])
   @@index([worker_id, status])
+  @@index([project_referrer_id])
   @@map("job_application")
 }
 
 // ============================================
-// 30. CONVERSATION & MESSAGES
+// 32. JOB ATTACHMENT (exclusive arc: exactly one of job_post_id /
+// job_application_id is non-null — every attachment belongs to a job post
+// XOR a job application. Enforced by the DB CHECK `job_attachment_one_owner`
+// and mirrored by a code-level guard. No uploader column: who uploaded a
+// file is the owner of its parent — job_post.employer_id for a post
+// attachment, job_application.worker_id for an application attachment.)
+// ============================================
+
+model JobAttachment {
+  id                 BigInt   @id @default(autoincrement())
+  job_post_id        BigInt?
+  job_application_id BigInt?
+  file_url           String   @db.VarChar(500)
+  original_name      String   @db.VarChar(255)
+  mime_type          String   @db.VarChar(100)
+  size_bytes         Int
+  created_at         DateTime @default(now()) @db.Timestamptz()
+
+  job_post        JobPost?        @relation(fields: [job_post_id], references: [id], onDelete: Cascade)
+  job_application JobApplication? @relation(fields: [job_application_id], references: [id], onDelete: Cascade)
+
+  @@index([job_post_id])
+  @@index([job_application_id])
+  @@index([created_at])
+  @@map("job_attachment")
+}
+
+// ============================================
+// 32B. SAVED JOB (worker bookmarks a JobPost — Upwork-style "Saved jobs")
+// Composite PK guarantees a worker can save the same post at most once.
+// Cascade on both sides: deleting the worker_profile or the job_post
+// removes the bookmark row.
+// ============================================
+
+model SavedJob {
+  worker_id   BigInt
+  job_post_id BigInt
+  created_at  DateTime @default(now()) @db.Timestamptz()
+
+  worker_profile WorkerProfile @relation(fields: [worker_id], references: [id], onDelete: Cascade)
+  job_post       JobPost       @relation(fields: [job_post_id], references: [id], onDelete: Cascade)
+
+  @@id([worker_id, job_post_id])
+  @@index([job_post_id])
+  @@index([worker_id, created_at(sort: Desc)])
+  @@map("saved_job")
+}
+
+// ============================================
+// 32D. SAVED WORKER (employer bookmarks a WorkerProfile — Upwork-style
+// "Saved talent"). Mirrors SavedJob but for the reverse direction:
+// employers maintain a personal shortlist of workers they want to revisit.
+// Composite PK guarantees an employer can save the same worker at most
+// once. Cascade on both sides: deleting the employer_profile or the
+// worker_profile removes the bookmark row.
+// ============================================
+
+model SavedWorker {
+  employer_id BigInt
+  worker_id   BigInt
+  created_at  DateTime @default(now()) @db.Timestamptz()
+
+  employer       EmployerProfile @relation(fields: [employer_id], references: [id], onDelete: Cascade)
+  worker_profile WorkerProfile   @relation(fields: [worker_id], references: [id], onDelete: Cascade)
+
+  @@id([employer_id, worker_id])
+  @@index([worker_id])
+  @@index([employer_id, created_at(sort: Desc)])
+  @@map("saved_worker")
+}
+
+// ============================================
+// 33. REFERRAL INTENT (server-side click record — replaces ref cookies)
+// A logged-in client clicks a project ref link; the intent is stored
+// keyed by (actor, target). A later qualifying action (apply / hire)
+// looks up the latest non-expired intent and copies attribution onto the
+// durable row. Exactly ONE of target_job_post_id / target_worker_id is
+// non-null (CHECK constraint):
+//   - target_job_post_id => W2W (worker shares a job link)
+//   - target_worker_id   => E2E (employer shares a worker link)
+// ============================================
+
+model ReferralIntent {
+  id                 BigInt   @id @default(autoincrement())
+  actor_id           BigInt
+  referrer_id        BigInt
+  target_job_post_id BigInt?
+  target_worker_id   BigInt?
+  expires_at         DateTime @db.Timestamptz()
+  created_at         DateTime @default(now()) @db.Timestamptz()
+
+  actor           ClientProfile  @relation("ReferralIntentActor", fields: [actor_id], references: [id], onDelete: Cascade)
+  referrer        ClientProfile  @relation("ReferralIntentReferrer", fields: [referrer_id], references: [id], onDelete: Cascade)
+  target_job_post JobPost?       @relation(fields: [target_job_post_id], references: [id], onDelete: Cascade)
+  target_worker   WorkerProfile? @relation(fields: [target_worker_id], references: [id], onDelete: Cascade)
+
+  @@index([actor_id, target_job_post_id, expires_at])
+  @@index([actor_id, target_worker_id, expires_at])
+  @@map("referral_intent")
+}
+
+// ============================================
+// 34. CONVERSATION (the chat thread — strict 1:1 with Collaboration)
+// Shares its primary key with collaboration (conversation.id =
+// collaboration.id) — an unambiguous 1:1, the same shared-PK pattern as
+// client_profile <-> account. Participants are always the collaboration's
+// worker + employer; per-party read tracking lives here as two columns.
 // ============================================
 
 model Conversation {
-  id              BigInt    @id @default(autoincrement())
-  last_message_at DateTime? @db.Timestamptz()
-  created_at      DateTime  @default(now()) @db.Timestamptz()
+  id                    BigInt    @id
+  last_message_at       DateTime? @db.Timestamptz()
+  worker_last_read_at   DateTime? @db.Timestamptz()
+  employer_last_read_at DateTime? @db.Timestamptz()
+  created_at            DateTime  @default(now()) @db.Timestamptz()
 
-  participants ConversationParticipant[]
-  messages     Message[]
+  collaboration Collaboration @relation(fields: [id], references: [id], onDelete: Cascade)
+  messages      Message[]
 
   @@map("conversation")
 }
 
-model ConversationParticipant {
-  conversation_id BigInt
-  account_id      BigInt
-  last_read_at    DateTime? @db.Timestamptz()
-  joined_at       DateTime  @default(now()) @db.Timestamptz()
-
-  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
-  account      Account      @relation(fields: [account_id], references: [id], onDelete: Cascade)
-
-  messages Message[]
-
-  @@id([conversation_id, account_id])
-  @@index([account_id])
-  @@map("conversation_participant")
-}
+// ============================================
+// 35. MESSAGE (text / image / file / system — one row per message)
+// A file message carries its file columns inline; message_type
+// discriminates. sender_id is NULL for SYSTEM messages. A CHECK constraint
+// guarantees every message has either text content or a file.
+// ============================================
 
 model Message {
-  id              BigInt   @id @default(autoincrement())
-  conversation_id BigInt
-  sender_id       BigInt
-  content         String
-  message_type    String   @default("TEXT") @db.VarChar(20)
-  metadata        Json     @default("{}")
-  created_at      DateTime @default(now()) @db.Timestamptz()
+  id                       BigInt   @id @default(autoincrement())
+  conversation_id          BigInt?
+  // NULL when this message belongs to a support_collaboration. XOR via CHECK
+  // constraint `message_one_container` (num_nonnulls(conversation_id, support_collaboration_id) = 1).
+  support_collaboration_id BigInt?
+  // NULL when this message belongs to a collab conversation.
+  sender_id                BigInt?
+  // FK to account(id). NULL = SYSTEM message. Works for both client and staff
+  // senders because client_profile.id = staff_member.id = account.id (shared PK).
+  // To know sender role: LEFT JOIN client_profile / staff_member.
+  message_type             String   @default("TEXT") @db.VarChar(20)
+  // TEXT | IMAGE | FILE | SYSTEM
+  content                  String?
+  // text body, or caption for an image/file message
+  file_url                 String?  @db.VarChar(500)
+  original_name            String?  @db.VarChar(255)
+  mime_type                String?  @db.VarChar(100)
+  size_bytes               Int?
+  metadata                 Json     @default("{}")
+  created_at               DateTime @default(now()) @db.Timestamptz()
 
-  conversation Conversation              @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
-  participant  ConversationParticipant @relation(fields: [conversation_id, sender_id], references: [conversation_id, account_id])
+  conversation          Conversation?         @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  support_collaboration SupportCollaboration? @relation(fields: [support_collaboration_id], references: [id], onDelete: Cascade)
+  sender                Account?              @relation(fields: [sender_id], references: [id], onDelete: SetNull)
 
   @@index([conversation_id, created_at])
+  @@index([support_collaboration_id, created_at])
+  @@index([sender_id])
   @@map("message")
+}
+
+// ============================================
+// 36. STAFF ROLE (lookup; staff_member can have multiple via junction)
+// ============================================
+
+model StaffRole {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(40)
+  description String?  @db.VarChar(500)
+  is_system   Boolean  @default(false)
+  // System roles (ADMIN, STAFF) cannot be renamed or deleted; their
+  // permissions stay editable except for ADMIN which always has every perm.
+  created_at  DateTime @default(now()) @db.Timestamptz()
+
+  staff_member_roles            StaffMemberRole[]
+  approval_rules_required       StaffApprovalRule[]     @relation("ApprovalRuleRequiredRole")
+  approval_condition_roles      ApprovalConditionRole[]
+  sla_rules_notify              StaffSlaRule[]
+  role_permissions              RolePermission[]
+
+  @@map("staff_role")
+}
+
+// ============================================
+// 36b. PERMISSION (catalog of granular abilities)
+// Key format: <module>.<action>, e.g. payments.mark_paid, users.suspend.
+// Categories group related perms in the admin UI.
+// ============================================
+
+model Permission {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique @db.VarChar(80)
+  category    String   @db.VarChar(40)
+  description String   @db.VarChar(500)
+  is_system   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz()
+
+  role_permissions RolePermission[]
+
+  @@index([category])
+  @@map("permission")
+}
+
+// ============================================
+// 36c. ROLE PERMISSION (junction M:N role ↔ permission)
+// ADMIN role implicitly has every permission (guard short-circuits) so its
+// rows here are informational only.
+// ============================================
+
+model RolePermission {
+  staff_role_id       Int
+  permission_id       Int
+  granted_at          DateTime @default(now()) @db.Timestamptz()
+  granted_by_staff_id BigInt?
+
+  staff_role StaffRole  @relation(fields: [staff_role_id], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@id([staff_role_id, permission_id])
+  @@index([permission_id])
+  @@map("role_permission")
+}
+
+// ============================================
+// 37. STAFF MEMBER ROLE (junction M:N staff ↔ role, with audit metadata)
+// ============================================
+
+model StaffMemberRole {
+  staff_member_id     BigInt
+  staff_role_id       Int
+  granted_at          DateTime @default(now()) @db.Timestamptz()
+  granted_by_staff_id BigInt?
+
+  staff_member StaffMember  @relation("StaffMemberRoles", fields: [staff_member_id], references: [id], onDelete: Cascade)
+  staff_role   StaffRole    @relation(fields: [staff_role_id], references: [id], onDelete: Restrict)
+  granted_by   StaffMember? @relation("StaffMemberRoleGrantedBy", fields: [granted_by_staff_id], references: [id], onDelete: SetNull)
+
+  @@id([staff_member_id, staff_role_id])
+  @@index([staff_role_id])
+  @@map("staff_member_role")
+}
+
+// ============================================
+// 38. ADMIN ACTION TYPE (lookup of admin operations)
+// ============================================
+
+model AdminActionType {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(60)
+  category    String   @db.VarChar(40)
+  description String   @db.VarChar(500)
+  is_money    Boolean  @default(false)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz()
+
+  approval_rules StaffApprovalRule[]
+
+  @@index([category, is_active])
+  @@map("admin_action_type")
+}
+
+// ============================================
+// 39. ADMIN TARGET KIND (lookup of polymorphic target kinds)
+// ============================================
+
+model AdminTargetKind {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(40)
+  description String   @db.VarChar(500)
+  created_at  DateTime @default(now()) @db.Timestamptz()
+
+  action_approvals StaffActionApproval[]
+  sla_breaches     StaffSlaBreach[]
+
+  @@map("admin_target_kind")
+}
+
+// ============================================
+// 40. ADMIN QUEUE TYPE (lookup of SLA queue types)
+// ============================================
+
+model AdminQueueType {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(40)
+  description String   @db.VarChar(500)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz()
+
+  sla_rules StaffSlaRule[]
+
+  @@map("admin_queue_type")
+}
+
+// ============================================
+// 41. APPROVAL CONDITION TYPE (lookup; drives subtype dispatch)
+// ============================================
+
+model ApprovalConditionType {
+  id            Int      @id @default(autoincrement())
+  name          String   @unique @db.VarChar(40)
+  value_subtype String   @db.VarChar(40)
+  // AMOUNT | ROLE | DOC_TYPE — maps to the subtype table (approval_condition_<lowercase>)
+  description   String   @db.VarChar(500)
+  created_at    DateTime @default(now()) @db.Timestamptz()
+
+  rule_conditions StaffApprovalRuleCondition[]
+
+  @@map("approval_condition_type")
+}
+
+// ============================================
+// 42. REVIEWABLE ITEM (parent of "things staff reviews")
+// `client_profile_id` owner lives on parent (all subtypes belong to a client).
+// `kind` is a discriminator; lowercase matches the subtype table name
+// (e.g., 'DOCUMENT' → document table). Subtype existence enforced via
+// DEFERRED trigger `reviewable_item_must_have_subtype`.
+// ============================================
+
+model ReviewableItem {
+  id                BigInt   @id @default(autoincrement())
+  client_profile_id BigInt
+  kind              String   @db.VarChar(40)
+  // 'DOCUMENT' — for now. Future: 'COMPANIES_HOUSE_CHECK', 'HMRC_CIS_CHECK', etc.
+  created_at        DateTime @default(now()) @db.Timestamptz()
+
+  client_profile ClientProfile @relation(fields: [client_profile_id], references: [id], onDelete: Cascade)
+  document       Document?
+  review_items   ReviewItem[]
+
+  @@index([kind])
+  @@index([client_profile_id])
+  @@index([client_profile_id, kind])
+  @@map("reviewable_item")
+}
+
+// ============================================
+// 43. REVIEW ITEM (workflow attached to reviewable_item)
+// 1:N — many review_items per reviewable (history of past reviews preserved).
+// Partial UNIQUE on (reviewable_item_id) WHERE status='PENDING' prevents
+// parallel active reviews — defined in migration as raw SQL (Prisma can't
+// express partial unique indexes in @@unique).
+// ============================================
+
+model ReviewItem {
+  id                   BigInt    @id @default(autoincrement())
+  reviewable_item_id   BigInt
+  status               String    @default("PENDING") @db.VarChar(20)
+  // PENDING | APPROVED | REJECTED
+  assigned_to_staff_id BigInt?
+  reviewed_by_staff_id BigInt?
+  reviewed_at          DateTime? @db.Timestamptz()
+  rejection_reason     String?   @db.VarChar(500)
+  created_at           DateTime  @default(now()) @db.Timestamptz()
+  updated_at           DateTime  @updatedAt @db.Timestamptz()
+
+  reviewable_item ReviewableItem @relation(fields: [reviewable_item_id], references: [id], onDelete: Cascade)
+  assignee        StaffMember?   @relation("ReviewItemAssignee", fields: [assigned_to_staff_id], references: [id], onDelete: SetNull)
+  reviewer        StaffMember?   @relation("ReviewItemReviewer", fields: [reviewed_by_staff_id], references: [id], onDelete: SetNull)
+
+  @@index([reviewable_item_id, created_at(sort: Desc)])
+  @@index([status, created_at])
+  @@index([assigned_to_staff_id, status])
+  @@index([reviewed_by_staff_id])
+  @@map("review_item")
+}
+
+// ============================================
+// 44. STAFF APPROVAL RULE (admin-created rule: which actions need approval)
+// ============================================
+
+model StaffApprovalRule {
+  id                        BigInt   @id @default(autoincrement())
+  name                      String   @db.VarChar(100)
+  description               String?  @db.VarChar(500)
+  target_action_type_id     Int
+  required_approver_role_id Int
+  is_active                 Boolean  @default(true)
+  created_by_staff_id       BigInt
+  created_at                DateTime @default(now()) @db.Timestamptz()
+  updated_at                DateTime @updatedAt @db.Timestamptz()
+
+  target_action_type     AdminActionType @relation(fields: [target_action_type_id], references: [id], onDelete: Restrict)
+  required_approver_role StaffRole       @relation("ApprovalRuleRequiredRole", fields: [required_approver_role_id], references: [id], onDelete: Restrict)
+  created_by             StaffMember     @relation("StaffApprovalRuleCreatedBy", fields: [created_by_staff_id], references: [id], onDelete: Restrict)
+  conditions             StaffApprovalRuleCondition[]
+  action_approvals       StaffActionApproval[]
+
+  @@index([target_action_type_id, is_active])
+  @@map("staff_approval_rule")
+}
+
+// ============================================
+// 45. STAFF APPROVAL RULE CONDITION (parent of inheritance; AND-ed at evaluation)
+// Subtype enforced via DEFERRED trigger `approval_condition_must_have_subtype`.
+// ============================================
+
+model StaffApprovalRuleCondition {
+  id                BigInt   @id @default(autoincrement())
+  rule_id           BigInt
+  condition_type_id Int
+  created_at        DateTime @default(now()) @db.Timestamptz()
+
+  rule           StaffApprovalRule         @relation(fields: [rule_id], references: [id], onDelete: Cascade)
+  condition_type ApprovalConditionType     @relation(fields: [condition_type_id], references: [id], onDelete: Restrict)
+  amount         ApprovalConditionAmount?
+  role           ApprovalConditionRole?
+  doc_type       ApprovalConditionDocType?
+
+  @@unique([rule_id, condition_type_id])
+  @@index([rule_id])
+  @@map("staff_approval_rule_condition")
+}
+
+// ============================================
+// 46. APPROVAL CONDITION AMOUNT (subtype; shared PK with parent condition)
+// ============================================
+
+model ApprovalConditionAmount {
+  id              BigInt @id
+  threshold_pence BigInt
+
+  condition StaffApprovalRuleCondition @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  @@map("approval_condition_amount")
+}
+
+// ============================================
+// 47. APPROVAL CONDITION ROLE (subtype)
+// ============================================
+
+model ApprovalConditionRole {
+  id            BigInt @id
+  staff_role_id Int
+
+  condition  StaffApprovalRuleCondition @relation(fields: [id], references: [id], onDelete: Cascade)
+  staff_role StaffRole                  @relation(fields: [staff_role_id], references: [id], onDelete: Restrict)
+
+  @@map("approval_condition_role")
+}
+
+// ============================================
+// 48. APPROVAL CONDITION DOC TYPE (subtype)
+// ============================================
+
+model ApprovalConditionDocType {
+  id            BigInt @id
+  document_type String @db.VarChar(40)
+
+  condition StaffApprovalRuleCondition @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  @@map("approval_condition_doc_type")
+}
+
+// ============================================
+// 49. STAFF ACTION APPROVAL (pending/resolved approval request)
+// target_id is polymorphic (no FK); trigger `staff_action_approval_target_must_exist`
+// validates target row exists in the table named by target_kind.
+// ============================================
+
+model StaffActionApproval {
+  id                    BigInt    @id @default(autoincrement())
+  rule_id               BigInt
+  target_kind_id        Int
+  target_id             BigInt
+  context               Json      @default("{}")
+  // opaque action args (heterogeneous per target_action_type)
+  status                String    @default("PENDING") @db.VarChar(20)
+  // PENDING | APPROVED | REJECTED | EXECUTED | CANCELED | EXPIRED
+  requested_by_staff_id BigInt
+  requested_reason      String?   @db.VarChar(2000)
+  approved_by_staff_id  BigInt?
+  approver_reason       String?   @db.VarChar(2000)
+  execution_audit_id    BigInt?
+  requested_at          DateTime  @default(now()) @db.Timestamptz()
+  resolved_at           DateTime? @db.Timestamptz()
+  expires_at            DateTime? @db.Timestamptz()
+
+  rule            StaffApprovalRule @relation(fields: [rule_id], references: [id], onDelete: Restrict)
+  target_kind     AdminTargetKind   @relation(fields: [target_kind_id], references: [id], onDelete: Restrict)
+  requested_by    StaffMember       @relation("StaffActionApprovalRequestedBy", fields: [requested_by_staff_id], references: [id], onDelete: Restrict)
+  approved_by     StaffMember?      @relation("StaffActionApprovalApprovedBy", fields: [approved_by_staff_id], references: [id], onDelete: SetNull)
+  execution_audit AuditLog?         @relation(fields: [execution_audit_id], references: [id], onDelete: SetNull)
+
+  @@index([status, requested_at])
+  @@index([rule_id, status])
+  @@index([requested_by_staff_id, status])
+  @@index([target_kind_id, target_id])
+  @@map("staff_action_approval")
+}
+
+// ============================================
+// 50. STAFF SLA RULE (admin-created rule for overdue queue task)
+// ============================================
+
+model StaffSlaRule {
+  id                  BigInt   @id @default(autoincrement())
+  name                String   @db.VarChar(100)
+  description         String?  @db.VarChar(500)
+  target_queue_id     Int
+  threshold_minutes   Int
+  notify_role_id      Int?
+  notify_assignee     Boolean  @default(true)
+  notification_title  String?  @db.VarChar(200)
+  notification_body   String?
+  is_active           Boolean  @default(true)
+  created_by_staff_id BigInt
+  created_at          DateTime @default(now()) @db.Timestamptz()
+  updated_at          DateTime @updatedAt @db.Timestamptz()
+
+  target_queue AdminQueueType   @relation(fields: [target_queue_id], references: [id], onDelete: Restrict)
+  notify_role  StaffRole?       @relation(fields: [notify_role_id], references: [id], onDelete: Restrict)
+  created_by   StaffMember      @relation("StaffSlaRuleCreatedBy", fields: [created_by_staff_id], references: [id], onDelete: Restrict)
+  breaches     StaffSlaBreach[]
+
+  @@index([target_queue_id, is_active])
+  @@map("staff_sla_rule")
+}
+
+// ============================================
+// 51. STAFF SLA BREACH (recorded breach by cron; UNIQUE prevents double-notify)
+// target_id polymorphic; trigger `staff_sla_breach_target_must_exist` validates.
+// ============================================
+
+model StaffSlaBreach {
+  id             BigInt    @id @default(autoincrement())
+  rule_id        BigInt
+  target_kind_id Int
+  target_id      BigInt
+  detected_at    DateTime  @default(now()) @db.Timestamptz()
+  resolved_at    DateTime? @db.Timestamptz()
+
+  rule        StaffSlaRule    @relation(fields: [rule_id], references: [id], onDelete: Cascade)
+  target_kind AdminTargetKind @relation(fields: [target_kind_id], references: [id], onDelete: Restrict)
+
+  @@unique([rule_id, target_kind_id, target_id], map: "staff_sla_breach_active_unique")
+  @@index([target_kind_id, target_id])
+  @@map("staff_sla_breach")
+}
+
+// ============================================
+// 52. SUPPORT COLLABORATION (1 per client; like collaboration but client ↔ support)
+// Messages live in the existing `message` table via `message.support_collaboration_id`.
+// Any staff with appropriate role can write — no explicit "membership" tracking,
+// `assigned_to_staff_id` is just current responsible (rotates on handoff).
+// ============================================
+
+model SupportCollaboration {
+  id                   BigInt    @id @default(autoincrement())
+  client_profile_id    BigInt    @unique
+  assigned_to_staff_id BigInt?
+  last_message_at      DateTime? @db.Timestamptz()
+  user_last_read_at    DateTime? @db.Timestamptz()
+  staff_last_read_at   DateTime? @db.Timestamptz()
+  created_at           DateTime  @default(now()) @db.Timestamptz()
+  updated_at           DateTime  @updatedAt @db.Timestamptz()
+
+  client_profile ClientProfile @relation(fields: [client_profile_id], references: [id], onDelete: Cascade)
+  assignee       StaffMember?  @relation("SupportCollaborationAssignee", fields: [assigned_to_staff_id], references: [id], onDelete: SetNull)
+  messages       Message[]
+
+  @@index([assigned_to_staff_id])
+  @@index([last_message_at(sort: Desc)])
+  @@map("support_collaboration")
 }

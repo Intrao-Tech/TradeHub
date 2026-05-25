@@ -1,8 +1,10 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
@@ -27,7 +29,15 @@ export class TagService {
   }
 
   async create(dto: CreateTagDto) {
-    const baseSlug = slugify(dto.name);
+    const name = dto.name.trim();
+    const existing = await this.prisma.tag.findUnique({ where: { name } });
+    if (existing) {
+      throw new ConflictException({
+        code: 'TAG_EXISTS',
+        message: `A tag named "${name}" already exists.`,
+      });
+    }
+    const baseSlug = slugify(name);
     let slug = baseSlug;
     let n = 0;
     while (await this.prisma.tag.findUnique({ where: { slug } })) {
@@ -35,12 +45,22 @@ export class TagService {
       slug = `${baseSlug}-${n}`;
     }
 
-    return this.prisma.tag.create({
-      data: {
-        name: dto.name.trim(),
-        slug,
-      },
-    });
+    try {
+      return await this.prisma.tag.create({
+        data: { name, slug },
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new ConflictException({
+          code: 'TAG_EXISTS',
+          message: `A tag named "${name}" already exists.`,
+        });
+      }
+      throw err;
+    }
   }
 
   async update(id: number, dto: UpdateTagDto) {
