@@ -110,7 +110,6 @@ CREATE TABLE "employer_profile" (
 CREATE TABLE "staff_member" (
     "id" BIGINT NOT NULL,
     "display_name" VARCHAR(100) NOT NULL,
-    "staff_role" VARCHAR(20) NOT NULL,
     "is_on_duty" BOOLEAN NOT NULL DEFAULT false,
     "invite_expires_at" TIMESTAMPTZ,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -120,17 +119,10 @@ CREATE TABLE "staff_member" (
 
 -- CreateTable
 CREATE TABLE "document" (
-    "id" BIGSERIAL NOT NULL,
-    "client_profile_id" BIGINT NOT NULL,
+    "id" BIGINT NOT NULL,
     "doc_type" VARCHAR(40) NOT NULL,
     "file_url" VARCHAR(500) NOT NULL,
-    "status" VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-    "rejection_reason" VARCHAR(500),
     "metadata" JSONB,
-    "assigned_to" BIGINT,
-    "reviewed_by" BIGINT,
-    "reviewed_at" TIMESTAMPTZ,
-    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "document_pkey" PRIMARY KEY ("id")
 );
@@ -388,12 +380,36 @@ CREATE TABLE "escrow_dispute" (
     "resolution" JSONB,
     "arbitration_required" BOOLEAN NOT NULL DEFAULT false,
     "resolved_by" BIGINT,
+    "assigned_to_staff_id" BIGINT,
     "resolved_at" TIMESTAMPTZ,
     "resolution_reasoning" VARCHAR(2000),
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL,
 
     CONSTRAINT "escrow_dispute_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "escrow_dispute_proposal" (
+    "id" BIGSERIAL NOT NULL,
+    "dispute_id" BIGINT NOT NULL,
+    "proposed_by_staff_id" BIGINT NOT NULL,
+    "worker_pct" INTEGER NOT NULL,
+    "employer_refund_pct" INTEGER NOT NULL,
+    "keep_platform_fee" BOOLEAN NOT NULL DEFAULT true,
+    "reasoning" VARCHAR(2000) NOT NULL,
+    "status" VARCHAR(20) NOT NULL DEFAULT 'PENDING_RESPONSE',
+    "worker_decision" VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    "worker_decided_at" TIMESTAMPTZ,
+    "worker_decision_note" VARCHAR(500),
+    "employer_decision" VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    "employer_decided_at" TIMESTAMPTZ,
+    "employer_decision_note" VARCHAR(500),
+    "proposed_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "resolved_at" TIMESTAMPTZ,
+    "execution_audit_id" BIGINT,
+
+    CONSTRAINT "escrow_dispute_proposal_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -543,6 +559,15 @@ CREATE TABLE "job_attachment" (
 );
 
 -- CreateTable
+CREATE TABLE "saved_job" (
+    "worker_id" BIGINT NOT NULL,
+    "job_post_id" BIGINT NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "saved_job_pkey" PRIMARY KEY ("worker_id","job_post_id")
+);
+
+-- CreateTable
 CREATE TABLE "referral_intent" (
     "id" BIGSERIAL NOT NULL,
     "actor_id" BIGINT NOT NULL,
@@ -569,7 +594,8 @@ CREATE TABLE "conversation" (
 -- CreateTable
 CREATE TABLE "message" (
     "id" BIGSERIAL NOT NULL,
-    "conversation_id" BIGINT NOT NULL,
+    "conversation_id" BIGINT,
+    "support_collaboration_id" BIGINT,
     "sender_id" BIGINT,
     "message_type" VARCHAR(20) NOT NULL DEFAULT 'TEXT',
     "content" TEXT,
@@ -581,6 +607,233 @@ CREATE TABLE "message" (
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "message_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "staff_role" (
+    "id" SERIAL NOT NULL,
+    "name" VARCHAR(40) NOT NULL,
+    "description" VARCHAR(500),
+    "is_system" BOOLEAN NOT NULL DEFAULT false,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "staff_role_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "permission" (
+    "id" SERIAL NOT NULL,
+    "key" VARCHAR(80) NOT NULL,
+    "category" VARCHAR(40) NOT NULL,
+    "description" VARCHAR(500) NOT NULL,
+    "is_system" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "permission_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "role_permission" (
+    "staff_role_id" INTEGER NOT NULL,
+    "permission_id" INTEGER NOT NULL,
+    "granted_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "granted_by_staff_id" BIGINT,
+
+    CONSTRAINT "role_permission_pkey" PRIMARY KEY ("staff_role_id","permission_id")
+);
+
+-- CreateTable
+CREATE TABLE "staff_member_role" (
+    "staff_member_id" BIGINT NOT NULL,
+    "staff_role_id" INTEGER NOT NULL,
+    "granted_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "granted_by_staff_id" BIGINT,
+
+    CONSTRAINT "staff_member_role_pkey" PRIMARY KEY ("staff_member_id","staff_role_id")
+);
+
+-- CreateTable
+CREATE TABLE "admin_action_type" (
+    "id" SERIAL NOT NULL,
+    "name" VARCHAR(60) NOT NULL,
+    "category" VARCHAR(40) NOT NULL,
+    "description" VARCHAR(500) NOT NULL,
+    "is_money" BOOLEAN NOT NULL DEFAULT false,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "admin_action_type_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "admin_target_kind" (
+    "id" SERIAL NOT NULL,
+    "name" VARCHAR(40) NOT NULL,
+    "description" VARCHAR(500) NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "admin_target_kind_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "admin_queue_type" (
+    "id" SERIAL NOT NULL,
+    "name" VARCHAR(40) NOT NULL,
+    "description" VARCHAR(500) NOT NULL,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "admin_queue_type_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "approval_condition_type" (
+    "id" SERIAL NOT NULL,
+    "name" VARCHAR(40) NOT NULL,
+    "value_subtype" VARCHAR(40) NOT NULL,
+    "description" VARCHAR(500) NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "approval_condition_type_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "reviewable_item" (
+    "id" BIGSERIAL NOT NULL,
+    "client_profile_id" BIGINT NOT NULL,
+    "kind" VARCHAR(40) NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "reviewable_item_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "review_item" (
+    "id" BIGSERIAL NOT NULL,
+    "reviewable_item_id" BIGINT NOT NULL,
+    "status" VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    "assigned_to_staff_id" BIGINT,
+    "reviewed_by_staff_id" BIGINT,
+    "reviewed_at" TIMESTAMPTZ,
+    "rejection_reason" VARCHAR(500),
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT "review_item_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "staff_approval_rule" (
+    "id" BIGSERIAL NOT NULL,
+    "name" VARCHAR(100) NOT NULL,
+    "description" VARCHAR(500),
+    "target_action_type_id" INTEGER NOT NULL,
+    "required_approver_role_id" INTEGER NOT NULL,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "created_by_staff_id" BIGINT NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT "staff_approval_rule_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "staff_approval_rule_condition" (
+    "id" BIGSERIAL NOT NULL,
+    "rule_id" BIGINT NOT NULL,
+    "condition_type_id" INTEGER NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "staff_approval_rule_condition_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "approval_condition_amount" (
+    "id" BIGINT NOT NULL,
+    "threshold_pence" BIGINT NOT NULL,
+
+    CONSTRAINT "approval_condition_amount_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "approval_condition_role" (
+    "id" BIGINT NOT NULL,
+    "staff_role_id" INTEGER NOT NULL,
+
+    CONSTRAINT "approval_condition_role_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "approval_condition_doc_type" (
+    "id" BIGINT NOT NULL,
+    "document_type" VARCHAR(40) NOT NULL,
+
+    CONSTRAINT "approval_condition_doc_type_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "staff_action_approval" (
+    "id" BIGSERIAL NOT NULL,
+    "rule_id" BIGINT NOT NULL,
+    "target_kind_id" INTEGER NOT NULL,
+    "target_id" BIGINT NOT NULL,
+    "context" JSONB NOT NULL DEFAULT '{}',
+    "status" VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    "requested_by_staff_id" BIGINT NOT NULL,
+    "requested_reason" VARCHAR(2000),
+    "approved_by_staff_id" BIGINT,
+    "approver_reason" VARCHAR(2000),
+    "execution_audit_id" BIGINT,
+    "requested_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "resolved_at" TIMESTAMPTZ,
+    "expires_at" TIMESTAMPTZ,
+
+    CONSTRAINT "staff_action_approval_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "staff_sla_rule" (
+    "id" BIGSERIAL NOT NULL,
+    "name" VARCHAR(100) NOT NULL,
+    "description" VARCHAR(500),
+    "target_queue_id" INTEGER NOT NULL,
+    "threshold_minutes" INTEGER NOT NULL,
+    "notify_role_id" INTEGER,
+    "notify_assignee" BOOLEAN NOT NULL DEFAULT true,
+    "notification_title" VARCHAR(200),
+    "notification_body" TEXT,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "created_by_staff_id" BIGINT NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT "staff_sla_rule_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "staff_sla_breach" (
+    "id" BIGSERIAL NOT NULL,
+    "rule_id" BIGINT NOT NULL,
+    "target_kind_id" INTEGER NOT NULL,
+    "target_id" BIGINT NOT NULL,
+    "detected_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "resolved_at" TIMESTAMPTZ,
+
+    CONSTRAINT "staff_sla_breach_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "support_collaboration" (
+    "id" BIGSERIAL NOT NULL,
+    "client_profile_id" BIGINT NOT NULL,
+    "assigned_to_staff_id" BIGINT,
+    "last_message_at" TIMESTAMPTZ,
+    "user_last_read_at" TIMESTAMPTZ,
+    "staff_last_read_at" TIMESTAMPTZ,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT "support_collaboration_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -635,13 +888,7 @@ CREATE INDEX "employer_profile_rating_avg_rating_count_idx" ON "employer_profile
 CREATE INDEX "staff_member_is_on_duty_idx" ON "staff_member"("is_on_duty");
 
 -- CreateIndex
-CREATE INDEX "document_client_profile_id_status_idx" ON "document"("client_profile_id", "status");
-
--- CreateIndex
-CREATE INDEX "document_status_created_at_idx" ON "document"("status", "created_at");
-
--- CreateIndex
-CREATE INDEX "document_assigned_to_status_idx" ON "document"("assigned_to", "status");
+CREATE INDEX "document_doc_type_idx" ON "document"("doc_type");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "specialisation_name_key" ON "specialisation"("name");
@@ -710,6 +957,15 @@ CREATE UNIQUE INDEX "escrow_dispute_milestone_id_key" ON "escrow_dispute"("miles
 CREATE INDEX "escrow_dispute_status_idx" ON "escrow_dispute"("status");
 
 -- CreateIndex
+CREATE INDEX "escrow_dispute_assigned_to_staff_id_status_idx" ON "escrow_dispute"("assigned_to_staff_id", "status");
+
+-- CreateIndex
+CREATE INDEX "escrow_dispute_proposal_dispute_id_status_idx" ON "escrow_dispute_proposal"("dispute_id", "status");
+
+-- CreateIndex
+CREATE INDEX "escrow_dispute_proposal_proposed_by_staff_id_idx" ON "escrow_dispute_proposal"("proposed_by_staff_id");
+
+-- CreateIndex
 CREATE INDEX "user_subscription_client_profile_id_is_current_idx" ON "user_subscription"("client_profile_id", "is_current");
 
 -- CreateIndex
@@ -764,6 +1020,12 @@ CREATE INDEX "job_attachment_job_application_id_idx" ON "job_attachment"("job_ap
 CREATE INDEX "job_attachment_created_at_idx" ON "job_attachment"("created_at");
 
 -- CreateIndex
+CREATE INDEX "saved_job_job_post_id_idx" ON "saved_job"("job_post_id");
+
+-- CreateIndex
+CREATE INDEX "saved_job_worker_id_created_at_idx" ON "saved_job"("worker_id", "created_at" DESC);
+
+-- CreateIndex
 CREATE INDEX "referral_intent_actor_id_target_job_post_id_expires_at_idx" ON "referral_intent"("actor_id", "target_job_post_id", "expires_at");
 
 -- CreateIndex
@@ -771,6 +1033,102 @@ CREATE INDEX "referral_intent_actor_id_target_worker_id_expires_at_idx" ON "refe
 
 -- CreateIndex
 CREATE INDEX "message_conversation_id_created_at_idx" ON "message"("conversation_id", "created_at");
+
+-- CreateIndex
+CREATE INDEX "message_support_collaboration_id_created_at_idx" ON "message"("support_collaboration_id", "created_at");
+
+-- CreateIndex
+CREATE INDEX "message_sender_id_idx" ON "message"("sender_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "staff_role_name_key" ON "staff_role"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "permission_key_key" ON "permission"("key");
+
+-- CreateIndex
+CREATE INDEX "permission_category_idx" ON "permission"("category");
+
+-- CreateIndex
+CREATE INDEX "role_permission_permission_id_idx" ON "role_permission"("permission_id");
+
+-- CreateIndex
+CREATE INDEX "staff_member_role_staff_role_id_idx" ON "staff_member_role"("staff_role_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "admin_action_type_name_key" ON "admin_action_type"("name");
+
+-- CreateIndex
+CREATE INDEX "admin_action_type_category_is_active_idx" ON "admin_action_type"("category", "is_active");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "admin_target_kind_name_key" ON "admin_target_kind"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "admin_queue_type_name_key" ON "admin_queue_type"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "approval_condition_type_name_key" ON "approval_condition_type"("name");
+
+-- CreateIndex
+CREATE INDEX "reviewable_item_kind_idx" ON "reviewable_item"("kind");
+
+-- CreateIndex
+CREATE INDEX "reviewable_item_client_profile_id_idx" ON "reviewable_item"("client_profile_id");
+
+-- CreateIndex
+CREATE INDEX "reviewable_item_client_profile_id_kind_idx" ON "reviewable_item"("client_profile_id", "kind");
+
+-- CreateIndex
+CREATE INDEX "review_item_reviewable_item_id_created_at_idx" ON "review_item"("reviewable_item_id", "created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "review_item_status_created_at_idx" ON "review_item"("status", "created_at");
+
+-- CreateIndex
+CREATE INDEX "review_item_assigned_to_staff_id_status_idx" ON "review_item"("assigned_to_staff_id", "status");
+
+-- CreateIndex
+CREATE INDEX "review_item_reviewed_by_staff_id_idx" ON "review_item"("reviewed_by_staff_id");
+
+-- CreateIndex
+CREATE INDEX "staff_approval_rule_target_action_type_id_is_active_idx" ON "staff_approval_rule"("target_action_type_id", "is_active");
+
+-- CreateIndex
+CREATE INDEX "staff_approval_rule_condition_rule_id_idx" ON "staff_approval_rule_condition"("rule_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "staff_approval_rule_condition_rule_id_condition_type_id_key" ON "staff_approval_rule_condition"("rule_id", "condition_type_id");
+
+-- CreateIndex
+CREATE INDEX "staff_action_approval_status_requested_at_idx" ON "staff_action_approval"("status", "requested_at");
+
+-- CreateIndex
+CREATE INDEX "staff_action_approval_rule_id_status_idx" ON "staff_action_approval"("rule_id", "status");
+
+-- CreateIndex
+CREATE INDEX "staff_action_approval_requested_by_staff_id_status_idx" ON "staff_action_approval"("requested_by_staff_id", "status");
+
+-- CreateIndex
+CREATE INDEX "staff_action_approval_target_kind_id_target_id_idx" ON "staff_action_approval"("target_kind_id", "target_id");
+
+-- CreateIndex
+CREATE INDEX "staff_sla_rule_target_queue_id_is_active_idx" ON "staff_sla_rule"("target_queue_id", "is_active");
+
+-- CreateIndex
+CREATE INDEX "staff_sla_breach_target_kind_id_target_id_idx" ON "staff_sla_breach"("target_kind_id", "target_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "staff_sla_breach_active_unique" ON "staff_sla_breach"("rule_id", "target_kind_id", "target_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "support_collaboration_client_profile_id_key" ON "support_collaboration"("client_profile_id");
+
+-- CreateIndex
+CREATE INDEX "support_collaboration_assigned_to_staff_id_idx" ON "support_collaboration"("assigned_to_staff_id");
+
+-- CreateIndex
+CREATE INDEX "support_collaboration_last_message_at_idx" ON "support_collaboration"("last_message_at" DESC);
 
 -- AddForeignKey
 ALTER TABLE "email_verification_token" ADD CONSTRAINT "email_verification_token_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -797,13 +1155,7 @@ ALTER TABLE "employer_profile" ADD CONSTRAINT "employer_profile_id_fkey" FOREIGN
 ALTER TABLE "staff_member" ADD CONSTRAINT "staff_member_id_fkey" FOREIGN KEY ("id") REFERENCES "account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "document" ADD CONSTRAINT "document_client_profile_id_fkey" FOREIGN KEY ("client_profile_id") REFERENCES "client_profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "document" ADD CONSTRAINT "document_assigned_to_fkey" FOREIGN KEY ("assigned_to") REFERENCES "staff_member"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "document" ADD CONSTRAINT "document_reviewed_by_fkey" FOREIGN KEY ("reviewed_by") REFERENCES "staff_member"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "document" ADD CONSTRAINT "document_id_fkey" FOREIGN KEY ("id") REFERENCES "reviewable_item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "worker_specialisation" ADD CONSTRAINT "worker_specialisation_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "worker_profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -881,6 +1233,18 @@ ALTER TABLE "escrow_dispute" ADD CONSTRAINT "escrow_dispute_milestone_id_fkey" F
 ALTER TABLE "escrow_dispute" ADD CONSTRAINT "escrow_dispute_resolved_by_fkey" FOREIGN KEY ("resolved_by") REFERENCES "staff_member"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "escrow_dispute" ADD CONSTRAINT "escrow_dispute_assigned_to_staff_id_fkey" FOREIGN KEY ("assigned_to_staff_id") REFERENCES "staff_member"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "escrow_dispute_proposal" ADD CONSTRAINT "escrow_dispute_proposal_dispute_id_fkey" FOREIGN KEY ("dispute_id") REFERENCES "escrow_dispute"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "escrow_dispute_proposal" ADD CONSTRAINT "escrow_dispute_proposal_proposed_by_staff_id_fkey" FOREIGN KEY ("proposed_by_staff_id") REFERENCES "staff_member"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "escrow_dispute_proposal" ADD CONSTRAINT "escrow_dispute_proposal_execution_audit_id_fkey" FOREIGN KEY ("execution_audit_id") REFERENCES "audit_log"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "user_subscription" ADD CONSTRAINT "user_subscription_client_profile_id_fkey" FOREIGN KEY ("client_profile_id") REFERENCES "client_profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -929,6 +1293,12 @@ ALTER TABLE "job_attachment" ADD CONSTRAINT "job_attachment_job_post_id_fkey" FO
 ALTER TABLE "job_attachment" ADD CONSTRAINT "job_attachment_job_application_id_fkey" FOREIGN KEY ("job_application_id") REFERENCES "job_application"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "saved_job" ADD CONSTRAINT "saved_job_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "worker_profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "saved_job" ADD CONSTRAINT "saved_job_job_post_id_fkey" FOREIGN KEY ("job_post_id") REFERENCES "job_post"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "referral_intent" ADD CONSTRAINT "referral_intent_actor_id_fkey" FOREIGN KEY ("actor_id") REFERENCES "client_profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -947,23 +1317,420 @@ ALTER TABLE "conversation" ADD CONSTRAINT "conversation_id_fkey" FOREIGN KEY ("i
 ALTER TABLE "message" ADD CONSTRAINT "message_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "message" ADD CONSTRAINT "message_sender_id_fkey" FOREIGN KEY ("sender_id") REFERENCES "client_profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "message" ADD CONSTRAINT "message_support_collaboration_id_fkey" FOREIGN KEY ("support_collaboration_id") REFERENCES "support_collaboration"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- CHECK constraints (not expressible in Prisma schema).
+-- AddForeignKey
+ALTER TABLE "message" ADD CONSTRAINT "message_sender_id_fkey" FOREIGN KEY ("sender_id") REFERENCES "account"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- ReferralIntent: exactly one target (job post for W2W, worker for E2E).
-ALTER TABLE "referral_intent" ADD CONSTRAINT "referral_intent_one_target"
-  CHECK (num_nonnulls("target_job_post_id", "target_worker_id") = 1);
+-- AddForeignKey
+ALTER TABLE "role_permission" ADD CONSTRAINT "role_permission_staff_role_id_fkey" FOREIGN KEY ("staff_role_id") REFERENCES "staff_role"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- ReferralIntent: no self-referral (you cannot refer yourself).
-ALTER TABLE "referral_intent" ADD CONSTRAINT "referral_intent_no_self_ref"
-  CHECK ("actor_id" <> "referrer_id");
+-- AddForeignKey
+ALTER TABLE "role_permission" ADD CONSTRAINT "role_permission_permission_id_fkey" FOREIGN KEY ("permission_id") REFERENCES "permission"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- JobAttachment: exactly one owner — every attachment belongs to a job post
--- XOR a job application (no orphan / unattached rows).
-ALTER TABLE "job_attachment" ADD CONSTRAINT "job_attachment_one_owner"
+-- AddForeignKey
+ALTER TABLE "staff_member_role" ADD CONSTRAINT "staff_member_role_staff_member_id_fkey" FOREIGN KEY ("staff_member_id") REFERENCES "staff_member"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_member_role" ADD CONSTRAINT "staff_member_role_staff_role_id_fkey" FOREIGN KEY ("staff_role_id") REFERENCES "staff_role"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_member_role" ADD CONSTRAINT "staff_member_role_granted_by_staff_id_fkey" FOREIGN KEY ("granted_by_staff_id") REFERENCES "staff_member"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "reviewable_item" ADD CONSTRAINT "reviewable_item_client_profile_id_fkey" FOREIGN KEY ("client_profile_id") REFERENCES "client_profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "review_item" ADD CONSTRAINT "review_item_reviewable_item_id_fkey" FOREIGN KEY ("reviewable_item_id") REFERENCES "reviewable_item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "review_item" ADD CONSTRAINT "review_item_assigned_to_staff_id_fkey" FOREIGN KEY ("assigned_to_staff_id") REFERENCES "staff_member"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "review_item" ADD CONSTRAINT "review_item_reviewed_by_staff_id_fkey" FOREIGN KEY ("reviewed_by_staff_id") REFERENCES "staff_member"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_approval_rule" ADD CONSTRAINT "staff_approval_rule_target_action_type_id_fkey" FOREIGN KEY ("target_action_type_id") REFERENCES "admin_action_type"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_approval_rule" ADD CONSTRAINT "staff_approval_rule_required_approver_role_id_fkey" FOREIGN KEY ("required_approver_role_id") REFERENCES "staff_role"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_approval_rule" ADD CONSTRAINT "staff_approval_rule_created_by_staff_id_fkey" FOREIGN KEY ("created_by_staff_id") REFERENCES "staff_member"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_approval_rule_condition" ADD CONSTRAINT "staff_approval_rule_condition_rule_id_fkey" FOREIGN KEY ("rule_id") REFERENCES "staff_approval_rule"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_approval_rule_condition" ADD CONSTRAINT "staff_approval_rule_condition_condition_type_id_fkey" FOREIGN KEY ("condition_type_id") REFERENCES "approval_condition_type"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "approval_condition_amount" ADD CONSTRAINT "approval_condition_amount_id_fkey" FOREIGN KEY ("id") REFERENCES "staff_approval_rule_condition"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "approval_condition_role" ADD CONSTRAINT "approval_condition_role_id_fkey" FOREIGN KEY ("id") REFERENCES "staff_approval_rule_condition"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "approval_condition_role" ADD CONSTRAINT "approval_condition_role_staff_role_id_fkey" FOREIGN KEY ("staff_role_id") REFERENCES "staff_role"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "approval_condition_doc_type" ADD CONSTRAINT "approval_condition_doc_type_id_fkey" FOREIGN KEY ("id") REFERENCES "staff_approval_rule_condition"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_action_approval" ADD CONSTRAINT "staff_action_approval_rule_id_fkey" FOREIGN KEY ("rule_id") REFERENCES "staff_approval_rule"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_action_approval" ADD CONSTRAINT "staff_action_approval_target_kind_id_fkey" FOREIGN KEY ("target_kind_id") REFERENCES "admin_target_kind"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_action_approval" ADD CONSTRAINT "staff_action_approval_requested_by_staff_id_fkey" FOREIGN KEY ("requested_by_staff_id") REFERENCES "staff_member"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_action_approval" ADD CONSTRAINT "staff_action_approval_approved_by_staff_id_fkey" FOREIGN KEY ("approved_by_staff_id") REFERENCES "staff_member"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_action_approval" ADD CONSTRAINT "staff_action_approval_execution_audit_id_fkey" FOREIGN KEY ("execution_audit_id") REFERENCES "audit_log"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_sla_rule" ADD CONSTRAINT "staff_sla_rule_target_queue_id_fkey" FOREIGN KEY ("target_queue_id") REFERENCES "admin_queue_type"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_sla_rule" ADD CONSTRAINT "staff_sla_rule_notify_role_id_fkey" FOREIGN KEY ("notify_role_id") REFERENCES "staff_role"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_sla_rule" ADD CONSTRAINT "staff_sla_rule_created_by_staff_id_fkey" FOREIGN KEY ("created_by_staff_id") REFERENCES "staff_member"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_sla_breach" ADD CONSTRAINT "staff_sla_breach_rule_id_fkey" FOREIGN KEY ("rule_id") REFERENCES "staff_sla_rule"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "staff_sla_breach" ADD CONSTRAINT "staff_sla_breach_target_kind_id_fkey" FOREIGN KEY ("target_kind_id") REFERENCES "admin_target_kind"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "support_collaboration" ADD CONSTRAINT "support_collaboration_client_profile_id_fkey" FOREIGN KEY ("client_profile_id") REFERENCES "client_profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "support_collaboration" ADD CONSTRAINT "support_collaboration_assigned_to_staff_id_fkey" FOREIGN KEY ("assigned_to_staff_id") REFERENCES "staff_member"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+
+-- ##########################################################################
+-- ##  SEED LOOKUPS — staff_role, admin_target_kind, admin_queue_type,     ##
+-- ##  approval_condition_type, admin_action_type                          ##
+-- ##########################################################################
+
+INSERT INTO "staff_role" ("name", "description", "is_system") VALUES
+  ('ADMIN', 'Full access including money mutations, platform settings, staff management.', true),
+  ('STAFF', 'Verifications, disputes, reviews moderation, support chat. No money or settings.', true);
+
+INSERT INTO "admin_target_kind" ("name", "description") VALUES
+  ('PAYMENT',           'Row in `payment` ledger.'),
+  ('CLIENT_PROFILE',    'A client (worker or employer profile owner).'),
+  ('ESCROW_MILESTONE',  'A milestone in `escrow_milestone`.'),
+  ('DOCUMENT',          'Uploaded verification document in `document`.'),
+  ('ESCROW_DISPUTE',    'A dispute row in `escrow_dispute`.'),
+  ('CONTRACT',          'Row in `contract`.'),
+  ('PLATFORM_SETTING',  'Row in `platform_setting`.');
+
+INSERT INTO "admin_queue_type" ("name", "description") VALUES
+  ('DOCUMENT_PENDING',           'Verification documents awaiting staff review.'),
+  ('DISPUTE_OPEN',               'Disputes in OPEN state, awaiting first staff response.'),
+  ('DISPUTE_RESPONDED',          'Disputes in RESPONDED/MEDIATION, awaiting resolution.'),
+  ('PAYMENT_FAILED',             'Payment rows with status=FAILED awaiting retry decision.'),
+  ('PAYMENT_TRANSFER_PENDING',   'PENDING worker payouts / referral commissions not yet swept.'),
+  ('SUPPORT_THREAD_UNANSWERED',  'Support thread with last message from user > threshold.'),
+  ('APPROVAL_REQUIRED',          'staff_action_approval rows in PENDING state.');
+
+INSERT INTO "approval_condition_type" ("name", "value_subtype", "description") VALUES
+  ('AMOUNT_GT',                 'AMOUNT',   'Action amount (context.amount_pence) must exceed threshold.'),
+  ('REQUESTING_STAFF_HAS_ROLE', 'ROLE',     'Requesting staff must have a specific role.'),
+  ('DOCUMENT_TYPE_EQUALS',      'DOC_TYPE', 'Target document must be of specific doc_type (only when target_kind=DOCUMENT).');
+
+INSERT INTO "admin_action_type" ("name", "category", "description", "is_money") VALUES
+  ('PAYMENT_MARK_PAID',           'PAYMENT',      'Set payment.status = PAID manually (out-of-band settlement).',                true),
+  ('PAYMENT_MARK_FAILED',         'PAYMENT',      'Set payment.status = FAILED manually.',                                       false),
+  ('PAYMENT_RETRY_TRANSFER',      'PAYMENT',      'Re-attempt the Stripe transfer for a failed/pending payout.',                 true),
+  ('ESCROW_FORCE_RELEASE',        'ESCROW',       'Release a milestone to worker bypassing employer approval.',                  true),
+  ('ESCROW_FORCE_REFUND',         'ESCROW',       'Refund a funded milestone to employer bypassing dispute flow.',               true),
+  ('ESCROW_FORCE_CANCEL',         'ESCROW',       'Cancel a milestone in an unusual state.',                                     false),
+  ('VERIFICATION_DOC_APPROVE',    'VERIFICATION', 'Approve an uploaded verification document.',                                  false),
+  ('VERIFICATION_DOC_REJECT',     'VERIFICATION', 'Reject an uploaded verification document with reason.',                       false),
+  ('VERIFICATION_LEVEL_OVERRIDE', 'VERIFICATION', 'Set client_profile.verification_level directly bypassing normal workflow.',   false),
+  ('USER_SUSPEND',                'USER',         'Suspend an account (block login).',                                           false),
+  ('USER_UNSUSPEND',              'USER',         'Lift a suspension.',                                                          false),
+  ('USER_DELETE',                 'USER',         'Hard-delete an account (cascades per FK rules).',                             false),
+  ('PLATFORM_SETTING_UPDATE',     'PLATFORM',     'Update a row in platform_setting.',                                           false),
+  ('STAFF_INVITE',                'STAFF',        'Invite a new staff member (creates account + role assignment).',              false),
+  ('STAFF_ROLE_GRANT',            'STAFF',        'Add a role to a staff member.',                                               false),
+  ('STAFF_ROLE_REVOKE',           'STAFF',        'Remove a role from a staff member.',                                          false),
+  ('BROADCAST_MESSAGE',           'COMMS',        'Send a notification to a subset of users (future).',                          false);
+
+
+-- ##########################################################################
+-- ##  SEED PERMISSIONS (RBAC) + ADMIN/STAFF role_permission grants        ##
+-- ##########################################################################
+
+INSERT INTO "permission" ("key", "category", "description") VALUES
+  -- Read access (gates tab visibility)
+  ('dashboard.read',             'read',     'View admin dashboard counters and time-series.'),
+  ('users.read',                 'read',     'Search marketplace users and view their detail page.'),
+  ('staff.read',                 'read',     'View the staff member list.'),
+  ('audit.read',                 'read',     'Browse the audit log.'),
+  ('verification.read',          'read',     'View the document verification queue.'),
+  ('escrow_disputes.read',       'read',     'View open escrow disputes.'),
+  ('approvals.read',             'read',     'View pending and historical action approvals.'),
+  ('support.read',               'read',     'View support threads.'),
+
+  -- User mutations
+  ('users.suspend',              'users',    'Suspend / unsuspend marketplace accounts.'),
+  ('users.delete',               'users',    'Hard-deactivate accounts (USER_DELETE action).'),
+  ('users.set_verification',     'users',    'Override a client''s verification level.'),
+
+  -- Payment / escrow mutations
+  ('payments.mark_paid',         'payments', 'Force-mark a payment row PAID (reconciliation).'),
+  ('payments.mark_failed',       'payments', 'Force-mark a payment row FAILED.'),
+  ('payments.retry_transfer',    'payments', 'Re-queue a FAILED payout/refund for retry.'),
+  ('escrow.force_release',       'escrow',   'Force-release a milestone outside the normal flow.'),
+  ('escrow.force_refund',        'escrow',   'Force-refund a milestone outside the normal flow.'),
+  ('escrow.force_cancel',        'escrow',   'Force-cancel a milestone.'),
+
+  -- Verification + review queue
+  ('verification.review',        'verification', 'Approve or reject documents in the review queue.'),
+
+  -- Platform / catalog management
+  ('platform.settings.write',    'platform', 'Update platform_setting (fees, referral %, etc.).'),
+  ('specialisations.manage',     'catalog',  'Create / update / delete trade specialisations.'),
+  ('tags.manage',                'catalog',  'Create / update / delete worker tags.'),
+  ('plans.manage',               'catalog',  'Create / update / publish subscription plans.'),
+
+  -- Operations resources
+  ('approval_rules.manage',      'ops',      'Create / update / deactivate approval rules.'),
+  ('sla_rules.manage',           'ops',      'Create / update / deactivate SLA rules.'),
+  ('approvals.resolve',          'ops',      'Approve or reject pending action approvals.'),
+  ('broadcast.send',             'ops',      'Send broadcast notifications to user audiences.'),
+
+  -- Staff management
+  ('staff.invite',               'staff',    'Invite a new staff member or promote an existing client.'),
+  ('staff.role_change',          'staff',    'Change a staff member''s role.'),
+  ('staff.deactivate',           'staff',    'Deactivate / reactivate a staff account.'),
+  ('staff.reset_password',       'staff',    'Force-reset a staff member''s password.'),
+  ('roles.manage',               'staff',    'Create / rename / delete custom roles and manage their permissions.'),
+
+  -- Support
+  ('support.reply',              'support',  'Send messages on support threads as TradeHub Support.'),
+  ('support.assign',             'support',  'Assign or unassign the responsible staff on a support thread.'),
+
+  -- Escrow dispute proposals
+  ('disputes.propose',  'escrow',  'Propose a worker/employer split on an open dispute. Both parties must accept before it executes.'),
+  ('disputes.escalate', 'escrow',  'Escalate a dispute to ARBITRATION_PENDING when parties cannot agree on a proposal.'),
+  ('support.initiate',  'support', 'Open a new support thread with a user from the admin Users page (sending the first message).');
+
+-- Grant ALL permissions to ADMIN role
+INSERT INTO "role_permission" ("staff_role_id", "permission_id")
+SELECT r.id, p.id
+FROM "staff_role" r
+CROSS JOIN "permission" p
+WHERE r.name = 'ADMIN';
+
+-- Grant a sensible default subset to STAFF role
+INSERT INTO "role_permission" ("staff_role_id", "permission_id")
+SELECT r.id, p.id
+FROM "staff_role" r
+CROSS JOIN "permission" p
+WHERE r.name = 'STAFF'
+  AND p.key IN (
+    'dashboard.read',
+    'users.read',
+    'staff.read',
+    'audit.read',
+    'verification.read',
+    'escrow_disputes.read',
+    'approvals.read',
+    'support.read',
+    'verification.review',
+    'support.reply',
+    'support.assign'
+  );
+
+
+-- ##########################################################################
+-- ##  TRIGGERS (PL/pgSQL functions + triggers)                            ##
+-- ##  Includes the hotfix from 20260524230000: polymorphic-target-exists  ##
+-- ##  trigger returns NEW (not NULL) so BEFORE INSERT lets the row pass.  ##
+-- ##########################################################################
+
+-- R2: cascade-up — when a subtype row (e.g. document) is deleted, also delete its parent reviewable_item
+CREATE OR REPLACE FUNCTION delete_reviewable_item_on_subtype_delete()
+  RETURNS TRIGGER AS $$
+BEGIN
+  DELETE FROM "reviewable_item" WHERE "id" = OLD."id";
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "document_delete_cascades_up"
+AFTER DELETE ON "document"
+FOR EACH ROW
+EXECUTE FUNCTION delete_reviewable_item_on_subtype_delete();
+
+
+-- R3a: reviewable_item must have a matching subtype row (DEFERRABLE)
+CREATE OR REPLACE FUNCTION check_reviewable_item_subtype_exists()
+  RETURNS TRIGGER AS $$
+DECLARE
+  subtype_table TEXT;
+  subtype_exists BOOLEAN;
+BEGIN
+  subtype_table := lower(NEW."kind");
+  EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE "id" = $1)', subtype_table)
+    INTO subtype_exists USING NEW."id";
+  IF NOT subtype_exists THEN
+    RAISE EXCEPTION 'reviewable_item % has kind=% but no matching row in subtype table %',
+      NEW."id", NEW."kind", subtype_table;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER "reviewable_item_must_have_subtype"
+AFTER INSERT OR UPDATE ON "reviewable_item"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION check_reviewable_item_subtype_exists();
+
+
+-- R3b: staff_approval_rule_condition must have a matching subtype row
+CREATE OR REPLACE FUNCTION check_approval_condition_subtype_exists()
+  RETURNS TRIGGER AS $$
+DECLARE
+  v_value_subtype TEXT;
+  subtype_table TEXT;
+  subtype_exists BOOLEAN;
+BEGIN
+  SELECT "value_subtype" INTO v_value_subtype
+  FROM "approval_condition_type"
+  WHERE "id" = NEW."condition_type_id";
+
+  IF v_value_subtype IS NULL THEN
+    RAISE EXCEPTION 'approval_condition_type id=% not found', NEW."condition_type_id";
+  END IF;
+
+  subtype_table := 'approval_condition_' || lower(v_value_subtype);
+  EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE "id" = $1)', subtype_table)
+    INTO subtype_exists USING NEW."id";
+
+  IF NOT subtype_exists THEN
+    RAISE EXCEPTION 'staff_approval_rule_condition % has value_subtype=% but no matching row in %',
+      NEW."id", v_value_subtype, subtype_table;
+  END IF;
+
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER "approval_condition_must_have_subtype"
+AFTER INSERT OR UPDATE ON "staff_approval_rule_condition"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION check_approval_condition_subtype_exists();
+
+
+-- Polymorphic target validation for staff_action_approval + staff_sla_breach
+-- HOTFIX (from 20260524230000): returns NEW so BEFORE INSERT trigger lets the
+-- row through. Returning NULL silently skipped the INSERT and broke Prisma
+-- RETURNING / app code reading the resulting row.
+CREATE OR REPLACE FUNCTION check_polymorphic_target_exists()
+  RETURNS TRIGGER AS $$
+DECLARE
+  v_target_kind_name TEXT;
+  target_table TEXT;
+  target_exists BOOLEAN;
+BEGIN
+  SELECT "name" INTO v_target_kind_name
+  FROM "admin_target_kind"
+  WHERE "id" = NEW."target_kind_id";
+
+  IF v_target_kind_name IS NULL THEN
+    RAISE EXCEPTION 'admin_target_kind id=% not found', NEW."target_kind_id";
+  END IF;
+
+  target_table := lower(v_target_kind_name);
+  EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE "id" = $1)', target_table)
+    INTO target_exists USING NEW."target_id";
+
+  IF NOT target_exists THEN
+    RAISE EXCEPTION 'Polymorphic target_id=% not found in table %', NEW."target_id", target_table;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "staff_action_approval_target_must_exist"
+BEFORE INSERT OR UPDATE OF "target_kind_id", "target_id" ON "staff_action_approval"
+FOR EACH ROW
+EXECUTE FUNCTION check_polymorphic_target_exists();
+
+CREATE TRIGGER "staff_sla_breach_target_must_exist"
+BEFORE INSERT OR UPDATE OF "target_kind_id", "target_id" ON "staff_sla_breach"
+FOR EACH ROW
+EXECUTE FUNCTION check_polymorphic_target_exists();
+
+
+-- ##########################################################################
+-- ##  CHECK constraints + partial indexes (not representable in Prisma    ##
+-- ##  schema; added as raw SQL — preserved from original migrations).     ##
+-- ##########################################################################
+
+ALTER TABLE "approval_condition_amount"
+  ADD CONSTRAINT "approval_condition_amount_threshold_positive"
+  CHECK ("threshold_pence" > 0);
+
+ALTER TABLE "escrow_dispute_proposal"
+  ADD CONSTRAINT "escrow_dispute_proposal_split_sums_to_100"
+  CHECK ("worker_pct" + "employer_refund_pct" = 100
+     AND "worker_pct" >= 0 AND "worker_pct" <= 100);
+
+ALTER TABLE "job_attachment"
+  ADD CONSTRAINT "job_attachment_one_owner"
   CHECK (num_nonnulls("job_post_id", "job_application_id") = 1);
 
--- Message: every message has either text content or a file.
-ALTER TABLE "message" ADD CONSTRAINT "message_has_body"
+ALTER TABLE "message"
+  ADD CONSTRAINT "message_has_body"
   CHECK ("content" IS NOT NULL OR "file_url" IS NOT NULL);
+
+ALTER TABLE "message"
+  ADD CONSTRAINT "message_one_container"
+  CHECK (num_nonnulls("conversation_id", "support_collaboration_id") = 1);
+
+ALTER TABLE "referral_intent"
+  ADD CONSTRAINT "referral_intent_no_self_ref"
+  CHECK ("actor_id" <> "referrer_id");
+
+ALTER TABLE "referral_intent"
+  ADD CONSTRAINT "referral_intent_one_target"
+  CHECK (num_nonnulls("target_job_post_id", "target_worker_id") = 1);
+
+ALTER TABLE "staff_sla_rule"
+  ADD CONSTRAINT "staff_sla_rule_threshold_positive"
+  CHECK ("threshold_minutes" > 0);
+
+-- Partial indexes (Prisma 7 supports partial indexes for unique only via @@unique with `where`,
+-- not all forms; preserving raw-SQL originals here for parity).
+-- Drop the plain (non-partial) variants Prisma may have generated, then create the partial ones.
+
+DROP INDEX IF EXISTS "review_item_reviewed_by_staff_id_idx";
+CREATE INDEX "review_item_reviewed_by_staff_id_idx"
+  ON "review_item"("reviewed_by_staff_id")
+  WHERE "reviewed_by_staff_id" IS NOT NULL;
+
+CREATE UNIQUE INDEX "escrow_dispute_proposal_one_pending_per_dispute"
+  ON "escrow_dispute_proposal"("dispute_id")
+  WHERE "status" = 'PENDING_RESPONSE';
+
+CREATE UNIQUE INDEX "review_item_one_pending_per_reviewable"
+  ON "review_item"("reviewable_item_id")
+  WHERE "status" = 'PENDING';
+
+CREATE INDEX "staff_sla_breach_unresolved_idx"
+  ON "staff_sla_breach"("rule_id")
+  WHERE "resolved_at" IS NULL;
