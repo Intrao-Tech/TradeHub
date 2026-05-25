@@ -156,10 +156,10 @@ export default function EditJobPage() {
       ) : post && initial ? (
         <>
           <header className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-fg">
+            <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">
               Edit job
             </h1>
-            <p className="text-sm text-fg-muted">{post.title}</p>
+            <p className="break-words text-sm text-fg-muted">{post.title}</p>
           </header>
 
           {applicationsCount > 0 ? (

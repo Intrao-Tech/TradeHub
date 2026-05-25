@@ -50,7 +50,7 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          'flex max-w-[80%] flex-col gap-1.5 rounded-lg px-3 py-2 text-sm',
+          'flex max-w-[85%] flex-col gap-1.5 rounded-lg px-3 py-2 text-sm sm:max-w-[80%]',
           mine
             ? 'bg-primary text-primary-fg'
             : 'bg-subtle text-fg',

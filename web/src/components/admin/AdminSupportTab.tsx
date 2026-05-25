@@ -438,11 +438,11 @@ export function AdminSupportTab() {
                   messages.map((m) => (
                     <div
                       key={m.id}
-                      className={`max-w-[80%] rounded px-3 py-2 text-sm ${
+                      className={`max-w-[90%] rounded px-3 py-2 text-sm break-words sm:max-w-[80%] ${
                         m.from === 'STAFF'
-                          ? 'bg-primary text-primary-foreground ml-auto'
+                          ? 'bg-primary text-primary-fg ml-auto'
                           : m.from === 'CLIENT'
-                            ? 'bg-bg border border-border-subtle'
+                            ? 'bg-raised border border-border-subtle'
                             : 'bg-warning-subtle text-warning text-xs italic mx-auto text-center'
                       }`}
                     >

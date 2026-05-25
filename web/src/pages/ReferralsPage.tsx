@@ -78,7 +78,7 @@ export default function ReferralsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Referrals</h1>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Referrals</h1>
         <p className="text-sm text-fg-muted">
           Earn commission when people you refer sign up, apply, or get hired.
           Two referral types: <strong>Account</strong> (signup link, paid as
@@ -112,11 +112,11 @@ export default function ReferralsPage() {
               <div className="font-mono text-lg font-semibold tracking-widest">
                 {code}
               </div>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 truncate rounded-md border border-border-default bg-subtle px-3 py-2 text-xs">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <code className="min-w-0 flex-1 truncate rounded-md border border-border-default bg-subtle px-3 py-2 text-xs">
                   {link}
                 </code>
-                <Button type="button" variant="outline" onClick={copyLink}>
+                <Button type="button" variant="outline" onClick={copyLink} className="sm:w-auto">
                   <Copy className="h-4 w-4" />
                   {copied ? 'Copied' : 'Copy'}
                 </Button>
@@ -131,15 +131,15 @@ export default function ReferralsPage() {
       {/* 2. Account referral stats */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <CardTitle>Account referrals</CardTitle>
               <CardDescription>
                 People who signed up via your code. You earn a share of the
                 platform fee on every milestone of their first contract.
               </CardDescription>
             </div>
-            <Button type="button" variant="outline" onClick={() => void loadAll()}>
+            <Button type="button" variant="outline" onClick={() => void loadAll()} className="self-start sm:self-auto">
               <RefreshCw />
               Refresh
             </Button>
@@ -171,9 +171,9 @@ export default function ReferralsPage() {
                   {stats.items.map((it) => (
                     <li
                       key={it.account_id}
-                      className="flex items-center justify-between rounded-md border border-border-default bg-raised px-3 py-2"
+                      className="flex flex-col gap-1 rounded-md border border-border-default bg-raised px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <span>
+                      <span className="min-w-0 break-words">
                         <strong>{it.display_name ?? it.email}</strong>{' '}
                         <span className="text-xs text-fg-muted">
                           ({it.email})
@@ -210,12 +210,12 @@ export default function ReferralsPage() {
               {shares.applications.map((a) => (
                 <li
                   key={a.id}
-                  className="flex items-center justify-between rounded-md border border-border-default bg-raised px-3 py-2"
+                  className="flex flex-col gap-2 rounded-md border border-border-default bg-raised px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <span>
+                  <span className="min-w-0 truncate">
                     {a.job_post?.title ?? `Job #${a.id}`}
                   </span>
-                  <Badge variant="info">{a.status}</Badge>
+                  <Badge variant="info" className="self-start sm:self-auto">{a.status}</Badge>
                 </li>
               ))}
             </ul>
@@ -241,13 +241,13 @@ export default function ReferralsPage() {
               {shares.contracts.map((c) => (
                 <li
                   key={c.id}
-                  className="flex items-center justify-between rounded-md border border-border-default bg-raised px-3 py-2"
+                  className="flex flex-col gap-2 rounded-md border border-border-default bg-raised px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <span>
+                  <span className="min-w-0 break-words">
                     {c.collaboration.worker.client_profile.display_name} ·{' '}
                     {c.project_type ?? 'Untitled'}
                   </span>
-                  <span className="flex items-center gap-2">
+                  <span className="flex flex-wrap items-center gap-2">
                     <Badge variant="info">{c.status}</Badge>
                     {c.agreed_amount ? (
                       <span className="text-fg-muted">
@@ -312,12 +312,12 @@ export default function ReferralsPage() {
               {pending.map((p) => (
                 <li
                   key={p.id}
-                  className="flex items-center justify-between rounded-md border border-border-default bg-raised px-3 py-2"
+                  className="flex flex-col gap-2 rounded-md border border-border-default bg-raised px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <span>
+                  <span className="min-w-0 break-words">
                     {p.type} · milestone #{p.milestone_id}
                   </span>
-                  <span>
+                  <span className="flex flex-wrap items-center gap-2">
                     <Badge
                       variant={p.status === 'PAID' ? 'success' : 'warning'}
                     >

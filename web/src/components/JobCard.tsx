@@ -146,7 +146,7 @@ export function JobCard({
         </div>
       </div>
 
-      <h3 className="text-lg font-semibold leading-tight text-fg">
+      <h3 className="text-lg font-semibold leading-tight text-fg break-words">
         {job.title}
       </h3>
 

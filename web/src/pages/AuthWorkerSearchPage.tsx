@@ -350,7 +350,7 @@ export default function AuthWorkerSearchPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Find workers</h1>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Find workers</h1>
         <p className="text-sm text-fg-muted">
           Browse verified tradespeople and invite them to one of your open jobs.
         </p>

@@ -272,7 +272,7 @@ function PlanForm({
       onSubmit={submit}
       className="rounded border border-border-subtle bg-subtle/40 p-3 space-y-3"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm font-medium">
           {mode === 'create' ? 'New plan' : `Edit plan #${plan?.id}`}
         </div>

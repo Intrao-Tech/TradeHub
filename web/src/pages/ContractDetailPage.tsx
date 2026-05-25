@@ -152,7 +152,7 @@ export default function ContractDetailPage() {
       </div>
 
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
           Contract #{contract?.position ?? '…'}
         </h1>
         <p className="text-sm text-fg-muted">

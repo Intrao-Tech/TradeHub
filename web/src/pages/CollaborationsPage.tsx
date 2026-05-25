@@ -205,7 +205,7 @@ export default function CollaborationsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
             Collaborations
           </h1>
           <p className="text-sm text-fg-muted">
@@ -286,8 +286,8 @@ export default function CollaborationsPage() {
                 <Card>
                   <CardHeader>
                     <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <CardTitle className="text-base">{cpName}</CardTitle>
+                      <div className="min-w-0">
+                        <CardTitle className="text-base truncate">{cpName}</CardTitle>
                         <CardDescription>
                           {cpCity ? `${cpCity} · ` : ''}
                           since {fmtDate(row.first_contracted_at ?? row.created_at)}

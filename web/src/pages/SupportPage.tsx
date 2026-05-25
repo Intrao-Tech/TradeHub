@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LifeBuoy, Send } from 'lucide-react';
 import { api, parseApiError } from '../api';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -92,7 +93,7 @@ export default function SupportPage() {
         </p>
       </div>
 
-      <Card className="flex h-[70vh] flex-col">
+      <Card className="flex h-[calc(100vh-12rem)] min-h-[480px] flex-col sm:h-[70vh]">
         <CardHeader>
           <div className="flex items-center gap-2">
             <LifeBuoy className="h-4 w-4 text-fg-muted" />
@@ -123,11 +124,12 @@ export default function SupportPage() {
                 {messages.map((m) => (
                   <div
                     key={m.id}
-                    className={`max-w-[80%] rounded px-3 py-2 text-sm ${
+                    className={cn(
+                      'max-w-[90%] rounded px-3 py-2 text-sm break-words sm:max-w-[80%]',
                       m.from === 'CLIENT'
-                        ? 'ml-auto bg-primary text-primary-foreground'
-                        : 'border border-border-subtle bg-bg'
-                    }`}
+                        ? 'ml-auto bg-primary text-primary-fg'
+                        : 'border border-border-subtle bg-raised',
+                    )}
                   >
                     {m.from === 'STAFF' && m.display_name ? (
                       <div className="text-[10px] uppercase tracking-wide opacity-80 mb-1">
@@ -161,12 +163,12 @@ export default function SupportPage() {
             </div>
           ) : null}
 
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Write a message… (⌘/Ctrl + Enter to send)"
-              className="min-h-[60px] text-sm"
+              className="min-h-[60px] flex-1 text-sm"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
@@ -174,7 +176,11 @@ export default function SupportPage() {
                 }
               }}
             />
-            <Button onClick={() => void send()} disabled={sending}>
+            <Button
+              onClick={() => void send()}
+              disabled={sending}
+              className="sm:self-end"
+            >
               <Send className="h-3.5 w-3.5" />
               {sending ? 'Sending…' : 'Send'}
             </Button>

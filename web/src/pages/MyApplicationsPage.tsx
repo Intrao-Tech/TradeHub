@@ -162,7 +162,7 @@ export default function MyApplicationsPage() {
   if (!accountLoading && !isWorker) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">My applications</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">My applications</h1>
         <EmptyState
           icon={Inbox}
           title="No applications"
@@ -175,7 +175,7 @@ export default function MyApplicationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">My applications</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">My applications</h1>
         <p className="text-sm text-fg-muted">
           Track every application you've sent and every invitation you've received.
         </p>

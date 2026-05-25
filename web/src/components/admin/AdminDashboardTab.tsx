@@ -142,8 +142,8 @@ export function AdminDashboardTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h2 className="text-base font-semibold tracking-tight">Overview</h2>
           <p className="text-sm text-fg-muted">
             Live snapshot of the platform. Click any tile to drill in.

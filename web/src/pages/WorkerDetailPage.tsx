@@ -172,9 +172,9 @@ export default function WorkerDetailPage() {
       />
 
       <div className="flex flex-col gap-3 rounded-md border border-border-default bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+        <div className="min-w-0">
           {rate ? (
-            <p className="text-xl font-semibold text-fg">{rate}</p>
+            <p className="text-lg font-semibold text-fg sm:text-xl">{rate}</p>
           ) : (
             <p className="text-sm text-fg-muted">Rate not set</p>
           )}

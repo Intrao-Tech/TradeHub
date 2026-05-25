@@ -328,7 +328,7 @@ export function JobPostForm({
       </Field>
 
       {values.pay_type === 'DAY_RATE' ? (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field
             label="Day rate min (£)"
             htmlFor="job-day-min"

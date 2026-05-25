@@ -628,7 +628,7 @@ export function AdminUsersTab() {
               ) : null}
 
               <div className="rounded border border-border-subtle p-3 space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-sm font-medium">Admin actions</div>
                   {myAccountId === detail.id ? (
                     <span className="text-[11px] text-fg-muted">

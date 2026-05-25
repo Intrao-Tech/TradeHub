@@ -237,7 +237,7 @@ export default function MyJobApplicantsPage() {
               {(post._count?.applications ?? apps.length) === 1 ? '' : 's'}
             </Badge>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-fg">
+          <h1 className="break-words text-xl font-semibold tracking-tight text-fg sm:text-2xl">
             <Link
               to={`/jobs/${post.id}`}
               className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

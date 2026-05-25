@@ -155,7 +155,7 @@ export default function MyJobsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-fg">My jobs</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">My jobs</h1>
           <p className="text-sm text-fg-muted">
             Manage every job you've posted.
           </p>
@@ -298,7 +298,7 @@ function JobRow({
       <Card className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <CardHeader className="min-w-0 flex-1 space-y-2 p-0">
           <div className="flex flex-wrap items-center gap-2">
-            <CardTitle className="text-base font-semibold">
+            <CardTitle className="break-words text-base font-semibold">
               <Link
                 to={`/jobs/${post.id}`}
                 className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

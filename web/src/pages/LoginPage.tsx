@@ -131,7 +131,7 @@ export default function LoginPage({ onLogin }: Props) {
     <AuthShell>
       <Card>
         <CardHeader>
-          <CardTitle className="text-center text-2xl">Log in to TradeHub</CardTitle>
+          <CardTitle className="text-center text-xl sm:text-2xl">Log in to TradeHub</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
           {banner ? (

@@ -118,7 +118,7 @@ export default function PublicJobBoardPage() {
 
       <section className="space-y-4">
         {list ? (
-          <h2 className="text-lg font-semibold tracking-tight">
+          <h2 className="text-base font-semibold tracking-tight sm:text-lg">
             Check out a sample of the {list.total} jobs posted on TradeHub
           </h2>
         ) : null}

@@ -88,7 +88,7 @@ export default function WalletPage() {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Wallet className="h-6 w-6 text-fg-muted" />
-        <h1 className="text-2xl font-semibold tracking-tight">Payments</h1>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Payments</h1>
       </div>
       <p className="text-sm text-fg-muted">
         Stripe Connect setup and every payout to your account.
@@ -130,10 +130,10 @@ export default function WalletPage() {
               <Link
                 key={m.milestone_id}
                 to={`/escrow/${m.contract_id}`}
-                className="flex items-center justify-between rounded-md border border-border-default bg-raised px-3 py-2 hover:bg-subtle"
+                className="flex flex-col gap-2 rounded-md border border-border-default bg-raised px-3 py-2 hover:bg-subtle sm:flex-row sm:items-center sm:justify-between"
               >
-                <span className="font-medium text-fg">{m.title}</span>
-                <span className="flex items-center gap-2">
+                <span className="min-w-0 truncate font-medium text-fg">{m.title}</span>
+                <span className="flex flex-wrap items-center gap-2">
                   <Badge variant={m.status === 'SUBMITTED' ? 'warning' : 'info'}>
                     {m.status === 'SUBMITTED' ? 'Awaiting review' : 'In escrow'}
                   </Badge>
@@ -157,10 +157,10 @@ export default function WalletPage() {
             wallet.released_history.map((m) => (
               <div
                 key={m.milestone_id}
-                className="flex items-center justify-between rounded-md border border-border-default bg-raised px-3 py-2"
+                className="flex flex-col gap-2 rounded-md border border-border-default bg-raised px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div>
-                  <div className="font-medium text-fg">{m.title}</div>
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-fg">{m.title}</div>
                   {m.released_at ? (
                     <div className="text-xs text-fg-muted">
                       Released {new Date(m.released_at).toLocaleDateString()}
@@ -188,9 +188,9 @@ export default function WalletPage() {
               <Link
                 key={m.milestone_id}
                 to={`/escrow/${m.contract_id}`}
-                className="flex items-center justify-between rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-danger"
+                className="flex flex-col gap-2 rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-danger sm:flex-row sm:items-center sm:justify-between"
               >
-                <span className="font-medium">{m.title}</span>
+                <span className="min-w-0 truncate font-medium">{m.title}</span>
                 <span>{fmt(m.amount)}</span>
               </Link>
             ))}
@@ -214,10 +214,10 @@ export default function WalletPage() {
               <Link
                 key={p.id}
                 to={`/escrow/${p.contract_id}`}
-                className="flex items-center justify-between rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-warning hover:bg-warning-subtle/80"
+                className="flex flex-col gap-2 rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-warning hover:bg-warning-subtle/80 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div>
-                  <div className="font-medium">{p.milestone_title}</div>
+                <div className="min-w-0">
+                  <div className="truncate font-medium">{p.milestone_title}</div>
                   <div className="text-xs opacity-80">
                     Held since {new Date(p.created_at).toLocaleDateString()}
                     {p.failure_reason ? ` — ${p.failure_reason}` : ''}
@@ -302,7 +302,7 @@ function EmployerPaymentsView() {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <CreditCard className="h-6 w-6 text-fg-muted" />
-        <h1 className="text-2xl font-semibold tracking-tight">Payments</h1>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Payments</h1>
       </div>
       <p className="text-sm text-fg-muted">
         Funds you've charged, refunds you've issued, and any open disputes on

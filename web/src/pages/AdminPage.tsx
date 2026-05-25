@@ -18,6 +18,15 @@ import {
   Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { StaffManagementCard } from '@/components/StaffManagementCard';
 import { VerificationQueueTab } from '@/components/admin/VerificationQueueTab';
 import { EscrowDisputesTab } from '@/components/admin/EscrowDisputesTab';
@@ -271,9 +280,32 @@ export default function AdminPage() {
         <p className="text-sm text-fg-muted">Loading…</p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+          <div className="lg:hidden">
+            <Select
+              value={active?.id ?? ''}
+              onValueChange={(v) => v && setTab(v)}
+            >
+              <SelectTrigger aria-label="Admin section">
+                <SelectValue placeholder="Select section" />
+              </SelectTrigger>
+              <SelectContent>
+                {sections.map((section) => (
+                  <SelectGroup key={section.id}>
+                    <SelectLabel>{section.label}</SelectLabel>
+                    {section.tabs.map((tab) => (
+                      <SelectItem key={tab.id} value={tab.id}>
+                        {tab.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <nav
             aria-label="Admin sections"
-            className="space-y-4 lg:sticky lg:top-4 lg:self-start"
+            className="hidden space-y-4 lg:block lg:sticky lg:top-4 lg:self-start"
           >
             {sections.map((section) => (
               <div key={section.id} className="space-y-1">
@@ -292,7 +324,7 @@ export default function AdminPage() {
                         className={cn(
                           'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
                           isActive
-                            ? 'bg-primary text-primary-foreground'
+                            ? 'bg-primary text-primary-fg'
                             : 'text-fg hover:bg-subtle',
                         )}
                       >

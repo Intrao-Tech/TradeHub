@@ -154,7 +154,7 @@ export default function CollaborationDetailPage() {
       </div>
 
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <h1 className="text-xl font-semibold tracking-tight break-words sm:text-2xl">
           {collab?.worker?.client_profile?.display_name ?? 'Worker'}{' '}
           ↔{' '}
           {collab?.employer?.client_profile?.display_name ?? 'Employer'}
@@ -266,9 +266,9 @@ export default function CollaborationDetailPage() {
                   key={String(c.id)}
                   className="rounded-md border border-border-default bg-raised px-3 py-3"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex flex-col">
-                      <span className="font-medium">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 flex-col">
+                      <span className="font-medium truncate">
                         Contract #{c.position} ·{' '}
                         {c.project_type ?? 'Untitled'}
                       </span>
@@ -281,7 +281,7 @@ export default function CollaborationDetailPage() {
                         {c.ended_at ? `· ended ${fmtDate(c.ended_at)}` : ''}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={contractStatusVariant(c.status)}>
                         {c.status}
                         {c.end_reason ? ` · ${c.end_reason}` : ''}

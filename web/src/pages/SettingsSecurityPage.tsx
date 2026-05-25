@@ -25,7 +25,7 @@ export default function SettingsSecurityPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Security</h1>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Security</h1>
         <p className="text-sm text-fg-muted">
           Manage your password and active sessions.
         </p>
