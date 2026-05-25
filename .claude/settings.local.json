@@ -16,7 +16,8 @@
       "WebSearch",
       "Bash(npm install *)",
       "Bash(npm ls *)",
-      "Bash(lsof *)"
+      "Bash(lsof *)",
+      "Bash(docker compose *)"
     ]
   }
 }

@@ -568,6 +568,15 @@ CREATE TABLE "saved_job" (
 );
 
 -- CreateTable
+CREATE TABLE "saved_worker" (
+    "employer_id" BIGINT NOT NULL,
+    "worker_id" BIGINT NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "saved_worker_pkey" PRIMARY KEY ("employer_id","worker_id")
+);
+
+-- CreateTable
 CREATE TABLE "referral_intent" (
     "id" BIGSERIAL NOT NULL,
     "actor_id" BIGINT NOT NULL,
@@ -1026,6 +1035,12 @@ CREATE INDEX "saved_job_job_post_id_idx" ON "saved_job"("job_post_id");
 CREATE INDEX "saved_job_worker_id_created_at_idx" ON "saved_job"("worker_id", "created_at" DESC);
 
 -- CreateIndex
+CREATE INDEX "saved_worker_worker_id_idx" ON "saved_worker"("worker_id");
+
+-- CreateIndex
+CREATE INDEX "saved_worker_employer_id_created_at_idx" ON "saved_worker"("employer_id", "created_at" DESC);
+
+-- CreateIndex
 CREATE INDEX "referral_intent_actor_id_target_job_post_id_expires_at_idx" ON "referral_intent"("actor_id", "target_job_post_id", "expires_at");
 
 -- CreateIndex
@@ -1299,6 +1314,12 @@ ALTER TABLE "saved_job" ADD CONSTRAINT "saved_job_worker_id_fkey" FOREIGN KEY ("
 ALTER TABLE "saved_job" ADD CONSTRAINT "saved_job_job_post_id_fkey" FOREIGN KEY ("job_post_id") REFERENCES "job_post"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "saved_worker" ADD CONSTRAINT "saved_worker_employer_id_fkey" FOREIGN KEY ("employer_id") REFERENCES "employer_profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "saved_worker" ADD CONSTRAINT "saved_worker_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "worker_profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "referral_intent" ADD CONSTRAINT "referral_intent_actor_id_fkey" FOREIGN KEY ("actor_id") REFERENCES "client_profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1412,325 +1433,3 @@ ALTER TABLE "support_collaboration" ADD CONSTRAINT "support_collaboration_client
 -- AddForeignKey
 ALTER TABLE "support_collaboration" ADD CONSTRAINT "support_collaboration_assigned_to_staff_id_fkey" FOREIGN KEY ("assigned_to_staff_id") REFERENCES "staff_member"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
-
--- ##########################################################################
--- ##  SEED LOOKUPS — staff_role, admin_target_kind, admin_queue_type,     ##
--- ##  approval_condition_type, admin_action_type                          ##
--- ##########################################################################
-
-INSERT INTO "staff_role" ("name", "description", "is_system") VALUES
-  ('ADMIN', 'Full access including money mutations, platform settings, staff management.', true),
-  ('STAFF', 'Verifications, disputes, reviews moderation, support chat. No money or settings.', true);
-
-INSERT INTO "admin_target_kind" ("name", "description") VALUES
-  ('PAYMENT',           'Row in `payment` ledger.'),
-  ('CLIENT_PROFILE',    'A client (worker or employer profile owner).'),
-  ('ESCROW_MILESTONE',  'A milestone in `escrow_milestone`.'),
-  ('DOCUMENT',          'Uploaded verification document in `document`.'),
-  ('ESCROW_DISPUTE',    'A dispute row in `escrow_dispute`.'),
-  ('CONTRACT',          'Row in `contract`.'),
-  ('PLATFORM_SETTING',  'Row in `platform_setting`.');
-
-INSERT INTO "admin_queue_type" ("name", "description") VALUES
-  ('DOCUMENT_PENDING',           'Verification documents awaiting staff review.'),
-  ('DISPUTE_OPEN',               'Disputes in OPEN state, awaiting first staff response.'),
-  ('DISPUTE_RESPONDED',          'Disputes in RESPONDED/MEDIATION, awaiting resolution.'),
-  ('PAYMENT_FAILED',             'Payment rows with status=FAILED awaiting retry decision.'),
-  ('PAYMENT_TRANSFER_PENDING',   'PENDING worker payouts / referral commissions not yet swept.'),
-  ('SUPPORT_THREAD_UNANSWERED',  'Support thread with last message from user > threshold.'),
-  ('APPROVAL_REQUIRED',          'staff_action_approval rows in PENDING state.');
-
-INSERT INTO "approval_condition_type" ("name", "value_subtype", "description") VALUES
-  ('AMOUNT_GT',                 'AMOUNT',   'Action amount (context.amount_pence) must exceed threshold.'),
-  ('REQUESTING_STAFF_HAS_ROLE', 'ROLE',     'Requesting staff must have a specific role.'),
-  ('DOCUMENT_TYPE_EQUALS',      'DOC_TYPE', 'Target document must be of specific doc_type (only when target_kind=DOCUMENT).');
-
-INSERT INTO "admin_action_type" ("name", "category", "description", "is_money") VALUES
-  ('PAYMENT_MARK_PAID',           'PAYMENT',      'Set payment.status = PAID manually (out-of-band settlement).',                true),
-  ('PAYMENT_MARK_FAILED',         'PAYMENT',      'Set payment.status = FAILED manually.',                                       false),
-  ('PAYMENT_RETRY_TRANSFER',      'PAYMENT',      'Re-attempt the Stripe transfer for a failed/pending payout.',                 true),
-  ('ESCROW_FORCE_RELEASE',        'ESCROW',       'Release a milestone to worker bypassing employer approval.',                  true),
-  ('ESCROW_FORCE_REFUND',         'ESCROW',       'Refund a funded milestone to employer bypassing dispute flow.',               true),
-  ('ESCROW_FORCE_CANCEL',         'ESCROW',       'Cancel a milestone in an unusual state.',                                     false),
-  ('VERIFICATION_DOC_APPROVE',    'VERIFICATION', 'Approve an uploaded verification document.',                                  false),
-  ('VERIFICATION_DOC_REJECT',     'VERIFICATION', 'Reject an uploaded verification document with reason.',                       false),
-  ('VERIFICATION_LEVEL_OVERRIDE', 'VERIFICATION', 'Set client_profile.verification_level directly bypassing normal workflow.',   false),
-  ('USER_SUSPEND',                'USER',         'Suspend an account (block login).',                                           false),
-  ('USER_UNSUSPEND',              'USER',         'Lift a suspension.',                                                          false),
-  ('USER_DELETE',                 'USER',         'Hard-delete an account (cascades per FK rules).',                             false),
-  ('PLATFORM_SETTING_UPDATE',     'PLATFORM',     'Update a row in platform_setting.',                                           false),
-  ('STAFF_INVITE',                'STAFF',        'Invite a new staff member (creates account + role assignment).',              false),
-  ('STAFF_ROLE_GRANT',            'STAFF',        'Add a role to a staff member.',                                               false),
-  ('STAFF_ROLE_REVOKE',           'STAFF',        'Remove a role from a staff member.',                                          false),
-  ('BROADCAST_MESSAGE',           'COMMS',        'Send a notification to a subset of users (future).',                          false);
-
-
--- ##########################################################################
--- ##  SEED PERMISSIONS (RBAC) + ADMIN/STAFF role_permission grants        ##
--- ##########################################################################
-
-INSERT INTO "permission" ("key", "category", "description") VALUES
-  -- Read access (gates tab visibility)
-  ('dashboard.read',             'read',     'View admin dashboard counters and time-series.'),
-  ('users.read',                 'read',     'Search marketplace users and view their detail page.'),
-  ('staff.read',                 'read',     'View the staff member list.'),
-  ('audit.read',                 'read',     'Browse the audit log.'),
-  ('verification.read',          'read',     'View the document verification queue.'),
-  ('escrow_disputes.read',       'read',     'View open escrow disputes.'),
-  ('approvals.read',             'read',     'View pending and historical action approvals.'),
-  ('support.read',               'read',     'View support threads.'),
-
-  -- User mutations
-  ('users.suspend',              'users',    'Suspend / unsuspend marketplace accounts.'),
-  ('users.delete',               'users',    'Hard-deactivate accounts (USER_DELETE action).'),
-  ('users.set_verification',     'users',    'Override a client''s verification level.'),
-
-  -- Payment / escrow mutations
-  ('payments.mark_paid',         'payments', 'Force-mark a payment row PAID (reconciliation).'),
-  ('payments.mark_failed',       'payments', 'Force-mark a payment row FAILED.'),
-  ('payments.retry_transfer',    'payments', 'Re-queue a FAILED payout/refund for retry.'),
-  ('escrow.force_release',       'escrow',   'Force-release a milestone outside the normal flow.'),
-  ('escrow.force_refund',        'escrow',   'Force-refund a milestone outside the normal flow.'),
-  ('escrow.force_cancel',        'escrow',   'Force-cancel a milestone.'),
-
-  -- Verification + review queue
-  ('verification.review',        'verification', 'Approve or reject documents in the review queue.'),
-
-  -- Platform / catalog management
-  ('platform.settings.write',    'platform', 'Update platform_setting (fees, referral %, etc.).'),
-  ('specialisations.manage',     'catalog',  'Create / update / delete trade specialisations.'),
-  ('tags.manage',                'catalog',  'Create / update / delete worker tags.'),
-  ('plans.manage',               'catalog',  'Create / update / publish subscription plans.'),
-
-  -- Operations resources
-  ('approval_rules.manage',      'ops',      'Create / update / deactivate approval rules.'),
-  ('sla_rules.manage',           'ops',      'Create / update / deactivate SLA rules.'),
-  ('approvals.resolve',          'ops',      'Approve or reject pending action approvals.'),
-  ('broadcast.send',             'ops',      'Send broadcast notifications to user audiences.'),
-
-  -- Staff management
-  ('staff.invite',               'staff',    'Invite a new staff member or promote an existing client.'),
-  ('staff.role_change',          'staff',    'Change a staff member''s role.'),
-  ('staff.deactivate',           'staff',    'Deactivate / reactivate a staff account.'),
-  ('staff.reset_password',       'staff',    'Force-reset a staff member''s password.'),
-  ('roles.manage',               'staff',    'Create / rename / delete custom roles and manage their permissions.'),
-
-  -- Support
-  ('support.reply',              'support',  'Send messages on support threads as TradeHub Support.'),
-  ('support.assign',             'support',  'Assign or unassign the responsible staff on a support thread.'),
-
-  -- Escrow dispute proposals
-  ('disputes.propose',  'escrow',  'Propose a worker/employer split on an open dispute. Both parties must accept before it executes.'),
-  ('disputes.escalate', 'escrow',  'Escalate a dispute to ARBITRATION_PENDING when parties cannot agree on a proposal.'),
-  ('support.initiate',  'support', 'Open a new support thread with a user from the admin Users page (sending the first message).');
-
--- Grant ALL permissions to ADMIN role
-INSERT INTO "role_permission" ("staff_role_id", "permission_id")
-SELECT r.id, p.id
-FROM "staff_role" r
-CROSS JOIN "permission" p
-WHERE r.name = 'ADMIN';
-
--- Grant a sensible default subset to STAFF role
-INSERT INTO "role_permission" ("staff_role_id", "permission_id")
-SELECT r.id, p.id
-FROM "staff_role" r
-CROSS JOIN "permission" p
-WHERE r.name = 'STAFF'
-  AND p.key IN (
-    'dashboard.read',
-    'users.read',
-    'staff.read',
-    'audit.read',
-    'verification.read',
-    'escrow_disputes.read',
-    'approvals.read',
-    'support.read',
-    'verification.review',
-    'support.reply',
-    'support.assign'
-  );
-
-
--- ##########################################################################
--- ##  TRIGGERS (PL/pgSQL functions + triggers)                            ##
--- ##  Includes the hotfix from 20260524230000: polymorphic-target-exists  ##
--- ##  trigger returns NEW (not NULL) so BEFORE INSERT lets the row pass.  ##
--- ##########################################################################
-
--- R2: cascade-up — when a subtype row (e.g. document) is deleted, also delete its parent reviewable_item
-CREATE OR REPLACE FUNCTION delete_reviewable_item_on_subtype_delete()
-  RETURNS TRIGGER AS $$
-BEGIN
-  DELETE FROM "reviewable_item" WHERE "id" = OLD."id";
-  RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER "document_delete_cascades_up"
-AFTER DELETE ON "document"
-FOR EACH ROW
-EXECUTE FUNCTION delete_reviewable_item_on_subtype_delete();
-
-
--- R3a: reviewable_item must have a matching subtype row (DEFERRABLE)
-CREATE OR REPLACE FUNCTION check_reviewable_item_subtype_exists()
-  RETURNS TRIGGER AS $$
-DECLARE
-  subtype_table TEXT;
-  subtype_exists BOOLEAN;
-BEGIN
-  subtype_table := lower(NEW."kind");
-  EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE "id" = $1)', subtype_table)
-    INTO subtype_exists USING NEW."id";
-  IF NOT subtype_exists THEN
-    RAISE EXCEPTION 'reviewable_item % has kind=% but no matching row in subtype table %',
-      NEW."id", NEW."kind", subtype_table;
-  END IF;
-  RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE CONSTRAINT TRIGGER "reviewable_item_must_have_subtype"
-AFTER INSERT OR UPDATE ON "reviewable_item"
-DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW
-EXECUTE FUNCTION check_reviewable_item_subtype_exists();
-
-
--- R3b: staff_approval_rule_condition must have a matching subtype row
-CREATE OR REPLACE FUNCTION check_approval_condition_subtype_exists()
-  RETURNS TRIGGER AS $$
-DECLARE
-  v_value_subtype TEXT;
-  subtype_table TEXT;
-  subtype_exists BOOLEAN;
-BEGIN
-  SELECT "value_subtype" INTO v_value_subtype
-  FROM "approval_condition_type"
-  WHERE "id" = NEW."condition_type_id";
-
-  IF v_value_subtype IS NULL THEN
-    RAISE EXCEPTION 'approval_condition_type id=% not found', NEW."condition_type_id";
-  END IF;
-
-  subtype_table := 'approval_condition_' || lower(v_value_subtype);
-  EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE "id" = $1)', subtype_table)
-    INTO subtype_exists USING NEW."id";
-
-  IF NOT subtype_exists THEN
-    RAISE EXCEPTION 'staff_approval_rule_condition % has value_subtype=% but no matching row in %',
-      NEW."id", v_value_subtype, subtype_table;
-  END IF;
-
-  RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE CONSTRAINT TRIGGER "approval_condition_must_have_subtype"
-AFTER INSERT OR UPDATE ON "staff_approval_rule_condition"
-DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW
-EXECUTE FUNCTION check_approval_condition_subtype_exists();
-
-
--- Polymorphic target validation for staff_action_approval + staff_sla_breach
--- HOTFIX (from 20260524230000): returns NEW so BEFORE INSERT trigger lets the
--- row through. Returning NULL silently skipped the INSERT and broke Prisma
--- RETURNING / app code reading the resulting row.
-CREATE OR REPLACE FUNCTION check_polymorphic_target_exists()
-  RETURNS TRIGGER AS $$
-DECLARE
-  v_target_kind_name TEXT;
-  target_table TEXT;
-  target_exists BOOLEAN;
-BEGIN
-  SELECT "name" INTO v_target_kind_name
-  FROM "admin_target_kind"
-  WHERE "id" = NEW."target_kind_id";
-
-  IF v_target_kind_name IS NULL THEN
-    RAISE EXCEPTION 'admin_target_kind id=% not found', NEW."target_kind_id";
-  END IF;
-
-  target_table := lower(v_target_kind_name);
-  EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE "id" = $1)', target_table)
-    INTO target_exists USING NEW."target_id";
-
-  IF NOT target_exists THEN
-    RAISE EXCEPTION 'Polymorphic target_id=% not found in table %', NEW."target_id", target_table;
-  END IF;
-
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER "staff_action_approval_target_must_exist"
-BEFORE INSERT OR UPDATE OF "target_kind_id", "target_id" ON "staff_action_approval"
-FOR EACH ROW
-EXECUTE FUNCTION check_polymorphic_target_exists();
-
-CREATE TRIGGER "staff_sla_breach_target_must_exist"
-BEFORE INSERT OR UPDATE OF "target_kind_id", "target_id" ON "staff_sla_breach"
-FOR EACH ROW
-EXECUTE FUNCTION check_polymorphic_target_exists();
-
-
--- ##########################################################################
--- ##  CHECK constraints + partial indexes (not representable in Prisma    ##
--- ##  schema; added as raw SQL — preserved from original migrations).     ##
--- ##########################################################################
-
-ALTER TABLE "approval_condition_amount"
-  ADD CONSTRAINT "approval_condition_amount_threshold_positive"
-  CHECK ("threshold_pence" > 0);
-
-ALTER TABLE "escrow_dispute_proposal"
-  ADD CONSTRAINT "escrow_dispute_proposal_split_sums_to_100"
-  CHECK ("worker_pct" + "employer_refund_pct" = 100
-     AND "worker_pct" >= 0 AND "worker_pct" <= 100);
-
-ALTER TABLE "job_attachment"
-  ADD CONSTRAINT "job_attachment_one_owner"
-  CHECK (num_nonnulls("job_post_id", "job_application_id") = 1);
-
-ALTER TABLE "message"
-  ADD CONSTRAINT "message_has_body"
-  CHECK ("content" IS NOT NULL OR "file_url" IS NOT NULL);
-
-ALTER TABLE "message"
-  ADD CONSTRAINT "message_one_container"
-  CHECK (num_nonnulls("conversation_id", "support_collaboration_id") = 1);
-
-ALTER TABLE "referral_intent"
-  ADD CONSTRAINT "referral_intent_no_self_ref"
-  CHECK ("actor_id" <> "referrer_id");
-
-ALTER TABLE "referral_intent"
-  ADD CONSTRAINT "referral_intent_one_target"
-  CHECK (num_nonnulls("target_job_post_id", "target_worker_id") = 1);
-
-ALTER TABLE "staff_sla_rule"
-  ADD CONSTRAINT "staff_sla_rule_threshold_positive"
-  CHECK ("threshold_minutes" > 0);
-
--- Partial indexes (Prisma 7 supports partial indexes for unique only via @@unique with `where`,
--- not all forms; preserving raw-SQL originals here for parity).
--- Drop the plain (non-partial) variants Prisma may have generated, then create the partial ones.
-
-DROP INDEX IF EXISTS "review_item_reviewed_by_staff_id_idx";
-CREATE INDEX "review_item_reviewed_by_staff_id_idx"
-  ON "review_item"("reviewed_by_staff_id")
-  WHERE "reviewed_by_staff_id" IS NOT NULL;
-
-CREATE UNIQUE INDEX "escrow_dispute_proposal_one_pending_per_dispute"
-  ON "escrow_dispute_proposal"("dispute_id")
-  WHERE "status" = 'PENDING_RESPONSE';
-
-CREATE UNIQUE INDEX "review_item_one_pending_per_reviewable"
-  ON "review_item"("reviewable_item_id")
-  WHERE "status" = 'PENDING';
-
-CREATE INDEX "staff_sla_breach_unresolved_idx"
-  ON "staff_sla_breach"("rule_id")
-  WHERE "resolved_at" IS NULL;
