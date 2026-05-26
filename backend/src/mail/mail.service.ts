@@ -2,10 +2,15 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
+import { Resend } from 'resend';
 
 @Injectable()
 export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
+  // Exactly one of these is initialised in onModuleInit, picked by
+  // MAIL_TRANSPORT. Resend HTTP API works on hosts that block outbound SMTP
+  // (Railway Hobby, Render free, etc) because traffic goes out via HTTPS.
+  private resend: Resend | null = null;
   private transporter: Transporter | null = null;
   private fromAddress = '';
   private frontendUrl = '';
@@ -15,6 +20,42 @@ export class MailService implements OnModuleInit {
   onModuleInit() {
     this.frontendUrl =
       this.config.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+
+    // Explicit transport switch. Default = smtp for back-compat with the
+    // original local-dev setup. Set MAIL_TRANSPORT=http on hosts that block
+    // outbound SMTP.
+    const transport = (this.config.get<string>('MAIL_TRANSPORT') || 'smtp')
+      .toLowerCase()
+      .trim();
+
+    if (transport === 'http') {
+      const resendKey = (
+        this.config.get<string>('RESEND_API_KEY') || ''
+      ).trim();
+      if (!resendKey) {
+        this.logger.warn(
+          'Mail disabled: MAIL_TRANSPORT=http but RESEND_API_KEY is empty',
+        );
+        return;
+      }
+      this.resend = new Resend(resendKey);
+      this.fromAddress =
+        this.config.get<string>('RESEND_FROM') ||
+        this.config.get<string>('SMTP_FROM') ||
+        'onboarding@resend.dev';
+      this.logger.log(
+        `Mail enabled via Resend HTTP API as ${this.fromAddress}`,
+      );
+      return;
+    }
+
+    if (transport !== 'smtp') {
+      this.logger.warn(
+        `Mail disabled: unknown MAIL_TRANSPORT="${transport}" (expected "http" or "smtp")`,
+      );
+      return;
+    }
+
     const host = this.config.get<string>('SMTP_HOST') || 'smtp.gmail.com';
     const port = Number(this.config.get<string>('SMTP_PORT') || 587);
     const user = this.config.get<string>('SMTP_USER') || '';
@@ -25,7 +66,9 @@ export class MailService implements OnModuleInit {
     this.fromAddress = this.config.get<string>('SMTP_FROM') || user;
 
     if (!user || !pass) {
-      this.logger.warn('Mail disabled: SMTP_USER / SMTP_PASS not set');
+      this.logger.warn(
+        'Mail disabled: MAIL_TRANSPORT=smtp but SMTP_USER / SMTP_PASS not set',
+      );
       return;
     }
 
@@ -35,7 +78,7 @@ export class MailService implements OnModuleInit {
       secure: port === 465,
       auth: { user, pass },
     });
-    this.logger.log(`Mail enabled via ${host}:${port} as ${user}`);
+    this.logger.log(`Mail enabled via SMTP ${host}:${port} as ${user}`);
   }
 
   async send(
@@ -44,27 +87,55 @@ export class MailService implements OnModuleInit {
     html: string,
     text?: string,
   ): Promise<void> {
-    if (!this.transporter) {
-      this.logger.warn(
-        `Mail skipped (disabled): to=${to} subject="${subject}"`,
-      );
+    const plainText = text ?? html.replace(/<[^>]+>/g, '');
+
+    if (this.resend) {
+      try {
+        const res = await this.resend.emails.send({
+          from: this.fromAddress,
+          to,
+          subject,
+          html,
+          text: plainText,
+        });
+        if (res.error) {
+          this.logger.error(
+            `Mail failed :: to=${to} subject="${subject}" :: ${res.error.name}: ${res.error.message}`,
+          );
+          return;
+        }
+        this.logger.log(
+          `Mail sent :: to=${to} subject="${subject}" id=${res.data?.id ?? '?'}`,
+        );
+      } catch (err) {
+        this.logger.error(
+          `Mail failed :: to=${to} subject="${subject}"`,
+          err as Error,
+        );
+      }
       return;
     }
-    try {
-      await this.transporter.sendMail({
-        from: this.fromAddress,
-        to,
-        subject,
-        html,
-        text: text ?? html.replace(/<[^>]+>/g, ''),
-      });
-      this.logger.log(`Mail sent :: to=${to} subject="${subject}"`);
-    } catch (err) {
-      this.logger.error(
-        `Mail failed :: to=${to} subject="${subject}"`,
-        err as Error,
-      );
+
+    if (this.transporter) {
+      try {
+        await this.transporter.sendMail({
+          from: this.fromAddress,
+          to,
+          subject,
+          html,
+          text: plainText,
+        });
+        this.logger.log(`Mail sent :: to=${to} subject="${subject}"`);
+      } catch (err) {
+        this.logger.error(
+          `Mail failed :: to=${to} subject="${subject}"`,
+          err as Error,
+        );
+      }
+      return;
     }
+
+    this.logger.warn(`Mail skipped (disabled): to=${to} subject="${subject}"`);
   }
 
   async sendWelcome(to: string, displayName: string): Promise<void> {
