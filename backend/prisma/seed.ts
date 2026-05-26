@@ -1096,8 +1096,12 @@ async function main() {
   });
 
   for (const collab of allCollabs) {
-    const conv = await prisma.conversation.create({
-      data: { id: collab.id },
+    // upsert (not create) so partial-failure / proxy-retry scenarios don't
+    // P2002 on re-run — `id` is shared-PK with collaboration, idempotent.
+    const conv = await prisma.conversation.upsert({
+      where: { id: collab.id },
+      update: {},
+      create: { id: collab.id },
     });
     const isTom = collab.worker_id === workerAccounts[3].id;
     const isEmma = collab.worker_id === workerAccounts[4].id;
