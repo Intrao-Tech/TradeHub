@@ -86,6 +86,183 @@ async function main() {
   });
   console.log('  Platform settings (defaults)');
 
+  // ── Admin-panel lookup tables (formerly seeded by migration INSERTs) ───
+  // These were INSERT'ed by the now-squashed admin-panel migrations. After
+  // Igor's squash into one init migration the INSERTs were stripped, so we
+  // seed them here. All upserts/idempotent so re-running is safe.
+
+  // ── Staff role lookup (ADMIN, STAFF) ────────────────────────
+  await prisma.staffRole.upsert({
+    where: { name: 'ADMIN' },
+    update: {},
+    create: { name: 'ADMIN', description: 'Full platform admin', is_system: true },
+  });
+  await prisma.staffRole.upsert({
+    where: { name: 'STAFF' },
+    update: {},
+    create: { name: 'STAFF', description: 'General-purpose staff', is_system: true },
+  });
+  console.log('  Staff roles (ADMIN, STAFF)');
+
+  // ── Permission catalog (31 keys, grouped by category) ──────
+  const permissionRows: Array<{ key: string; category: string; description: string }> = [
+    // read — gate tab visibility
+    { key: 'dashboard.read',         category: 'read', description: 'View admin dashboard' },
+    { key: 'users.read',             category: 'read', description: 'View user list and details' },
+    { key: 'staff.read',             category: 'read', description: 'View staff members and roles' },
+    { key: 'approvals.read',         category: 'read', description: 'View approval queue and rules' },
+    { key: 'support.read',           category: 'read', description: 'View support threads' },
+    { key: 'verification.read',      category: 'read', description: 'View verification queue' },
+    { key: 'escrow_disputes.read',   category: 'read', description: 'View escrow disputes' },
+    { key: 'audit.read',             category: 'read', description: 'View audit log' },
+    // action — 1:1 with admin_action_type entries
+    { key: 'payments.write',                      category: 'action', description: 'Mark payment PAID / FAILED manually' },
+    { key: 'escrow.refund',                       category: 'action', description: 'Force-refund an escrow milestone' },
+    { key: 'escrow.force_release',                category: 'action', description: 'Force-release an escrow milestone' },
+    { key: 'users.suspend',                       category: 'action', description: 'Suspend a user account' },
+    { key: 'users.unsuspend',                     category: 'action', description: 'Unsuspend a user account' },
+    { key: 'users.delete',                        category: 'action', description: 'Delete a user account' },
+    { key: 'users.verification_level_override',   category: 'action', description: "Override a user's verification level" },
+    { key: 'staff.roles.grant',                   category: 'action', description: 'Grant a role to a staff member' },
+    { key: 'staff.roles.revoke',                  category: 'action', description: 'Revoke a role from a staff member' },
+    { key: 'disputes.resolve',                    category: 'action', description: 'Resolve an escrow dispute' },
+    { key: 'disputes.propose',                    category: 'action', description: 'Propose a dispute resolution split' },
+    { key: 'disputes.escalate',                   category: 'action', description: 'Escalate a dispute to arbitration' },
+    // resource — catalog / settings management
+    { key: 'approval_rules.manage',  category: 'resource', description: 'Create / edit approval rules' },
+    { key: 'sla_rules.manage',       category: 'resource', description: 'Create / edit SLA rules' },
+    { key: 'specialisations.manage', category: 'resource', description: 'Manage trade specialisations' },
+    { key: 'tags.manage',            category: 'resource', description: 'Manage internal tags' },
+    { key: 'plans.manage',           category: 'resource', description: 'Manage subscription plans' },
+    { key: 'platform.settings.write',category: 'resource', description: 'Edit platform fee settings' },
+    { key: 'roles.manage',           category: 'resource', description: 'Create / edit roles and assign permissions' },
+    // support — chat with users as TradeHub Support
+    { key: 'support.reply',          category: 'support', description: 'Reply to support threads' },
+    { key: 'support.assign',         category: 'support', description: 'Assign support threads' },
+    { key: 'support.initiate',       category: 'support', description: 'Open a support thread to a user' },
+    // verification — document review
+    { key: 'verification.review',    category: 'verification', description: 'Approve / reject verification documents' },
+  ];
+  for (const p of permissionRows) {
+    await prisma.permission.upsert({
+      where: { key: p.key },
+      update: { category: p.category, description: p.description },
+      create: { ...p, is_system: true },
+    });
+  }
+  console.log(`  ${permissionRows.length} permission keys`);
+
+  // ── RolePermission junction ─────────────────────────────────
+  // ADMIN bypasses permission checks at runtime, but we still record the
+  // full set so the admin UI shows it correctly.
+  const adminRoleRow = await prisma.staffRole.findUniqueOrThrow({ where: { name: 'ADMIN' } });
+  const staffRoleRow = await prisma.staffRole.findUniqueOrThrow({ where: { name: 'STAFF' } });
+  const allPermissions = await prisma.permission.findMany();
+  const staffDefaultKeys = new Set([
+    'dashboard.read', 'users.read', 'staff.read', 'approvals.read',
+    'support.read', 'verification.read', 'escrow_disputes.read', 'audit.read',
+    'verification.review', 'support.reply', 'support.assign',
+  ]);
+  for (const perm of allPermissions) {
+    await prisma.rolePermission.upsert({
+      where: {
+        staff_role_id_permission_id: {
+          staff_role_id: adminRoleRow.id,
+          permission_id: perm.id,
+        },
+      },
+      update: {},
+      create: { staff_role_id: adminRoleRow.id, permission_id: perm.id },
+    });
+    if (staffDefaultKeys.has(perm.key)) {
+      await prisma.rolePermission.upsert({
+        where: {
+          staff_role_id_permission_id: {
+            staff_role_id: staffRoleRow.id,
+            permission_id: perm.id,
+          },
+        },
+        update: {},
+        create: { staff_role_id: staffRoleRow.id, permission_id: perm.id },
+      });
+    }
+  }
+  console.log(`  Role permissions (ADMIN: all ${allPermissions.length}, STAFF: ${staffDefaultKeys.size})`);
+
+  // ── AdminActionType lookup (admin operations the approval engine can gate) ──
+  const actionTypes: Array<{ name: string; category: string; description: string; is_money: boolean }> = [
+    { name: 'ESCROW_REFUND',                    category: 'escrow',   description: 'Refund a funded milestone',        is_money: true  },
+    { name: 'ESCROW_FORCE_RELEASE',             category: 'escrow',   description: 'Force-release a milestone',        is_money: true  },
+    { name: 'PAYMENT_MARK_PAID',                category: 'payments', description: 'Manually mark payment as PAID',    is_money: true  },
+    { name: 'PAYMENT_MARK_FAILED',              category: 'payments', description: 'Manually mark payment as FAILED',  is_money: true  },
+    { name: 'USER_SUSPEND',                     category: 'users',    description: 'Suspend user account',             is_money: false },
+    { name: 'USER_UNSUSPEND',                   category: 'users',    description: 'Unsuspend user account',           is_money: false },
+    { name: 'USER_DELETE',                      category: 'users',    description: 'Delete user account',              is_money: false },
+    { name: 'USER_VERIFICATION_LEVEL_OVERRIDE', category: 'users',    description: 'Override verification level',      is_money: false },
+    { name: 'STAFF_ROLE_GRANT',                 category: 'staff',    description: 'Grant a role to a staff member',   is_money: false },
+    { name: 'STAFF_ROLE_REVOKE',                category: 'staff',    description: 'Revoke a role from a staff member',is_money: false },
+    { name: 'DISPUTE_RESOLVE',                  category: 'disputes', description: 'Resolve an escrow dispute',        is_money: true  },
+  ];
+  for (const a of actionTypes) {
+    await prisma.adminActionType.upsert({
+      where: { name: a.name },
+      update: { category: a.category, description: a.description, is_money: a.is_money },
+      create: { ...a, is_active: true },
+    });
+  }
+  console.log(`  ${actionTypes.length} admin action types`);
+
+  // ── AdminTargetKind lookup (polymorphic target discriminator) ───────
+  const targetKinds = [
+    { name: 'account',          description: 'auth-root account row' },
+    { name: 'client_profile',   description: "user's marketplace profile" },
+    { name: 'staff_member',     description: 'internal staff record' },
+    { name: 'escrow_milestone', description: 'milestone inside an escrow contract' },
+    { name: 'payment',          description: 'money-ledger payment row' },
+    { name: 'escrow_dispute',   description: 'opened escrow dispute' },
+    { name: 'document',         description: 'verification document submitted by a user' },
+    { name: 'support_thread',   description: 'support conversation thread' },
+  ];
+  for (const t of targetKinds) {
+    await prisma.adminTargetKind.upsert({
+      where: { name: t.name },
+      update: { description: t.description },
+      create: t,
+    });
+  }
+  console.log(`  ${targetKinds.length} admin target kinds`);
+
+  // ── AdminQueueType lookup (SLA-watchable queues) ────────────
+  const queueTypes = [
+    { name: 'VERIFICATION_PENDING',  description: 'Verification documents awaiting review' },
+    { name: 'SUPPORT_OPEN',          description: 'Open support threads awaiting reply' },
+    { name: 'APPROVAL_PENDING',      description: 'Admin actions queued for approval' },
+    { name: 'ESCROW_DISPUTE_OPEN',   description: 'Open escrow disputes awaiting mediation' },
+  ];
+  for (const q of queueTypes) {
+    await prisma.adminQueueType.upsert({
+      where: { name: q.name },
+      update: { description: q.description },
+      create: { ...q, is_active: true },
+    });
+  }
+  console.log(`  ${queueTypes.length} admin queue types`);
+
+  // ── ApprovalConditionType lookup ─────────────────────────────
+  const conditionTypes = [
+    { name: 'AMOUNT_GT',                  value_subtype: 'AMOUNT',   description: 'Amount exceeds threshold (used by money actions)' },
+    { name: 'REQUESTING_STAFF_HAS_ROLE',  value_subtype: 'ROLE',     description: 'Requesting staff has the given role' },
+    { name: 'DOCUMENT_TYPE_EQUALS',       value_subtype: 'DOC_TYPE', description: 'Verification document is of the given type' },
+  ];
+  for (const c of conditionTypes) {
+    await prisma.approvalConditionType.upsert({
+      where: { name: c.name },
+      update: { value_subtype: c.value_subtype, description: c.description },
+      create: c,
+    });
+  }
+  console.log(`  ${conditionTypes.length} approval condition types`);
+
   // ── Password hash (shared for test accounts) ────────────────
   const hash = await bcrypt.hash('Password123!', 12);
 
