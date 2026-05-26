@@ -59,7 +59,9 @@ async function bootstrap() {
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('TradeHub UK API')
-    .setDescription('B2B platform for UK construction tradespeople')
+    .setDescription(
+      'B2B platform for UK construction tradespeople — jobs, escrow, reviews, and KYC.',
+    )
     .setVersion('1.0')
     .addBearerAuth()
     .build();
@@ -69,9 +71,9 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
-  console.log(`TradeHub API running on http://localhost:${port}/api`);
-  console.log(`Swagger docs: http://localhost:${port}/api/docs`);
-  console.log(`WebSocket chat: ws://localhost:${port}/chat`);
+  console.log(`TradeHub API listening on port ${port} (prefix /api)`);
+  console.log(`Swagger docs available at /api/docs`);
+  console.log(`WebSocket chat available at /chat`);
 }
 
 void bootstrap();
