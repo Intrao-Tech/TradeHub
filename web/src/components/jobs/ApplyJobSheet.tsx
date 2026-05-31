@@ -144,7 +144,7 @@ export function ApplyJobSheet({
               </p>
             ) : null}
           </div>
-          <div className="space-y-2">
+          <div className="flex flex-col gap-3">
             <Label htmlFor="apply-rate">Proposed rate (£, optional)</Label>
             <Input
               id="apply-rate"
