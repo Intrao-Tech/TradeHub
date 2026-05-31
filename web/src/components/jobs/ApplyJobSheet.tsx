@@ -127,7 +127,7 @@ export function ApplyJobSheet({
           </SheetDescription>
         </SheetHeader>
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3">
             <Label htmlFor="apply-cover">Cover message</Label>
             <Textarea
               id="apply-cover"
