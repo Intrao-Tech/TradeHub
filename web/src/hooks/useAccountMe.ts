@@ -115,9 +115,9 @@ function setState(next: CacheState) {
   notify();
 }
 
-async function fetchOnce(): Promise<void> {
+async function fetchOnce(silent = false): Promise<void> {
   if (inflight) return inflight;
-  setState({ kind: 'loading' });
+  if (!silent) setState({ kind: 'loading' });
   inflight = api<AccountMe>('/account/me')
     .then((account) => {
       setState({ kind: 'ready', account });
@@ -197,7 +197,7 @@ export function useAccountMe(): UseAccountMe {
     error: snapshot.kind === 'error' ? snapshot.error : null,
     refetch: async () => {
       inflight = null;
-      await fetchOnce();
+      await fetchOnce(state.kind === 'ready');
     },
   };
 }
