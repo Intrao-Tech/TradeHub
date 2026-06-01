@@ -121,7 +121,7 @@ export function FlagCollaborationDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2.5">
             <Label htmlFor="flag-category">Reason category</Label>
             <Select
               value={category}
@@ -140,7 +140,7 @@ export function FlagCollaborationDialog({
             </Select>
           </div>
 
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2.5">
             <Label htmlFor="flag-detail">
               Detail{' '}
               <span className="text-fg-muted">

@@ -116,7 +116,7 @@ export default function ResetPasswordPage() {
               ) : null}
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2.5">
                   <Label htmlFor="reset-password">New password</Label>
                   <Input
                     id="reset-password"
@@ -130,7 +130,7 @@ export default function ResetPasswordPage() {
                   />
                   <PasswordRules password={password} dirty={password.length > 0} />
                 </div>
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2.5">
                   <Label htmlFor="reset-confirm">Confirm password</Label>
                   <Input
                     id="reset-confirm"

@@ -127,7 +127,7 @@ export function ApplyJobSheet({
           </SheetDescription>
         </SheetHeader>
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2.5">
             <Label htmlFor="apply-cover">Cover message</Label>
             <Textarea
               id="apply-cover"
@@ -144,7 +144,7 @@ export function ApplyJobSheet({
               </p>
             ) : null}
           </div>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2.5">
             <Label htmlFor="apply-rate">Proposed rate (£, optional)</Label>
             <Input
               id="apply-rate"

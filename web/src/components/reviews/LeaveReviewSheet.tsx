@@ -308,7 +308,7 @@ export function LeaveReviewSheet({
             </div>
           ) : null}
 
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2.5">
             <Label>Overall rating *</Label>
             <div className="flex items-center gap-3">
               <StarRating
@@ -362,7 +362,7 @@ export function LeaveReviewSheet({
             </div>
           </details>
 
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2.5">
             <Label htmlFor="review-comment">Comment (optional)</Label>
             <Textarea
               id="review-comment"

@@ -132,7 +132,7 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
     <div className="rounded-md border border-border-default bg-raised p-4 space-y-3">
       <h3 className="font-medium text-fg">{submitLabel ?? 'New milestone'}</h3>
       <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
-        <div className="space-y-1">
+        <div className="flex flex-col gap-2.5">
           <Label htmlFor="milestone-title">Title</Label>
           <Input
             id="milestone-title"
@@ -143,7 +143,7 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
             maxLength={200}
           />
         </div>
-        <div className="space-y-1">
+        <div className="flex flex-col gap-2.5">
           <Label htmlFor="milestone-amount">Amount (£)</Label>
           <Input
             id="milestone-amount"
@@ -157,7 +157,7 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
           />
         </div>
       </div>
-      <div className="space-y-1">
+      <div className="flex flex-col gap-2.5">
         <Label htmlFor="milestone-desc">
           Description <span className="text-fg-muted">(optional)</span>
         </Label>
@@ -174,7 +174,7 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
           {description.length} / 2000
         </p>
       </div>
-      <div className="space-y-1">
+      <div className="flex flex-col gap-2.5">
         <Label>
           Attachments{' '}
           <span className="text-fg-muted">

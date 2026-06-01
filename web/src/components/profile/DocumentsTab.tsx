@@ -343,7 +343,7 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2.5">
               <Label>Document type</Label>
               <Select value={docType} onValueChange={(v) => setDocType(v as DocType)}>
                 <SelectTrigger>
@@ -358,7 +358,7 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
                 </SelectContent>
               </Select>
               {requiresTitle ? (
-                <div className="space-y-1 pt-2">
+                <div className="flex flex-col gap-2.5 pt-2">
                   <Label htmlFor="doc-other-title">
                     Title <span className="text-danger">*</span>
                   </Label>
@@ -377,7 +377,7 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
                 </div>
               ) : null}
             </div>
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="doc-file">File</Label>
               <input
                 ref={fileInputRef}

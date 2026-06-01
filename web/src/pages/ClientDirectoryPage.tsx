@@ -107,7 +107,7 @@ export default function ClientDirectoryPage() {
             onSubmit={runSearch}
             className="grid gap-4 sm:grid-cols-[1fr_auto_auto]"
           >
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="cd-search">Name contains</Label>
               <Input
                 id="cd-search"
@@ -116,7 +116,7 @@ export default function ClientDirectoryPage() {
                 placeholder="e.g. Mike"
               />
             </div>
-            <div className="space-y-2 sm:w-40">
+            <div className="flex flex-col gap-2.5 sm:w-40">
               <Label htmlFor="cd-postcode">Postcode area</Label>
               <Input
                 id="cd-postcode"

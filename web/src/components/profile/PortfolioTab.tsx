@@ -340,7 +340,7 @@ export function PortfolioTab({ workerId, flash }: PortfolioTabProps) {
           <CardDescription>Choose a type to add a new entry.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2.5">
             <Label>Item type</Label>
             <Select
               value={createType}
@@ -714,7 +714,7 @@ function FieldArea({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="space-y-2 sm:col-span-2">
+    <div className="flex flex-col gap-2.5 sm:col-span-2">
       <Label htmlFor={id}>{label}</Label>
       <Textarea
         id={id}
@@ -1092,7 +1092,7 @@ function MediaSection({
         <p className="text-sm text-fg-muted">No media yet.</p>
       )}
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2.5">
         <Label htmlFor="media-caption">Caption (optional)</Label>
         <Input
           id="media-caption"
@@ -1219,7 +1219,7 @@ function DocumentsSection({
         <p className="text-sm text-fg-muted">No documents linked yet.</p>
       )}
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2.5">
         <Label>Link an approved document</Label>
         {docs == null ? (
           <p className="text-sm text-fg-muted">Loading…</p>

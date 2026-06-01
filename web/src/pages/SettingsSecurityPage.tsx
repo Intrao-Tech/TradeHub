@@ -151,7 +151,7 @@ function ChangePasswordCard() {
         ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2.5">
             <Label htmlFor="cp-current">Current password</Label>
             <Input
               id="cp-current"
@@ -162,7 +162,7 @@ function ChangePasswordCard() {
               required
             />
           </div>
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2.5">
             <Label htmlFor="cp-new">New password</Label>
             <Input
               id="cp-new"
@@ -176,7 +176,7 @@ function ChangePasswordCard() {
             />
             <PasswordRules password={next} dirty={next.length > 0} />
           </div>
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2.5">
             <Label htmlFor="cp-confirm">Confirm new password</Label>
             <Input
               id="cp-confirm"

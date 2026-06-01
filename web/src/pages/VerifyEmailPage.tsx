@@ -87,7 +87,7 @@ export default function VerifyEmailPage() {
           ) : null}
 
           <form onSubmit={handleResend} className="space-y-3">
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="resend-email">Resend to</Label>
               <Input
                 id="resend-email"
