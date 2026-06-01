@@ -21,6 +21,40 @@ export function clearTokens() {
   localStorage.removeItem('refresh_token');
 }
 
+let refreshPromise: Promise<boolean> | null = null;
+
+// Single-flight refresh. The refresh token is one-time (rotated server-side),
+// so when several requests hit 401 at once they must NOT each spend it — the
+// first wins, the rest race into an invalidated token and the user is logged
+// out mid-session. Funnel every concurrent 401 through one shared call.
+async function refreshAccessToken(): Promise<boolean> {
+  if (!refreshToken) return false;
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    try {
+      const refreshRes = await fetch(`${API}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        credentials: 'include',
+      });
+      if (!refreshRes.ok) {
+        clearTokens();
+        return false;
+      }
+      const data = await refreshRes.json();
+      setTokens(data.access_token, data.refresh_token);
+      return true;
+    } catch {
+      clearTokens();
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
+
 /**
  * Error thrown by `api()` for non-2xx responses. Preserves the structured
  * body so callers can inspect `code`, `reasons`, etc.
@@ -95,17 +129,10 @@ export async function api<T = unknown>(
   });
 
   if (res.status === 401 && refreshToken) {
-    const refreshRes = await fetch(`${API}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-      credentials: 'include',
-    });
+    const refreshed = await refreshAccessToken();
 
-    if (refreshRes.ok) {
-      const data = await refreshRes.json();
-      setTokens(data.access_token, data.refresh_token);
-      headers['Authorization'] = `Bearer ${data.access_token}`;
+    if (refreshed) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
       const retry = await fetch(`${API}${path}`, {
         ...options,
         headers,
@@ -117,7 +144,6 @@ export async function api<T = unknown>(
       if (retry.status === 204) return {} as T;
       return retry.json();
     } else {
-      clearTokens();
       window.location.href = '/login?reason=expired';
       throw new ApiError(401, { code: 'REFRESH_INVALID', message: 'Session expired.' });
     }
