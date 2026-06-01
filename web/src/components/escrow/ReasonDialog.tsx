@@ -84,7 +84,7 @@ export function ReasonDialog({
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2.5">
           <Label htmlFor="reason-dialog-textarea">Reason</Label>
           <Textarea
             id="reason-dialog-textarea"

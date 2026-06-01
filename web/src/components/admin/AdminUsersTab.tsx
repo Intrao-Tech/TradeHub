@@ -677,7 +677,7 @@ export function AdminUsersTab() {
                   <Textarea
                     value={suspendReason}
                     onChange={(e) => setSuspendReason(e.target.value)}
-                    placeholder="e.g. fraud investigation case #4827"
+                    placeholder="e.g. fraud investigation case no. 4827"
                     className="min-h-[60px] text-sm"
                   />
                 </div>

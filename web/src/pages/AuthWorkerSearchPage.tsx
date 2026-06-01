@@ -297,7 +297,7 @@ export default function AuthWorkerSearchPage() {
 
   const filterRail = (
     <div className="space-y-6">
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2.5">
         <Label htmlFor="ws-postcode">Postcode area</Label>
         <Input
           id="ws-postcode"
@@ -314,7 +314,7 @@ export default function AuthWorkerSearchPage() {
         />
       </div>
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2.5">
         <Label htmlFor="ws-spec">Specialisation</Label>
         <Select
           value={specialisationId != null ? String(specialisationId) : '__any__'}
@@ -339,7 +339,7 @@ export default function AuthWorkerSearchPage() {
         </Select>
       </div>
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2.5">
         <Label>Day rate (£)</Label>
         <div className="flex gap-2">
           <Input
@@ -377,7 +377,7 @@ export default function AuthWorkerSearchPage() {
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2.5">
         <Label>Minimum rating</Label>
         <div className="flex items-center gap-2">
           <StarRating

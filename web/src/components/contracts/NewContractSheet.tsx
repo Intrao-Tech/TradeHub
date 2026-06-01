@@ -149,7 +149,7 @@ export function NewContractSheet({
                 {loadErr}
               </div>
             ) : null}
-            <div className="space-y-1">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="picked-job">Job post *</Label>
               {jobs && jobs.length === 0 ? (
                 <p className="text-sm text-fg-muted">
@@ -173,7 +173,7 @@ export function NewContractSheet({
                 </Select>
               )}
             </div>
-            <div className="space-y-1">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="ct-project">Project type *</Label>
               <Input
                 id="ct-project"
@@ -184,7 +184,7 @@ export function NewContractSheet({
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
+              <div className="flex flex-col gap-2.5">
                 <Label htmlFor="ct-postcode">Site postcode</Label>
                 <Input
                   id="ct-postcode"
@@ -193,7 +193,7 @@ export function NewContractSheet({
                   placeholder="SW1"
                 />
               </div>
-              <div className="space-y-1">
+              <div className="flex flex-col gap-2.5">
                 <Label htmlFor="ct-amount">Agreed amount (£)</Label>
                 <Input
                   id="ct-amount"

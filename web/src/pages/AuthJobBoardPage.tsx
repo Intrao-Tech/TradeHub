@@ -290,7 +290,7 @@ export default function AuthJobBoardPage() {
 
   const filterRail = (
     <div className="space-y-6">
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2.5">
         <Label htmlFor="filter-postcode">Postcode area</Label>
         <div className="flex gap-2">
           <Input
@@ -309,7 +309,7 @@ export default function AuthJobBoardPage() {
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2.5">
         <Label htmlFor="filter-spec">Specialisation</Label>
         <Select
           value={specialisationId != null ? String(specialisationId) : '__any__'}
