@@ -16,7 +16,7 @@ export function LanguagesEditor({ value, onChange }: LanguagesEditorProps) {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2.5">
       <Label>Languages spoken</Label>
       <div className="flex flex-wrap gap-2">
         {CONSTRUCTION_LANGUAGES.map((lang) => {

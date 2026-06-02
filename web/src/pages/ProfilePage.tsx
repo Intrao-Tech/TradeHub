@@ -417,7 +417,7 @@ export default function ProfilePage() {
           />
           Available for work
         </label>
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2.5">
           <Label htmlFor="w-available-from" className="text-xs">
             Available from
           </Label>
@@ -524,7 +524,7 @@ export default function ProfilePage() {
                     onSubmit={submitClient}
                     className="grid gap-4 sm:grid-cols-2"
                   >
-                    <div className="space-y-2 sm:col-span-2">
+                    <div className="flex flex-col gap-2.5 sm:col-span-2">
                       <Label htmlFor="p-display-name">Display name</Label>
                       <Input
                         id="p-display-name"
@@ -533,7 +533,7 @@ export default function ProfilePage() {
                         maxLength={150}
                       />
                     </div>
-                    <div className="space-y-2 sm:col-span-2">
+                    <div className="flex flex-col gap-2.5 sm:col-span-2">
                       <Label htmlFor="p-bio">Bio</Label>
                       <Textarea
                         id="p-bio"
@@ -544,7 +544,7 @@ export default function ProfilePage() {
                         placeholder="Tell clients what you do, your specialties, and what makes you stand out."
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2.5">
                       <Label htmlFor="p-city">City (London borough)</Label>
                       <Select
                         value={city || '__none__'}
@@ -578,7 +578,7 @@ export default function ProfilePage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2.5">
                       <Label htmlFor="p-postcode">Postcode area</Label>
                       <Select
                         value={postcodeAreaClient || '__none__'}
@@ -633,7 +633,7 @@ export default function ProfilePage() {
                     onSubmit={submitWorker}
                     className="grid gap-4 sm:grid-cols-3"
                   >
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2.5">
                       <Label htmlFor="w-years">Years experience</Label>
                       <Input
                         id="w-years"
@@ -643,7 +643,7 @@ export default function ProfilePage() {
                         min={0}
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2.5">
                       <Label htmlFor="w-rate-min">Day rate min (£)</Label>
                       <Input
                         id="w-rate-min"
@@ -653,7 +653,7 @@ export default function ProfilePage() {
                         onChange={(e) => setDayRateMin(e.target.value)}
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2.5">
                       <Label htmlFor="w-rate-max">Day rate max (£)</Label>
                       <Input
                         id="w-rate-max"
@@ -755,7 +755,7 @@ export default function ProfilePage() {
                     onSubmit={submitClient}
                     className="grid gap-4 sm:grid-cols-2"
                   >
-                    <div className="space-y-2 sm:col-span-2">
+                    <div className="flex flex-col gap-2.5 sm:col-span-2">
                       <Label htmlFor="p-display-name-e">Display name</Label>
                       <Input
                         id="p-display-name-e"
@@ -764,7 +764,7 @@ export default function ProfilePage() {
                         maxLength={150}
                       />
                     </div>
-                    <div className="space-y-2 sm:col-span-2">
+                    <div className="flex flex-col gap-2.5 sm:col-span-2">
                       <Label htmlFor="p-bio-e">Bio</Label>
                       <Textarea
                         id="p-bio-e"
@@ -775,7 +775,7 @@ export default function ProfilePage() {
                         placeholder="Tell workers about your business, the kind of jobs you post, and how you work."
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2.5">
                       <Label htmlFor="p-city-e">City (London borough)</Label>
                       <Select
                         value={city || '__none__'}
@@ -805,7 +805,7 @@ export default function ProfilePage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2.5">
                       <Label htmlFor="p-postcode-e">Postcode area</Label>
                       <Select
                         value={postcodeAreaClient || '__none__'}
@@ -854,7 +854,7 @@ export default function ProfilePage() {
                     onSubmit={submitEmployer}
                     className="grid gap-4 sm:grid-cols-2"
                   >
-                    <div className="space-y-2 sm:col-span-2">
+                    <div className="flex flex-col gap-2.5 sm:col-span-2">
                       <Label htmlFor="e-company">Company name</Label>
                       <Input
                         id="e-company"
@@ -862,7 +862,7 @@ export default function ProfilePage() {
                         onChange={(e) => setCompanyName(e.target.value)}
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2.5">
                       <Label htmlFor="e-number">Companies House number</Label>
                       <Input
                         id="e-number"
@@ -871,7 +871,7 @@ export default function ProfilePage() {
                         placeholder="e.g. 12345678"
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2.5">
                       <Label htmlFor="e-team">Team size</Label>
                       <Input
                         id="e-team"

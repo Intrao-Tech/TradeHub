@@ -154,7 +154,7 @@ export function NewCollaborationSheet({
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2.5">
             <Label htmlFor="newcoll-counterparty">{counterpartyLabel}</Label>
             <Input
               id="newcoll-counterparty"
@@ -176,7 +176,7 @@ export function NewCollaborationSheet({
             </p>
           </div>
 
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2.5">
             <Label htmlFor="newcoll-project-type">{t('newSheet.projectTypeLabel')}</Label>
             <Input
               id="newcoll-project-type"
@@ -188,7 +188,7 @@ export function NewCollaborationSheet({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="newcoll-postcode">{t('newSheet.postcodeLabel')}</Label>
               <Input
                 id="newcoll-postcode"
@@ -203,7 +203,7 @@ export function NewCollaborationSheet({
               ) : null}
             </div>
 
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="newcoll-amount">{t('newSheet.amountLabel')}</Label>
               <Input
                 id="newcoll-amount"
@@ -220,7 +220,7 @@ export function NewCollaborationSheet({
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2.5">
             <Label htmlFor="newcoll-referral">{t('newSheet.referralLabel')}</Label>
             <Input
               id="newcoll-referral"

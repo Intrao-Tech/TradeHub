@@ -127,7 +127,7 @@ export function ApplyJobSheet({
           <SheetDescription>{t('apply.description')}</SheetDescription>
         </SheetHeader>
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2.5">
             <Label htmlFor="apply-cover">{t('apply.coverLabel')}</Label>
             <Textarea
               id="apply-cover"
@@ -141,7 +141,7 @@ export function ApplyJobSheet({
               <p className="text-xs text-fg-muted">{t('apply.coverHint')}</p>
             ) : null}
           </div>
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2.5">
             <Label htmlFor="apply-rate">{t('apply.rateLabel')}</Label>
             <Input
               id="apply-rate"

@@ -113,7 +113,7 @@ export default function AuthEmployerSearchPage() {
 
   const filterRail = (
     <div className="space-y-6">
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2.5">
         <Label htmlFor="es-search">{t('employerSearch.companyLabel')}</Label>
         <Input
           id="es-search"

@@ -152,7 +152,7 @@ export default function LoginPage({ onLogin }: Props) {
           ) : null}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="login-email">{t('shared.email')}</Label>
               <Input
                 id="login-email"

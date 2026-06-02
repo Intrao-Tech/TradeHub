@@ -114,7 +114,7 @@ export default function ResetPasswordPage() {
               ) : null}
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2.5">
                   <Label htmlFor="reset-password">{t('reset.newPasswordLabel')}</Label>
                   <Input
                     id="reset-password"
@@ -128,7 +128,7 @@ export default function ResetPasswordPage() {
                   />
                   <PasswordRules password={password} dirty={password.length > 0} />
                 </div>
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2.5">
                   <Label htmlFor="reset-confirm">{t('reset.confirmLabel')}</Label>
                   <Input
                     id="reset-confirm"

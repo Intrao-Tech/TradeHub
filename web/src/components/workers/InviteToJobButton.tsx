@@ -143,7 +143,7 @@ export function InviteToJobButton({
             </SheetDescription>
           </SheetHeader>
           <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="invite-job-select">Job</Label>
               {jobsError ? (
                 <div
@@ -176,7 +176,7 @@ export function InviteToJobButton({
                 </Select>
               )}
             </div>
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="invite-message">Message (optional)</Label>
               <Textarea
                 id="invite-message"

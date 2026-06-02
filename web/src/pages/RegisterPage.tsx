@@ -369,7 +369,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
         <form onSubmit={handleSubmit} className="space-y-4">
             {role === 'WORKER' ? (
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2.5">
                   <Label htmlFor="reg-firstname">{t('register.firstNameLabel')}</Label>
                   <Input
                     id="reg-firstname"
@@ -383,7 +383,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
                     maxLength={75}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2.5">
                   <Label htmlFor="reg-surname">{t('register.surnameLabel')}</Label>
                   <Input
                     id="reg-surname"
@@ -399,7 +399,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
                 </div>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="flex flex-col gap-2.5">
                 <Label htmlFor="reg-company">{t('register.companyLabel')}</Label>
                 <Input
                   id="reg-company"
@@ -414,7 +414,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
                 />
               </div>
             )}
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="reg-email">{t('shared.email')}</Label>
               <Input
                 id="reg-email"
@@ -426,7 +426,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
                 required
               />
             </div>
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="reg-password">{t('register.passwordLabel')}</Label>
               <Input
                 id="reg-password"
@@ -440,7 +440,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
               />
               <PasswordRules password={password} dirty={password.length > 0} />
             </div>
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="reg-confirm-password">{t('register.confirmLabel')}</Label>
               <Input
                 id="reg-confirm-password"
@@ -454,7 +454,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
                 <p className="text-xs text-warning">{t('register.passwordsDontMatch')}</p>
               ) : null}
             </div>
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="reg-phone">
                 {t('register.phoneLabel')}{' '}
                 <span className="text-fg-subtle">{t('register.optional')}</span>

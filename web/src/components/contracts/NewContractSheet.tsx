@@ -142,7 +142,7 @@ export function NewContractSheet({
                 {loadErr}
               </div>
             ) : null}
-            <div className="space-y-1">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="picked-job">{t('newContract.jobPostLabel')} *</Label>
               {jobs && jobs.length === 0 ? (
                 <p className="text-sm text-fg-muted">{t('newContract.noJobs')}</p>
@@ -164,7 +164,7 @@ export function NewContractSheet({
                 </Select>
               )}
             </div>
-            <div className="space-y-1">
+            <div className="flex flex-col gap-2.5">
               <Label htmlFor="ct-project">{t('newContract.projectTypeLabel')} *</Label>
               <Input
                 id="ct-project"
@@ -175,7 +175,7 @@ export function NewContractSheet({
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
+              <div className="flex flex-col gap-2.5">
                 <Label htmlFor="ct-postcode">{t('newContract.postcodeLabel')}</Label>
                 <Input
                   id="ct-postcode"
@@ -184,7 +184,7 @@ export function NewContractSheet({
                   placeholder={t('newContract.postcodePlaceholder')}
                 />
               </div>
-              <div className="space-y-1">
+              <div className="flex flex-col gap-2.5">
                 <Label htmlFor="ct-amount">{t('newContract.amountLabel')}</Label>
                 <Input
                   id="ct-amount"
