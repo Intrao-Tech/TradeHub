@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { LifeBuoy, Send } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { cn } from '@/lib/utils';
+import { formatDateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -148,7 +149,7 @@ export default function SupportPage() {
                       </a>
                     ) : null}
                     <div className="text-[10px] opacity-70 mt-1">
-                      {new Date(m.created_at).toLocaleString()}
+                      {formatDateTime(m.created_at)}
                     </div>
                   </div>
                 ))}

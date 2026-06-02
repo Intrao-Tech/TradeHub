@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ListChecks, Plus, ShieldAlert } from 'lucide-react';
 import { api, parseApiError } from '../../api';
 import { useAccountMe } from '../../hooks/useAccountMe';
+import { formatMoney } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -87,10 +89,10 @@ const ACTION_COMPATIBLE_CONDITIONS: Record<
   BROADCAST_MESSAGE: ['REQUESTING_STAFF_HAS_ROLE'],
 };
 
-const CONDITION_LABEL: Record<ConditionType, string> = {
-  AMOUNT_GT: '+ Amount >',
-  REQUESTING_STAFF_HAS_ROLE: '+ Requestor role',
-  DOCUMENT_TYPE_EQUALS: '+ Document type',
+const CONDITION_LABEL_KEY: Record<ConditionType, string> = {
+  AMOUNT_GT: 'rules.condAmount',
+  REQUESTING_STAFF_HAS_ROLE: 'rules.condRole',
+  DOCUMENT_TYPE_EQUALS: 'rules.condDocType',
 };
 
 type Condition =
@@ -109,6 +111,7 @@ type Rule = {
 };
 
 export function AdminApprovalRulesTab() {
+  const { t } = useTranslation('admin');
   const { isAdmin } = useAccountMe();
   const [rules, setRules] = useState<Rule[]>([]);
   const [err, setErr] = useState('');
@@ -177,7 +180,7 @@ export function AdminApprovalRulesTab() {
       const data = await api<Rule[]>('/admin/approval-rules');
       setRules(data);
     } catch (e) {
-      setErr(parseApiError(e)?.message ?? 'Failed to load rules');
+      setErr(parseApiError(e)?.message ?? t('rules.loadError'));
     }
   }, []);
 
@@ -199,11 +202,11 @@ export function AdminApprovalRulesTab() {
     setCreateErr('');
     setCreateMsg('');
     if (!name.trim()) {
-      setCreateErr('Name required');
+      setCreateErr(t('rules.nameRequired'));
       return;
     }
     if (!conditions.length) {
-      setCreateErr('At least one condition required');
+      setCreateErr(t('rules.conditionRequired'));
       return;
     }
     setBusy(true);
@@ -221,7 +224,7 @@ export function AdminApprovalRulesTab() {
             conditions,
           }),
         });
-        setCreateMsg('Rule updated.');
+        setCreateMsg(t('rules.updated'));
       } else {
         const body = {
           name: name.trim(),
@@ -234,12 +237,12 @@ export function AdminApprovalRulesTab() {
           method: 'POST',
           body: JSON.stringify(body),
         });
-        setCreateMsg('Rule created.');
+        setCreateMsg(t('rules.created'));
       }
       resetForm();
       void load();
     } catch (e) {
-      setCreateErr(parseApiError(e)?.message ?? 'Save failed');
+      setCreateErr(parseApiError(e)?.message ?? t('rules.saveFailed'));
     } finally {
       setBusy(false);
     }
@@ -250,7 +253,7 @@ export function AdminApprovalRulesTab() {
       await api(`/admin/approval-rules/${id}`, { method: 'DELETE' });
       void load();
     } catch (e) {
-      setErr(parseApiError(e)?.message ?? 'Deactivate failed');
+      setErr(parseApiError(e)?.message ?? t('rules.deactivateFailed'));
     }
   }
 
@@ -266,14 +269,11 @@ export function AdminApprovalRulesTab() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <ListChecks className="h-4 w-4 text-fg-muted" />
-            <CardTitle>Existing rules</CardTitle>
+            <CardTitle>{t('rules.existingTitle')}</CardTitle>
           </div>
           <CardDescription>
-            Rules are AND-ed against incoming actions. A match queues the
-            request for the required approver role.
-            {!isAdmin
-              ? ' Only admins can create or deactivate rules.'
-              : ''}
+            {t('rules.existingDesc')}
+            {!isAdmin ? t('rules.adminOnlyNote') : ''}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -285,8 +285,8 @@ export function AdminApprovalRulesTab() {
           {rules.length === 0 ? (
             <EmptyState
               icon={ShieldAlert}
-              title="No rules yet"
-              description="Create your first rule on the right — every admin action will run immediately until you do."
+              title={t('rules.noRules')}
+              description={t('rules.noRulesDesc')}
             />
           ) : (
             <ul className="space-y-2">
@@ -309,7 +309,7 @@ export function AdminApprovalRulesTab() {
                     </div>
                     <div className="flex gap-1">
                       <Badge variant={r.is_active ? 'success' : 'secondary'}>
-                        {r.is_active ? 'Active' : 'Inactive'}
+                        {r.is_active ? t('rules.active') : t('rules.inactive')}
                       </Badge>
                       {isAdmin ? (
                         <Button
@@ -319,7 +319,7 @@ export function AdminApprovalRulesTab() {
                             editingId === r.id ? resetForm() : startEdit(r)
                           }
                         >
-                          {editingId === r.id ? 'Cancel edit' : 'Edit'}
+                          {editingId === r.id ? t('rules.cancelEdit') : t('rules.edit')}
                         </Button>
                       ) : null}
                       {isAdmin && r.is_active ? (
@@ -328,7 +328,7 @@ export function AdminApprovalRulesTab() {
                           variant="ghost"
                           onClick={() => void deactivate(r.id)}
                         >
-                          Deactivate
+                          {t('rules.deactivate')}
                         </Button>
                       ) : null}
                     </div>
@@ -336,13 +336,15 @@ export function AdminApprovalRulesTab() {
                   <div className="text-xs flex flex-wrap gap-1">
                     <Badge variant="outline">{r.target_action}</Badge>
                     <Badge variant="outline">
-                      approver: {r.required_approver_role}
+                      {t('rules.approverBadge', {
+                        role: r.required_approver_role,
+                      })}
                     </Badge>
                     {r.conditions.map((c) => (
                       <Badge key={c.id} variant="outline">
                         {c.type}
                         {'threshold_pence' in c
-                          ? ` > £${(Number(c.threshold_pence) / 100).toFixed(2)}`
+                          ? ` > ${formatMoney(Number(c.threshold_pence) / 100)}`
                           : 'staff_role_name' in c
                             ? `: ${String(c.staff_role_name)}`
                             : 'document_type' in c
@@ -363,12 +365,10 @@ export function AdminApprovalRulesTab() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Plus className="h-4 w-4 text-fg-muted" />
-            <CardTitle>{editingId ? 'Edit rule' : 'New rule'}</CardTitle>
+            <CardTitle>{editingId ? t('rules.editTitle') : t('rules.newTitle')}</CardTitle>
           </div>
           <CardDescription>
-            {editingId
-              ? 'Update the name, description, active state — or tweak the condition values (thresholds, role names, document types). Target action, approver role and the set of condition types are immutable — deactivate and create a new rule to change them.'
-              : 'Pick an action, the approver role, and any conditions that must all match for the rule to fire.'}
+            {editingId ? t('rules.editDesc') : t('rules.newDesc')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -383,11 +383,11 @@ export function AdminApprovalRulesTab() {
             </div>
           ) : null}
           <div className="space-y-2">
-            <Label>Name</Label>
+            <Label>{t('rules.name')}</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label>Description</Label>
+            <Label>{t('rules.description')}</Label>
             <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -396,7 +396,7 @@ export function AdminApprovalRulesTab() {
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>
-                Target action{editingId ? ' (immutable)' : ''}
+                {t('rules.targetAction')}{editingId ? t('rules.immutable') : ''}
               </Label>
               <Select
                 value={targetAction}
@@ -429,7 +429,7 @@ export function AdminApprovalRulesTab() {
             </div>
             <div className="space-y-2">
               <Label>
-                Required approver{editingId ? ' (immutable)' : ''}
+                {t('rules.requiredApprover')}{editingId ? t('rules.immutable') : ''}
               </Label>
               <Select
                 value={approverRole}
@@ -455,12 +455,12 @@ export function AdminApprovalRulesTab() {
                 onChange={(e) => setIsActive(e.target.checked)}
                 className="h-4 w-4"
               />
-              Active
+              {t('rules.activeCheckbox')}
             </label>
           ) : null}
 
           <div className="space-y-2">
-            <Label>Conditions (AND-ed)</Label>
+            <Label>{t('rules.conditions')}</Label>
             <div className="space-y-2">
               {conditions.map((c, idx) => (
                 <div
@@ -537,7 +537,7 @@ export function AdminApprovalRulesTab() {
                         )
                       }
                     >
-                      Remove
+                      {t('rules.remove')}
                     </Button>
                   ) : null}
                 </div>
@@ -563,22 +563,19 @@ export function AdminApprovalRulesTab() {
                           variant="outline"
                           onClick={() => addCondition(kind)}
                         >
-                          {CONDITION_LABEL[kind]}
+                          {t(CONDITION_LABEL_KEY[kind])}
                         </Button>
                       ))}
                   </div>
                   <p className="text-[11px] text-fg-muted">
-                    Only conditions valid for{' '}
-                    <span className="font-mono">{targetAction}</span> are shown.
-                    Switching the action will drop incompatible conditions.
+                    {t('rules.onlyValidPre')}
+                    <span className="font-mono">{targetAction}</span>
+                    {t('rules.onlyValidPost')}
                   </p>
                 </div>
               ) : (
                 <p className="text-[11px] text-fg-muted">
-                  Condition <em>values</em> are editable above (e.g. change the
-                  AMOUNT_GT threshold or the required role). Condition{' '}
-                  <em>types</em> are immutable — deactivate this rule and create
-                  a new one to add or remove conditions.
+                  {t('rules.editNote')}
                 </p>
               )}
             </div>
@@ -586,10 +583,10 @@ export function AdminApprovalRulesTab() {
 
           <Button onClick={() => void submit()} disabled={busy}>
             {busy
-              ? 'Saving…'
+              ? t('rules.saving')
               : editingId
-                ? 'Save changes'
-                : 'Create rule'}
+                ? t('rules.saveChanges')
+                : t('rules.createRule')}
           </Button>
         </CardContent>
       </Card>

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '../../api';
 import { useAccountMe } from '../../hooks/useAccountMe';
 import { publicFileUrl } from '../../lib/files';
+import { formatDate } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -51,20 +53,21 @@ type QueueResponse = {
 };
 
 const STATUS_FILTERS = [
-  { value: 'PENDING,IN_REVIEW', label: 'Active (default)' },
-  { value: 'PENDING', label: 'Pending only' },
-  { value: 'IN_REVIEW', label: 'In review only' },
-  { value: 'APPROVED', label: 'Approved' },
-  { value: 'REJECTED', label: 'Rejected' },
+  { value: 'PENDING,IN_REVIEW', labelKey: 'verification.statusActive' },
+  { value: 'PENDING', labelKey: 'verification.statusPending' },
+  { value: 'IN_REVIEW', labelKey: 'verification.statusInReview' },
+  { value: 'APPROVED', labelKey: 'verification.statusApproved' },
+  { value: 'REJECTED', labelKey: 'verification.statusRejected' },
 ] as const;
 
 const ASSIGNMENT_FILTERS = [
-  { value: 'all', label: 'All' },
-  { value: 'mine', label: 'Mine' },
-  { value: 'unassigned', label: 'Unassigned' },
+  { value: 'all', labelKey: 'verification.assignAll' },
+  { value: 'mine', labelKey: 'verification.assignMine' },
+  { value: 'unassigned', labelKey: 'verification.assignUnassigned' },
 ] as const;
 
 export function VerificationQueueTab() {
+  const { t } = useTranslation('admin');
   const { isAdmin } = useAccountMe();
   const [data, setData] = useState<QueueResponse | null>(null);
   const [error, setError] = useState('');
@@ -92,11 +95,11 @@ export function VerificationQueueTab() {
       setData(res);
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Failed to load queue');
+      setError(parsed?.message ?? t('verification.loadError'));
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, assignment]);
+  }, [statusFilter, assignment, t]);
 
   useEffect(() => {
     void load();
@@ -121,7 +124,7 @@ export function VerificationQueueTab() {
       await load();
     } catch (err) {
       const parsed = parseApiError(err);
-      setActionErr(parsed?.message ?? 'Approve failed');
+      setActionErr(parsed?.message ?? t('verification.approveFailed'));
     } finally {
       setActionInFlight(false);
     }
@@ -131,7 +134,7 @@ export function VerificationQueueTab() {
     if (!rejecting) return;
     const reason = rejecting.reason.trim();
     if (reason.length < 10) {
-      setActionErr('Rejection reason must be at least 10 characters.');
+      setActionErr(t('verification.rejectReasonTooShort'));
       return;
     }
     setActionErr('');
@@ -145,7 +148,7 @@ export function VerificationQueueTab() {
       await load();
     } catch (err) {
       const parsed = parseApiError(err);
-      setActionErr(parsed?.message ?? 'Reject failed');
+      setActionErr(parsed?.message ?? t('verification.rejectFailed'));
     } finally {
       setActionInFlight(false);
     }
@@ -161,7 +164,7 @@ export function VerificationQueueTab() {
       await load();
     } catch (err) {
       const parsed = parseApiError(err);
-      setActionErr(parsed?.message ?? 'Claim failed');
+      setActionErr(parsed?.message ?? t('verification.claimFailed'));
     } finally {
       setActionInFlight(false);
     }
@@ -170,12 +173,8 @@ export function VerificationQueueTab() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Verification queue</CardTitle>
-        <CardDescription>
-          Documents waiting on staff review. Approve writes a milestone and may
-          promote the user; reject requires a reason of at least 10 characters
-          (shown to the uploader).
-        </CardDescription>
+        <CardTitle>{t('verification.title')}</CardTitle>
+        <CardDescription>{t('verification.desc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {error ? (
@@ -197,7 +196,7 @@ export function VerificationQueueTab() {
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-2">
-            <Label>Status</Label>
+            <Label>{t('verification.status')}</Label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger>
                 <SelectValue />
@@ -205,14 +204,14 @@ export function VerificationQueueTab() {
               <SelectContent>
                 {STATUS_FILTERS.map((f) => (
                   <SelectItem key={f.value} value={f.value}>
-                    {f.label}
+                    {t(f.labelKey)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Assignment</Label>
+            <Label>{t('verification.assignment')}</Label>
             <Select value={assignment} onValueChange={setAssignment}>
               <SelectTrigger>
                 <SelectValue />
@@ -222,7 +221,7 @@ export function VerificationQueueTab() {
                   (f) => f.value !== 'all' || isAdmin,
                 ).map((f) => (
                   <SelectItem key={f.value} value={f.value}>
-                    {f.label}
+                    {t(f.labelKey)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -230,26 +229,26 @@ export function VerificationQueueTab() {
           </div>
           <div className="flex items-end">
             <Button type="button" onClick={load} disabled={loading}>
-              {loading ? 'Loading…' : 'Refresh'}
+              {loading ? t('verification.loading') : t('verification.refresh')}
             </Button>
           </div>
         </div>
 
         {data == null ? (
-          <p className="text-sm text-fg-muted">Loading…</p>
+          <p className="text-sm text-fg-muted">{t('verification.loading')}</p>
         ) : data.items.length === 0 ? (
-          <p className="text-sm text-fg-muted">No documents matching the current filters.</p>
+          <p className="text-sm text-fg-muted">{t('verification.noDocuments')}</p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Uploader</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Assignee</TableHead>
-                <TableHead>Uploaded</TableHead>
-                <TableHead>File</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t('verification.colUploader')}</TableHead>
+                <TableHead>{t('verification.colType')}</TableHead>
+                <TableHead>{t('verification.colStatus')}</TableHead>
+                <TableHead>{t('verification.colAssignee')}</TableHead>
+                <TableHead>{t('verification.colUploaded')}</TableHead>
+                <TableHead>{t('verification.colFile')}</TableHead>
+                <TableHead className="text-right">{t('verification.colActions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -291,12 +290,12 @@ export function VerificationQueueTab() {
                           onClick={() => claim(item.document.id)}
                           disabled={actionInFlight}
                         >
-                          Claim
+                          {t('verification.claim')}
                         </Button>
                       )}
                     </TableCell>
                     <TableCell>
-                      {new Date(item.document.created_at).toLocaleDateString()}
+                      {formatDate(item.document.created_at, 'short')}
                     </TableCell>
                     <TableCell>
                       {url && item.document.file_url !== '(structured-only)' ? (
@@ -306,10 +305,10 @@ export function VerificationQueueTab() {
                           rel="noopener noreferrer"
                           className="text-primary underline"
                         >
-                          Open
+                          {t('verification.open')}
                         </a>
                       ) : (
-                        <span className="text-xs text-fg-muted">structured</span>
+                        <span className="text-xs text-fg-muted">{t('verification.structured')}</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
@@ -321,7 +320,7 @@ export function VerificationQueueTab() {
                           onClick={() => approve(item.document.id)}
                           disabled={terminal || actionInFlight}
                         >
-                          Approve
+                          {t('verification.approve')}
                         </Button>
                         <Button
                           type="button"
@@ -332,7 +331,7 @@ export function VerificationQueueTab() {
                           }
                           disabled={terminal || actionInFlight}
                         >
-                          Reject
+                          {t('verification.reject')}
                         </Button>
                       </div>
                     </TableCell>
@@ -346,7 +345,7 @@ export function VerificationQueueTab() {
         {rejecting ? (
           <div className="rounded-md border border-border-default bg-raised p-3 space-y-2">
             <Label htmlFor="reject-reason">
-              Rejection reason (visible to uploader, ≥10 chars)
+              {t('verification.rejectReasonLabel')}
             </Label>
             <Textarea
               id="reject-reason"
@@ -355,7 +354,7 @@ export function VerificationQueueTab() {
                 setRejecting({ ...rejecting, reason: e.target.value })
               }
               rows={3}
-              placeholder="e.g. Card photo is too blurry to read the registration number — please re-upload a sharper image."
+              placeholder={t('verification.rejectReasonPlaceholder')}
             />
             <div className="flex gap-2">
               <Button
@@ -364,7 +363,7 @@ export function VerificationQueueTab() {
                 onClick={submitReject}
                 disabled={actionInFlight || rejecting.reason.trim().length < 10}
               >
-                Confirm reject
+                {t('verification.confirmReject')}
               </Button>
               <Button
                 type="button"
@@ -372,7 +371,7 @@ export function VerificationQueueTab() {
                 onClick={() => setRejecting(null)}
                 disabled={actionInFlight}
               >
-                Cancel
+                {t('verification.cancel')}
               </Button>
             </div>
           </div>

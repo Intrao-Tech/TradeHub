@@ -6,6 +6,7 @@ import {
   useState,
   type DragEvent,
 } from 'react';
+import { formatDate } from '@/lib/format';
 import {
   CircleCheck,
   CircleDashed,
@@ -520,7 +521,7 @@ function DocumentRowItem({
   const variant = STATUS_VARIANT[doc.status] ?? 'outline';
   const label = STATUS_LABEL[doc.status] ?? doc.status;
   const date = doc.created_at
-    ? new Date(doc.created_at).toLocaleDateString()
+    ? formatDate(doc.created_at, 'short')
     : null;
 
   return (

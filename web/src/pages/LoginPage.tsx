@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError, setTokens } from '../api';
 import { AuthShell } from '@/components/AppShell';
 import { AuthBanner, bannerFromReason } from '@/components/AuthBanner';
@@ -43,6 +44,7 @@ type Props = { onLogin: () => void };
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
 
 export default function LoginPage({ onLogin }: Props) {
+  const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const next = searchParams.get('next');
@@ -121,8 +123,7 @@ export default function LoginPage({ onLogin }: Props) {
     } catch {
       setError({
         code: 'GOOGLE_UNAVAILABLE',
-        message:
-          'Google sign-in is not available right now. Try again or sign in with email.',
+        message: t('login.googleUnavailable'),
       });
     }
   }
@@ -131,7 +132,7 @@ export default function LoginPage({ onLogin }: Props) {
     <AuthShell>
       <Card>
         <CardHeader>
-          <CardTitle className="text-center text-xl sm:text-2xl">Log in to TradeHub</CardTitle>
+          <CardTitle className="text-center text-xl sm:text-2xl">{t('login.title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
           {banner ? (
@@ -143,16 +144,16 @@ export default function LoginPage({ onLogin }: Props) {
           {error ? (
             <AuthBanner
               variant="danger"
-              title={errorTitle(error)}
-              action={errorAction(error, email)}
+              title={errorTitle(error, t)}
+              action={errorAction(error, email, t)}
             >
-              {error.message ?? 'Something went wrong. Please try again.'}
+              {error.message ?? t('shared.genericError')}
             </AuthBanner>
           ) : null}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="login-email">Email</Label>
+              <Label htmlFor="login-email">{t('shared.email')}</Label>
               <Input
                 id="login-email"
                 type="email"
@@ -165,12 +166,12 @@ export default function LoginPage({ onLogin }: Props) {
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="login-password">Password</Label>
+                <Label htmlFor="login-password">{t('login.passwordLabel')}</Label>
                 <Link
                   to="/forgot-password"
                   className="text-xs text-fg-muted underline-offset-4 hover:text-fg hover:underline"
                 >
-                  Forgot password?
+                  {t('shared.forgotPassword')}
                 </Link>
               </div>
               <Input
@@ -189,7 +190,7 @@ export default function LoginPage({ onLogin }: Props) {
               className="w-full"
               disabled={loading}
             >
-              {loading ? 'Signing in…' : 'Sign in'}
+              {loading ? t('login.signingIn') : t('shared.signIn')}
             </Button>
           </form>
 
@@ -201,7 +202,7 @@ export default function LoginPage({ onLogin }: Props) {
                 </div>
                 <div className="relative flex justify-center">
                   <span className="bg-raised px-2 text-xs uppercase tracking-wide text-fg-subtle">
-                    or
+                    {t('shared.or')}
                   </span>
                 </div>
               </div>
@@ -213,17 +214,17 @@ export default function LoginPage({ onLogin }: Props) {
                 onClick={handleGoogle}
               >
                 <GoogleIcon />
-                Continue with Google
+                {t('shared.continueWithGoogle')}
               </Button>
             </>
           ) : null}
 
           <div className="space-y-3 border-t border-border-default pt-5">
             <p className="text-center text-sm text-fg-muted">
-              Don't have a TradeHub account?
+              {t('login.noAccount')}
             </p>
             <Button asChild variant="outline" size="lg" className="w-full">
-              <Link to="/register">Sign up</Link>
+              <Link to="/register">{t('shared.signUp')}</Link>
             </Button>
           </div>
         </CardContent>
@@ -234,7 +235,7 @@ export default function LoginPage({ onLogin }: Props) {
 
 function parseError(err: unknown): LoginError {
   const parsed = parseApiError(err);
-  if (!parsed) return { message: 'Something went wrong. Please try again.' };
+  if (!parsed) return {};
   return {
     code: parsed.code,
     message: parsed.message,
@@ -250,22 +251,25 @@ function parseError(err: unknown): LoginError {
   };
 }
 
-function errorTitle(error: NonNullable<LoginError>): string {
+function errorTitle(
+  error: NonNullable<LoginError>,
+  t: (key: string) => string,
+): string {
   switch (error.code) {
-    case 'INVALID_CREDENTIALS':
-      return 'Sign in failed';
     case 'ACCOUNT_DEACTIVATED':
-      return 'Account deactivated';
+      return t('login.error.accountDeactivated');
     case 'EMAIL_NOT_VERIFIED':
-      return 'Email not verified';
+      return t('login.error.emailNotVerified');
+    case 'INVALID_CREDENTIALS':
     default:
-      return 'Sign in failed';
+      return t('login.error.invalidCredentials');
   }
 }
 
 function errorAction(
   error: NonNullable<LoginError>,
   email: string,
+  t: (key: string) => string,
 ): React.ReactNode {
   if (error.code === 'EMAIL_NOT_VERIFIED' && (error.email || email)) {
     return (
@@ -273,7 +277,7 @@ function errorAction(
         to={`/verify-email?email=${encodeURIComponent(error.email ?? email)}`}
         className="font-medium underline-offset-4 hover:underline"
       >
-        Resend verification email
+        {t('login.resendVerification')}
       </Link>
     );
   }

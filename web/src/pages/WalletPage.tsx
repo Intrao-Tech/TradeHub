@@ -3,6 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { CreditCard, ScaleIcon, Wallet } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '../hooks/useAccountMe';
+import { useTranslation } from 'react-i18next';
+import { formatMoney, formatDate } from '@/lib/format';
 import {
   Card,
   CardContent,
@@ -32,13 +34,10 @@ import {
 } from '../components/escrow';
 import { EmptyState } from '../components/EmptyState';
 
-const fmt = (s: string) =>
-  new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(Number(s));
+const fmt = (s: string) => formatMoney(Number(s));
 
 export default function WalletPage() {
+  const { t } = useTranslation('wallet');
   const { isWorker } = useAccountMe();
   const [searchParams] = useSearchParams();
   const justCompleted = searchParams.get('onboarding') === 'complete';
@@ -57,7 +56,7 @@ export default function WalletPage() {
       if (parsed?.status === 403) {
         setStatus(null);
       } else {
-        setError(parsed?.message ?? 'Could not load wallet status.');
+        setError(parsed?.message ?? t('page.statusError'));
       }
     }
     try {
@@ -88,11 +87,9 @@ export default function WalletPage() {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Wallet className="h-6 w-6 text-fg-muted" />
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Payments</h1>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t('page.title')}</h1>
       </div>
-      <p className="text-sm text-fg-muted">
-        Stripe Connect setup and every payout to your account.
-      </p>
+      <p className="text-sm text-fg-muted">{t('page.workerSubtitle')}</p>
 
       {error ? (
         <div
@@ -108,8 +105,7 @@ export default function WalletPage() {
           role="status"
           className="rounded-md border border-info/40 bg-info-subtle px-3 py-2 text-sm text-info"
         >
-          We're confirming your payout setup with Stripe. This can take a few
-          seconds — refresh in a moment if the status doesn't update.
+          {t('page.confirmingSetup')}
         </div>
       ) : null}
 
@@ -117,14 +113,12 @@ export default function WalletPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Active escrow</CardTitle>
-          <CardDescription>
-            Milestones currently in escrow waiting for your work or for the employer's approval.
-          </CardDescription>
+          <CardTitle>{t('page.activeEscrow')}</CardTitle>
+          <CardDescription>{t('page.activeEscrowDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {!wallet || wallet.active_escrow.length === 0 ? (
-            <p className="text-fg-muted">Nothing in flight.</p>
+            <p className="text-fg-muted">{t('page.nothingInFlight')}</p>
           ) : (
             wallet.active_escrow.map((m) => (
               <Link
@@ -135,7 +129,7 @@ export default function WalletPage() {
                 <span className="min-w-0 truncate font-medium text-fg">{m.title}</span>
                 <span className="flex flex-wrap items-center gap-2">
                   <Badge variant={m.status === 'SUBMITTED' ? 'warning' : 'info'}>
-                    {m.status === 'SUBMITTED' ? 'Awaiting review' : 'In escrow'}
+                    {m.status === 'SUBMITTED' ? t('page.awaitingReview') : t('page.inEscrow')}
                   </Badge>
                   <span className="text-fg-muted">{fmt(m.expected_payout)}</span>
                 </span>
@@ -147,12 +141,12 @@ export default function WalletPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Released history</CardTitle>
-          <CardDescription>Funds released to your account via Stripe Connect.</CardDescription>
+          <CardTitle>{t('page.releasedHistory')}</CardTitle>
+          <CardDescription>{t('page.releasedHistoryDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {!wallet || wallet.released_history.length === 0 ? (
-            <p className="text-fg-muted">No released funds yet.</p>
+            <p className="text-fg-muted">{t('page.noReleased')}</p>
           ) : (
             wallet.released_history.map((m) => (
               <div
@@ -163,7 +157,7 @@ export default function WalletPage() {
                   <div className="truncate font-medium text-fg">{m.title}</div>
                   {m.released_at ? (
                     <div className="text-xs text-fg-muted">
-                      Released {new Date(m.released_at).toLocaleDateString()}
+                      {t('page.released', { date: formatDate(m.released_at, 'short') })}
                     </div>
                   ) : null}
                 </div>
@@ -177,11 +171,8 @@ export default function WalletPage() {
       {wallet && wallet.failed_transfers.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Failed payouts</CardTitle>
-            <CardDescription>
-              These payouts couldn't go through. Fix your Stripe Connect setup
-              above, then click "Retry payout" on each milestone.
-            </CardDescription>
+            <CardTitle>{t('page.failedPayouts')}</CardTitle>
+            <CardDescription>{t('page.failedPayoutsDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             {wallet.failed_transfers.map((m) => (
@@ -201,13 +192,8 @@ export default function WalletPage() {
       {wallet && wallet.pending_worker_payouts.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Held until you set up Stripe</CardTitle>
-            <CardDescription>
-              The employer has released these milestones, but we couldn't pay
-              you yet because your payout account isn't connected. Funds are
-              safely held on the platform — complete onboarding above and they
-              sweep to you automatically.
-            </CardDescription>
+            <CardTitle>{t('page.heldTitle')}</CardTitle>
+            <CardDescription>{t('page.heldDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             {wallet.pending_worker_payouts.map((p) => (
@@ -219,7 +205,7 @@ export default function WalletPage() {
                 <div className="min-w-0">
                   <div className="truncate font-medium">{p.milestone_title}</div>
                   <div className="text-xs opacity-80">
-                    Held since {new Date(p.created_at).toLocaleDateString()}
+                    {t('page.heldSince', { date: formatDate(p.created_at, 'short') })}
                     {p.failure_reason ? ` — ${p.failure_reason}` : ''}
                   </div>
                 </div>
@@ -233,12 +219,8 @@ export default function WalletPage() {
       {wallet && wallet.pending_referral_payouts.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Pending referral payouts</CardTitle>
-            <CardDescription>
-              Referral commission accumulated while your payouts were not yet
-              enabled. Once you complete onboarding, these are paid out
-              automatically on the next webhook.
-            </CardDescription>
+            <CardTitle>{t('page.pendingReferralTitle')}</CardTitle>
+            <CardDescription>{t('page.pendingReferralDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             {wallet.pending_referral_payouts.map((p) => (
@@ -258,6 +240,7 @@ export default function WalletPage() {
 }
 
 function EmployerPaymentsView() {
+  const { t } = useTranslation('wallet');
   const [data, setData] = useState<EmployerPaymentsData | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -270,7 +253,7 @@ function EmployerPaymentsView() {
         if (!cancelled) setData(res);
       } catch (err) {
         if (!cancelled) {
-          setError(parseApiError(err)?.message ?? 'Could not load payments.');
+          setError(parseApiError(err)?.message ?? t('page.paymentsError'));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -302,12 +285,9 @@ function EmployerPaymentsView() {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <CreditCard className="h-6 w-6 text-fg-muted" />
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Payments</h1>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t('page.title')}</h1>
       </div>
-      <p className="text-sm text-fg-muted">
-        Funds you've charged, refunds you've issued, and any open disputes on
-        your milestones.
-      </p>
+      <p className="text-sm text-fg-muted">{t('page.employerSubtitle')}</p>
 
       {error ? (
         <div
@@ -319,10 +299,10 @@ function EmployerPaymentsView() {
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryCard label="Charged" {...totals.chargesPaid} />
-        <SummaryCard label="Pending" {...totals.chargesPending} />
-        <SummaryCard label="Failed" {...totals.chargesFailed} tone="danger" />
-        <SummaryCard label="Refunded" {...totals.refundsPaid} />
+        <SummaryCard label={t('page.summaryCharged')} {...totals.chargesPaid} />
+        <SummaryCard label={t('page.summaryPending')} {...totals.chargesPending} />
+        <SummaryCard label={t('page.summaryFailed')} {...totals.chargesFailed} tone="danger" />
+        <SummaryCard label={t('page.summaryRefunded')} {...totals.refundsPaid} />
       </div>
 
       {data && data.open_disputes.length > 0 ? (
@@ -330,12 +310,9 @@ function EmployerPaymentsView() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ScaleIcon className="h-4 w-4" />
-              Open disputes
+              {t('page.openDisputes')}
             </CardTitle>
-            <CardDescription>
-              Milestones currently under dispute. Click through to respond or
-              follow the resolution proposal.
-            </CardDescription>
+            <CardDescription>{t('page.openDisputesDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             {data.open_disputes.map((d) => (
@@ -347,8 +324,11 @@ function EmployerPaymentsView() {
                 <div>
                   <div className="font-medium">{d.milestone.title}</div>
                   <div className="text-xs opacity-80">
-                    Filed by {d.filed_by_role.toLowerCase()} on{' '}
-                    {new Date(d.created_at).toLocaleDateString()} — {d.status}
+                    {t('page.disputeFiledBy', {
+                      role: d.filed_by_role.toLowerCase(),
+                      date: formatDate(d.created_at, 'short'),
+                      status: d.status,
+                    })}
                   </div>
                 </div>
                 <span className="font-semibold">{fmt(d.milestone.amount)}</span>
@@ -360,30 +340,28 @@ function EmployerPaymentsView() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Ledger</CardTitle>
-          <CardDescription>
-            Every charge and refund on your account, newest first.
-          </CardDescription>
+          <CardTitle>{t('page.ledger')}</CardTitle>
+          <CardDescription>{t('page.ledgerDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-fg-muted">Loading…</p>
+            <p className="text-sm text-fg-muted">{t('page.loading')}</p>
           ) : !data || data.payments.length === 0 ? (
             <EmptyState
               icon={Wallet}
-              title="No payments yet"
-              description="Fund your first milestone and it will show up here."
+              title={t('page.noPaymentsTitle')}
+              description={t('page.noPaymentsDesc')}
             />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Milestone</TableHead>
-                  <TableHead>Worker</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>{t('page.thType')}</TableHead>
+                  <TableHead>{t('page.thStatus')}</TableHead>
+                  <TableHead>{t('page.thMilestone')}</TableHead>
+                  <TableHead>{t('page.thWorker')}</TableHead>
+                  <TableHead>{t('page.thDate')}</TableHead>
+                  <TableHead className="text-right">{t('page.thAmount')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -410,6 +388,7 @@ function SummaryCard({
   count: number;
   tone?: 'danger';
 }) {
+  const { t } = useTranslation('wallet');
   const toneCls = tone === 'danger' ? 'text-danger' : 'text-fg';
   return (
     <Card>
@@ -421,7 +400,7 @@ function SummaryCard({
           {fmt(String(amount))}
         </div>
         <div className="text-xs text-fg-muted">
-          {count} {count === 1 ? 'item' : 'items'}
+          {t('page.items', { count })}
         </div>
       </CardContent>
     </Card>
@@ -460,7 +439,7 @@ function PaymentRow({ payment: p }: { payment: EmployerPaymentRow }) {
       </TableCell>
       <TableCell className="text-fg-muted">{p.worker.display_name}</TableCell>
       <TableCell className="text-fg-muted">
-        {new Date(p.created_at).toLocaleDateString()}
+        {formatDate(p.created_at, 'short')}
       </TableCell>
       <TableCell
         className={`text-right font-semibold ${p.type === 'REFUND' ? 'text-warning' : ''}`}

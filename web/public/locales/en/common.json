@@ -1,0 +1,70 @@
+{
+  "header": {
+    "login": "Login",
+    "signUp": "Sign up"
+  },
+  "language": {
+    "en": "English",
+    "label": "Language",
+    "uk": "Українська"
+  },
+  "menu": {
+    "account": "Account",
+    "clickToGoOff": "Click to go off",
+    "clickToGoOn": "Click to go on",
+    "dutyError": "Failed to toggle duty",
+    "dutyOff": "off duty",
+    "dutyOn": "on duty",
+    "logOut": "Log out",
+    "offDuty": "Off duty",
+    "onDuty": "On duty",
+    "open": "Open menu",
+    "openAccount": "Open account menu",
+    "profile": "Profile",
+    "settings": "Settings",
+    "staffBadgeAria": "Logged in as {{role}}, {{duty}}",
+    "title": "Menu"
+  },
+  "nav": {
+    "applications": "Applications",
+    "collaborations": "Collaborations",
+    "employers": "Employers",
+    "inbox": "Inbox",
+    "jobs": "Jobs",
+    "payments": "Payments",
+    "postedJobs": "Posted jobs",
+    "referrals": "Referrals",
+    "support": "Support",
+    "workers": "Workers"
+  },
+  "notifications": {
+    "activity": "Activity",
+    "count_one": "{{count}} notification",
+    "count_other": "{{count}} notifications",
+    "countNone": "No notifications yet",
+    "emptyDesc": "When platform events happen on your account, they'll appear here.",
+    "emptyTitle": "No notifications yet",
+    "loadError": "Could not load notifications.",
+    "loading": "Loading…",
+    "markAllError": "Could not mark all as read.",
+    "markAllRead": "Mark all read",
+    "markRead": "Mark read",
+    "markReadError": "Could not mark notification as read.",
+    "next": "Next",
+    "pageLine": "Page {{page}} of {{pages}}",
+    "previous": "Previous",
+    "subtitle": "Job invites, milestone updates, and platform alerts.",
+    "title": "Notifications"
+  },
+  "reviews_one": "({{count}} review)",
+  "reviews_other": "({{count}} reviews)",
+  "theme": {
+    "auto": "Auto",
+    "autoDesc": "Use the same theme as your device",
+    "dark": "Dark",
+    "darkDesc": "Dark background with light text",
+    "label": "Theme",
+    "light": "Light",
+    "lightDesc": "Light background with dark text"
+  }
+}

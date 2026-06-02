@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Briefcase, Lock, ShieldCheck, Star } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { JobCard, type JobCardData } from '@/components/JobCard';
@@ -21,6 +22,7 @@ type JobListResponse = {
 const SAMPLE_SIZE = 20;
 
 export default function PublicJobBoardPage() {
+  const { t } = useTranslation('jobs');
   const navigate = useNavigate();
   const [list, setList] = useState<JobListResponse | null>(null);
   const [listError, setListError] = useState('');
@@ -37,7 +39,7 @@ export default function PublicJobBoardPage() {
         if (!cancelled) setList(data);
       } catch (e) {
         if (!cancelled) {
-          setListError(parseApiError(e)?.message ?? 'Could not load jobs.');
+          setListError(parseApiError(e)?.message ?? t('board.loadError'));
           setList(null);
         }
       }
@@ -59,7 +61,7 @@ export default function PublicJobBoardPage() {
       );
       setHasLoadedMore(true);
     } catch (e) {
-      setListError(parseApiError(e)?.message ?? 'Could not load more jobs.');
+      setListError(parseApiError(e)?.message ?? t('publicBoard.loadMoreError'));
     } finally {
       setLoadingMore(false);
     }
@@ -78,31 +80,31 @@ export default function PublicJobBoardPage() {
           id="job-board-hero-title"
           className="text-3xl font-semibold tracking-tight text-fg sm:text-4xl"
         >
-          Find your next trade job in the UK
+          {t('publicBoard.heroTitle')}
         </h1>
         <ul
           className="mx-auto mt-4 flex max-w-2xl flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-fg-muted"
-          aria-label="Why TradeHub"
+          aria-label={t('publicBoard.whyAria')}
         >
           <li className="inline-flex items-center gap-1.5">
             <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
-            Verified employers
+            {t('publicBoard.verifiedEmployers')}
           </li>
           <li className="inline-flex items-center gap-1.5">
             <Star className="h-4 w-4 text-primary" aria-hidden="true" />
-            Two-way reviews
+            {t('publicBoard.twoWayReviews')}
           </li>
           <li className="inline-flex items-center gap-1.5">
             <Lock className="h-4 w-4 text-primary" aria-hidden="true" />
-            Escrow payments
+            {t('publicBoard.escrowPayments')}
           </li>
         </ul>
         <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Button asChild size="lg" className="w-full sm:w-auto">
-            <Link to="/register?next=/jobs">Apply</Link>
+            <Link to="/register?next=/jobs">{t('publicBoard.apply')}</Link>
           </Button>
           <Button asChild size="lg" variant="outline" className="w-full sm:w-auto">
-            <Link to="/register?next=/my-jobs">Hiring? Post a job</Link>
+            <Link to="/register?next=/my-jobs">{t('publicBoard.hiringPostJob')}</Link>
           </Button>
         </div>
       </section>
@@ -119,7 +121,7 @@ export default function PublicJobBoardPage() {
       <section className="space-y-4">
         {list ? (
           <h2 className="text-base font-semibold tracking-tight sm:text-lg">
-            Check out a sample of the {list.total} jobs posted on TradeHub
+            {t('publicBoard.sample', { count: list.total })}
           </h2>
         ) : null}
         {list?.items?.length ? (
@@ -135,11 +137,11 @@ export default function PublicJobBoardPage() {
         ) : list ? (
           <EmptyState
             icon={Briefcase}
-            title="No jobs yet"
-            description="Check back soon."
+            title={t('publicBoard.emptyTitle')}
+            description={t('publicBoard.emptyDesc')}
           />
         ) : (
-          <p className="text-sm text-fg-muted">Loading…</p>
+          <p className="text-sm text-fg-muted">{t('board.loading')}</p>
         )}
 
         {canLoadMore ? (
@@ -152,7 +154,7 @@ export default function PublicJobBoardPage() {
               disabled={loadingMore}
               className="border-primary bg-transparent text-primary hover:bg-primary/5"
             >
-              {loadingMore ? 'Loading…' : 'Load more jobs'}
+              {loadingMore ? t('board.loading') : t('publicBoard.loadMore')}
             </Button>
           </div>
         ) : null}
@@ -160,10 +162,10 @@ export default function PublicJobBoardPage() {
         {hasLoadedMore ? (
           <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row sm:gap-6">
             <p className="text-base font-medium text-fg">
-              Want to browse more jobs?
+              {t('publicBoard.browseMore')}
             </p>
             <Button asChild size="lg">
-              <Link to="/register?next=/jobs">Sign up</Link>
+              <Link to="/register?next=/jobs">{t('publicBoard.signUp')}</Link>
             </Button>
           </div>
         ) : null}

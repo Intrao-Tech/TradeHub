@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { formatMoney } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import {
   VerificationBadge,
@@ -51,10 +53,11 @@ export function ApplicantCard({
   onTransition,
   onConvert,
 }: ApplicantCardProps) {
+  const { t } = useTranslation('jobs');
   const [coverExpanded, setCoverExpanded] = useState(false);
 
   const worker = application.worker_profile ?? null;
-  const display = worker?.client_profile?.display_name ?? 'Worker';
+  const display = worker?.client_profile?.display_name ?? t('applicant.workerFallback');
   const avatarUrl = publicFileUrl(worker?.client_profile?.avatar_url ?? null);
   const initials = display
     .split(/\s+/)
@@ -95,7 +98,7 @@ export function ApplicantCard({
           />
           <ApplicationStatusBadge status={application.status} />
           {application.initiated_by === 'EMPLOYER' ? (
-            <Badge variant="info">Invitation</Badge>
+            <Badge variant="info">{t('applicant.invitation')}</Badge>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
@@ -105,13 +108,17 @@ export function ApplicantCard({
               {rating.toFixed(1)} ({ratingCount})
             </span>
           ) : (
-            <span>No reviews yet</span>
+            <span>{t('applicant.noReviews')}</span>
           )}
           {application.proposed_rate != null ? (
-            <span>Proposed rate: £{String(application.proposed_rate)}</span>
+            <span>
+              {t('applicant.proposedRate', {
+                rate: formatMoney(Number(application.proposed_rate), { decimals: 0 }),
+              })}
+            </span>
           ) : null}
           {application.created_at ? (
-            <span>Applied {formatRelative(application.created_at)}</span>
+            <span>{t('applicant.applied', { time: formatRelative(application.created_at) })}</span>
           ) : null}
         </div>
         {cover ? (
@@ -123,15 +130,15 @@ export function ApplicantCard({
                 onClick={() => setCoverExpanded((v) => !v)}
                 className="mt-1 text-xs font-medium text-primary underline-offset-4 hover:underline"
               >
-                {coverExpanded ? 'Show less' : 'Read more'}
+                {coverExpanded ? t('applicant.showLess') : t('applicant.readMore')}
               </button>
             ) : null}
           </div>
         ) : (
-          <p className="text-sm italic text-fg-muted">No cover message.</p>
+          <p className="text-sm italic text-fg-muted">{t('applicant.noCover')}</p>
         )}
         <AttachmentList
-          heading="Work samples"
+          heading={t('applicant.workSamples')}
           attachments={application.attachments}
           previewImages
         />
@@ -158,13 +165,14 @@ function ActionRow({
   onTransition: (next: 'REVIEWED' | 'SHORTLISTED' | 'ACCEPTED' | 'REJECTED') => void;
   onConvert: () => void;
 }) {
+  const { t } = useTranslation('jobs');
   if (status === 'REJECTED' || status === 'WITHDRAWN') return null;
 
   if (status === 'ACCEPTED') {
     return (
       <div className="flex flex-wrap gap-2 pt-1">
         <Button size="sm" disabled={pending} onClick={onConvert}>
-          View collaboration
+          {t('applicant.viewCollaboration')}
         </Button>
       </div>
     );
@@ -179,7 +187,7 @@ function ActionRow({
           disabled={pending}
           onClick={() => onTransition('REVIEWED')}
         >
-          Mark reviewed
+          {t('applicant.markReviewed')}
         </Button>
       ) : null}
       {(status === 'PENDING' || status === 'REVIEWED') ? (
@@ -189,11 +197,11 @@ function ActionRow({
           disabled={pending}
           onClick={() => onTransition('SHORTLISTED')}
         >
-          Shortlist
+          {t('applicant.shortlist')}
         </Button>
       ) : null}
       <Button size="sm" disabled={pending} onClick={() => onTransition('ACCEPTED')}>
-        Accept
+        {t('applicant.accept')}
       </Button>
       <Button
         size="sm"
@@ -201,7 +209,7 @@ function ActionRow({
         disabled={pending}
         onClick={() => onTransition('REJECTED')}
       >
-        Reject
+        {t('applicant.reject')}
       </Button>
     </div>
   );

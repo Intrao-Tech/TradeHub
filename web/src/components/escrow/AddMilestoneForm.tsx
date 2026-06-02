@@ -1,4 +1,5 @@
 import { useRef, useState, type ChangeEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Paperclip, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,7 @@ type Props = {
 };
 
 export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
+  const { t } = useTranslation('wallet');
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -51,11 +53,11 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
     const valid: File[] = [];
     for (const f of list) {
       if (!ALLOWED_MIME.includes(f.type)) {
-        setError(`${f.name}: only PDF, JPEG, PNG, WebP allowed.`);
+        setError(t('milestone.fileTypeError', { name: f.name }));
         continue;
       }
       if (f.size > 25 * 1024 * 1024) {
-        setError(`${f.name}: max 25 MB.`);
+        setError(t('milestone.fileSizeError', { name: f.name }));
         continue;
       }
       valid.push(f);
@@ -63,7 +65,7 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
     setStagedFiles((prev) => {
       const merged = [...prev, ...valid];
       if (merged.length > MAX_ATTACHMENTS) {
-        setError(`Max ${MAX_ATTACHMENTS} attachments — extras dropped.`);
+        setError(t('milestone.maxAttachmentsError', { count: MAX_ATTACHMENTS }));
         return merged.slice(0, MAX_ATTACHMENTS);
       }
       return merged;
@@ -77,12 +79,12 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
   async function submit() {
     setError('');
     if (title.trim().length < 3) {
-      setError('Title must be at least 3 characters.');
+      setError(t('milestone.titleError'));
       return;
     }
     const num = Number(amount);
     if (!Number.isFinite(num) || num < 5) {
-      setError('Amount must be at least £5.00.');
+      setError(t('milestone.amountError'));
       return;
     }
     setBusy(true);
@@ -100,13 +102,16 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
           uploaded.push(await uploadMilestoneAttachment(m.id, f, 'CREATION'));
         } catch (err) {
           failures.push(
-            `${f.name}: ${parseApiError(err)?.message ?? 'upload failed'}`,
+            `${f.name}: ${parseApiError(err)?.message ?? t('milestone.uploadFailed')}`,
           );
         }
       }
       if (failures.length > 0) {
         setError(
-          `Milestone added but ${failures.length} attachment(s) failed: ${failures.join('; ')}`,
+          t('milestone.attachmentsFailed', {
+            count: failures.length,
+            details: failures.join('; '),
+          }),
         );
       }
       reset();
@@ -114,7 +119,7 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
       onAdded();
       void uploaded;
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Add failed');
+      setError(parseApiError(err)?.message ?? t('milestone.addError'));
     } finally {
       setBusy(false);
     }
@@ -123,28 +128,28 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
   if (!open) {
     return (
       <Button type="button" variant="outline" onClick={() => setOpen(true)}>
-        <Plus className="mr-1 h-4 w-4" /> {submitLabel ?? 'Add milestone'}
+        <Plus className="mr-1 h-4 w-4" /> {submitLabel ?? t('milestone.addMilestone')}
       </Button>
     );
   }
 
   return (
     <div className="rounded-md border border-border-default bg-raised p-4 space-y-3">
-      <h3 className="font-medium text-fg">{submitLabel ?? 'New milestone'}</h3>
+      <h3 className="font-medium text-fg">{submitLabel ?? t('milestone.newMilestone')}</h3>
       <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
         <div className="space-y-1">
-          <Label htmlFor="milestone-title">Title</Label>
+          <Label htmlFor="milestone-title">{t('milestone.titleLabel')}</Label>
           <Input
             id="milestone-title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Foundation work"
+            placeholder={t('milestone.titlePlaceholder')}
             disabled={busy}
             maxLength={200}
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="milestone-amount">Amount (£)</Label>
+          <Label htmlFor="milestone-amount">{t('milestone.amountLabel')}</Label>
           <Input
             id="milestone-amount"
             type="number"
@@ -152,20 +157,20 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
             min="5"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder="500.00"
+            placeholder={t('milestone.amountPlaceholder')}
             disabled={busy}
           />
         </div>
       </div>
       <div className="space-y-1">
         <Label htmlFor="milestone-desc">
-          Description <span className="text-fg-muted">(optional)</span>
+          {t('milestone.descriptionLabel')} <span className="text-fg-muted">{t('milestone.optional')}</span>
         </Label>
         <Textarea
           id="milestone-desc"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Scope of work, deliverables, deadlines…"
+          placeholder={t('milestone.descriptionPlaceholder')}
           rows={3}
           maxLength={2000}
           disabled={busy}
@@ -176,9 +181,9 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
       </div>
       <div className="space-y-1">
         <Label>
-          Attachments{' '}
+          {t('milestone.attachmentsLabel')}{' '}
           <span className="text-fg-muted">
-            (optional, up to {MAX_ATTACHMENTS} files: PDF/JPEG/PNG/WebP, ≤ 25 MB each)
+            {t('milestone.attachmentsHelp', { count: MAX_ATTACHMENTS })}
           </span>
         </Label>
         <div className="flex flex-wrap items-center gap-2">
@@ -198,10 +203,10 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
             onClick={() => fileRef.current?.click()}
             disabled={busy || stagedFiles.length >= MAX_ATTACHMENTS}
           >
-            <Paperclip className="h-4 w-4" /> Pick files
+            <Paperclip className="h-4 w-4" /> {t('milestone.pickFiles')}
           </Button>
           {stagedFiles.length === 0 ? (
-            <span className="text-xs text-fg-muted">No files selected.</span>
+            <span className="text-xs text-fg-muted">{t('milestone.noFiles')}</span>
           ) : (
             stagedFiles.map((f, i) => (
               <span
@@ -214,7 +219,7 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
                   onClick={() => removeFile(i)}
                   disabled={busy}
                   className="hover:text-danger"
-                  aria-label={`Remove ${f.name}`}
+                  aria-label={t('milestone.removeFile', { name: f.name })}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -230,7 +235,7 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
       ) : null}
       <div className="flex gap-2">
         <Button type="button" onClick={submit} disabled={busy}>
-          {busy ? 'Adding…' : (submitLabel ?? 'Add milestone')}
+          {busy ? t('milestone.adding') : (submitLabel ?? t('milestone.addMilestone'))}
         </Button>
         <Button
           type="button"
@@ -241,7 +246,7 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
           }}
           disabled={busy}
         >
-          Cancel
+          {t('milestone.cancel')}
         </Button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '../../api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -38,6 +39,7 @@ export function ApplyJobSheet({
   onSuccess,
   onApiError,
 }: ApplyJobSheetProps) {
+  const { t } = useTranslation('jobs');
   const [coverMessage, setCoverMessage] = useState('');
   const [proposedRate, setProposedRate] = useState('');
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
@@ -58,7 +60,7 @@ export function ApplyJobSheet({
     if (proposedRate) {
       const n = Number(proposedRate);
       if (Number.isNaN(n) || n <= 0) {
-        setError('Proposed rate must be a positive number.');
+        setError(t('apply.rateError'));
         return;
       }
     }
@@ -81,7 +83,7 @@ export function ApplyJobSheet({
         const parsed = parseApiError(err);
         const handled = onApiError(parsed);
         if (handled === 'unhandled') {
-          setError(parsed?.message ?? 'Could not submit application.');
+          setError(parsed?.message ?? t('apply.submitError'));
         } else {
           onOpenChange(false);
           reset();
@@ -121,31 +123,26 @@ export function ApplyJobSheet({
     >
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle>Apply to “{jobTitle}”</SheetTitle>
-          <SheetDescription>
-            A short message and a proposed rate help your application stand out.
-          </SheetDescription>
+          <SheetTitle>{t('apply.title', { title: jobTitle })}</SheetTitle>
+          <SheetDescription>{t('apply.description')}</SheetDescription>
         </SheetHeader>
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="apply-cover">Cover message</Label>
+            <Label htmlFor="apply-cover">{t('apply.coverLabel')}</Label>
             <Textarea
               id="apply-cover"
               rows={5}
               value={coverMessage}
               onChange={(e) => setCoverMessage(e.target.value)}
               maxLength={5000}
-              placeholder="Why are you the right fit for this job?"
+              placeholder={t('apply.coverPlaceholder')}
             />
             {coverShortHint ? (
-              <p className="text-xs text-fg-muted">
-                A short message gets twice the response — try 100 characters or
-                more.
-              </p>
+              <p className="text-xs text-fg-muted">{t('apply.coverHint')}</p>
             ) : null}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="apply-rate">Proposed rate (£, optional)</Label>
+            <Label htmlFor="apply-rate">{t('apply.rateLabel')}</Label>
             <Input
               id="apply-rate"
               type="number"
@@ -159,7 +156,7 @@ export function ApplyJobSheet({
           <AttachmentsField
             value={attachments}
             onChange={setAttachments}
-            helperText="Add work samples to strengthen your proposal. Please remove any contact details, as sharing these before a contract is against our policy."
+            helperText={t('apply.attachmentsHelper')}
           />
           {error ? (
             <div
@@ -178,10 +175,10 @@ export function ApplyJobSheet({
                 reset();
               }}
             >
-              Cancel
+              {t('apply.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? 'Submitting…' : 'Submit application'}
+              {submitting ? t('apply.submitting') : t('apply.submit')}
             </Button>
           </SheetFooter>
         </form>

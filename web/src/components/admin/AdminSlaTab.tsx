@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlarmClock, Clock, Plus, ShieldAlert } from 'lucide-react';
 import { api, parseApiError } from '../../api';
 import { useAccountMe } from '../../hooks/useAccountMe';
+import { formatDateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -31,18 +33,21 @@ import {
 } from '@/components/ui/table';
 import { EmptyState } from '../EmptyState';
 
+type TFn = (key: string, opts?: Record<string, unknown>) => string;
+
 const QUEUES = [
-  { value: 'DOCUMENT_PENDING', label: 'Document review (PENDING)' },
-  { value: 'APPROVAL_REQUIRED', label: 'Action approval (PENDING)' },
-  { value: 'SUPPORT_THREAD_UNANSWERED', label: 'Support thread unanswered' },
-  { value: 'DISPUTE_OPEN', label: 'Dispute OPEN (no staff reply yet)' },
-  { value: 'DISPUTE_RESPONDED', label: 'Dispute RESPONDED / MEDIATION' },
-  { value: 'PAYMENT_FAILED', label: 'Payment FAILED' },
-  { value: 'PAYMENT_TRANSFER_PENDING', label: 'Worker payout / referral PENDING' },
+  { value: 'DOCUMENT_PENDING', labelKey: 'sla.queueDocPending' },
+  { value: 'APPROVAL_REQUIRED', labelKey: 'sla.queueApprovalRequired' },
+  { value: 'SUPPORT_THREAD_UNANSWERED', labelKey: 'sla.queueSupportUnanswered' },
+  { value: 'DISPUTE_OPEN', labelKey: 'sla.queueDisputeOpen' },
+  { value: 'DISPUTE_RESPONDED', labelKey: 'sla.queueDisputeResponded' },
+  { value: 'PAYMENT_FAILED', labelKey: 'sla.queuePaymentFailed' },
+  { value: 'PAYMENT_TRANSFER_PENDING', labelKey: 'sla.queuePaymentTransferPending' },
 ] as const;
 
-function queueLabel(value: string): string {
-  return QUEUES.find((q) => q.value === value)?.label ?? value;
+function queueLabel(value: string, t: TFn): string {
+  const q = QUEUES.find((q) => q.value === value);
+  return q ? t(q.labelKey) : value;
 }
 
 type Rule = {
@@ -66,6 +71,7 @@ type Breach = {
 };
 
 export function AdminSlaTab() {
+  const { t } = useTranslation('admin');
   const { isAdmin } = useAccountMe();
   const [rules, setRules] = useState<Rule[]>([]);
   const [breaches, setBreaches] = useState<Breach[]>([]);
@@ -119,9 +125,9 @@ export function AdminSlaTab() {
       setRules(r);
       setBreaches(b);
     } catch (e) {
-      setErr(parseApiError(e)?.message ?? 'Failed to load');
+      setErr(parseApiError(e)?.message ?? t('sla.loadError'));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -146,7 +152,7 @@ export function AdminSlaTab() {
             is_active: isActive,
           }),
         });
-        setCreateMsg('Rule updated.');
+        setCreateMsg(t('sla.updated'));
       } else {
         const body: Record<string, unknown> = {
           name: name.trim(),
@@ -160,12 +166,12 @@ export function AdminSlaTab() {
           method: 'POST',
           body: JSON.stringify(body),
         });
-        setCreateMsg('Rule created.');
+        setCreateMsg(t('sla.created'));
       }
       resetForm();
       void load();
     } catch (e) {
-      setCreateErr(parseApiError(e)?.message ?? 'Save failed');
+      setCreateErr(parseApiError(e)?.message ?? t('sla.saveFailed'));
     } finally {
       setBusy(false);
     }
@@ -176,7 +182,7 @@ export function AdminSlaTab() {
       await api(`/admin/sla-rules/${id}`, { method: 'DELETE' });
       void load();
     } catch (e) {
-      setErr(parseApiError(e)?.message ?? 'Deactivate failed');
+      setErr(parseApiError(e)?.message ?? t('sla.deactivateFailed'));
     }
   }
 
@@ -187,12 +193,9 @@ export function AdminSlaTab() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-4 w-4 text-warning" />
-            <CardTitle>Active SLA breaches</CardTitle>
+            <CardTitle>{t('sla.breachesTitle')}</CardTitle>
           </div>
-          <CardDescription>
-            Items overdue for at least one active rule. Resolved breaches drop
-            off automatically when the underlying row leaves its queue.
-          </CardDescription>
+          <CardDescription>{t('sla.breachesDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           {err ? (
@@ -203,18 +206,18 @@ export function AdminSlaTab() {
           {breaches.length === 0 ? (
             <EmptyState
               icon={AlarmClock}
-              title="No active breaches"
-              description="Every queue is within its SLA window."
+              title={t('sla.noBreaches')}
+              description={t('sla.noBreachesDesc')}
             />
           ) : (
             <div className="rounded border border-border-subtle">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Rule</TableHead>
-                    <TableHead>Queue</TableHead>
-                    <TableHead>Target</TableHead>
-                    <TableHead>Detected</TableHead>
+                    <TableHead>{t('sla.colRule')}</TableHead>
+                    <TableHead>{t('sla.colQueue')}</TableHead>
+                    <TableHead>{t('sla.colTarget')}</TableHead>
+                    <TableHead>{t('sla.colDetected')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -222,13 +225,13 @@ export function AdminSlaTab() {
                     <TableRow key={b.id}>
                       <TableCell className="text-sm font-medium">{b.rule.name}</TableCell>
                       <TableCell className="text-xs">
-                        <Badge variant="outline">{queueLabel(b.rule.queue)}</Badge>
+                        <Badge variant="outline">{queueLabel(b.rule.queue, t)}</Badge>
                       </TableCell>
                       <TableCell className="text-xs font-mono">
                         {b.target_kind}#{b.target_id}
                       </TableCell>
                       <TableCell className="text-xs text-fg-muted">
-                        {new Date(b.detected_at).toLocaleString()}
+                        {formatDateTime(b.detected_at)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -250,24 +253,19 @@ export function AdminSlaTab() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-fg-muted" />
-              <CardTitle>SLA rules</CardTitle>
+              <CardTitle>{t('sla.rulesTitle')}</CardTitle>
             </div>
             <CardDescription>
-              Notifications are in-platform only (notification bell) and go
-              to <strong>staff</strong> — never to clients. Each breach pings
-              all active <strong>admins</strong> plus the per-item assignee
-              if there is one (review_item, dispute or support thread). SLA
-              rules themselves don't have an assignee — that's a per-row
-              concept.
-              {!isAdmin ? ' Only admins can create or deactivate rules.' : ''}
+              {t('sla.rulesDesc')}
+              {!isAdmin ? t('sla.adminOnlyNote') : ''}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {rules.length === 0 ? (
               <EmptyState
                 icon={Clock}
-                title="No SLA rules yet"
-                description="Create one on the right to start watching a queue."
+                title={t('sla.noRules')}
+                description={t('sla.noRulesDesc')}
               />
             ) : (
               <ul className="space-y-2">
@@ -290,7 +288,7 @@ export function AdminSlaTab() {
                       </div>
                       <div className="flex gap-1">
                         <Badge variant={r.is_active ? 'success' : 'secondary'}>
-                          {r.is_active ? 'Active' : 'Inactive'}
+                          {r.is_active ? t('rules.active') : t('rules.inactive')}
                         </Badge>
                         {isAdmin ? (
                           <Button
@@ -300,7 +298,7 @@ export function AdminSlaTab() {
                               editingId === r.id ? resetForm() : startEdit(r)
                             }
                           >
-                            {editingId === r.id ? 'Cancel edit' : 'Edit'}
+                            {editingId === r.id ? t('rules.cancelEdit') : t('rules.edit')}
                           </Button>
                         ) : null}
                         {isAdmin && r.is_active ? (
@@ -309,15 +307,15 @@ export function AdminSlaTab() {
                             variant="ghost"
                             onClick={() => void deactivate(r.id)}
                           >
-                            Deactivate
+                            {t('rules.deactivate')}
                           </Button>
                         ) : null}
                       </div>
                     </div>
                     <div className="text-xs flex flex-wrap gap-1">
-                      <Badge variant="outline">{queueLabel(r.target_queue)}</Badge>
+                      <Badge variant="outline">{queueLabel(r.target_queue, t)}</Badge>
                       <Badge variant="outline">
-                        threshold: {r.threshold_minutes}m
+                        {t('sla.thresholdBadge', { min: r.threshold_minutes })}
                       </Badge>
                     </div>
                   </li>
@@ -333,13 +331,11 @@ export function AdminSlaTab() {
             <div className="flex items-center gap-2">
               <Plus className="h-4 w-4 text-fg-muted" />
               <CardTitle>
-                {editingId ? 'Edit SLA rule' : 'New SLA rule'}
+                {editingId ? t('sla.editTitle') : t('sla.newTitle')}
               </CardTitle>
             </div>
             <CardDescription>
-              {editingId
-                ? 'Tweak the threshold, name, description or notification copy. Queue is immutable.'
-                : "Pick a queue and how long an item is allowed to wait before it's flagged."}
+              {editingId ? t('sla.editDesc') : t('sla.newDesc')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -354,11 +350,11 @@ export function AdminSlaTab() {
               </div>
             ) : null}
             <div className="space-y-2">
-              <Label>Name</Label>
+              <Label>{t('rules.name')}</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Description</Label>
+              <Label>{t('rules.description')}</Label>
               <Input
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -366,7 +362,7 @@ export function AdminSlaTab() {
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Queue{editingId ? ' (immutable)' : ''}</Label>
+                <Label>{t('sla.queue')}{editingId ? t('rules.immutable') : ''}</Label>
                 <Select
                   value={queue}
                   disabled={!!editingId}
@@ -378,14 +374,14 @@ export function AdminSlaTab() {
                   <SelectContent>
                     {QUEUES.map((q) => (
                       <SelectItem key={q.value} value={q.value}>
-                        {q.label}
+                        {t(q.labelKey)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Threshold (min)</Label>
+                <Label>{t('sla.threshold')}</Label>
                 <Input
                   type="number"
                   value={thresholdMin}
@@ -394,14 +390,14 @@ export function AdminSlaTab() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Notification title (optional)</Label>
+              <Label>{t('sla.notifTitle')}</Label>
               <Input
                 value={notifTitle}
                 onChange={(e) => setNotifTitle(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label>Notification body (optional)</Label>
+              <Label>{t('sla.notifBody')}</Label>
               <Textarea
                 value={notifBody}
                 onChange={(e) => setNotifBody(e.target.value)}
@@ -416,15 +412,15 @@ export function AdminSlaTab() {
                   onChange={(e) => setIsActive(e.target.checked)}
                   className="h-4 w-4"
                 />
-                Active
+                {t('rules.activeCheckbox')}
               </label>
             ) : null}
             <Button onClick={() => void submit()} disabled={busy}>
               {busy
-                ? 'Saving…'
+                ? t('rules.saving')
                 : editingId
-                  ? 'Save changes'
-                  : 'Create rule'}
+                  ? t('rules.saveChanges')
+                  : t('rules.createRule')}
             </Button>
           </CardContent>
         </Card>

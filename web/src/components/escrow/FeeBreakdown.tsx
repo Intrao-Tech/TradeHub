@@ -1,10 +1,8 @@
+import { useTranslation } from 'react-i18next';
+import { formatMoney } from '@/lib/format';
 import type { FeeBreakdown } from './api';
 
-const fmt = (s: string) =>
-  new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(Number(s));
+const fmt = (s: string) => formatMoney(Number(s));
 
 type FeeBreakdownProps = {
   breakdown: FeeBreakdown;
@@ -21,6 +19,7 @@ type FeeBreakdownProps = {
  * each pound goes before clicking through to Stripe Checkout.
  */
 export function FeeBreakdown({ breakdown, hasReferral, className }: FeeBreakdownProps) {
+  const { t } = useTranslation('wallet');
   return (
     <div
       className={`rounded-md border border-border-default bg-raised p-3 text-sm ${
@@ -28,30 +27,30 @@ export function FeeBreakdown({ breakdown, hasReferral, className }: FeeBreakdown
       }`}
     >
       <div className="space-y-1.5 text-fg">
-        <Row label="Milestone amount" value={fmt(breakdown.job_amount)} />
+        <Row label={t('fees.milestoneAmount')} value={fmt(breakdown.job_amount)} />
         <Row
-          label="Platform service fee"
+          label={t('fees.serviceFee')}
           value={`+ ${fmt(breakdown.client_marketplace_fee)}`}
           muted
         />
         <Row
-          label="Stripe processing"
+          label={t('fees.stripeProcessing')}
           value={`+ ${fmt(breakdown.stripe_fee_estimate)}`}
           muted
         />
         <div className="my-1 border-t border-border-default" />
         <Row
-          label="Total you pay"
+          label={t('fees.totalYouPay')}
           value={fmt(breakdown.employer_charge)}
           bold
         />
       </div>
       <div className="mt-3 space-y-1.5 text-xs text-fg-muted">
-        <Row label="Worker receives" value={fmt(breakdown.worker_payout)} />
+        <Row label={t('fees.workerReceives')} value={fmt(breakdown.worker_payout)} />
         {hasReferral ? (
-          <Row label="Referrer receives" value={fmt(breakdown.referral_commission)} />
+          <Row label={t('fees.referrerReceives')} value={fmt(breakdown.referral_commission)} />
         ) : null}
-        <Row label="Platform keeps" value={fmt(breakdown.platform_keep)} />
+        <Row label={t('fees.platformKeeps')} value={fmt(breakdown.platform_keep)} />
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Card,
   CardContent,
@@ -17,6 +18,7 @@ import {
 import { parseApiError } from '../../api';
 
 export function PlatformSettingsTab() {
+  const { t } = useTranslation('admin');
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -56,7 +58,7 @@ export function PlatformSettingsTab() {
       setE2ePct(res.project_referral_e2e_pct);
       setPassthrough(res.stripe_fee_passthrough);
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Failed to load settings');
+      setError(parseApiError(err)?.message ?? t('settings.loadError'));
     }
   }
 
@@ -79,26 +81,22 @@ export function PlatformSettingsTab() {
       setSettings(res);
       setSaved(true);
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Save failed');
+      setError(parseApiError(err)?.message ?? t('settings.saveFailed'));
     } finally {
       setSaving(false);
     }
   }
 
   if (!settings) {
-    return <p className="text-sm text-fg-muted">Loading settings…</p>;
+    return <p className="text-sm text-fg-muted">{t('settings.loading')}</p>;
   }
 
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Platform fees</CardTitle>
-          <CardDescription>
-            These percentages drive escrow fee math. Changes apply to NEW
-            milestone funding only — in-flight contracts use the snapshot
-            frozen at first-fund. Audit-logged.
-          </CardDescription>
+          <CardTitle>{t('settings.feesTitle')}</CardTitle>
+          <CardDescription>{t('settings.feesDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {error ? (
@@ -108,13 +106,13 @@ export function PlatformSettingsTab() {
           ) : null}
           {saved ? (
             <div role="status" className="rounded-md border border-success/40 bg-success-subtle px-3 py-2 text-sm text-success">
-              Settings saved.
+              {t('settings.saved')}
             </div>
           ) : null}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="client-fee">Client marketplace fee %</Label>
+              <Label htmlFor="client-fee">{t('settings.clientFee')}</Label>
               <Input
                 id="client-fee"
                 type="number"
@@ -125,12 +123,10 @@ export function PlatformSettingsTab() {
                 onChange={(e) => setClientFee(e.target.value)}
                 disabled={saving}
               />
-              <p className="text-xs text-fg-muted">
-                Charged to employer on top of agreed amount (Upwork pattern). Default 5%.
-              </p>
+              <p className="text-xs text-fg-muted">{t('settings.clientFeeHint')}</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="freelancer-fee">Freelancer service fee %</Label>
+              <Label htmlFor="freelancer-fee">{t('settings.freelancerFee')}</Label>
               <Input
                 id="freelancer-fee"
                 type="number"
@@ -141,12 +137,10 @@ export function PlatformSettingsTab() {
                 onChange={(e) => setFreelancerFee(e.target.value)}
                 disabled={saving}
               />
-              <p className="text-xs text-fg-muted">
-                Deducted from worker payout. Default 10%.
-              </p>
+              <p className="text-xs text-fg-muted">{t('settings.freelancerFeeHint')}</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="passthrough">Stripe processing fee paid by</Label>
+              <Label htmlFor="passthrough">{t('settings.passthrough')}</Label>
               <select
                 id="passthrough"
                 value={passthrough}
@@ -156,13 +150,11 @@ export function PlatformSettingsTab() {
                 disabled={saving}
                 className="h-9 w-full rounded-md border border-border-default bg-raised px-3 text-sm"
               >
-                <option value="EMPLOYER_PAYS">Employer (default — Upwork-style)</option>
-                <option value="PLATFORM_ABSORBS">Platform absorbs (eats from your fee)</option>
-                <option value="WORKER_ABSORBS">Worker (deducted from payout)</option>
+                <option value="EMPLOYER_PAYS">{t('settings.passthroughEmployer')}</option>
+                <option value="PLATFORM_ABSORBS">{t('settings.passthroughPlatform')}</option>
+                <option value="WORKER_ABSORBS">{t('settings.passthroughWorker')}</option>
               </select>
-              <p className="text-xs text-fg-muted">
-                Stripe takes 1.5% + 20p per UK card transaction.
-              </p>
+              <p className="text-xs text-fg-muted">{t('settings.passthroughHint')}</p>
             </div>
           </div>
         </CardContent>
@@ -170,17 +162,13 @@ export function PlatformSettingsTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Referral rates</CardTitle>
-          <CardDescription>
-            Sum of all referrer cuts on a milestone is capped at 100% of the
-            platform fee — worker payout is never reduced. Account referrals
-            pay from platform fee; project referrals pay from agreed amount.
-          </CardDescription>
+          <CardTitle>{t('settings.referralTitle')}</CardTitle>
+          <CardDescription>{t('settings.referralDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="account-ref">Account referral % (of platform fee)</Label>
+              <Label htmlFor="account-ref">{t('settings.accountRef')}</Label>
               <Input
                 id="account-ref"
                 type="number"
@@ -191,14 +179,11 @@ export function PlatformSettingsTab() {
                 onChange={(e) => setAccountRef(e.target.value)}
                 disabled={saving}
               />
-              <p className="text-xs text-fg-muted">
-                Paid to referrer on every released milestone where the
-                referree is a party. Default 10%.
-              </p>
+              <p className="text-xs text-fg-muted">{t('settings.accountRefHint')}</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="account-window">
-                Account referral window (months)
+                {t('settings.accountWindow')}
               </Label>
               <div className="flex items-center gap-2">
                 <Input
@@ -209,7 +194,7 @@ export function PlatformSettingsTab() {
                   value={windowMonths}
                   onChange={(e) => setWindowMonths(e.target.value)}
                   disabled={saving || lifetimeWindow}
-                  placeholder={lifetimeWindow ? 'lifetime' : '12'}
+                  placeholder={lifetimeWindow ? t('settings.lifetimePlaceholder') : '12'}
                 />
                 <label className="flex items-center gap-1 text-xs whitespace-nowrap">
                   <input
@@ -218,16 +203,13 @@ export function PlatformSettingsTab() {
                     onChange={(e) => setLifetimeWindow(e.target.checked)}
                     disabled={saving}
                   />
-                  Lifetime
+                  {t('settings.lifetime')}
                 </label>
               </div>
-              <p className="text-xs text-fg-muted">
-                How long the referrer keeps earning from the referree's
-                contracts after signup. Default 12 months.
-              </p>
+              <p className="text-xs text-fg-muted">{t('settings.accountWindowHint')}</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="w2w-ref">Project referral W→W % (of agreed)</Label>
+              <Label htmlFor="w2w-ref">{t('settings.w2wRef')}</Label>
               <Input
                 id="w2w-ref"
                 type="number"
@@ -238,12 +220,10 @@ export function PlatformSettingsTab() {
                 onChange={(e) => setW2wPct(e.target.value)}
                 disabled={saving}
               />
-              <p className="text-xs text-fg-muted">
-                Worker shares a job link → another worker wins. Default 2%.
-              </p>
+              <p className="text-xs text-fg-muted">{t('settings.w2wRefHint')}</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="e2e-ref">Project referral E→E % (of agreed)</Label>
+              <Label htmlFor="e2e-ref">{t('settings.e2eRef')}</Label>
               <Input
                 id="e2e-ref"
                 type="number"
@@ -254,17 +234,14 @@ export function PlatformSettingsTab() {
                 onChange={(e) => setE2ePct(e.target.value)}
                 disabled={saving}
               />
-              <p className="text-xs text-fg-muted">
-                Employer shares a worker profile → another employer hires the
-                same worker. Default 2%.
-              </p>
+              <p className="text-xs text-fg-muted">{t('settings.e2eRefHint')}</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
       <Button onClick={save} disabled={saving}>
-        {saving ? 'Saving…' : 'Save all settings'}
+        {saving ? t('settings.saving') : t('settings.saveAll')}
       </Button>
     </div>
   );

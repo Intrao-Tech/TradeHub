@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { MapPin, Pencil } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '../hooks/useAccountMe';
+import { formatMoney, formatDate as formatDateLib } from '@/lib/format';
 import { AuthBanner } from '../components/AuthBanner';
 import { AvatarUploader } from '../components/profile/AvatarUploader';
 import { PhoneInput, combinePhone } from '../components/PhoneInput';
@@ -53,14 +54,7 @@ import {
 } from '@/components/ui/select';
 
 function formatDate(value?: string | null): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  return formatDateLib(value) || null;
 }
 
 function initialsFor(name: string): string {
@@ -77,9 +71,10 @@ function formatRate(min?: string | number | null, max?: string | number | null):
   const m = min == null || min === '' ? null : Number(min);
   const x = max == null || max === '' ? null : Number(max);
   if (m == null && x == null) return '—';
-  if (m != null && x != null) return `£${m}–£${x}/day`;
-  if (m != null) return `from £${m}/day`;
-  return `up to £${x}/day`;
+  if (m != null && x != null)
+    return `${formatMoney(m, { decimals: 0 })}–${formatMoney(x, { decimals: 0 })}/day`;
+  if (m != null) return `from ${formatMoney(m, { decimals: 0 })}/day`;
+  return `up to ${formatMoney(Number(x), { decimals: 0 })}/day`;
 }
 
 function formatRating(avg?: string | number | null, count?: number | null): {

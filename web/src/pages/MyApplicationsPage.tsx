@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Briefcase, Inbox, MapPin } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '@/hooks/useAccountMe';
+import { formatMoney } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -75,19 +77,10 @@ const TAB_ORDER: StatusTab[] = [
   'WITHDRAWN',
 ];
 
-const TAB_LABEL: Record<StatusTab, string> = {
-  ALL: 'All',
-  PENDING: 'Pending',
-  REVIEWED: 'Reviewed',
-  SHORTLISTED: 'Shortlisted',
-  ACCEPTED: 'Accepted',
-  REJECTED: 'Rejected',
-  WITHDRAWN: 'Withdrawn',
-};
-
 const WITHDRAWABLE = new Set(['PENDING', 'REVIEWED', 'SHORTLISTED']);
 
 export default function MyApplicationsPage() {
+  const { t } = useTranslation('jobs');
   const navigate = useNavigate();
   const { isWorker, loading: accountLoading } = useAccountMe();
 
@@ -108,7 +101,7 @@ export default function MyApplicationsPage() {
       );
       setData(res.items ?? []);
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Could not load your applications.');
+      setError(parseApiError(err)?.message ?? t('myApplications.loadError'));
     } finally {
       setLoading(false);
     }
@@ -152,21 +145,21 @@ export default function MyApplicationsPage() {
         method: 'PATCH',
         body: JSON.stringify({ status: 'WITHDRAWN' }),
       });
-      toast.success('Application withdrawn');
+      toast.success(t('myApplications.withdrawnToast'));
       await load();
     } catch (err) {
-      toast.error(parseApiError(err)?.message ?? 'Could not withdraw application.');
+      toast.error(parseApiError(err)?.message ?? t('myApplications.withdrawError'));
     }
   }
 
   if (!accountLoading && !isWorker) {
     return (
       <div className="space-y-4">
-        <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">My applications</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">{t('myApplications.title')}</h1>
         <EmptyState
           icon={Inbox}
-          title="No applications"
-          description="Only worker accounts can apply to jobs."
+          title={t('myApplications.notWorkerTitle')}
+          description={t('myApplications.notWorkerDesc')}
         />
       </div>
     );
@@ -175,10 +168,8 @@ export default function MyApplicationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">My applications</h1>
-        <p className="text-sm text-fg-muted">
-          Track every application you've sent and every invitation you've received.
-        </p>
+        <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">{t('myApplications.title')}</h1>
+        <p className="text-sm text-fg-muted">{t('myApplications.subtitle')}</p>
       </div>
 
       {error ? (
@@ -192,7 +183,7 @@ export default function MyApplicationsPage() {
 
       {invitations.length > 0 ? (
         <section className="space-y-2">
-          <h2 className="text-base font-semibold text-fg">Invitations</h2>
+          <h2 className="text-base font-semibold text-fg">{t('myApplications.invitations')}</h2>
           <ul className="space-y-2">
             {invitations.map((inv) => (
               <ApplicationRow
@@ -208,11 +199,11 @@ export default function MyApplicationsPage() {
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as StatusTab)}>
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-subtle p-1 sm:w-auto">
-          {TAB_ORDER.map((t) => (
-            <TabsTrigger key={t} value={t} className="gap-2">
-              {TAB_LABEL[t]}
+          {TAB_ORDER.map((st) => (
+            <TabsTrigger key={st} value={st} className="gap-2">
+              {t(`myApplications.tab.${st}`)}
               <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
-                {counts[t]}
+                {counts[st]}
               </Badge>
             </TabsTrigger>
           ))}
@@ -227,10 +218,10 @@ export default function MyApplicationsPage() {
       ) : visible.length === 0 ? (
         <EmptyState
           icon={Briefcase}
-          title="No applications yet"
-          description="Browse jobs to find one to apply to."
+          title={t('myApplications.emptyTitle')}
+          description={t('myApplications.emptyDesc')}
           action={
-            <Button onClick={() => navigate('/jobs')}>Browse jobs</Button>
+            <Button onClick={() => navigate('/jobs')}>{t('myApplications.browseJobs')}</Button>
           }
         />
       ) : (
@@ -248,9 +239,9 @@ export default function MyApplicationsPage() {
       <ConfirmDialog
         open={withdrawTarget != null}
         onOpenChange={(o) => !o && setWithdrawTarget(null)}
-        title="Withdraw this application?"
-        description="Withdrawing is permanent for this job — you won't be able to apply again unless the employer reopens the post."
-        confirmLabel="Withdraw"
+        title={t('myApplications.withdrawConfirmTitle')}
+        description={t('myApplications.withdrawConfirmDesc')}
+        confirmLabel={t('myApplications.withdraw')}
         destructive
         onConfirm={async () => {
           if (withdrawTarget) await withdraw(withdrawTarget);
@@ -270,6 +261,7 @@ function ApplicationRow({
   isInvitation?: boolean;
   onWithdraw: () => void;
 }) {
+  const { t } = useTranslation('jobs');
   const post = application.job_post ?? null;
   const status = (application.status ?? '').toUpperCase();
   const canWithdraw = WITHDRAWABLE.has(status);
@@ -286,11 +278,11 @@ function ApplicationRow({
               {post.title}
             </Link>
           ) : (
-            <span className="font-medium text-fg">{post?.title ?? 'Untitled job'}</span>
+            <span className="font-medium text-fg">{post?.title ?? t('myApplications.untitledJob')}</span>
           )}
           <ApplicationStatusBadge status={application.status} />
           <JobStatusBadge status={post?.status} />
-          {isInvitation ? <Badge variant="info">Invitation</Badge> : null}
+          {isInvitation ? <Badge variant="info">{t('applicant.invitation')}</Badge> : null}
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
           <EmployerChip employer={post?.employer ?? null} showBadge={false} />
@@ -300,16 +292,20 @@ function ApplicationRow({
               {post.postcode_area}
             </span>
           ) : null}
-          {post ? <span>{formatPay(post)}</span> : null}
+          {post ? <span>{formatPay(post, t)}</span> : null}
           {application.created_at ? (
-            <span>Applied {formatRelative(application.created_at)}</span>
+            <span>{t('applicant.applied', { time: formatRelative(application.created_at) })}</span>
           ) : null}
           {application.proposed_rate != null ? (
-            <span>Proposed: £{String(application.proposed_rate)}</span>
+            <span>
+              {t('myApplications.proposed', {
+                rate: formatMoney(Number(application.proposed_rate), { decimals: 0 }),
+              })}
+            </span>
           ) : null}
         </div>
         <AttachmentList
-          heading="Your attachments"
+          heading={t('myApplications.yourAttachments')}
           attachments={application.attachments}
           previewImages
         />
@@ -317,12 +313,12 @@ function ApplicationRow({
       <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
         {isInvitation && post?.id != null ? (
           <Button asChild size="sm">
-            <Link to={`/jobs/${post.id}`}>View job</Link>
+            <Link to={`/jobs/${post.id}`}>{t('myApplications.viewJob')}</Link>
           </Button>
         ) : null}
         {canWithdraw ? (
           <Button type="button" size="sm" variant="outline" onClick={onWithdraw}>
-            Withdraw
+            {t('myApplications.withdraw')}
           </Button>
         ) : null}
       </div>

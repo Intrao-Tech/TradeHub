@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, MessageCircle, RefreshCw, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '@/api';
 import { useAccountMe } from '@/hooks/useAccountMe';
+import { formatMoney, formatDate } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -49,24 +51,13 @@ type FullContract = ContractRow & {
 const fmtGbp = (s: string | null | undefined) => {
   if (!s) return '—';
   const n = Number(s);
-  return Number.isFinite(n)
-    ? new Intl.NumberFormat('en-GB', {
-        style: 'currency',
-        currency: 'GBP',
-      }).format(n)
-    : '—';
+  return Number.isFinite(n) ? formatMoney(n) : '—';
 };
 
-const fmtDate = (s: string | null | undefined) =>
-  s
-    ? new Date(s).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      })
-    : '—';
+const fmtDate = (s: string | null | undefined) => formatDate(s) || '—';
 
 export default function ContractDetailPage() {
+  const { t } = useTranslation('collaborations');
   const { contractId } = useParams<{ contractId: string }>();
   const navigate = useNavigate();
   const { account } = useAccountMe();
@@ -88,7 +79,7 @@ export default function ContractDetailPage() {
       const res = await api<FullContract>(`/contracts/${contractId}`);
       setContract(res);
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Failed to load contract');
+      setError(parseApiError(err)?.message ?? t('contractDetail.loadError'));
     } finally {
       setLoading(false);
     }
@@ -117,10 +108,10 @@ export default function ContractDetailPage() {
     if (!contract) return;
     try {
       await respondToContract(contract.id, accept);
-      toast.success(accept ? 'Contract accepted' : 'Contract declined');
+      toast.success(accept ? t('contractDetail.accepted') : t('contractDetail.declined'));
       void load();
     } catch (err) {
-      toast.error(parseApiError(err)?.message ?? 'Could not respond');
+      toast.error(parseApiError(err)?.message ?? t('contractDetail.respondError'));
     }
   }
 
@@ -129,11 +120,15 @@ export default function ContractDetailPage() {
     setEndSubmitting(true);
     try {
       await endContract(contract.id, endReason);
-      toast.success(`Contract ended (${endReason.toLowerCase()})`);
+      toast.success(
+        t('contractDetail.endedToast', {
+          reason: t(`contractDetail.reasonWord.${endReason}`),
+        }),
+      );
       setEndOpen(false);
       void load();
     } catch (err) {
-      toast.error(parseApiError(err)?.message ?? 'Could not end contract');
+      toast.error(parseApiError(err)?.message ?? t('contractDetail.endError'));
     } finally {
       setEndSubmitting(false);
     }
@@ -147,13 +142,13 @@ export default function ContractDetailPage() {
           className="inline-flex items-center gap-1 text-sm text-fg-muted hover:text-fg"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back
+          {t('contractDetail.back')}
         </button>
       </div>
 
       <div>
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-          Contract #{contract?.position ?? '…'}
+          {t('contractDetail.title', { position: contract?.position ?? '…' })}
         </h1>
         <p className="text-sm text-fg-muted">
           {contract?.project_type ?? '—'}
@@ -173,12 +168,12 @@ export default function ContractDetailPage() {
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" onClick={() => void load()}>
           <RefreshCw />
-          Refresh
+          {t('contractDetail.refresh')}
         </Button>
         {contract ? (
           <Button asChild variant="outline">
             <Link to={`/collaborations/${contract.collaboration.id}`}>
-              View relationship
+              {t('contractDetail.viewRelationship')}
             </Link>
           </Button>
         ) : null}
@@ -188,26 +183,26 @@ export default function ContractDetailPage() {
               to={`/inbox/${contract.collaboration.conversation.id}`}
             >
               <MessageCircle />
-              Open chat
+              {t('contractDetail.openChat')}
             </Link>
           </Button>
         ) : null}
         {contract && contract.status === 'ACTIVE' ? (
           <Button asChild>
-            <Link to={`/contracts/${contract.id}/escrow`}>Open escrow</Link>
+            <Link to={`/contracts/${contract.id}/escrow`}>{t('contractDetail.openEscrow')}</Link>
           </Button>
         ) : null}
         {isCounterparty ? (
           <>
             <Button type="button" onClick={() => void respond(true)}>
-              Accept contract
+              {t('contractDetail.accept')}
             </Button>
             <Button
               type="button"
               variant="outline"
               onClick={() => void respond(false)}
             >
-              Decline
+              {t('contractDetail.decline')}
             </Button>
           </>
         ) : null}
@@ -218,17 +213,13 @@ export default function ContractDetailPage() {
             <DialogTrigger asChild>
               <Button type="button" variant="destructive">
                 <X />
-                End contract
+                {t('contractDetail.end')}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>End contract</DialogTitle>
-                <DialogDescription>
-                  Choose a reason. PENDING milestones will be auto-canceled.
-                  In-flight (FUNDED / SUBMITTED / DISPUTED) milestones must
-                  be resolved first.
-                </DialogDescription>
+                <DialogTitle>{t('contractDetail.end')}</DialogTitle>
+                <DialogDescription>{t('contractDetail.endDesc')}</DialogDescription>
               </DialogHeader>
               <div className="space-y-3 py-2">
                 <Select
@@ -242,13 +233,13 @@ export default function ContractDetailPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="COMPLETED">
-                      COMPLETED — work delivered
+                      {t('contractDetail.endOption.COMPLETED')}
                     </SelectItem>
                     <SelectItem value="CANCELED">
-                      CANCELED — mutual cancel
+                      {t('contractDetail.endOption.CANCELED')}
                     </SelectItem>
                     <SelectItem value="ABANDONED">
-                      ABANDONED — no longer pursuing
+                      {t('contractDetail.endOption.ABANDONED')}
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -260,7 +251,7 @@ export default function ContractDetailPage() {
                   onClick={() => setEndOpen(false)}
                   disabled={endSubmitting}
                 >
-                  Keep open
+                  {t('contractDetail.keepOpen')}
                 </Button>
                 <Button
                   type="button"
@@ -268,7 +259,7 @@ export default function ContractDetailPage() {
                   onClick={() => void submitEnd()}
                   disabled={endSubmitting}
                 >
-                  {endSubmitting ? 'Ending…' : 'End contract'}
+                  {endSubmitting ? t('contractDetail.ending') : t('contractDetail.end')}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -278,15 +269,13 @@ export default function ContractDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Summary</CardTitle>
-          <CardDescription>
-            Status, agreed amount, and key dates for this contract.
-          </CardDescription>
+          <CardTitle>{t('contractDetail.summary')}</CardTitle>
+          <CardDescription>{t('contractDetail.summaryDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <dl className="grid gap-3 sm:grid-cols-2">
             <div>
-              <dt className="text-xs text-fg-muted">Status</dt>
+              <dt className="text-xs text-fg-muted">{t('contractDetail.status')}</dt>
               <dd>
                 <Badge variant="info">{contract?.status ?? '—'}</Badge>
                 {contract?.end_reason ? (
@@ -297,33 +286,33 @@ export default function ContractDetailPage() {
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-fg-muted">Agreed amount</dt>
+              <dt className="text-xs text-fg-muted">{t('contractDetail.agreedAmount')}</dt>
               <dd className="font-semibold">{fmtGbp(contract?.agreed_amount)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-fg-muted">Started</dt>
+              <dt className="text-xs text-fg-muted">{t('contractDetail.started')}</dt>
               <dd>{fmtDate(contract?.started_at)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-fg-muted">Ended</dt>
+              <dt className="text-xs text-fg-muted">{t('contractDetail.ended')}</dt>
               <dd>{fmtDate(contract?.ended_at)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-fg-muted">Worker</dt>
+              <dt className="text-xs text-fg-muted">{t('contractDetail.worker')}</dt>
               <dd>{contract?.collaboration.worker.client_profile.display_name}</dd>
             </div>
             <div>
-              <dt className="text-xs text-fg-muted">Employer</dt>
+              <dt className="text-xs text-fg-muted">{t('contractDetail.employer')}</dt>
               <dd>{contract?.collaboration.employer.client_profile.display_name}</dd>
             </div>
             {contract?.project_referrer_id ? (
               <div className="sm:col-span-2">
-                <dt className="text-xs text-fg-muted">Project referrer</dt>
+                <dt className="text-xs text-fg-muted">{t('contractDetail.projectReferrer')}</dt>
                 <dd>
                   {contract.project_referrer_role === 'WORKER'
-                    ? 'Worker→Worker share'
-                    : 'Employer→Employer share'}{' '}
-                  · account #{contract.project_referrer_id}
+                    ? t('contractDetail.shareWorker')
+                    : t('contractDetail.shareEmployer')}{' '}
+                  · {t('contractDetail.account', { id: contract.project_referrer_id })}
                 </dd>
               </div>
             ) : null}
@@ -331,7 +320,7 @@ export default function ContractDetailPage() {
         </CardContent>
       </Card>
 
-      {loading ? <p className="text-sm text-fg-muted">Loading…</p> : null}
+      {loading ? <p className="text-sm text-fg-muted">{t('contractDetail.loading')}</p> : null}
     </div>
   );
 }

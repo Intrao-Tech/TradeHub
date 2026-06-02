@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatMoney, formatDateTime } from '@/lib/format';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -53,25 +55,27 @@ type Dispute = {
   };
 };
 
-function decisionBadge(d: 'PENDING' | 'ACCEPTED' | 'REJECTED') {
+type TFn = (key: string, opts?: Record<string, unknown>) => string;
+
+function decisionBadge(d: 'PENDING' | 'ACCEPTED' | 'REJECTED', t: TFn) {
   if (d === 'ACCEPTED')
     return (
       <Badge variant="success">
         <CheckCircle2 className="h-3 w-3" />
-        Accepted
+        {t('disputes.decisionAccepted')}
       </Badge>
     );
   if (d === 'REJECTED')
     return (
       <Badge variant="danger">
         <XCircle className="h-3 w-3" />
-        Rejected
+        {t('disputes.decisionRejected')}
       </Badge>
     );
   return (
     <Badge variant="outline">
       <Clock className="h-3 w-3" />
-      Pending
+      {t('disputes.decisionPending')}
     </Badge>
   );
 }
@@ -84,6 +88,7 @@ function statusVariant(s: string): 'warning' | 'success' | 'secondary' | 'danger
 }
 
 export function EscrowDisputesTab() {
+  const { t } = useTranslation('admin');
   const { hasPermission } = useAccountMe();
   const canPropose = hasPermission('disputes.propose');
   const canEscalate = hasPermission('disputes.escalate');
@@ -112,9 +117,9 @@ export function EscrowDisputesTab() {
       );
       setProposalsByDispute(Object.fromEntries(entries));
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Failed to load disputes');
+      setError(parseApiError(err)?.message ?? t('disputes.loadError'));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void reload();
@@ -125,13 +130,9 @@ export function EscrowDisputesTab() {
       <CardHeader>
         <div className="flex items-center gap-2">
           <ScaleIcon className="h-4 w-4 text-fg-muted" />
-          <CardTitle>Escrow disputes</CardTitle>
+          <CardTitle>{t('disputes.title')}</CardTitle>
         </div>
-        <CardDescription>
-          Mediator queue. Propose a worker/employer split — both parties must
-          Accept before money moves. If they can't agree, escalate to
-          arbitration (handled out-of-platform).
-        </CardDescription>
+        <CardDescription>{t('disputes.desc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {error ? (
@@ -143,12 +144,12 @@ export function EscrowDisputesTab() {
           </div>
         ) : null}
         {disputes == null ? (
-          <p className="text-sm text-fg-muted">Loading…</p>
+          <p className="text-sm text-fg-muted">{t('disputes.loading')}</p>
         ) : disputes.length === 0 ? (
           <EmptyState
             icon={ScaleIcon}
-            title="No open disputes"
-            description="Nothing in the mediator queue right now."
+            title={t('disputes.noOpen')}
+            description={t('disputes.noOpenDesc')}
           />
         ) : (
           disputes.map((d) => (
@@ -180,6 +181,7 @@ function DisputeCard({
   canEscalate: boolean;
   onChanged: () => void;
 }) {
+  const { t } = useTranslation('admin');
   const [proposeOpen, setProposeOpen] = useState(false);
   const [escalateOpen, setEscalateOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -196,7 +198,7 @@ function DisputeCard({
 
   async function submitProposal() {
     if (reasoning.trim().length < 30) {
-      setActionErr('Reasoning must be at least 30 characters.');
+      setActionErr(t('disputes.reasoningTooShort'));
       return;
     }
     setActionErr('');
@@ -212,7 +214,7 @@ function DisputeCard({
       setReasoning('');
       onChanged();
     } catch (err) {
-      setActionErr(parseApiError(err)?.message ?? 'Propose failed');
+      setActionErr(parseApiError(err)?.message ?? t('disputes.proposeFailed'));
     } finally {
       setBusy(false);
     }
@@ -220,7 +222,7 @@ function DisputeCard({
 
   async function submitEscalate() {
     if (escalateReason.trim().length < 10) {
-      setActionErr('Reason must be at least 10 characters.');
+      setActionErr(t('disputes.escalateReasonTooShort'));
       return;
     }
     setActionErr('');
@@ -231,7 +233,7 @@ function DisputeCard({
       setEscalateReason('');
       onChanged();
     } catch (err) {
-      setActionErr(parseApiError(err)?.message ?? 'Escalate failed');
+      setActionErr(parseApiError(err)?.message ?? t('disputes.escalateFailed'));
     } finally {
       setBusy(false);
     }
@@ -242,34 +244,43 @@ function DisputeCard({
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={statusVariant(status)}>{status}</Badge>
         <span className="font-medium">
-          Milestone "{d.milestone?.title}" — £{d.milestone?.amount}
+          {t('disputes.milestoneLine', {
+            title: d.milestone?.title,
+            amount:
+              d.milestone?.amount != null
+                ? formatMoney(Number(d.milestone.amount))
+                : '—',
+          })}
         </span>
         <span className="text-xs text-fg-muted">
-          Collab #{String(d.milestone?.contract?.collaboration?.id)}
+          {t('disputes.collabLine', {
+            id: String(d.milestone?.contract?.collaboration?.id),
+          })}
         </span>
       </div>
       <div className="text-sm text-fg-muted">
-        <strong>Worker:</strong>{' '}
+        <strong>{t('disputes.worker')}</strong>{' '}
         {d.milestone?.contract?.collaboration?.worker?.client_profile?.display_name}
         {' · '}
-        <strong>Employer:</strong>{' '}
+        <strong>{t('disputes.employer')}</strong>{' '}
         {d.milestone?.contract?.collaboration?.employer?.client_profile?.display_name}
       </div>
       <div className="text-sm">
         <strong>
-          Filed by{' '}
-          {d.filed_by_role === 'WORKER'
-            ? (d.milestone?.contract?.collaboration?.worker?.client_profile
-                ?.display_name ?? 'worker')
-            : (d.milestone?.contract?.collaboration?.employer?.client_profile
-                ?.display_name ?? 'employer')}
-          :
+          {t('disputes.filedBy', {
+            name:
+              d.filed_by_role === 'WORKER'
+                ? (d.milestone?.contract?.collaboration?.worker?.client_profile
+                    ?.display_name ?? t('disputes.workerFallback'))
+                : (d.milestone?.contract?.collaboration?.employer?.client_profile
+                    ?.display_name ?? t('disputes.employerFallback')),
+          })}
         </strong>{' '}
         {d.reason}
       </div>
       {d.response ? (
         <div className="text-sm text-fg-muted">
-          <strong>Counterparty response:</strong> {d.response}
+          <strong>{t('disputes.counterpartyResponse')}</strong> {d.response}
         </div>
       ) : null}
 
@@ -278,41 +289,47 @@ function DisputeCard({
         <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="text-sm font-medium">
-              Active proposal by {current.proposed_by.display_name}
+              {t('disputes.activeProposalBy', {
+                name: current.proposed_by.display_name,
+              })}
             </div>
             <Badge variant="warning">{current.status}</Badge>
           </div>
           <div className="text-xs grid gap-1 sm:grid-cols-3">
             <div>
-              <span className="text-fg-muted">Worker share:</span>{' '}
+              <span className="text-fg-muted">{t('disputes.workerShare')}</span>{' '}
               <span className="font-medium">{current.worker_pct}%</span>
             </div>
             <div>
-              <span className="text-fg-muted">Employer refund:</span>{' '}
+              <span className="text-fg-muted">{t('disputes.employerRefund')}</span>{' '}
               <span className="font-medium">{current.employer_refund_pct}%</span>
             </div>
             <div>
-              <span className="text-fg-muted">Platform fee:</span>{' '}
+              <span className="text-fg-muted">{t('disputes.platformFee')}</span>{' '}
               <span className="font-medium">
-                {current.keep_platform_fee ? 'kept' : 'refunded'}
+                {current.keep_platform_fee
+                  ? t('disputes.feeKept')
+                  : t('disputes.feeRefunded')}
               </span>
             </div>
           </div>
           <p className="text-xs whitespace-pre-wrap">{current.reasoning}</p>
           <div className="flex items-center gap-3 text-xs">
-            <span className="text-fg-muted">Worker:</span>
-            {decisionBadge(current.worker_decision)}
-            <span className="text-fg-muted">· Employer:</span>
-            {decisionBadge(current.employer_decision)}
+            <span className="text-fg-muted">{t('disputes.workerLabel')}</span>
+            {decisionBadge(current.worker_decision, t)}
+            <span className="text-fg-muted">{t('disputes.employerLabelDot')}</span>
+            {decisionBadge(current.employer_decision, t)}
           </div>
           {current.worker_decision_note ? (
             <p className="text-xs text-fg-muted">
-              Worker note: {current.worker_decision_note}
+              {t('disputes.workerNote', { note: current.worker_decision_note })}
             </p>
           ) : null}
           {current.employer_decision_note ? (
             <p className="text-xs text-fg-muted">
-              Employer note: {current.employer_decision_note}
+              {t('disputes.employerNote', {
+                note: current.employer_decision_note,
+              })}
             </p>
           ) : null}
         </div>
@@ -322,7 +339,7 @@ function DisputeCard({
       {history.length > 0 ? (
         <details className="text-xs">
           <summary className="cursor-pointer text-fg-muted">
-            Show {history.length} past proposal{history.length === 1 ? '' : 's'}
+            {t('disputes.showPast', { count: history.length })}
           </summary>
           <div className="mt-2 space-y-2">
             {history.map((h) => (
@@ -335,7 +352,7 @@ function DisputeCard({
       {/* Actions */}
       {status === 'RESOLVED' || status === 'ARBITRATION_PENDING' ? (
         <div className="text-xs text-fg-muted">
-          Dispute closed ({status.toLowerCase()}). No further action.
+          {t('disputes.closed', { status: status.toLowerCase() })}
         </div>
       ) : (
         <div className="space-y-2">
@@ -349,7 +366,7 @@ function DisputeCard({
             <div className="space-y-2 rounded border border-border-subtle p-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <Label>Worker share %</Label>
+                  <Label>{t('disputes.workerSharePct')}</Label>
                   <Input
                     type="number"
                     min="0"
@@ -358,32 +375,36 @@ function DisputeCard({
                     onChange={(e) => setWorkerPct(Number(e.target.value))}
                   />
                   <p className="text-xs text-fg-muted">
-                    Employer refund: {100 - workerPct}%
+                    {t('disputes.employerRefundPct', { pct: 100 - workerPct })}
                   </p>
                 </div>
                 <div className="space-y-1">
-                  <Label>Platform keeps fee?</Label>
+                  <Label>{t('disputes.platformKeepsFee')}</Label>
                   <select
                     value={keepFee ? 'yes' : 'no'}
                     onChange={(e) => setKeepFee(e.target.value === 'yes')}
                     className="block w-full h-9 rounded-md border border-border-default bg-raised px-3 text-sm"
                   >
-                    <option value="yes">Yes (default)</option>
-                    <option value="no">No (refund platform fee too)</option>
+                    <option value="yes">{t('disputes.feeYes')}</option>
+                    <option value="no">{t('disputes.feeNo')}</option>
                   </select>
                 </div>
               </div>
-              <Label>Reasoning (≥30 chars, shown to both parties)</Label>
+              <Label>{t('disputes.reasoningLabel')}</Label>
               <Textarea
                 value={reasoning}
                 onChange={(e) => setReasoning(e.target.value)}
                 rows={3}
-                placeholder="e.g. Worker delivered 60% of agreed scope per chat evidence; employer's complaints about quality not substantiated by submitted artifacts."
+                placeholder={t('disputes.reasoningPlaceholder')}
               />
               <div className="flex gap-2">
                 <Button onClick={() => void submitProposal()} disabled={busy}>
                   <Send className="h-3.5 w-3.5" />
-                  {busy ? 'Sending…' : current ? 'Replace proposal' : 'Send proposal'}
+                  {busy
+                    ? t('disputes.sending')
+                    : current
+                      ? t('disputes.replaceProposal')
+                      : t('disputes.sendProposal')}
                 </Button>
                 <Button
                   variant="ghost"
@@ -392,24 +413,20 @@ function DisputeCard({
                     setReasoning('');
                   }}
                 >
-                  Cancel
+                  {t('disputes.cancel')}
                 </Button>
               </div>
             </div>
           ) : escalateOpen ? (
             <div className="space-y-2 rounded border border-danger/40 bg-danger-subtle/30 p-3">
-              <Label>Why escalate?</Label>
+              <Label>{t('disputes.whyEscalate')}</Label>
               <Textarea
                 value={escalateReason}
                 onChange={(e) => setEscalateReason(e.target.value)}
                 rows={3}
-                placeholder="e.g. Worker rejected two proposals; positions still ~30 pp apart; cannot mediate further."
+                placeholder={t('disputes.escalatePlaceholder')}
               />
-              <p className="text-xs text-fg-muted">
-                This locks the dispute as <code>ARBITRATION_PENDING</code> —
-                in-platform mediation ends, parties get a notification,
-                arbitration is handled out-of-platform.
-              </p>
+              <p className="text-xs text-fg-muted">{t('disputes.lockNote')}</p>
               <div className="flex gap-2">
                 <Button
                   variant="destructive"
@@ -417,7 +434,7 @@ function DisputeCard({
                   disabled={busy}
                 >
                   <AlertTriangle className="h-3.5 w-3.5" />
-                  {busy ? 'Escalating…' : 'Escalate to arbitration'}
+                  {busy ? t('disputes.escalating') : t('disputes.escalateToArbitration')}
                 </Button>
                 <Button
                   variant="ghost"
@@ -426,7 +443,7 @@ function DisputeCard({
                     setEscalateReason('');
                   }}
                 >
-                  Cancel
+                  {t('disputes.cancel')}
                 </Button>
               </div>
             </div>
@@ -441,7 +458,7 @@ function DisputeCard({
                     setActionErr('');
                   }}
                 >
-                  {current ? 'Replace proposal' : 'Propose resolution'}
+                  {current ? t('disputes.replaceProposal') : t('disputes.proposeResolution')}
                 </Button>
               ) : null}
               {canEscalate ? (
@@ -455,14 +472,11 @@ function DisputeCard({
                   }}
                 >
                   <AlertTriangle className="h-3.5 w-3.5" />
-                  Escalate
+                  {t('disputes.escalate')}
                 </Button>
               ) : null}
               {!canPropose && !canEscalate ? (
-                <p className="text-xs text-fg-muted">
-                  You don't have <code>disputes.propose</code> or{' '}
-                  <code>disputes.escalate</code> — view only.
-                </p>
+                <p className="text-xs text-fg-muted">{t('disputes.viewOnly')}</p>
               ) : null}
             </div>
           )}
@@ -473,12 +487,16 @@ function DisputeCard({
 }
 
 function PastProposal({ p }: { p: DisputeProposal }) {
+  const { t } = useTranslation('admin');
   return (
     <div className="rounded border border-border-subtle p-2 space-y-1">
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium">
-          {p.worker_pct}% / {p.employer_refund_pct}% by{' '}
-          {p.proposed_by.display_name}
+          {t('disputes.pastProposalLine', {
+            worker: p.worker_pct,
+            employer: p.employer_refund_pct,
+            name: p.proposed_by.display_name,
+          })}
         </span>
         <Badge
           variant={
@@ -493,8 +511,11 @@ function PastProposal({ p }: { p: DisputeProposal }) {
         </Badge>
       </div>
       <div className="text-fg-muted">
-        Worker: {p.worker_decision} · Employer: {p.employer_decision} ·{' '}
-        {new Date(p.proposed_at).toLocaleString()}
+        {t('disputes.pastDecisionLine', {
+          worker: p.worker_decision,
+          employer: p.employer_decision,
+          date: formatDateTime(p.proposed_at),
+        })}
       </div>
       <div className="text-fg whitespace-pre-wrap">{p.reasoning}</div>
     </div>

@@ -1,0 +1,74 @@
+{
+  "header": {
+    "login": "Увійти",
+    "signUp": "Зареєструватися"
+  },
+  "language": {
+    "en": "English",
+    "label": "Мова",
+    "uk": "Українська"
+  },
+  "menu": {
+    "account": "Акаунт",
+    "clickToGoOff": "Завершити зміну",
+    "clickToGoOn": "Почати зміну",
+    "dutyError": "Не вдалося змінити статус",
+    "dutyOff": "не на зміні",
+    "dutyOn": "на зміні",
+    "logOut": "Вийти",
+    "offDuty": "Не на зміні",
+    "onDuty": "На зміні",
+    "open": "Відкрити меню",
+    "openAccount": "Відкрити меню акаунта",
+    "profile": "Профіль",
+    "settings": "Налаштування",
+    "staffBadgeAria": "Ви увійшли як {{role}}, {{duty}}",
+    "title": "Меню"
+  },
+  "nav": {
+    "applications": "Заявки",
+    "collaborations": "Співпраця",
+    "employers": "Роботодавці",
+    "inbox": "Вхідні",
+    "jobs": "Вакансії",
+    "payments": "Платежі",
+    "postedJobs": "Мої вакансії",
+    "referrals": "Реферали",
+    "support": "Підтримка",
+    "workers": "Майстри"
+  },
+  "notifications": {
+    "activity": "Активність",
+    "count_one": "{{count}} сповіщення",
+    "count_few": "{{count}} сповіщення",
+    "count_many": "{{count}} сповіщень",
+    "count_other": "{{count}} сповіщень",
+    "countNone": "Сповіщень ще немає",
+    "emptyDesc": "Коли на вашому акаунті стаються події платформи, вони з'являться тут.",
+    "emptyTitle": "Сповіщень ще немає",
+    "loadError": "Не вдалося завантажити сповіщення.",
+    "loading": "Завантаження…",
+    "markAllError": "Не вдалося позначити всі прочитаними.",
+    "markAllRead": "Позначити всі прочитаними",
+    "markRead": "Позначити прочитаним",
+    "markReadError": "Не вдалося позначити сповіщення прочитаним.",
+    "next": "Наступна",
+    "pageLine": "Сторінка {{page}} з {{pages}}",
+    "previous": "Попередня",
+    "subtitle": "Запрошення на роботу, оновлення етапів та сповіщення платформи.",
+    "title": "Сповіщення"
+  },
+  "reviews_one": "({{count}} відгук)",
+  "reviews_few": "({{count}} відгуки)",
+  "reviews_many": "({{count}} відгуків)",
+  "reviews_other": "({{count}} відгуку)",
+  "theme": {
+    "auto": "Авто",
+    "autoDesc": "Використовувати тему пристрою",
+    "dark": "Темна",
+    "darkDesc": "Темний фон, світлий текст",
+    "label": "Тема",
+    "light": "Світла",
+    "lightDesc": "Світлий фон, темний текст"
+  }
+}

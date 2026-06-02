@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { Bell, X } from 'lucide-react';
 import { api, parseApiError } from '@/api';
 import { IS_STAFF_HOST } from '@/lib/host';
+import { formatDate } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -40,7 +41,7 @@ function timeAgo(iso?: string | null): string {
   if (hr < 24) return `${hr}h ago`;
   const d = Math.floor(hr / 24);
   if (d < 7) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return formatDate(iso, 'short');
 }
 
 /**

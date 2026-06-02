@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { StarRating } from '@/components/StarRating';
 import { cn } from '@/lib/utils';
+import { formatDate as formatDateLib } from '@/lib/format';
 import type { Review } from './api';
 
 /**
@@ -20,14 +21,7 @@ const SUB_RATINGS = [
 type SubKey = (typeof SUB_RATINGS)[number]['key'];
 
 function formatDate(value?: string | null): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatDateLib(value) || null;
 }
 
 type ReviewCardProps = {

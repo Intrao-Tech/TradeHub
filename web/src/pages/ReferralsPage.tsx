@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Copy, Inbox as InboxIcon, RefreshCw } from 'lucide-react';
 import { parseApiError } from '../api';
+import { formatMoney, formatDate } from '@/lib/format';
 import {
   getOwnReferralCode,
   getAccountReferralStats,
@@ -24,10 +25,7 @@ import {
 
 const fmtGbp = (s: string | null | undefined) => {
   const n = Number(s ?? 0);
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(Number.isFinite(n) ? n : 0);
+  return formatMoney(Number.isFinite(n) ? n : 0);
 };
 
 export default function ReferralsPage() {
@@ -181,7 +179,7 @@ export default function ReferralsPage() {
                       </span>
                       <span className="text-xs text-fg-muted">
                         {it.referred_at
-                          ? new Date(it.referred_at).toLocaleDateString()
+                          ? formatDate(it.referred_at, 'short')
                           : '—'}
                       </span>
                     </li>

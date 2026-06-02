@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Briefcase,
   ChevronLeft,
@@ -73,6 +74,7 @@ function isFeedTab(v: string | null): v is FeedTab {
 }
 
 export default function AuthJobBoardPage() {
+  const { t } = useTranslation('jobs');
   const navigate = useNavigate();
   const { isWorker, isEmployer, verificationState, clientProfile } =
     useAccountMe();
@@ -160,7 +162,7 @@ export default function AuthJobBoardPage() {
         setList(data);
       }
     } catch (e) {
-      setListError(parseApiError(e)?.message ?? 'Could not load jobs.');
+      setListError(parseApiError(e)?.message ?? t('board.loadError'));
       setList(null);
     }
   }, [activeTab, querySuffix]);
@@ -291,13 +293,13 @@ export default function AuthJobBoardPage() {
   const filterRail = (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Label htmlFor="filter-postcode">Postcode area</Label>
+        <Label htmlFor="filter-postcode">{t('board.postcodeLabel')}</Label>
         <div className="flex gap-2">
           <Input
             id="filter-postcode"
             value={postcodeInput}
             onChange={(e) => setPostcodeInput(e.target.value)}
-            placeholder="e.g. SW1"
+            placeholder={t('board.postcodePlaceholder')}
             onBlur={applyPostcode}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -310,7 +312,7 @@ export default function AuthJobBoardPage() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="filter-spec">Specialisation</Label>
+        <Label htmlFor="filter-spec">{t('board.specialisationLabel')}</Label>
         <Select
           value={specialisationId != null ? String(specialisationId) : '__any__'}
           onValueChange={(v) =>
@@ -320,11 +322,11 @@ export default function AuthJobBoardPage() {
           }
           disabled={specsLoading}
         >
-          <SelectTrigger id="filter-spec" aria-label="Specialisation filter">
-            <SelectValue placeholder="Any specialisation" />
+          <SelectTrigger id="filter-spec" aria-label={t('board.specialisationFilterAria')}>
+            <SelectValue placeholder={t('board.anySpecialisation')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__any__">Any specialisation</SelectItem>
+            <SelectItem value="__any__">{t('board.anySpecialisation')}</SelectItem>
             {specialisationOptions.map((opt) => (
               <SelectItem key={opt.id} value={String(opt.id)}>
                 {opt.name}
@@ -344,7 +346,7 @@ export default function AuthJobBoardPage() {
               commitFilters({ isUrgent: e.target.checked ? true : null })
             }
           />
-          Urgent jobs only
+          {t('board.urgentOnly')}
         </Label>
       </div>
 
@@ -356,7 +358,7 @@ export default function AuthJobBoardPage() {
           className="w-full"
           onClick={clearFilters}
         >
-          Clear filters
+          {t('board.clearFilters')}
         </Button>
       ) : null}
     </div>
@@ -366,32 +368,27 @@ export default function AuthJobBoardPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Job board</h1>
-          <p className="text-sm text-fg-muted">
-            Browse open jobs from verified employers.
-          </p>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t('board.title')}</h1>
+          <p className="text-sm text-fg-muted">{t('board.subtitle')}</p>
         </div>
         {canPostJob ? (
           <Sheet open={createOpen} onOpenChange={setCreateOpen}>
             <SheetTrigger asChild>
               <Button>
                 <Plus />
-                Post a job
+                {t('board.postJob')}
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
               <SheetHeader>
-                <SheetTitle>Post a job</SheetTitle>
-                <SheetDescription>
-                  Tell verified workers what you need. You can edit anytime before
-                  applications arrive.
-                </SheetDescription>
+                <SheetTitle>{t('board.postJob')}</SheetTitle>
+                <SheetDescription>{t('board.postJobDesc')}</SheetDescription>
               </SheetHeader>
               <div className="mt-4">
                 <JobPostForm
                   mode="create"
                   onSuccess={(created) => {
-                    toast.success('Job posted');
+                    toast.success(t('board.jobPosted'));
                     setCreateOpen(false);
                     if (created?.id != null) navigate(`/jobs/${created.id}`);
                     else void loadJobs();
@@ -409,20 +406,20 @@ export default function AuthJobBoardPage() {
           role="status"
           className="rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-warning"
         >
-          Verify your email to post jobs.
+          {t('board.verifyToPost')}
         </div>
       ) : null}
 
       <form onSubmit={applySearch} className="relative">
         <Label htmlFor="search-title" className="sr-only">
-          Search title
+          {t('board.searchTitleLabel')}
         </Label>
         <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
         <Input
           id="search-title"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search for jobs"
+          placeholder={t('board.searchPlaceholder')}
           className="h-12 pl-11 pr-28 text-base"
         />
         <Button
@@ -430,7 +427,7 @@ export default function AuthJobBoardPage() {
           size="sm"
           className="absolute right-2 top-1/2 -translate-y-1/2"
         >
-          Search
+          {t('board.search')}
         </Button>
       </form>
 
@@ -448,7 +445,7 @@ export default function AuthJobBoardPage() {
           <div className="sticky top-4 space-y-4 rounded-md border border-border-default bg-card p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-fg">
               <SlidersHorizontal className="h-4 w-4" />
-              Filters
+              {t('board.filters')}
               {activeFilterCount > 0 ? (
                 <Badge variant="secondary" className="ml-auto">
                   {activeFilterCount}
@@ -462,14 +459,14 @@ export default function AuthJobBoardPage() {
         <section className="space-y-4">
           <div>
             <h2 className="text-lg font-semibold tracking-tight">
-              Jobs you might like
+              {t('board.feedTitle')}
             </h2>
             <p className="text-sm text-fg-muted">
               {activeTab === 'best_matches'
-                ? 'Ranked by overlap with your specialisations. Switch to Most Recent when you want the freshest posts first.'
+                ? t('board.feedDescBest')
                 : activeTab === 'most_recent'
-                  ? 'Browse the freshest open jobs, newest first.'
-                  : 'Jobs you bookmarked. Tap the icon again to remove a job from this list.'}
+                  ? t('board.feedDescRecent')
+                  : t('board.feedDescSaved')}
             </p>
           </div>
 
@@ -483,10 +480,10 @@ export default function AuthJobBoardPage() {
               }}
             >
               <TabsList>
-                <TabsTrigger value="best_matches">Best Matches</TabsTrigger>
-                <TabsTrigger value="most_recent">Most Recent</TabsTrigger>
+                <TabsTrigger value="best_matches">{t('board.tabBest')}</TabsTrigger>
+                <TabsTrigger value="most_recent">{t('board.tabRecent')}</TabsTrigger>
                 {isWorker ? (
-                  <TabsTrigger value="saved">Saved</TabsTrigger>
+                  <TabsTrigger value="saved">{t('board.tabSaved')}</TabsTrigger>
                 ) : null}
               </TabsList>
             </Tabs>
@@ -495,7 +492,7 @@ export default function AuthJobBoardPage() {
               <SheetTrigger asChild>
                 <Button variant="outline" size="sm" className="lg:hidden">
                   <Filter />
-                  Filters
+                  {t('board.filters')}
                   {activeFilterCount > 0 ? (
                     <Badge variant="secondary" className="ml-1">
                       {activeFilterCount}
@@ -505,10 +502,8 @@ export default function AuthJobBoardPage() {
               </SheetTrigger>
               <SheetContent side="left" className="w-full overflow-y-auto sm:max-w-sm">
                 <SheetHeader>
-                  <SheetTitle>Filters</SheetTitle>
-                  <SheetDescription>
-                    Narrow the feed to jobs that match what you're looking for.
-                  </SheetDescription>
+                  <SheetTitle>{t('board.filters')}</SheetTitle>
+                  <SheetDescription>{t('board.filtersDesc')}</SheetDescription>
                 </SheetHeader>
                 <div className="mt-4">{filterRail}</div>
               </SheetContent>
@@ -518,7 +513,7 @@ export default function AuthJobBoardPage() {
           {visibleItems.length > 0 ? (
             <>
               <div className="flex items-center justify-between text-xs text-fg-muted">
-                <span>{list?.total ?? 0} open jobs</span>
+                <span>{t('board.openJobs', { count: list?.total ?? 0 })}</span>
               </div>
               <div className="space-y-3">
                 {visibleItems.map((j) => (
@@ -540,7 +535,7 @@ export default function AuthJobBoardPage() {
               </div>
               {showPaginator ? (
                 <nav
-                  aria-label="Job board pagination"
+                  aria-label={t('board.paginationAria')}
                   className="flex items-center justify-between gap-2 pt-2"
                 >
                   <Button
@@ -560,10 +555,10 @@ export default function AuthJobBoardPage() {
                     }
                   >
                     <ChevronLeft />
-                    Previous
+                    {t('board.previous')}
                   </Button>
                   <span className="text-xs text-fg-muted">
-                    Page {page} of {totalPages}
+                    {t('board.pageOf', { page, total: totalPages })}
                   </span>
                   <Button
                     type="button"
@@ -581,7 +576,7 @@ export default function AuthJobBoardPage() {
                       })
                     }
                   >
-                    Next
+                    {t('board.next')}
                     <ChevronRight />
                   </Button>
                 </nav>
@@ -590,11 +585,11 @@ export default function AuthJobBoardPage() {
           ) : list ? (
             <EmptyState
               icon={Briefcase}
-              title="No jobs found"
-              description="Try adjusting your filters or come back later."
+              title={t('board.emptyTitle')}
+              description={t('board.emptyDesc')}
             />
           ) : (
-            <p className="text-sm text-fg-muted">Loading…</p>
+            <p className="text-sm text-fg-muted">{t('board.loading')}</p>
           )}
         </section>
       </div>

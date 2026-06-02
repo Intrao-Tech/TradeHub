@@ -7,6 +7,7 @@ import {
   Plus,
   Users,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '@/hooks/useAccountMe';
 import { Button } from '@/components/ui/button';
@@ -59,15 +60,9 @@ type JobListResponse = {
 
 type StatusTab = 'ALL' | 'OPEN' | 'CLOSED' | 'FILLED' | 'CANCELLED';
 const TAB_ORDER: StatusTab[] = ['ALL', 'OPEN', 'CLOSED', 'FILLED', 'CANCELLED'];
-const TAB_LABEL: Record<StatusTab, string> = {
-  ALL: 'All',
-  OPEN: 'Open',
-  CLOSED: 'Closed',
-  FILLED: 'Filled',
-  CANCELLED: 'Cancelled',
-};
 
 export default function MyJobsPage() {
+  const { t } = useTranslation('jobs');
   const navigate = useNavigate();
   const { isEmployer, loading: accountLoading } = useAccountMe();
 
@@ -92,7 +87,7 @@ export default function MyJobsPage() {
       const res = await api<JobListResponse>('/job-posts/me?page=1&limit=100');
       setData(res);
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Could not load your jobs.');
+      setError(parseApiError(err)?.message ?? t('myJobs.loadError'));
     } finally {
       setLoading(false);
     }
@@ -134,20 +129,20 @@ export default function MyJobsPage() {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       });
-      toast.success(`Job ${status.toLowerCase()}`);
+      toast.success(t(status === 'CLOSED' ? 'myJobs.toastClosed' : 'myJobs.toastReopened'));
       await load();
     } catch (err) {
-      toast.error(parseApiError(err)?.message ?? 'Could not update job.');
+      toast.error(parseApiError(err)?.message ?? t('myJobs.updateError'));
     }
   }
 
   async function deletePost(post: JobPostRow) {
     try {
       await api(`/job-posts/${post.id}`, { method: 'DELETE' });
-      toast.success('Job deleted');
+      toast.success(t('myJobs.deletedToast'));
       await load();
     } catch (err) {
-      toast.error(parseApiError(err)?.message ?? 'Could not delete job.');
+      toast.error(parseApiError(err)?.message ?? t('myJobs.deleteError'));
     }
   }
 
@@ -155,30 +150,26 @@ export default function MyJobsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">My jobs</h1>
-          <p className="text-sm text-fg-muted">
-            Manage every job you've posted.
-          </p>
+          <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">{t('myJobs.title')}</h1>
+          <p className="text-sm text-fg-muted">{t('myJobs.subtitle')}</p>
         </div>
         <Sheet open={createOpen} onOpenChange={setCreateOpen}>
           <SheetTrigger asChild>
             <Button>
               <Plus />
-              Post a job
+              {t('board.postJob')}
             </Button>
           </SheetTrigger>
           <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
             <SheetHeader>
-              <SheetTitle>Post a job</SheetTitle>
-              <SheetDescription>
-                Tell verified workers what you need.
-              </SheetDescription>
+              <SheetTitle>{t('board.postJob')}</SheetTitle>
+              <SheetDescription>{t('myJobs.postJobDesc')}</SheetDescription>
             </SheetHeader>
             <div className="mt-4">
               <JobPostForm
                 mode="create"
                 onSuccess={(created) => {
-                  toast.success('Job posted');
+                  toast.success(t('board.jobPosted'));
                   setCreateOpen(false);
                   if (created?.id != null) navigate(`/jobs/${created.id}`);
                   else void load();
@@ -201,11 +192,11 @@ export default function MyJobsPage() {
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as StatusTab)}>
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-subtle p-1 sm:w-auto">
-          {TAB_ORDER.map((t) => (
-            <TabsTrigger key={t} value={t} className="gap-2">
-              {TAB_LABEL[t]}
+          {TAB_ORDER.map((st) => (
+            <TabsTrigger key={st} value={st} className="gap-2">
+              {t(`myJobs.tab.${st}`)}
               <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
-                {counts[t]}
+                {counts[st]}
               </Badge>
             </TabsTrigger>
           ))}
@@ -221,12 +212,12 @@ export default function MyJobsPage() {
       ) : visibleRows.length === 0 ? (
         <EmptyState
           icon={Briefcase}
-          title="You haven't posted any jobs yet"
-          description="Post your first job to start receiving applications from verified workers."
+          title={t('myJobs.emptyTitle')}
+          description={t('myJobs.emptyDesc')}
           action={
             <Button onClick={() => setCreateOpen(true)}>
               <Plus />
-              Post a job
+              {t('board.postJob')}
             </Button>
           }
         />
@@ -245,9 +236,9 @@ export default function MyJobsPage() {
       <ConfirmDialog
         open={confirm?.kind === 'close'}
         onOpenChange={(o) => !o && setConfirm(null)}
-        title="Close this job?"
-        description="Workers won't be able to apply once it's closed. You can reopen it any time."
-        confirmLabel="Close job"
+        title={t('myJobs.closeTitle')}
+        description={t('myJobs.closeDesc')}
+        confirmLabel={t('myJobs.closeConfirm')}
         onConfirm={async () => {
           if (confirm?.post) await patchStatus(confirm.post, 'CLOSED');
           setConfirm(null);
@@ -256,9 +247,9 @@ export default function MyJobsPage() {
       <ConfirmDialog
         open={confirm?.kind === 'reopen'}
         onOpenChange={(o) => !o && setConfirm(null)}
-        title="Reopen this job?"
-        description="The job will appear on the public board again."
-        confirmLabel="Reopen"
+        title={t('myJobs.reopenTitle')}
+        description={t('myJobs.reopenDesc')}
+        confirmLabel={t('myJobs.reopenConfirm')}
         onConfirm={async () => {
           if (confirm?.post) await patchStatus(confirm.post, 'OPEN');
           setConfirm(null);
@@ -267,9 +258,9 @@ export default function MyJobsPage() {
       <ConfirmDialog
         open={confirm?.kind === 'delete'}
         onOpenChange={(o) => !o && setConfirm(null)}
-        title="Delete this job?"
-        description="This permanently removes the post. Close it instead if you want to keep your record."
-        confirmLabel="Delete"
+        title={t('myJobs.deleteTitle')}
+        description={t('myJobs.deleteDesc')}
+        confirmLabel={t('myJobs.deleteConfirm')}
         destructive
         onConfirm={async () => {
           if (confirm?.post) await deletePost(confirm.post);
@@ -287,6 +278,7 @@ function JobRow({
   post: JobPostRow;
   onAction: (kind: 'close' | 'reopen' | 'delete') => void;
 }) {
+  const { t } = useTranslation('jobs');
   const applicationCount = post._count?.applications ?? 0;
   const status = (post.status ?? '').toUpperCase();
   const canReopen = status === 'CLOSED';
@@ -310,7 +302,7 @@ function JobRow({
             {post.is_urgent ? (
               <Badge variant="danger" className="gap-1">
                 <AlertTriangle className="h-3 w-3" />
-                Urgent
+                {t('card.urgent')}
               </Badge>
             ) : null}
           </div>
@@ -320,14 +312,14 @@ function JobRow({
               className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
             >
               <Users className="h-3 w-3" />
-              {applicationCount} application{applicationCount === 1 ? '' : 's'}
+              {t('myJobs.applications', { count: applicationCount })}
             </Link>
-            <span>Posted {formatRelative(post.created_at)}</span>
+            <span>{t('card.posted', { time: formatRelative(post.created_at) })}</span>
           </div>
         </CardHeader>
         <CardContent className="flex flex-shrink-0 items-center gap-2 p-0">
           <Button asChild variant="outline" size="sm">
-            <Link to={`/my-jobs/${post.id}/applicants`}>View applicants</Link>
+            <Link to={`/my-jobs/${post.id}/applicants`}>{t('myJobs.viewApplicants')}</Link>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -335,23 +327,23 @@ function JobRow({
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label={`Actions for ${post.title}`}
+                aria-label={t('myJobs.actionsAria', { title: post.title })}
               >
                 <MoreHorizontal />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem asChild>
-                <Link to={`/my-jobs/${post.id}/edit`}>Edit</Link>
+                <Link to={`/my-jobs/${post.id}/edit`}>{t('myJobs.edit')}</Link>
               </DropdownMenuItem>
               {canClose ? (
                 <DropdownMenuItem onSelect={() => onAction('close')}>
-                  Close
+                  {t('myJobs.close')}
                 </DropdownMenuItem>
               ) : null}
               {canReopen ? (
                 <DropdownMenuItem onSelect={() => onAction('reopen')}>
-                  Reopen
+                  {t('myJobs.reopen')}
                 </DropdownMenuItem>
               ) : null}
               <DropdownMenuSeparator />
@@ -359,13 +351,9 @@ function JobRow({
                 disabled={!canDelete}
                 onSelect={() => canDelete && onAction('delete')}
                 className={!canDelete ? 'opacity-50' : 'text-danger'}
-                title={
-                  !canDelete
-                    ? 'Close the job instead — applicants would lose their record.'
-                    : undefined
-                }
+                title={!canDelete ? t('myJobs.cantDeleteTooltip') : undefined}
               >
-                Delete
+                {t('myJobs.delete')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { formatMoney, formatDate, formatDateTime } from '@/lib/format';
 import {
   Briefcase,
   HardHat,
@@ -151,6 +153,7 @@ const STATUS_VARIANTS: Record<
 };
 
 export function AdminUsersTab() {
+  const { t } = useTranslation('admin');
   const navigate = useNavigate();
   const { account, hasPermission } = useAccountMe();
   const canMessage = hasPermission('support.initiate');
@@ -195,7 +198,7 @@ export function AdminUsersTab() {
       const d = await api<UserList>(`/admin/users?${usp.toString()}`);
       setList(d);
     } catch (e) {
-      setErr(parseApiError(e)?.message ?? 'Failed to search');
+      setErr(parseApiError(e)?.message ?? t('users.searchError'));
     } finally {
       setLoading(false);
     }
@@ -237,14 +240,14 @@ export function AdminUsersTab() {
         // Best-effort; not fatal
       }
     } catch (e) {
-      setDetailErr(parseApiError(e)?.message ?? 'Failed to load user');
+      setDetailErr(parseApiError(e)?.message ?? t('users.loadError'));
     }
   }
 
   async function trigger(action: string, extra: Record<string, unknown> = {}) {
     if (!detail) return;
     if (!suspendReason.trim() && !extra.reason) {
-      setActionErr('Reason is required');
+      setActionErr(t('users.reasonRequired'));
       return;
     }
     setActionErr('');
@@ -266,13 +269,13 @@ export function AdminUsersTab() {
         body: JSON.stringify(body),
       });
       if (res.mode === 'PENDING_APPROVAL') {
-        setActionMsg(`Queued for approval (#${res.approval_id})`);
+        setActionMsg(t('users.queuedApproval', { id: res.approval_id }));
       } else {
-        setActionMsg(`Executed (audit #${res.audit_id})`);
+        setActionMsg(t('users.executed', { id: res.audit_id }));
       }
       void loadDetail(detail.id);
     } catch (e) {
-      setActionErr(parseApiError(e)?.message ?? 'Action failed');
+      setActionErr(parseApiError(e)?.message ?? t('users.actionFailed'));
     }
   }
 
@@ -282,18 +285,15 @@ export function AdminUsersTab() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Search className="h-4 w-4 text-fg-muted" />
-            <CardTitle>Search users</CardTitle>
+            <CardTitle>{t('users.searchTitle')}</CardTitle>
           </div>
-          <CardDescription>
-            Find any account by email, display name, slug, postcode, or
-            referral code.
-          </CardDescription>
+          <CardDescription>{t('users.searchDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-2">
-            <Label>Query</Label>
+            <Label>{t('users.query')}</Label>
             <Input
-              placeholder="email, name, slug, postcode, referral code"
+              placeholder={t('users.queryPlaceholder')}
               value={q}
               onChange={(e) => {
                 setPage(1);
@@ -303,7 +303,7 @@ export function AdminUsersTab() {
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Kind</Label>
+              <Label>{t('users.kind')}</Label>
               <Select
                 value={kind || 'ANY'}
                 onValueChange={(v) => {
@@ -315,15 +315,15 @@ export function AdminUsersTab() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ANY">Any</SelectItem>
-                  <SelectItem value="WORKER">Worker</SelectItem>
-                  <SelectItem value="EMPLOYER">Employer</SelectItem>
-                  <SelectItem value="STAFF">Staff</SelectItem>
+                  <SelectItem value="ANY">{t('users.kindAny')}</SelectItem>
+                  <SelectItem value="WORKER">{t('users.kindWorker')}</SelectItem>
+                  <SelectItem value="EMPLOYER">{t('users.kindEmployer')}</SelectItem>
+                  <SelectItem value="STAFF">{t('users.kindStaff')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Status</Label>
+              <Label>{t('users.status')}</Label>
               <Select
                 value={status || 'ANY'}
                 onValueChange={(v) => {
@@ -335,12 +335,12 @@ export function AdminUsersTab() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ANY">Any</SelectItem>
-                  <SelectItem value="ACTIVE">Active</SelectItem>
+                  <SelectItem value="ANY">{t('users.statusAny')}</SelectItem>
+                  <SelectItem value="ACTIVE">{t('users.statusActive')}</SelectItem>
                   <SelectItem value="PENDING_EMAIL_VERIFICATION">
-                    Pending email
+                    {t('users.statusPendingEmail')}
                   </SelectItem>
-                  <SelectItem value="DEACTIVATED">Deactivated</SelectItem>
+                  <SelectItem value="DEACTIVATED">{t('users.statusDeactivated')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -353,17 +353,17 @@ export function AdminUsersTab() {
           {list?.data.length === 0 ? (
             <EmptyState
               icon={UserX}
-              title={loading ? 'Loading…' : 'No users match'}
-              description="Adjust the query or filters and try again."
+              title={loading ? t('users.loading') : t('users.noMatch')}
+              description={t('users.noMatchDesc')}
             />
           ) : (
             <div className="rounded-md border border-border-subtle">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Kind</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{t('users.colUser')}</TableHead>
+                    <TableHead>{t('users.colKind')}</TableHead>
+                    <TableHead>{t('users.colStatus')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -408,19 +408,19 @@ export function AdminUsersTab() {
                           {r.is_worker ? (
                             <Badge variant="outline">
                               <HardHat className="h-3 w-3" />
-                              Worker
+                              {t('users.badgeWorker')}
                             </Badge>
                           ) : null}
                           {r.is_employer ? (
                             <Badge variant="outline">
                               <Briefcase className="h-3 w-3" />
-                              Employer
+                              {t('users.badgeEmployer')}
                             </Badge>
                           ) : null}
                           {r.is_staff ? (
                             <Badge variant="secondary">
                               <ShieldCheck className="h-3 w-3" />
-                              {r.staff_role ?? 'Staff'}
+                              {r.staff_role ?? t('users.badgeStaff')}
                             </Badge>
                           ) : null}
                         </div>
@@ -443,7 +443,10 @@ export function AdminUsersTab() {
           {list && list.total > list.limit ? (
             <div className="flex items-center justify-between text-xs text-fg-muted">
               <span>
-                Page {list.page} · {list.total.toLocaleString()} total
+                {t('users.pageLine', {
+                  page: list.page,
+                  total: list.total.toLocaleString(),
+                })}
               </span>
               <div className="flex gap-2">
                 <Button
@@ -452,7 +455,7 @@ export function AdminUsersTab() {
                   disabled={page <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
-                  Prev
+                  {t('users.prev')}
                 </Button>
                 <Button
                   variant="outline"
@@ -460,7 +463,7 @@ export function AdminUsersTab() {
                   disabled={page * list.limit >= list.total}
                   onClick={() => setPage((p) => p + 1)}
                 >
-                  Next
+                  {t('users.next')}
                 </Button>
               </div>
             </div>
@@ -472,11 +475,9 @@ export function AdminUsersTab() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <User className="h-4 w-4 text-fg-muted" />
-            <CardTitle>User detail</CardTitle>
+            <CardTitle>{t('users.detailTitle')}</CardTitle>
           </div>
-          <CardDescription>
-            Profile, recent activity, and admin actions.
-          </CardDescription>
+          <CardDescription>{t('users.detailDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {detailErr ? (
@@ -487,8 +488,8 @@ export function AdminUsersTab() {
           {!detail ? (
             <EmptyState
               icon={User}
-              title="No user selected"
-              description="Pick a user from the list to see profile, payments, reviews, and admin actions."
+              title={t('users.noSelection')}
+              description={t('users.noSelectionDesc')}
             />
           ) : (
             <>
@@ -509,8 +510,10 @@ export function AdminUsersTab() {
                     {detail.client?.display_name ?? detail.email}
                   </div>
                   <div className="text-xs text-fg-muted truncate">
-                    {detail.email} · joined{' '}
-                    {new Date(detail.created_at).toLocaleDateString()}
+                    {detail.email} ·{' '}
+                    {t('users.joined', {
+                      date: formatDate(detail.created_at, 'short'),
+                    })}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1">
                     <Badge
@@ -538,7 +541,9 @@ export function AdminUsersTab() {
                     ) : null}
                     {detail.client ? (
                       <Badge variant="outline">
-                        Verification: {detail.client.verification_level}
+                        {t('users.verification', {
+                          level: detail.client.verification_level,
+                        })}
                       </Badge>
                     ) : null}
                   </div>
@@ -554,7 +559,7 @@ export function AdminUsersTab() {
                       }}
                     >
                       <MessageCircle className="h-3.5 w-3.5" />
-                      Message this user
+                      {t('users.messageUser')}
                     </Button>
                   ) : null}
                 </div>
@@ -562,13 +567,13 @@ export function AdminUsersTab() {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded border border-border-subtle p-3 text-sm">
-                  <div className="text-xs text-fg-muted">Contracts</div>
+                  <div className="text-xs text-fg-muted">{t('users.contracts')}</div>
                   <div className="text-xl font-semibold">
                     {detail.counters.contracts}
                   </div>
                 </div>
                 <div className="rounded border border-border-subtle p-3 text-sm">
-                  <div className="text-xs text-fg-muted">Open disputes</div>
+                  <div className="text-xs text-fg-muted">{t('users.openDisputes')}</div>
                   <div className="text-xl font-semibold">
                     {detail.counters.open_disputes}
                   </div>
@@ -577,12 +582,11 @@ export function AdminUsersTab() {
 
               {detail.payment_totals.length > 0 ? (
                 <div>
-                  <div className="text-sm font-medium mb-2">Payment totals</div>
+                  <div className="text-sm font-medium mb-2">{t('users.paymentTotals')}</div>
                   <div className="flex flex-wrap gap-2 text-xs">
                     {detail.payment_totals.map((p, i) => (
                       <Badge key={i} variant="outline">
-                        {p.type}/{p.status}: {p.count} · £
-                        {Number(p.amount).toLocaleString()}
+                        {p.type}/{p.status}: {p.count} · {formatMoney(Number(p.amount), { decimals: 0 })}
                       </Badge>
                     ))}
                   </div>
@@ -592,7 +596,7 @@ export function AdminUsersTab() {
               {detail.reviewable_items.length > 0 ? (
                 <div>
                   <div className="text-sm font-medium mb-2">
-                    Reviewable items
+                    {t('users.reviewableItems')}
                   </div>
                   <div className="space-y-1 text-xs">
                     {detail.reviewable_items.slice(0, 8).map((ri) => (
@@ -619,7 +623,7 @@ export function AdminUsersTab() {
                             {ri.latest_review.status}
                           </Badge>
                         ) : (
-                          <Badge variant="outline">No review</Badge>
+                          <Badge variant="outline">{t('users.noReview')}</Badge>
                         )}
                       </div>
                     ))}
@@ -629,18 +633,19 @@ export function AdminUsersTab() {
 
               <div className="rounded border border-border-subtle p-3 space-y-3">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-sm font-medium">Admin actions</div>
+                  <div className="text-sm font-medium">{t('users.adminActions')}</div>
                   {myAccountId === detail.id ? (
                     <span className="text-[11px] text-fg-muted">
-                      Self-targeting actions are disabled.
+                      {t('users.selfDisabled')}
                     </span>
                   ) : null}
                 </div>
                 {pendingApprovals.length > 0 ? (
                   <div className="rounded border border-warning/40 bg-warning-subtle/30 px-3 py-2 space-y-1">
                     <div className="text-xs font-medium text-warning">
-                      Pending approval{pendingApprovals.length === 1 ? '' : 's'}{' '}
-                      against this user
+                      {t('users.pendingApprovalsTitle', {
+                        count: pendingApprovals.length,
+                      })}
                     </div>
                     <ul className="text-xs space-y-1">
                       {pendingApprovals.map((a) => {
@@ -649,12 +654,17 @@ export function AdminUsersTab() {
                           <li key={a.id} className="flex flex-wrap gap-1">
                             <span className="font-mono">{a.action}</span>
                             <span className="text-fg-muted">
-                              · requested by{' '}
-                              {mine ? 'you' : a.requested_by.display_name}{' '}
-                              {new Date(a.requested_at).toLocaleString()}
+                              {t('users.requestedBy', {
+                                who: mine
+                                  ? t('users.you')
+                                  : a.requested_by.display_name,
+                                when: formatDateTime(a.requested_at),
+                              })}
                             </span>
                             <span className="text-fg-muted">
-                              · needs {a.required_approver_role}
+                              {t('users.needs', {
+                                role: a.required_approver_role,
+                              })}
                             </span>
                           </li>
                         );
@@ -673,11 +683,11 @@ export function AdminUsersTab() {
                   </div>
                 ) : null}
                 <div className="space-y-2">
-                  <Label className="text-xs">Reason (audited)</Label>
+                  <Label className="text-xs">{t('users.reasonAudited')}</Label>
                   <Textarea
                     value={suspendReason}
                     onChange={(e) => setSuspendReason(e.target.value)}
-                    placeholder="e.g. fraud investigation case #4827"
+                    placeholder={t('users.reasonPlaceholder')}
                     className="min-h-[60px] text-sm"
                   />
                 </div>
@@ -691,7 +701,7 @@ export function AdminUsersTab() {
                     }
                     onClick={() => void trigger('USER_SUSPEND')}
                   >
-                    Suspend
+                    {t('users.suspend')}
                   </Button>
                   <Button
                     size="sm"
@@ -702,12 +712,12 @@ export function AdminUsersTab() {
                     }
                     onClick={() => void trigger('USER_UNSUSPEND')}
                   >
-                    Unsuspend
+                    {t('users.unsuspend')}
                   </Button>
                 </div>
                 <div className="border-t pt-2 space-y-2">
                   <Label className="text-xs">
-                    Override verification level
+                    {t('users.overrideVerification')}
                   </Label>
                   <div className="flex gap-2">
                     <Select
@@ -725,7 +735,7 @@ export function AdminUsersTab() {
                       </SelectContent>
                     </Select>
                     <Input
-                      placeholder="Reason"
+                      placeholder={t('users.reason')}
                       value={verificationReason}
                       onChange={(e) => setVerificationReason(e.target.value)}
                     />
@@ -739,7 +749,7 @@ export function AdminUsersTab() {
                         })
                       }
                     >
-                      Apply
+                      {t('users.apply')}
                     </Button>
                   </div>
                 </div>
@@ -749,7 +759,7 @@ export function AdminUsersTab() {
                 <div>
                   <div className="flex items-center gap-1.5 mb-2">
                     <ScrollText className="h-3.5 w-3.5 text-fg-muted" />
-                    <div className="text-sm font-medium">Recent audit</div>
+                    <div className="text-sm font-medium">{t('users.recentAudit')}</div>
                   </div>
                   <div className="space-y-1 text-xs">
                     {detail.recent_audit.slice(0, 10).map((a) => (
@@ -759,7 +769,7 @@ export function AdminUsersTab() {
                       >
                         <span className="font-mono">{a.action}</span>{' '}
                         <span className="text-fg-muted">
-                          · {new Date(a.created_at).toLocaleString()}
+                          · {formatDateTime(a.created_at)}
                         </span>
                       </div>
                     ))}

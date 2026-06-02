@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '@/api';
 import { POSTCODE_OUTWARD_REGEX } from '@/lib/london-boroughs';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,7 @@ export function NewCollaborationSheet({
   role,
   onCreated,
 }: Props) {
+  const { t } = useTranslation('collaborations');
   const [counterpartyId, setCounterpartyId] = useState('');
   const [projectType, setProjectType] = useState('');
   const [postcode, setPostcode] = useState('');
@@ -97,14 +99,13 @@ export function NewCollaborationSheet({
     projectTypeValid &&
     !submitting;
 
-  const counterpartyLabel = role === 'WORKER' ? 'Employer ID' : 'Worker ID';
+  const counterpartyLabel =
+    role === 'WORKER' ? t('newSheet.employerIdLabel') : t('newSheet.workerIdLabel');
   const counterpartyHelper =
-    role === 'WORKER'
-      ? "Employer's client profile ID — find it on their public profile."
-      : "Worker's client profile ID — find it on the worker's profile page.";
+    role === 'WORKER' ? t('newSheet.helperWorker') : t('newSheet.helperEmployer');
   const browseHref = role === 'WORKER' ? '/employers' : '/workers';
-  const browseLabel =
-    role === 'WORKER' ? 'Browse employers' : 'Browse workers';
+  const browseLink =
+    role === 'WORKER' ? t('newSheet.browseLinkWorker') : t('newSheet.browseLinkEmployer');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -127,11 +128,11 @@ export function NewCollaborationSheet({
         method: 'POST',
         body: JSON.stringify(body),
       });
-      toast.success('Collaboration created');
+      toast.success(t('newSheet.createdToast'));
       onCreated(created);
       onOpenChange(false);
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Could not create collaboration.');
+      setError(parseApiError(err)?.message ?? t('newSheet.createError'));
     } finally {
       setSubmitting(false);
     }
@@ -144,11 +145,11 @@ export function NewCollaborationSheet({
         className="w-full overflow-y-auto sm:max-w-md"
       >
         <SheetHeader>
-          <SheetTitle>New collaboration</SheetTitle>
+          <SheetTitle>{t('newSheet.title')}</SheetTitle>
           <SheetDescription>
             {role === 'WORKER'
-              ? 'Invite an employer to start a tracked engagement on TradeHub.'
-              : 'Invite a worker to start a tracked engagement on TradeHub.'}
+              ? t('newSheet.descWorker')
+              : t('newSheet.descEmployer')}
           </SheetDescription>
         </SheetHeader>
 
@@ -170,61 +171,57 @@ export function NewCollaborationSheet({
                 to={browseHref}
                 className="text-primary underline-offset-4 hover:underline"
               >
-                Counterparty unknown? {browseLabel}.
+                {browseLink}
               </Link>
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="newcoll-project-type">Project type (optional)</Label>
+            <Label htmlFor="newcoll-project-type">{t('newSheet.projectTypeLabel')}</Label>
             <Input
               id="newcoll-project-type"
               value={projectType}
               onChange={(e) => setProjectType(e.target.value)}
               maxLength={PROJECT_TYPE_MAX}
-              placeholder="e.g. Kitchen refit"
+              placeholder={t('newSheet.projectTypePlaceholder')}
             />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="newcoll-postcode">Site postcode (optional)</Label>
+              <Label htmlFor="newcoll-postcode">{t('newSheet.postcodeLabel')}</Label>
               <Input
                 id="newcoll-postcode"
                 value={postcode}
                 onChange={(e) => setPostcode(e.target.value)}
                 maxLength={POSTCODE_MAX}
-                placeholder="e.g. NW1"
+                placeholder={t('newSheet.postcodePlaceholder')}
                 aria-invalid={!postcodeValid}
               />
               {!postcodeValid ? (
-                <p className="text-xs text-danger">
-                  Use a UK postcode area like NW1 or SW1A.
-                </p>
+                <p className="text-xs text-danger">{t('newSheet.postcodeError')}</p>
               ) : null}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="newcoll-amount">Agreed amount (£, optional)</Label>
+              <Label htmlFor="newcoll-amount">{t('newSheet.amountLabel')}</Label>
               <Input
                 id="newcoll-amount"
                 type="text"
                 inputMode="decimal"
                 value={agreedAmount}
                 onChange={(e) => setAgreedAmount(e.target.value)}
-                placeholder="e.g. 1500"
+                placeholder={t('newSheet.amountPlaceholder')}
                 aria-invalid={!amountValid}
               />
               {!amountValid ? (
-                <p className="text-xs text-danger">
-                  Use a non-negative number with up to 2 decimal places.
-                </p>
+                <p className="text-xs text-danger">{t('newSheet.amountError')}</p>
               ) : null}
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="newcoll-referral">Referral ID (optional)</Label>
+            <Label htmlFor="newcoll-referral">{t('newSheet.referralLabel')}</Label>
             <Input
               id="newcoll-referral"
               type="number"
@@ -235,9 +232,7 @@ export function NewCollaborationSheet({
               aria-invalid={!referralValid}
             />
             {!referralValid ? (
-              <p className="text-xs text-danger">
-                Referral ID must be a positive whole number.
-              </p>
+              <p className="text-xs text-danger">{t('newSheet.referralError')}</p>
             ) : null}
           </div>
 
@@ -257,10 +252,10 @@ export function NewCollaborationSheet({
               onClick={() => onOpenChange(false)}
               disabled={submitting}
             >
-              Cancel
+              {t('newSheet.cancel')}
             </Button>
             <Button type="submit" disabled={!canSubmit}>
-              {submitting ? 'Creating…' : 'Create collaboration'}
+              {submitting ? t('newSheet.creating') : t('newSheet.create')}
             </Button>
           </SheetFooter>
         </form>

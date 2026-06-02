@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError, setTokens } from '../api';
 import { AuthShell } from '@/components/AppShell';
 import { AuthBanner } from '@/components/AuthBanner';
@@ -33,6 +34,7 @@ type ConfirmState =
 type Props = { onLogin: () => void };
 
 export default function VerifyEmailConfirmPage({ onLogin }: Props) {
+  const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
@@ -48,7 +50,7 @@ export default function VerifyEmailConfirmPage({ onLogin }: Props) {
     if (!token) {
       setState({
         kind: 'error',
-        message: 'No confirmation token in this link.',
+        message: t('verifyConfirm.noToken'),
       });
       return;
     }
@@ -86,8 +88,7 @@ export default function VerifyEmailConfirmPage({ onLogin }: Props) {
         setState({
           kind: 'error',
           code: parsed?.code,
-          message:
-            parsed?.message ?? 'This verification link is invalid or has expired.',
+          message: parsed?.message ?? t('verifyConfirm.invalidOrExpired'),
         });
       }
     })();
@@ -97,10 +98,8 @@ export default function VerifyEmailConfirmPage({ onLogin }: Props) {
     <AuthShell>
       <Card>
         <CardHeader>
-          <CardTitle>Confirming your email…</CardTitle>
-          <CardDescription>
-            One moment while we activate your account.
-          </CardDescription>
+          <CardTitle>{t('verifyConfirm.title')}</CardTitle>
+          <CardDescription>{t('verifyConfirm.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {state.kind === 'pending' ? (
@@ -111,22 +110,22 @@ export default function VerifyEmailConfirmPage({ onLogin }: Props) {
           ) : null}
 
           {state.kind === 'success' ? (
-            <AuthBanner variant="success" title="Email verified">
-              Welcome to TradeHub. Redirecting you to your profile…
+            <AuthBanner variant="success" title={t('verifyConfirm.successTitle')}>
+              {t('verifyConfirm.successBody')}
             </AuthBanner>
           ) : null}
 
           {state.kind === 'error' ? (
             <>
-              <AuthBanner variant="danger" title="Verification failed">
+              <AuthBanner variant="danger" title={t('verifyConfirm.errorTitle')}>
                 {state.message}
               </AuthBanner>
               <div className="space-y-2">
                 <Button asChild className="w-full">
-                  <Link to="/verify-email">Send a new link</Link>
+                  <Link to="/verify-email">{t('verifyConfirm.sendNewLink')}</Link>
                 </Button>
                 <Button asChild variant="outline" className="w-full">
-                  <Link to="/login">Back to sign in</Link>
+                  <Link to="/login">{t('shared.backToSignIn')}</Link>
                 </Button>
               </div>
             </>

@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { MapPin, Users } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
+import { formatDate } from '@/lib/format';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { StarRating } from '@/components/StarRating';
@@ -48,10 +50,7 @@ function initials(name?: string | null): string {
 }
 
 function formatMemberSince(iso?: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+  return formatDate(iso, 'monthYear') || null;
 }
 
 export function EmployerCard({
@@ -61,10 +60,11 @@ export function EmployerCard({
   selected,
   className,
 }: EmployerCardProps) {
+  const { t } = useTranslation('workers');
   const name =
     employer.company_name ??
     employer.client_profile?.display_name ??
-    'Employer';
+    t('employerCard.fallbackName');
   const avatar = employer.client_profile?.avatar_url ?? undefined;
   const postcode =
     employer.postcode_area ?? employer.client_profile?.postcode_area ?? null;
@@ -135,26 +135,24 @@ export function EmployerCard({
             <span className="inline-flex items-center gap-1 text-fg-muted">
               <StarRating value={Math.round(rating)} size="sm" />
               <span className="font-medium text-fg">{rating.toFixed(1)}</span>
-              <span>
-                ({reviewCount} review{reviewCount === 1 ? '' : 's'})
-              </span>
+              <span>{t('common:reviews', { count: reviewCount })}</span>
             </span>
           ) : null}
           {teamSize != null ? (
             <span className="inline-flex items-center gap-1 text-fg-muted">
               <Users className="h-3.5 w-3.5" />
-              Team of {teamSize}
+              {t('employerCard.teamOf', { count: teamSize })}
             </span>
           ) : null}
           {memberSince ? (
-            <span className="text-fg-muted">Member since {memberSince}</span>
+            <span className="text-fg-muted">{t('employerCard.memberSince', { date: memberSince })}</span>
           ) : null}
         </div>
       ) : null}
 
       <div>
         <Button type="button" size="sm" variant="outline" tabIndex={-1}>
-          See profile
+          {t('card.seeProfile')}
         </Button>
       </div>
     </Card>

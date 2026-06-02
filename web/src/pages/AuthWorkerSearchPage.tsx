@@ -7,6 +7,7 @@ import {
   SlidersHorizontal,
   Users,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '@/hooks/useAccountMe';
 import { useSpecialisations } from '@/hooks/useSpecialisations';
@@ -70,6 +71,7 @@ function isTab(v: string | null): v is Tab {
 }
 
 export default function AuthWorkerSearchPage() {
+  const { t } = useTranslation('workers');
   const navigate = useNavigate();
   const { isEmployer } = useAccountMe();
   const { items: specialisationOptions, loading: specsLoading } =
@@ -171,7 +173,7 @@ export default function AuthWorkerSearchPage() {
         setResults(data);
       }
     } catch (e) {
-      setError(parseApiError(e)?.message ?? 'Could not load workers.');
+      setError(parseApiError(e)?.message ?? t('search.loadError'));
       setResults(null);
     }
   }, [activeTab, querySuffix]);
@@ -298,12 +300,12 @@ export default function AuthWorkerSearchPage() {
   const filterRail = (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Label htmlFor="ws-postcode">Postcode area</Label>
+        <Label htmlFor="ws-postcode">{t('search.postcodeLabel')}</Label>
         <Input
           id="ws-postcode"
           value={postcodeInput}
           onChange={(e) => setPostcodeInput(e.target.value)}
-          placeholder="e.g. SW1"
+          placeholder={t('search.postcodePlaceholder')}
           onBlur={applyPostcode}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
@@ -315,7 +317,7 @@ export default function AuthWorkerSearchPage() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="ws-spec">Specialisation</Label>
+        <Label htmlFor="ws-spec">{t('search.specialisationLabel')}</Label>
         <Select
           value={specialisationId != null ? String(specialisationId) : '__any__'}
           onValueChange={(v) =>
@@ -325,11 +327,11 @@ export default function AuthWorkerSearchPage() {
           }
           disabled={specsLoading}
         >
-          <SelectTrigger id="ws-spec" aria-label="Specialisation filter">
-            <SelectValue placeholder="Any specialisation" />
+          <SelectTrigger id="ws-spec" aria-label={t('search.specialisationFilterAria')}>
+            <SelectValue placeholder={t('search.anySpecialisation')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__any__">Any specialisation</SelectItem>
+            <SelectItem value="__any__">{t('search.anySpecialisation')}</SelectItem>
             {specialisationOptions.map((opt) => (
               <SelectItem key={opt.id} value={String(opt.id)}>
                 {opt.name}
@@ -340,7 +342,7 @@ export default function AuthWorkerSearchPage() {
       </div>
 
       <div className="space-y-2">
-        <Label>Day rate (£)</Label>
+        <Label>{t('search.dayRateLabel')}</Label>
         <div className="flex gap-2">
           <Input
             type="number"
@@ -348,7 +350,7 @@ export default function AuthWorkerSearchPage() {
             step="1"
             value={rateMinInput}
             onChange={(e) => setRateMinInput(e.target.value)}
-            placeholder="Min"
+            placeholder={t('search.min')}
             onBlur={applyRateRange}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -356,7 +358,7 @@ export default function AuthWorkerSearchPage() {
                 applyRateRange();
               }
             }}
-            aria-label="Minimum day rate"
+            aria-label={t('search.minDayRateAria')}
           />
           <Input
             type="number"
@@ -364,7 +366,7 @@ export default function AuthWorkerSearchPage() {
             step="1"
             value={rateMaxInput}
             onChange={(e) => setRateMaxInput(e.target.value)}
-            placeholder="Max"
+            placeholder={t('search.max')}
             onBlur={applyRateRange}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -372,20 +374,20 @@ export default function AuthWorkerSearchPage() {
                 applyRateRange();
               }
             }}
-            aria-label="Maximum day rate"
+            aria-label={t('search.maxDayRateAria')}
           />
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label>Minimum rating</Label>
+        <Label>{t('search.minRating')}</Label>
         <div className="flex items-center gap-2">
           <StarRating
             value={minRating ?? 0}
             onChange={(v) =>
               commitFilters({ minRating: minRating === v ? null : v })
             }
-            label="Minimum rating"
+            label={t('search.minRating')}
           />
           {minRating != null && minRating > 0 ? (
             <button
@@ -393,7 +395,7 @@ export default function AuthWorkerSearchPage() {
               className="text-xs text-fg-muted underline-offset-2 hover:underline"
               onClick={() => commitFilters({ minRating: null })}
             >
-              clear
+              {t('search.clear')}
             </button>
           ) : null}
         </div>
@@ -409,7 +411,7 @@ export default function AuthWorkerSearchPage() {
               commitFilters({ isAvailable: e.target.checked ? true : null })
             }
           />
-          Available now
+          {t('search.availableNow')}
         </Label>
       </div>
 
@@ -421,7 +423,7 @@ export default function AuthWorkerSearchPage() {
           className="w-full"
           onClick={clearFilters}
         >
-          Clear filters
+          {t('search.clearFilters')}
         </Button>
       ) : null}
     </div>
@@ -430,11 +432,11 @@ export default function AuthWorkerSearchPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Find workers</h1>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t('search.title')}</h1>
         <p className="text-sm text-fg-muted">
           {activeTab === 'saved'
-            ? 'Workers you bookmarked. Tap the icon again to remove a worker from this list.'
-            : 'Browse verified tradespeople and invite them to one of your open jobs.'}
+            ? t('search.subtitleSaved')
+            : t('search.subtitleAll')}
         </p>
       </div>
 
@@ -448,8 +450,8 @@ export default function AuthWorkerSearchPage() {
           }}
         >
           <TabsList>
-            <TabsTrigger value="all">All workers</TabsTrigger>
-            <TabsTrigger value="saved">Saved</TabsTrigger>
+            <TabsTrigger value="all">{t('search.tabAll')}</TabsTrigger>
+            <TabsTrigger value="saved">{t('search.tabSaved')}</TabsTrigger>
           </TabsList>
         </Tabs>
       ) : null}
@@ -468,7 +470,7 @@ export default function AuthWorkerSearchPage() {
           <div className="sticky top-4 space-y-4 rounded-md border border-border-default bg-card p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-fg">
               <SlidersHorizontal className="h-4 w-4" />
-              Filters
+              {t('search.filters')}
               {activeFilterCount > 0 ? (
                 <Badge variant="secondary" className="ml-auto">
                   {activeFilterCount}
@@ -483,8 +485,8 @@ export default function AuthWorkerSearchPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm text-fg-muted">
               {results
-                ? `${results.total} worker${results.total === 1 ? '' : 's'}`
-                : 'Loading…'}
+                ? t('search.count', { count: results.total })
+                : t('search.loading')}
             </div>
             <Sheet
               open={mobileFiltersOpen}
@@ -493,7 +495,7 @@ export default function AuthWorkerSearchPage() {
               <SheetTrigger asChild>
                 <Button variant="outline" size="sm" className="lg:hidden">
                   <Filter />
-                  Filters
+                  {t('search.filters')}
                   {activeFilterCount > 0 ? (
                     <Badge variant="secondary" className="ml-1">
                       {activeFilterCount}
@@ -506,10 +508,8 @@ export default function AuthWorkerSearchPage() {
                 className="w-full overflow-y-auto sm:max-w-sm"
               >
                 <SheetHeader>
-                  <SheetTitle>Filters</SheetTitle>
-                  <SheetDescription>
-                    Narrow the list to workers that match what you need.
-                  </SheetDescription>
+                  <SheetTitle>{t('search.filters')}</SheetTitle>
+                  <SheetDescription>{t('search.filtersDesc')}</SheetDescription>
                 </SheetHeader>
                 <div className="mt-4">{filterRail}</div>
               </SheetContent>
@@ -556,7 +556,7 @@ export default function AuthWorkerSearchPage() {
                 </div>
                 {showPaginator ? (
                   <nav
-                    aria-label="Workers pagination"
+                    aria-label={t('search.paginationAria')}
                     className="flex items-center justify-between gap-2 pt-2"
                   >
                     <Button
@@ -567,10 +567,10 @@ export default function AuthWorkerSearchPage() {
                       onClick={() => commitFilters({ page: page - 1 })}
                     >
                       <ChevronLeft />
-                      Previous
+                      {t('search.previous')}
                     </Button>
                     <span className="text-xs text-fg-muted">
-                      Page {page} of {totalPages}
+                      {t('search.pageOf', { page, total: totalPages })}
                     </span>
                     <Button
                       type="button"
@@ -579,7 +579,7 @@ export default function AuthWorkerSearchPage() {
                       disabled={page >= totalPages}
                       onClick={() => commitFilters({ page: page + 1 })}
                     >
-                      Next
+                      {t('search.next')}
                       <ChevronRight />
                     </Button>
                   </nav>
@@ -588,12 +588,12 @@ export default function AuthWorkerSearchPage() {
             ) : (
               <EmptyState
                 icon={Users}
-                title="No workers found"
-                description="Try broadening your filters."
+                title={t('search.emptyTitle')}
+                description={t('search.emptyDesc')}
               />
             )
           ) : (
-            <p className="text-sm text-fg-muted">Loading…</p>
+            <p className="text-sm text-fg-muted">{t('search.loading')}</p>
           )}
         </section>
       </div>

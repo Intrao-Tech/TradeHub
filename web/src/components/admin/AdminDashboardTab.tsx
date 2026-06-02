@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { formatMoney } from '@/lib/format';
 import {
   ArrowRight,
   ClipboardCheck,
@@ -113,6 +115,7 @@ function StatCard({
 }
 
 export function AdminDashboardTab() {
+  const { t } = useTranslation('admin');
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardStats | null>(null);
   const [err, setErr] = useState('');
@@ -130,7 +133,7 @@ export function AdminDashboardTab() {
       const d = await api<DashboardStats>('/admin/dashboard');
       setData(d);
     } catch (e) {
-      setErr(parseApiError(e)?.message ?? 'Failed to load dashboard');
+      setErr(parseApiError(e)?.message ?? t('dashboard.loadError'));
     } finally {
       setLoading(false);
     }
@@ -144,15 +147,15 @@ export function AdminDashboardTab() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold tracking-tight">Overview</h2>
+          <h2 className="text-base font-semibold tracking-tight">{t('dashboard.title')}</h2>
           <p className="text-sm text-fg-muted">
-            Live snapshot of the platform. Click any tile to drill in.
-            {loading ? ' Refreshing…' : null}
+            {t('dashboard.subtitle')}
+            {loading ? t('dashboard.refreshing') : null}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void load()}>
           <RefreshCw className="h-3.5 w-3.5" />
-          Refresh
+          {t('dashboard.refresh')}
         </Button>
       </div>
       {err ? (
@@ -165,101 +168,117 @@ export function AdminDashboardTab() {
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <StatCard
-              title="Active users"
+              title={t('dashboard.activeUsers')}
               icon={Users}
               value={data.users.active.toLocaleString()}
-              subtitle={`${data.users.total.toLocaleString()} total · ${data.users.deactivated.toLocaleString()} deactivated`}
+              subtitle={t('dashboard.usersSubtitle', {
+                total: data.users.total.toLocaleString(),
+                deactivated: data.users.deactivated.toLocaleString(),
+              })}
               onClick={() => goto('users', { status: 'ACTIVE' })}
-              navigateLabel="Browse users"
+              navigateLabel={t('dashboard.browseUsers')}
             />
             <StatCard
-              title="New (7d / 30d)"
+              title={t('dashboard.newUsers')}
               icon={TrendingUp}
               accent="success"
               value={`${data.users.new_7d} / ${data.users.new_30d}`}
-              subtitle={`${data.users.workers} workers · ${data.users.employers} employers · ${data.staff.total} staff`}
+              subtitle={t('dashboard.newUsersSubtitle', {
+                workers: data.users.workers,
+                employers: data.users.employers,
+                staff: data.staff.total,
+              })}
               onClick={() => goto('users', { sort: 'newest' })}
-              navigateLabel="See recent signups"
+              navigateLabel={t('dashboard.recentSignups')}
             />
             <StatCard
-              title="Staff"
+              title={t('dashboard.staff')}
               icon={ShieldCheckIcon}
               value={data.staff.active.toLocaleString()}
-              subtitle={`${data.staff.on_duty} on duty · ${data.staff.total} total`}
+              subtitle={t('dashboard.staffSubtitle', {
+                onDuty: data.staff.on_duty,
+                total: data.staff.total,
+              })}
               onClick={() => goto('staff')}
-              navigateLabel="Manage staff"
+              navigateLabel={t('dashboard.manageStaff')}
             />
             <StatCard
-              title="Active contracts"
+              title={t('dashboard.activeContracts')}
               icon={FileCheck2}
               value={data.contracts.active.toLocaleString()}
-              subtitle={`${data.contracts.total.toLocaleString()} total`}
+              subtitle={t('dashboard.contractsSubtitle', {
+                total: data.contracts.total.toLocaleString(),
+              })}
               onClick={() => goto('escrow-disputes')}
-              navigateLabel="Open escrow tab"
+              navigateLabel={t('dashboard.openEscrow')}
             />
             <StatCard
-              title="Funded (last 24h)"
+              title={t('dashboard.funded24h')}
               icon={Wallet}
               accent="success"
-              value={`£${Number(data.milestones.funded_last_24h.total).toLocaleString()}`}
-              subtitle={`${data.milestones.funded_last_24h.count} milestones`}
+              value={formatMoney(Number(data.milestones.funded_last_24h.total), { decimals: 0 })}
+              subtitle={t('dashboard.funded24hSubtitle', {
+                count: data.milestones.funded_last_24h.count,
+              })}
               onClick={() => goto('audit', { action: 'escrow.milestone.funded' })}
-              navigateLabel="See audit log"
+              navigateLabel={t('dashboard.seeAudit')}
             />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
-              title="Pending document reviews"
+              title={t('dashboard.pendingReviews')}
               icon={ClipboardCheck}
               accent={data.queues.pending_review_items > 0 ? 'warning' : 'default'}
               value={data.queues.pending_review_items.toLocaleString()}
               onClick={() => goto('documents')}
-              navigateLabel="Open queue"
+              navigateLabel={t('dashboard.openQueue')}
             />
             <StatCard
-              title="Pending approvals"
+              title={t('dashboard.pendingApprovals')}
               icon={ShieldAlert}
               accent={data.queues.pending_approvals > 0 ? 'warning' : 'default'}
               value={data.queues.pending_approvals.toLocaleString()}
               onClick={() => goto('approvals', { status: 'PENDING' })}
-              navigateLabel="Review approvals"
+              navigateLabel={t('dashboard.reviewApprovals')}
             />
             <StatCard
-              title="Active SLA breaches"
+              title={t('dashboard.slaBreaches')}
               icon={ShieldAlert}
               accent={data.queues.sla_breaches_active > 0 ? 'danger' : 'default'}
               value={data.queues.sla_breaches_active.toLocaleString()}
               onClick={() => goto('sla')}
-              navigateLabel="See breaches"
+              navigateLabel={t('dashboard.seeBreaches')}
             />
             <StatCard
-              title="Open disputes"
+              title={t('dashboard.openDisputes')}
               icon={ScaleIcon}
               accent={data.disputes.open > 0 ? 'warning' : 'default'}
               value={data.disputes.open.toLocaleString()}
-              subtitle={`${data.queues.support_threads_active_7d} active support threads (7d)`}
+              subtitle={t('dashboard.openDisputesSubtitle', {
+                count: data.queues.support_threads_active_7d,
+              })}
               onClick={() => goto('escrow-disputes')}
-              navigateLabel="Open disputes tab"
+              navigateLabel={t('dashboard.openDisputesTab')}
             />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <StatCard
-              title="Active support threads (7d)"
+              title={t('dashboard.supportThreads')}
               icon={LifeBuoy}
               value={data.queues.support_threads_active_7d.toLocaleString()}
-              subtitle="Threads with a message in the last 7 days."
+              subtitle={t('dashboard.supportThreadsSubtitle')}
               onClick={() => goto('support')}
-              navigateLabel="Open support"
+              navigateLabel={t('dashboard.openSupport')}
             />
             <StatCard
-              title="Find a user"
+              title={t('dashboard.findUser')}
               icon={Users}
-              value="Search"
-              subtitle="Email, name, slug, postcode, referral code."
+              value={t('dashboard.search')}
+              subtitle={t('dashboard.findUserSubtitle')}
               onClick={() => goto('users')}
-              navigateLabel="Open user search"
+              navigateLabel={t('dashboard.openUserSearch')}
             />
           </div>
 
@@ -268,23 +287,20 @@ export function AdminDashboardTab() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <FileCheck2 className="h-4 w-4 text-fg-muted" />
-                  <CardTitle>Milestones by status</CardTitle>
+                  <CardTitle>{t('dashboard.milestonesByStatus')}</CardTitle>
                 </div>
-                <CardDescription>
-                  Live counts across every escrow state.
-                </CardDescription>
+                <CardDescription>{t('dashboard.milestonesByStatusDesc')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
                   {data.milestones.by_status.length === 0 ? (
                     <span className="text-xs text-fg-muted">
-                      No milestones yet.
+                      {t('dashboard.noMilestones')}
                     </span>
                   ) : (
                     data.milestones.by_status.map((m) => (
                       <Badge key={m.status} variant="outline" className="text-xs">
-                        {m.status}: {m.count} · £
-                        {Number(m.total).toLocaleString()}
+                        {m.status}: {m.count} · {formatMoney(Number(m.total), { decimals: 0 })}
                       </Badge>
                     ))
                   )}
@@ -296,15 +312,13 @@ export function AdminDashboardTab() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <Wallet className="h-4 w-4 text-fg-muted" />
-                  <CardTitle>Payments (last 30 days)</CardTitle>
+                  <CardTitle>{t('dashboard.payments30d')}</CardTitle>
                 </div>
-                <CardDescription>
-                  Grouped by type and current status.
-                </CardDescription>
+                <CardDescription>{t('dashboard.payments30dDesc')}</CardDescription>
               </CardHeader>
               <CardContent>
                 {data.payments_30d.length === 0 ? (
-                  <p className="text-xs text-fg-muted">No payment activity.</p>
+                  <p className="text-xs text-fg-muted">{t('dashboard.noPayments')}</p>
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2">
                     {data.payments_30d.map((p, idx) => (
@@ -317,8 +331,10 @@ export function AdminDashboardTab() {
                           <span className="text-fg-muted">{p.status}</span>
                         </div>
                         <div className="text-xs text-fg-muted">
-                          {p.count} payments · £
-                          {Number(p.amount).toLocaleString()}
+                          {t('dashboard.paymentsLine', {
+                            count: p.count,
+                            amount: formatMoney(Number(p.amount), { decimals: 0 }),
+                          })}
                         </div>
                       </div>
                     ))}
@@ -332,11 +348,9 @@ export function AdminDashboardTab() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-fg-muted" />
-                <CardTitle>New accounts per day (7d)</CardTitle>
+                <CardTitle>{t('dashboard.newAccounts')}</CardTitle>
               </div>
-              <CardDescription>
-                Signups across all account types.
-              </CardDescription>
+              <CardDescription>{t('dashboard.newAccountsDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-end gap-2 h-32">

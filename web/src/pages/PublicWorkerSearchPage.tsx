@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Lock, ShieldCheck, Star, Users } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../api';
+import { formatMoney } from '@/lib/format';
 import { WorkerCard, type WorkerCardData } from '@/components/WorkerCard';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
@@ -30,6 +32,7 @@ type WorkerSearchResponse = {
 const SAMPLE_LIMIT = 20;
 
 export default function PublicWorkerSearchPage() {
+  const { t } = useTranslation('workers');
   const [results, setResults] = useState<WorkerSearchResponse | null>(null);
   const [error, setError] = useState('');
   const [loadingMore, setLoadingMore] = useState(false);
@@ -86,31 +89,31 @@ export default function PublicWorkerSearchPage() {
           id="worker-search-hero-title"
           className="text-3xl font-semibold tracking-tight text-fg sm:text-4xl"
         >
-          Hire verified tradespeople in the UK
+          {t('publicSearch.heroTitle')}
         </h1>
         <ul
           className="mx-auto mt-4 flex max-w-2xl flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-fg-muted"
-          aria-label="Why TradeHub"
+          aria-label={t('publicSearch.whyAria')}
         >
           <li className="inline-flex items-center gap-1.5">
             <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
-            Verified tradespeople
+            {t('publicSearch.verifiedTradespeople')}
           </li>
           <li className="inline-flex items-center gap-1.5">
             <Star className="h-4 w-4 text-primary" aria-hidden="true" />
-            Two-way reviews
+            {t('publicSearch.twoWayReviews')}
           </li>
           <li className="inline-flex items-center gap-1.5">
             <Lock className="h-4 w-4 text-primary" aria-hidden="true" />
-            Escrow payments
+            {t('publicSearch.escrowPayments')}
           </li>
         </ul>
         <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Button asChild size="lg" className="w-full sm:w-auto">
-            <Link to="/register?next=/workers">Hire</Link>
+            <Link to="/register?next=/workers">{t('publicSearch.hire')}</Link>
           </Button>
           <Button asChild size="lg" variant="outline" className="w-full sm:w-auto">
-            <Link to="/register?next=/jobs">Looking for work?</Link>
+            <Link to="/register?next=/jobs">{t('publicSearch.lookingForWork')}</Link>
           </Button>
         </div>
       </section>
@@ -139,12 +142,12 @@ export default function PublicWorkerSearchPage() {
           ) : (
             <EmptyState
               icon={Users}
-              title="No workers yet"
-              description="Check back soon."
+              title={t('publicSearch.emptyTitle')}
+              description={t('publicSearch.emptyDesc')}
             />
           )
         ) : (
-          <p className="text-sm text-fg-muted">Loading…</p>
+          <p className="text-sm text-fg-muted">{t('search.loading')}</p>
         )}
 
         {canLoadMore ? (
@@ -157,7 +160,7 @@ export default function PublicWorkerSearchPage() {
               disabled={loadingMore}
               className="border-primary bg-transparent text-primary hover:bg-primary/5"
             >
-              {loadingMore ? 'Loading…' : 'Load more workers'}
+              {loadingMore ? t('search.loading') : t('publicSearch.loadMore')}
             </Button>
           </div>
         ) : null}
@@ -165,10 +168,10 @@ export default function PublicWorkerSearchPage() {
         {hasLoadedMore ? (
           <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row sm:gap-6">
             <p className="text-base font-medium text-fg">
-              Want to browse more tradespeople?
+              {t('publicSearch.browseMore')}
             </p>
             <Button asChild size="lg">
-              <Link to="/register?next=/workers">Sign up</Link>
+              <Link to="/register?next=/workers">{t('publicSearch.signUp')}</Link>
             </Button>
           </div>
         ) : null}
@@ -180,13 +183,13 @@ export default function PublicWorkerSearchPage() {
           onOpenChange={(o) => {
             if (!o) setSelected(null);
           }}
-          action="contact this tradesperson"
-          name={selected.client_profile?.display_name ?? 'this tradesperson'}
+          action={t('publicSearch.gateAction')}
+          name={selected.client_profile?.display_name ?? t('publicSearch.gateNameFallback')}
           nextPath={`/workers/${String(selected.id)}`}
           avatarUrl={selected.avatar_url ?? selected.client_profile?.avatar_url}
           subtitle={selected.headline ?? null}
           location={selected.postcode_area ?? selected.client_profile?.postcode_area ?? null}
-          stats={workerStats(selected)}
+          stats={workerStats(selected, t)}
           rating={selected.rating_average != null ? Number(selected.rating_average) : null}
         />
       ) : null}
@@ -194,20 +197,23 @@ export default function PublicWorkerSearchPage() {
   );
 }
 
-function workerStats(w: WorkerRow): SignupGateStat[] {
+function workerStats(
+  w: WorkerRow,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): SignupGateStat[] {
   const out: SignupGateStat[] = [];
   if (w.day_rate_min != null && w.day_rate_max != null) {
-    out.push({ label: 'Day rate', value: `£${w.day_rate_min}–${w.day_rate_max}` });
+    out.push({ label: t('publicSearch.statDayRate'), value: `${formatMoney(Number(w.day_rate_min), { decimals: 0 })}–${formatMoney(Number(w.day_rate_max), { decimals: 0 })}` });
   } else if (w.day_rate_min != null) {
-    out.push({ label: 'Day rate', value: `£${w.day_rate_min}` });
+    out.push({ label: t('publicSearch.statDayRate'), value: formatMoney(Number(w.day_rate_min), { decimals: 0 }) });
   }
   if (w.rating_avg != null) {
-    out.push({ label: 'Rating', value: Number(w.rating_avg).toFixed(1) });
+    out.push({ label: t('publicSearch.statRating'), value: Number(w.rating_avg).toFixed(1) });
   } else if (w.rating_average != null) {
-    out.push({ label: 'Rating', value: Number(w.rating_average).toFixed(1) });
+    out.push({ label: t('publicSearch.statRating'), value: Number(w.rating_average).toFixed(1) });
   }
   if (w.rating_count != null && w.rating_count > 0) {
-    out.push({ label: 'Reviews', value: String(w.rating_count) });
+    out.push({ label: t('publicSearch.statReviews'), value: String(w.rating_count) });
   }
   return out;
 }

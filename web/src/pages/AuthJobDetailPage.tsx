@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { formatDate } from '@/lib/format';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -94,6 +96,7 @@ type MyApplicationsResponse = {
 };
 
 export default function AuthJobDetailPage() {
+  const { t } = useTranslation('jobs');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const loggedIn = !!getToken();
@@ -124,7 +127,7 @@ export default function AuthJobDetailPage() {
         const parsed = parseApiError(err);
         setError({
           status: parsed?.status ?? 0,
-          message: parsed?.message ?? 'Could not load this job.',
+          message: parsed?.message ?? t('detail.loadError'),
         });
       })
       .finally(() => {
@@ -182,11 +185,11 @@ export default function AuthJobDetailPage() {
     return (
       <EmptyState
         icon={Briefcase}
-        title="Job not found"
-        description="This job has been removed or never existed."
+        title={t('detail.notFoundTitle')}
+        description={t('detail.notFoundDesc')}
         action={
           <Button asChild variant="outline">
-            <Link to="/jobs">Back to job board</Link>
+            <Link to="/jobs">{t('detail.backToBoard')}</Link>
           </Button>
         }
       />
@@ -198,13 +201,13 @@ export default function AuthJobDetailPage() {
       <div className="space-y-4">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
           <ArrowLeft />
-          Back
+          {t('detail.back')}
         </Button>
         <div
           role="alert"
           className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
         >
-          {error?.message ?? 'Something went wrong loading this job.'}
+          {error?.message ?? t('detail.loadErrorGeneric')}
         </div>
       </div>
     );
@@ -224,7 +227,7 @@ export default function AuthJobDetailPage() {
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/jobs">
             <ArrowLeft />
-            Back to jobs
+            {t('detail.backToJobs')}
           </Link>
         </Button>
       </div>
@@ -234,13 +237,13 @@ export default function AuthJobDetailPage() {
           role="status"
           className="rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-warning"
         >
-          This job is no longer accepting applications.
+          {t('authDetail.closedNotice')}
         </div>
       ) : null}
 
       {loggedIn && isWorker && verificationState === 'PENDING_EMAIL_VERIFICATION' ? (
-        <AuthBanner variant="warning" title="Verify your email to apply">
-          Confirm your email address to start applying to jobs.
+        <AuthBanner variant="warning" title={t('authDetail.verifyTitle')}>
+          {t('authDetail.verifyBody')}
         </AuthBanner>
       ) : null}
 
@@ -251,7 +254,7 @@ export default function AuthJobDetailPage() {
               {detail.is_urgent ? (
                 <Badge variant="danger" className="gap-1">
                   <AlertTriangle className="h-3 w-3" />
-                  Urgent
+                  {t('card.urgent')}
                 </Badge>
               ) : null}
               <JobStatusBadge status={detail.status} />
@@ -269,10 +272,10 @@ export default function AuthJobDetailPage() {
                 </span>
               ) : null}
               {detail.created_at ? (
-                <span>Posted {formatRelative(detail.created_at)}</span>
+                <span>{t('detail.posted', { time: formatRelative(detail.created_at) })}</span>
               ) : null}
               {detail.expires_at ? (
-                <span>Expires {formatRelative(detail.expires_at)}</span>
+                <span>{t('authDetail.expires', { time: formatRelative(detail.expires_at) })}</span>
               ) : null}
             </div>
           </header>
@@ -281,7 +284,7 @@ export default function AuthJobDetailPage() {
 
           {detail.description ? (
             <section className="space-y-2">
-              <h2 className="text-base font-semibold text-fg">Description</h2>
+              <h2 className="text-base font-semibold text-fg">{t('authDetail.descriptionHeading')}</h2>
               <p className="whitespace-pre-wrap text-sm text-fg">
                 {detail.description}
               </p>
@@ -291,7 +294,7 @@ export default function AuthJobDetailPage() {
           {specs.length > 0 ? (
             <section className="space-y-2">
               <h2 className="text-base font-semibold text-fg">
-                Required specialisations
+                {t('authDetail.requiredSpecs')}
               </h2>
               <div className="flex flex-wrap gap-1.5">
                 {specs.map((s) => (
@@ -305,7 +308,7 @@ export default function AuthJobDetailPage() {
 
           {tags.length > 0 ? (
             <section className="space-y-2">
-              <h2 className="text-base font-semibold text-fg">Tags</h2>
+              <h2 className="text-base font-semibold text-fg">{t('authDetail.tags')}</h2>
               <div className="flex flex-wrap gap-1.5">
                 {tags.map((t) => (
                   <Badge key={`tag-${t}`} variant="outline">
@@ -317,20 +320,20 @@ export default function AuthJobDetailPage() {
           ) : null}
 
           <AttachmentList
-            heading="Attachments"
+            heading={t('authDetail.attachments')}
             attachments={detail.attachments}
             previewImages
           />
 
           <section className="space-y-2">
-            <h2 className="text-base font-semibold text-fg">Activity on this job</h2>
+            <h2 className="text-base font-semibold text-fg">{t('authDetail.activity')}</h2>
             <div className="flex items-center gap-2 text-sm text-fg-muted">
               <Users className="h-4 w-4" />
               <span>
                 <span className="font-medium text-fg">
                   {proposalsCount >= 50 ? '50+' : proposalsCount}
                 </span>{' '}
-                {proposalsCount === 1 ? 'application' : 'applications'} received
+                {t('authDetail.applicationsReceived', { count: proposalsCount })}
               </span>
             </div>
           </section>
@@ -365,7 +368,7 @@ export default function AuthJobDetailPage() {
           jobPostId={id}
           jobTitle={detail.title}
           onSuccess={(application) => {
-            toast.success('Application submitted');
+            toast.success(t('authDetail.applicationSubmittedToast'));
             setMyApp(application);
             setRefreshKey((k) => k + 1);
           }}
@@ -374,29 +377,29 @@ export default function AuthJobDetailPage() {
             const code = parsed.code;
             const status = parsed.status;
             if (code === 'ALREADY_APPLIED' || status === 409) {
-              toast.info("You've already applied to this job");
+              toast.info(t('authDetail.alreadyApplied'));
               setRefreshKey((k) => k + 1);
               return 'handled';
             }
             if (code === 'JOB_CLOSED') {
-              toast.warning('This job is no longer accepting applications');
+              toast.warning(t('authDetail.jobClosedToast'));
               setRefreshKey((k) => k + 1);
               return 'handled';
             }
             if (code === 'EMAIL_NOT_VERIFIED' || status === 403) {
-              toast.error(parsed.message ?? 'Verify your email to apply');
+              toast.error(parsed.message ?? t('authDetail.verifyToApplyToast'));
               return 'handled';
             }
             // Heuristic fallback while BE-JOBS-2 / BE-JOBS-3 are in flight:
             // backend currently throws 400 with a string message for both.
             const message = parsed.message ?? '';
             if (/already applied/i.test(message)) {
-              toast.info("You've already applied to this job");
+              toast.info(t('authDetail.alreadyApplied'));
               setRefreshKey((k) => k + 1);
               return 'handled';
             }
             if (/not open/i.test(message)) {
-              toast.warning('This job is no longer accepting applications');
+              toast.warning(t('authDetail.jobClosedToast'));
               setRefreshKey((k) => k + 1);
               return 'handled';
             }
@@ -409,33 +412,30 @@ export default function AuthJobDetailPage() {
 }
 
 function ScopeStrip({ detail }: { detail: JobDetail }) {
-  const pay = formatPay(detail);
+  const { t } = useTranslation('jobs');
+  const pay = formatPay(detail, t);
   const duration =
     detail.duration_days != null
-      ? `${detail.duration_days} day${detail.duration_days === 1 ? '' : 's'}`
+      ? t('card.durationDays', { count: detail.duration_days })
       : null;
   const startDate = detail.start_date
-    ? new Date(detail.start_date).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      })
+    ? formatDate(detail.start_date, 'long')
     : null;
   const items: Array<{
     icon: React.ComponentType<{ className?: string }>;
     label: string;
     value: string;
   }> = [
-    { icon: Briefcase, label: payTypeLabel(detail.pay_type), value: pay },
+    { icon: Briefcase, label: payTypeLabel(detail.pay_type, t), value: pay },
   ];
   if (duration) {
-    items.push({ icon: Clock, label: 'Duration', value: duration });
+    items.push({ icon: Clock, label: t('detail.duration'), value: duration });
   }
   if (startDate) {
-    items.push({ icon: CalendarDays, label: 'Start date', value: startDate });
+    items.push({ icon: CalendarDays, label: t('detail.startDate'), value: startDate });
   }
   if (detail.site_address) {
-    items.push({ icon: MapPin, label: 'Site', value: detail.site_address });
+    items.push({ icon: MapPin, label: t('authDetail.site'), value: detail.site_address });
   }
   return (
     <Card>
@@ -458,10 +458,12 @@ function ScopeStrip({ detail }: { detail: JobDetail }) {
   );
 }
 
-function payTypeLabel(payType?: string): string {
-  if (payType === 'DAY_RATE') return 'Day rate';
-  if (payType === 'FIXED_PRICE') return 'Fixed price';
-  return 'Pay';
+type TFn = (key: string, opts?: Record<string, unknown>) => string;
+
+function payTypeLabel(payType: string | undefined, t: TFn): string {
+  if (payType === 'DAY_RATE') return t('card.payDayRate');
+  if (payType === 'FIXED_PRICE') return t('card.payFixed');
+  return t('detail.payLabel');
 }
 
 type ActionCardProps = {
@@ -493,21 +495,25 @@ function ActionCard({
   initialSaved,
   onApply,
 }: ActionCardProps) {
+  const { t } = useTranslation('jobs');
   // Employer-other: keep the existing behaviour of rendering nothing — but
   // still surface "About the client" elsewhere on the page. The wrapper
   // section below decides what to render given the role/state.
-  const body = renderActionBody({
-    loggedIn,
-    isWorker,
-    isEmployer,
-    ownsPost,
-    verificationState,
-    isClosed,
-    myApp,
-    nextHref,
-    jobId,
-    onApply,
-  });
+  const body = renderActionBody(
+    {
+      loggedIn,
+      isWorker,
+      isEmployer,
+      ownsPost,
+      verificationState,
+      isClosed,
+      myApp,
+      nextHref,
+      jobId,
+      onApply,
+    },
+    t,
+  );
   if (!body) return null;
   return (
     <Card>
@@ -544,12 +550,12 @@ function renderActionBody({
   nextHref,
   jobId,
   onApply,
-}: Omit<ActionCardProps, 'jobTitle'>): React.ReactNode {
+}: Omit<ActionCardProps, 'jobTitle'>, t: TFn): React.ReactNode {
   if (!loggedIn) {
     return (
       <Button asChild className="w-full">
         <Link to={`/login?next=${encodeURIComponent(nextHref)}`}>
-          Sign in to apply
+          {t('authDetail.signInToApply')}
         </Link>
       </Button>
     );
@@ -559,10 +565,10 @@ function renderActionBody({
     return (
       <div className="flex flex-col gap-2">
         <Button asChild>
-          <Link to={`/my-jobs/${jobId}/applicants`}>View applicants</Link>
+          <Link to={`/my-jobs/${jobId}/applicants`}>{t('myJobs.viewApplicants')}</Link>
         </Button>
         <Button asChild variant="outline">
-          <Link to={`/my-jobs/${jobId}/edit`}>Edit</Link>
+          <Link to={`/my-jobs/${jobId}/edit`}>{t('myJobs.edit')}</Link>
         </Button>
       </div>
     );
@@ -581,14 +587,14 @@ function renderActionBody({
     if (upper === 'WITHDRAWN') {
       return (
         <Button disabled className="w-full">
-          Application withdrawn
+          {t('authDetail.applicationWithdrawn')}
         </Button>
       );
     }
     return (
       <Button asChild className="w-full">
         <Link to="/my-applications">
-          Application submitted · View status
+          {t('authDetail.applicationSubmitted')}
         </Link>
       </Button>
     );
@@ -597,7 +603,7 @@ function renderActionBody({
   if (isClosed) {
     return (
       <Button disabled className="w-full">
-        Closed
+        {t('authDetail.closed')}
       </Button>
     );
   }
@@ -607,16 +613,16 @@ function renderActionBody({
       <Button
         disabled
         className="w-full"
-        title="Verify your email to apply"
+        title={t('authDetail.verifyTitle')}
       >
-        Apply
+        {t('authDetail.apply')}
       </Button>
     );
   }
 
   return (
     <Button onClick={onApply} className="w-full">
-      Apply
+      {t('authDetail.apply')}
     </Button>
   );
 }
@@ -626,10 +632,11 @@ function AboutClientCard({
 }: {
   employer: JobDetail['employer'] | null;
 }) {
+  const { t } = useTranslation('jobs');
   if (!employer) return null;
   const cp = employer.client_profile ?? null;
   const displayName =
-    cp?.display_name?.trim() || employer.company_name?.trim() || 'Client';
+    cp?.display_name?.trim() || employer.company_name?.trim() || t('authDetail.clientFallback');
   const avatar = cp?.avatar_url ?? undefined;
   const verification = verificationFromLevel(cp?.verification_level);
   const showVerification = verification !== 'unverified';
@@ -639,16 +646,13 @@ function AboutClientCard({
   const showRating = ratingCount > 0 && Number.isFinite(ratingAvg);
   const location = [cp?.city, cp?.postcode_area].filter(Boolean).join(' · ');
   const memberSince = cp?.created_at
-    ? new Date(cp.created_at).toLocaleDateString('en-GB', {
-        month: 'short',
-        year: 'numeric',
-      })
+    ? formatDate(cp.created_at, 'monthYear')
     : null;
 
   return (
     <Card>
       <CardHeader className="pb-3">
-        <h2 className="text-base font-semibold text-fg">About the client</h2>
+        <h2 className="text-base font-semibold text-fg">{t('authDetail.aboutClient')}</h2>
       </CardHeader>
       <CardContent className="space-y-3 p-5 pt-0 text-sm">
         <div className="flex items-center gap-3">
@@ -688,9 +692,7 @@ function AboutClientCard({
           <div className="flex items-center gap-2 text-fg-muted">
             <StarRating value={Math.round(ratingAvg)} size="sm" />
             <span className="font-medium text-fg">{ratingAvg.toFixed(1)}</span>
-            <span>
-              ({ratingCount} review{ratingCount === 1 ? '' : 's'})
-            </span>
+            <span>{t('common:reviews', { count: ratingCount })}</span>
           </div>
         ) : null}
 
@@ -702,7 +704,7 @@ function AboutClientCard({
         ) : null}
 
         {memberSince ? (
-          <div className="text-fg-muted">Member since {memberSince}</div>
+          <div className="text-fg-muted">{t('authDetail.memberSince', { date: memberSince })}</div>
         ) : null}
       </CardContent>
     </Card>
@@ -710,6 +712,7 @@ function AboutClientCard({
 }
 
 function JobLinkCard({ jobId }: { jobId: string }) {
+  const { t } = useTranslation('jobs');
   const url =
     typeof window !== 'undefined'
       ? `${window.location.origin}/jobs/${jobId}`
@@ -718,19 +721,19 @@ function JobLinkCard({ jobId }: { jobId: string }) {
   async function copy() {
     try {
       await navigator.clipboard.writeText(url);
-      toast.success('Link copied');
+      toast.success(t('authDetail.linkCopied'));
     } catch {
-      toast.error('Could not copy link');
+      toast.error(t('authDetail.copyError'));
     }
   }
 
   return (
     <Card>
       <CardHeader className="pb-3">
-        <h2 className="text-base font-semibold text-fg">Job link</h2>
+        <h2 className="text-base font-semibold text-fg">{t('authDetail.jobLink')}</h2>
       </CardHeader>
       <CardContent className="space-y-2 p-5 pt-0">
-        <Input value={url} readOnly aria-label="Job link" />
+        <Input value={url} readOnly aria-label={t('authDetail.jobLink')} />
         <Button
           type="button"
           variant="outline"
@@ -739,7 +742,7 @@ function JobLinkCard({ jobId }: { jobId: string }) {
           onClick={copy}
         >
           <Copy />
-          Copy link
+          {t('authDetail.copyLink')}
         </Button>
       </CardContent>
     </Card>

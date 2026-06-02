@@ -14,6 +14,20 @@ import { cleanup, configure } from '@testing-library/react';
 import { server } from './msw-server';
 import { clearTokens } from '@/api';
 
+// Swap the production i18n (HTTP backend + Suspense) for a synchronous test
+// instance with the real English bundles inlined — see ./i18n.ts. Hoisted by
+// Vitest and applied to every test file, so `useTranslation()` / formatMoney
+// resolve without a network call or a <Suspense> boundary.
+vi.mock('@/i18n', async () => await import('./i18n'));
+
+// Eagerly initialise that instance for EVERY test file. The vi.mock above only
+// runs its factory when a module imports `@/i18n`; a component that imports just
+// `react-i18next` (e.g. NewCollaborationSheet, EditJobPage, MyJobsPage) would
+// otherwise leave the i18next singleton un-init'd, so `useTranslation()` returns
+// raw keys instead of the English copy. Importing the side-effecting init here
+// guarantees the singleton is ready before any render.
+import './i18n';
+
 // Raise the async-util timeout used by `waitFor` / `findBy*`. The 1000ms
 // default flakes when ~56 test files contend for a loaded machine — a
 // re-render that normally lands in <100ms can slip past 1s under load.

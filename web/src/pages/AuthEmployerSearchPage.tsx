@@ -7,6 +7,7 @@ import {
   Filter,
   SlidersHorizontal,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '../api';
 import { EmployerCard, type EmployerCardData } from '@/components/EmployerCard';
 import { EmptyState } from '@/components/EmptyState';
@@ -35,6 +36,7 @@ type EmployerSearchResponse = {
 const PAGE_SIZE = 10;
 
 export default function AuthEmployerSearchPage() {
+  const { t } = useTranslation('workers');
   const navigate = useNavigate();
 
   const [params, setParams] = useSearchParams();
@@ -67,7 +69,7 @@ export default function AuthEmployerSearchPage() {
       );
       setResults(data);
     } catch (e) {
-      setError(parseApiError(e)?.message ?? 'Could not load employers.');
+      setError(parseApiError(e)?.message ?? t('employerSearch.loadError'));
       setResults(null);
     }
   }, [querySuffix]);
@@ -112,12 +114,12 @@ export default function AuthEmployerSearchPage() {
   const filterRail = (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Label htmlFor="es-search">Company name</Label>
+        <Label htmlFor="es-search">{t('employerSearch.companyLabel')}</Label>
         <Input
           id="es-search"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="e.g. Acme Build"
+          placeholder={t('employerSearch.companyPlaceholder')}
           onBlur={applySearch}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
@@ -136,7 +138,7 @@ export default function AuthEmployerSearchPage() {
           className="w-full"
           onClick={clearFilters}
         >
-          Clear filters
+          {t('search.clearFilters')}
         </Button>
       ) : null}
     </div>
@@ -146,11 +148,9 @@ export default function AuthEmployerSearchPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-          Find employers
+          {t('employerSearch.title')}
         </h1>
-        <p className="text-sm text-fg-muted">
-          Browse verified employers that hire on TradeHub.
-        </p>
+        <p className="text-sm text-fg-muted">{t('employerSearch.subtitle')}</p>
       </div>
 
       {error ? (
@@ -167,7 +167,7 @@ export default function AuthEmployerSearchPage() {
           <div className="sticky top-4 space-y-4 rounded-md border border-border-default bg-card p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-fg">
               <SlidersHorizontal className="h-4 w-4" />
-              Filters
+              {t('search.filters')}
               {activeFilterCount > 0 ? (
                 <Badge variant="secondary" className="ml-auto">
                   {activeFilterCount}
@@ -182,8 +182,8 @@ export default function AuthEmployerSearchPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm text-fg-muted">
               {results
-                ? `${results.total} employer${results.total === 1 ? '' : 's'}`
-                : 'Loading…'}
+                ? t('employerSearch.count', { count: results.total })
+                : t('search.loading')}
             </div>
             <Sheet
               open={mobileFiltersOpen}
@@ -192,7 +192,7 @@ export default function AuthEmployerSearchPage() {
               <SheetTrigger asChild>
                 <Button variant="outline" size="sm" className="lg:hidden">
                   <Filter />
-                  Filters
+                  {t('search.filters')}
                   {activeFilterCount > 0 ? (
                     <Badge variant="secondary" className="ml-1">
                       {activeFilterCount}
@@ -205,11 +205,8 @@ export default function AuthEmployerSearchPage() {
                 className="w-full overflow-y-auto sm:max-w-sm"
               >
                 <SheetHeader>
-                  <SheetTitle>Filters</SheetTitle>
-                  <SheetDescription>
-                    Narrow the list to employers that match what you're
-                    looking for.
-                  </SheetDescription>
+                  <SheetTitle>{t('search.filters')}</SheetTitle>
+                  <SheetDescription>{t('employerSearch.filtersDesc')}</SheetDescription>
                 </SheetHeader>
                 <div className="mt-4">{filterRail}</div>
               </SheetContent>
@@ -232,7 +229,7 @@ export default function AuthEmployerSearchPage() {
                 </div>
                 {showPaginator ? (
                   <nav
-                    aria-label="Employers pagination"
+                    aria-label={t('employerSearch.paginationAria')}
                     className="flex items-center justify-between gap-2 pt-2"
                   >
                     <Button
@@ -243,10 +240,10 @@ export default function AuthEmployerSearchPage() {
                       onClick={() => commitFilters({ page: page - 1 })}
                     >
                       <ChevronLeft />
-                      Previous
+                      {t('search.previous')}
                     </Button>
                     <span className="text-xs text-fg-muted">
-                      Page {page} of {totalPages}
+                      {t('search.pageOf', { page, total: totalPages })}
                     </span>
                     <Button
                       type="button"
@@ -255,7 +252,7 @@ export default function AuthEmployerSearchPage() {
                       disabled={page >= totalPages}
                       onClick={() => commitFilters({ page: page + 1 })}
                     >
-                      Next
+                      {t('search.next')}
                       <ChevronRight />
                     </Button>
                   </nav>
@@ -264,12 +261,12 @@ export default function AuthEmployerSearchPage() {
             ) : (
               <EmptyState
                 icon={Building2}
-                title="No employers found"
-                description="Try adjusting your filters."
+                title={t('employerSearch.emptyTitle')}
+                description={t('employerSearch.emptyDesc')}
               />
             )
           ) : (
-            <p className="text-sm text-fg-muted">Loading…</p>
+            <p className="text-sm text-fg-muted">{t('search.loading')}</p>
           )}
         </section>
       </div>
