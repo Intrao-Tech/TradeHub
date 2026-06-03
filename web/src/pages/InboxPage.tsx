@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { ApiError, api, parseApiError } from '@/api';
@@ -16,7 +17,10 @@ import type {
 } from '@/components/chat/types';
 import { cn } from '@/lib/utils';
 
-function previewLine(message: ChatMessage | null): string | null {
+function previewLine(
+  message: ChatMessage | null,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string | null {
   if (!message) return null;
   if (message.content && message.content.trim().length > 0) {
     return message.content;
@@ -24,13 +28,14 @@ function previewLine(message: ChatMessage | null): string | null {
   // A file message carries its file inline now.
   if (message.file_url) {
     return message.original_name
-      ? `Sent a file: ${message.original_name}`
-      : 'Sent a file';
+      ? t('inbox.sentFileNamed', { name: message.original_name })
+      : t('inbox.sentFile');
   }
   return null;
 }
 
 export default function InboxPage() {
+  const { t } = useTranslation('chat');
   const navigate = useNavigate();
   const { conversationId: routeConversationId } = useParams<{
     conversationId?: string;
@@ -56,7 +61,7 @@ export default function InboxPage() {
       if (err instanceof ApiError && err.status === 401) {
         setError(null);
       } else {
-        setError(parseApiError(err)?.message ?? 'Could not load conversations.');
+        setError(parseApiError(err)?.message ?? t('inbox.loadError'));
       }
     } finally {
       setLoading(false);
@@ -109,7 +114,7 @@ export default function InboxPage() {
       className="flex h-[calc(100vh-7rem)] flex-col gap-3"
     >
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">Inbox</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-fg">{t('inbox.title')}</h1>
       </header>
 
       {error ? (
@@ -130,7 +135,7 @@ export default function InboxPage() {
           )}
         >
           <div className="border-b border-border-default px-3 py-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Conversations
+            {t('inbox.conversations')}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {loading ? (
@@ -143,8 +148,8 @@ export default function InboxPage() {
               <div className="p-4">
                 <EmptyState
                   icon={MessageSquare}
-                  title="No conversations yet"
-                  description="Once you confirm a collaboration, the chat with your counterparty appears here."
+                  title={t('inbox.noConversationsTitle')}
+                  description={t('inbox.noConversationsDesc')}
                 />
               </div>
             ) : (
@@ -183,8 +188,8 @@ export default function InboxPage() {
             <div className="flex h-full items-center justify-center p-6">
               <EmptyState
                 icon={MessageSquare}
-                title="Select a conversation"
-                description="Pick one from the list to view messages."
+                title={t('inbox.selectTitle')}
+                description={t('inbox.selectDesc')}
               />
             </div>
           )}
@@ -201,11 +206,12 @@ type InboxRowProps = {
 };
 
 function InboxRow({ row, active, onSelect }: InboxRowProps) {
+  const { t } = useTranslation('chat');
   const name =
     row.other_participant?.display_name ??
     (row.other_participant?.account_id != null
-      ? `Account ${String(row.other_participant.account_id)}`
-      : 'Conversation');
+      ? t('inbox.accountName', { id: String(row.other_participant.account_id) })
+      : t('inbox.fallbackName'));
   const lastIso =
     row.conversation.last_message_at ?? row.last_message?.created_at ?? null;
 
@@ -218,7 +224,7 @@ function InboxRow({ row, active, onSelect }: InboxRowProps) {
           other_party_avatar: row.other_participant?.avatar_url ?? null,
           other_party_verification_level:
             row.other_participant?.verification_level ?? null,
-          last_message_preview: previewLine(row.last_message ?? null),
+          last_message_preview: previewLine(row.last_message ?? null, t),
           last_message_at: lastIso,
           unread_count: row.unread_count,
         }}
@@ -234,13 +240,14 @@ type ConversationPanelHeaderProps = {
 };
 
 export function MobileBackButton({ onBack }: ConversationPanelHeaderProps) {
+  const { t } = useTranslation('chat');
   return (
     <Button
       type="button"
       size="icon"
       variant="ghost"
       className="lg:hidden"
-      aria-label="Back to inbox"
+      aria-label={t('inbox.backToInbox')}
       onClick={onBack}
     >
       <ArrowLeft className="h-4 w-4" />

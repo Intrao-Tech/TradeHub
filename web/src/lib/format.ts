@@ -14,9 +14,17 @@ import i18n from '@/i18n';
 // ("5 Jun 2026", "£1,500.00") rather than US English.
 const FORMAT_LOCALE: Record<string, string> = {
   en: 'en-GB',
+  uk: 'uk-UA',
 };
 
-function activeLocale(): string {
+/**
+ * The BCP-47 locale for the active language. Exported so other surfaces that
+ * format dates/times directly (e.g. the chat helpers) follow the same locale
+ * instead of falling back to the browser default — passing `undefined` to
+ * `toLocaleDateString` renders in whatever locale the OS/browser is set to
+ * (often Russian for ru/uk machines), not the language the user picked.
+ */
+export function activeLocale(): string {
   const lng = i18n.resolvedLanguage ?? i18n.language ?? 'en';
   return FORMAT_LOCALE[lng] ?? lng;
 }

@@ -31,6 +31,7 @@ import {
   POSTCODE_OUTWARD_REGEX,
 } from '@/lib/london-boroughs';
 import { cn } from '@/lib/utils';
+import { specLabel } from '@/lib/specialisations';
 
 export type JobPostFormValues = {
   title: string;
@@ -261,8 +262,8 @@ export function JobPostForm({
   }
 
   const specOptions = useMemo(
-    () => specs.map((s) => ({ id: s.id, name: s.name })),
-    [specs],
+    () => specs.map((s) => ({ id: s.id, name: specLabel(s.name, t) })),
+    [specs, t],
   );
   const tagOptions = useMemo(
     () => tags.map((t) => ({ id: t.id, name: t.name })),

@@ -46,7 +46,7 @@ export default function ResetPasswordPage() {
     if (!policy.ok) {
       setError({
         title: t('reset.error.passwordRejected'),
-        message: policy.reasons.map(describeReason).join(' '),
+        message: policy.reasons.map((r) => describeReason(r, t)).join(' '),
       });
       return;
     }
@@ -74,7 +74,7 @@ export default function ResetPasswordPage() {
         setError({
           title: t('reset.error.passwordRejected'),
           message:
-            reasons.map((r) => describeReason(r as never)).join(' ') ||
+            reasons.map((r) => describeReason(r as never, t)).join(' ') ||
             (parsed.message ?? t('reset.error.pickStronger')),
         });
       } else {

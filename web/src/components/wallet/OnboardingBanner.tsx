@@ -50,7 +50,16 @@ export function OnboardingBanner({ status, onRefresh }: OnboardingBannerProps) {
       }
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? t('onboarding.startError'));
+      // Prefer a localized message for known backend conditions (the raw API
+      // message is English-only): rate-limit (429) and the Stripe-not-
+      // configured code. Falls back to the API message, then a generic error.
+      const msg =
+        parsed?.status === 429
+          ? t('common:tooManyRequests')
+          : parsed?.code === 'STRIPE_NOT_CONFIGURED'
+            ? t('onboarding.stripeNotConfigured')
+            : (parsed?.message ?? t('onboarding.startError'));
+      setError(msg);
       setStarting(false);
     }
   }

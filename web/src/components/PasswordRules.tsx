@@ -1,5 +1,6 @@
 import { Check, Circle } from 'lucide-react';
-import { PASSWORD_RULES } from '@/lib/password-policy';
+import { useTranslation } from 'react-i18next';
+import { PASSWORD_RULES, MIN_LENGTH } from '@/lib/password-policy';
 
 type PasswordRulesProps = {
   password: string;
@@ -17,6 +18,7 @@ type PasswordRulesProps = {
  * started typing without satisfying it.
  */
 export function PasswordRules({ password, dirty }: PasswordRulesProps) {
+  const { t } = useTranslation('auth');
   return (
     <ul className="grid gap-1.5 text-xs sm:grid-cols-2" aria-live="polite">
       {PASSWORD_RULES.map((rule) => {
@@ -33,7 +35,7 @@ export function PasswordRules({ password, dirty }: PasswordRulesProps) {
             ) : (
               <Circle className="h-3.5 w-3.5" aria-hidden />
             )}
-            <span>{rule.label}</span>
+            <span>{t(rule.labelKey, { count: MIN_LENGTH, defaultValue: rule.label })}</span>
           </li>
         );
       })}

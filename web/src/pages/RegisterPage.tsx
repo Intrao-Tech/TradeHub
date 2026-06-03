@@ -112,7 +112,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
     if (!policy.ok) {
       setError({
         title: t('register.error.passwordRejected'),
-        message: policy.reasons.map(describeReason).join(' '),
+        message: policy.reasons.map((r) => describeReason(r, t)).join(' '),
       });
       return;
     }
@@ -183,7 +183,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
         setError({
           title: t('register.error.passwordRejected'),
           message:
-            reasons.map((r) => describeReason(r as never)).join(' ') ||
+            reasons.map((r) => describeReason(r as never, t)).join(' ') ||
             (parsed.message ?? t('register.error.pickStronger')),
         });
       } else if (parsed?.code === 'EMAIL_TAKEN') {

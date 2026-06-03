@@ -291,7 +291,11 @@ export default function CollaborationsPage() {
                           {lastContract.project_type ?? t('list.untitledContract')}
                         </strong>{' '}
                         · {fmtGbp(lastContract.agreed_amount)} ·{' '}
-                        <Badge variant="outline">{lastContract.status}</Badge>
+                        <Badge variant="outline">
+                          {t(`contractStatus.${lastContract.status.toLowerCase()}`, {
+                            defaultValue: lastContract.status,
+                          })}
+                        </Badge>
                       </p>
                     ) : (
                       <p className="text-fg-muted">

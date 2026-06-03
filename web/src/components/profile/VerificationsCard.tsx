@@ -11,6 +11,7 @@ import {
   UserCheck,
   Wrench,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../api';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -45,7 +46,7 @@ type PublicLevelResponse = {
   reviews?: { count?: number; average?: number | null };
 };
 
-type Row = { key: string; label: string; icon: LucideIcon; verified: boolean };
+type Row = { key: string; labelKey: string; icon: LucideIcon; verified: boolean };
 
 function workerRows(
   flags: PublicLevelResponse['flags'] | undefined,
@@ -53,54 +54,14 @@ function workerRows(
   const f = flags ?? {};
   const certs = new Set(f.certification_doc_types ?? []);
   return [
-    {
-      key: 'id',
-      label: 'ID',
-      icon: UserCheck,
-      verified: Boolean(f.identity_verified),
-    },
-    {
-      key: 'insurance',
-      label: 'Insurance',
-      icon: ShieldCheck,
-      verified: Boolean(f.insurance_approved),
-    },
-    {
-      key: 'right_to_work',
-      label: 'Right to work',
-      icon: FileCheck2,
-      verified: Boolean(f.right_to_work_verified),
-    },
-    {
-      key: 'hmrc_cis',
-      label: 'HMRC CIS',
-      icon: Receipt,
-      verified: Boolean(f.hmrc_cis_verified),
-    },
-    {
-      key: 'cscs',
-      label: 'CSCS card',
-      icon: BadgeCheck,
-      verified: certs.has('CSCS_CARD'),
-    },
-    {
-      key: 'gas_safe',
-      label: 'Gas Safe',
-      icon: Wrench,
-      verified: certs.has('GAS_SAFE_CERT'),
-    },
-    {
-      key: 'niceic',
-      label: 'NICEIC',
-      icon: Stamp,
-      verified: certs.has('NICEIC_CERT'),
-    },
-    {
-      key: 'firas',
-      label: 'FIRAS',
-      icon: Hammer,
-      verified: certs.has('FIRAS_CERT'),
-    },
+    { key: 'id', labelKey: 'verifications.id', icon: UserCheck, verified: Boolean(f.identity_verified) },
+    { key: 'insurance', labelKey: 'verifications.insurance', icon: ShieldCheck, verified: Boolean(f.insurance_approved) },
+    { key: 'right_to_work', labelKey: 'verifications.rightToWork', icon: FileCheck2, verified: Boolean(f.right_to_work_verified) },
+    { key: 'hmrc_cis', labelKey: 'verifications.hmrcCis', icon: Receipt, verified: Boolean(f.hmrc_cis_verified) },
+    { key: 'cscs', labelKey: 'verifications.cscs', icon: BadgeCheck, verified: certs.has('CSCS_CARD') },
+    { key: 'gas_safe', labelKey: 'verifications.gasSafe', icon: Wrench, verified: certs.has('GAS_SAFE_CERT') },
+    { key: 'niceic', labelKey: 'verifications.niceic', icon: Stamp, verified: certs.has('NICEIC_CERT') },
+    { key: 'firas', labelKey: 'verifications.firas', icon: Hammer, verified: certs.has('FIRAS_CERT') },
   ];
 }
 
@@ -109,30 +70,10 @@ function employerRows(
 ): Row[] {
   const f = flags ?? {};
   return [
-    {
-      key: 'id',
-      label: 'ID',
-      icon: UserCheck,
-      verified: Boolean(f.identity_verified),
-    },
-    {
-      key: 'insurance',
-      label: 'Insurance',
-      icon: ShieldCheck,
-      verified: Boolean(f.insurance_approved),
-    },
-    {
-      key: 'company_house',
-      label: 'Companies House',
-      icon: Building2,
-      verified: Boolean(f.company_house_verified),
-    },
-    {
-      key: 'letterhead',
-      label: 'Company letterhead',
-      icon: FileCheck2,
-      verified: Boolean(f.company_letterhead_approved),
-    },
+    { key: 'id', labelKey: 'verifications.id', icon: UserCheck, verified: Boolean(f.identity_verified) },
+    { key: 'insurance', labelKey: 'verifications.insurance', icon: ShieldCheck, verified: Boolean(f.insurance_approved) },
+    { key: 'company_house', labelKey: 'verifications.companiesHouse', icon: Building2, verified: Boolean(f.company_house_verified) },
+    { key: 'letterhead', labelKey: 'verifications.letterhead', icon: FileCheck2, verified: Boolean(f.company_letterhead_approved) },
   ];
 }
 
@@ -143,6 +84,7 @@ export function VerificationsCard({
   clientProfileId: string | number | bigint | null | undefined;
   role: VerificationsCardRole;
 }) {
+  const { t } = useTranslation('common');
   const [data, setData] = useState<PublicLevelResponse | null>(null);
 
   useEffect(() => {
@@ -168,7 +110,7 @@ export function VerificationsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Verifications</CardTitle>
+        <CardTitle className="text-base">{t('verifications.title')}</CardTitle>
       </CardHeader>
       <CardContent>
         <ul className="divide-y divide-border-default">
@@ -179,12 +121,12 @@ export function VerificationsCard({
             >
               <span className="inline-flex items-center gap-2 text-fg">
                 <row.icon className="h-4 w-4 text-fg-muted" />
-                <span>{row.label}</span>
+                <span>{t(row.labelKey)}</span>
               </span>
               {row.verified ? (
-                <Badge variant="success">Verified</Badge>
+                <Badge variant="success">{t('verifications.verified')}</Badge>
               ) : (
-                <Badge variant="outline">Not verified</Badge>
+                <Badge variant="outline">{t('verifications.notVerified')}</Badge>
               )}
             </li>
           ))}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { formatDate } from '@/lib/format';
+import { specLabel, tagLabel } from '@/lib/specialisations';
 import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
@@ -214,9 +215,11 @@ export default function AuthJobDetailPage() {
   }
 
   const specs = (detail.specialisations ?? [])
-    .map((s) => s.specialisation?.name)
+    .map((s) => (s.specialisation?.name ? specLabel(s.specialisation.name, t) : null))
     .filter(Boolean) as string[];
-  const tags = (detail.tags ?? []).map((t) => t.tag?.name).filter(Boolean) as string[];
+  const tags = (detail.tags ?? [])
+    .map((tg) => (tg.tag?.name ? tagLabel(tg.tag.name, t) : null))
+    .filter(Boolean) as string[];
   const isClosed = detail.status != null && detail.status.toUpperCase() !== 'OPEN';
   const nextHref = `/jobs/${id}`;
   const proposalsCount = detail._count?.applications ?? 0;
@@ -272,10 +275,10 @@ export default function AuthJobDetailPage() {
                 </span>
               ) : null}
               {detail.created_at ? (
-                <span>{t('detail.posted', { time: formatRelative(detail.created_at) })}</span>
+                <span>{t('detail.posted', { time: formatRelative(detail.created_at, t) })}</span>
               ) : null}
               {detail.expires_at ? (
-                <span>{t('authDetail.expires', { time: formatRelative(detail.expires_at) })}</span>
+                <span>{t('authDetail.expires', { time: formatRelative(detail.expires_at, t) })}</span>
               ) : null}
             </div>
           </header>

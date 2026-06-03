@@ -1,0 +1,52 @@
+{
+  "inbox": {
+    "title": "Вхідні",
+    "conversations": "Розмови",
+    "loadError": "Не вдалося завантажити розмови.",
+    "backToInbox": "Назад до вхідних",
+    "noConversationsTitle": "Розмов ще немає",
+    "noConversationsDesc": "Щойно ви підтвердите співпрацю, тут з’явиться чат із вашою стороною.",
+    "selectTitle": "Виберіть розмову",
+    "selectDesc": "Виберіть розмову зі списку, щоб переглянути повідомлення.",
+    "fallbackName": "Розмова",
+    "accountName": "Акаунт {{id}}",
+    "sentFile": "Надіслано файл",
+    "sentFileNamed": "Надіслано файл: {{name}}",
+    "noMessages": "Повідомлень ще немає"
+  },
+  "panel": {
+    "counterparty": "Співрозмовник",
+    "conversation": "Розмова",
+    "viewCollaboration": "Переглянути співпрацю",
+    "unavailableTitle": "Розмова недоступна",
+    "notFound": "Розмову не знайдено або у вас немає доступу.",
+    "loadError": "Не вдалося завантажити розмову.",
+    "emailNotVerified": "Підтвердьте електронну пошту, щоб брати участь у цій розмові.",
+    "accountDeactivated": "Цей акаунт деактивовано.",
+    "cannotSend": "Ви не можете надсилати повідомлення в поточному стані акаунта."
+  },
+  "bubble": {
+    "sending": "Надсилання…",
+    "couldntSend": "Не вдалося надіслати",
+    "seen": "Переглянуто",
+    "retry": "Повторити",
+    "discard": "Відхилити",
+    "attachment": "Вкладення"
+  },
+  "composer": {
+    "placeholder": "Напишіть повідомлення…",
+    "messageAria": "Повідомлення",
+    "sendAria": "Надіслати повідомлення"
+  },
+  "list": {
+    "newMessages": "Нові повідомлення"
+  },
+  "day": {
+    "today": "Сьогодні",
+    "yesterday": "Вчора"
+  },
+  "system": {
+    "jobAcceptedWelcome": "Вакансію прийнято. Ласкаво просимо до TradeHub.",
+    "collaborationConfirmed": "Співпрацю підтверджено. Тепер ви можете спілкуватися щодо проєкту."
+  }
+}

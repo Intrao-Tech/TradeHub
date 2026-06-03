@@ -25,7 +25,10 @@ export type PasswordPolicyResult =
  */
 export type PasswordRule = {
   id: PasswordPolicyReason;
+  /** English fallback copy (used as `defaultValue` and in non-i18n contexts/tests). */
   label: string;
+  /** i18next key (in the `auth` namespace) for the localized label. */
+  labelKey: string;
   check: (password: string) => boolean;
 };
 
@@ -33,26 +36,31 @@ export const PASSWORD_RULES: PasswordRule[] = [
   {
     id: 'too_short',
     label: `At least ${MIN_LENGTH} characters`,
+    labelKey: 'auth:shared.atLeastChars',
     check: (p) => p.length >= MIN_LENGTH,
   },
   {
     id: 'no_lowercase',
     label: 'One lowercase letter (a–z)',
+    labelKey: 'auth:password.lowercase',
     check: (p) => /[a-z]/.test(p),
   },
   {
     id: 'no_uppercase',
     label: 'One uppercase letter (A–Z)',
+    labelKey: 'auth:password.uppercase',
     check: (p) => /[A-Z]/.test(p),
   },
   {
     id: 'no_digit',
     label: 'One digit (0–9)',
+    labelKey: 'auth:password.digit',
     check: (p) => /\d/.test(p),
   },
   {
     id: 'no_special',
     label: 'One special character (!@#$…)',
+    labelKey: 'auth:password.special',
     check: (p) => /[^a-zA-Z0-9]/.test(p),
   },
 ];
@@ -74,7 +82,22 @@ export function checkPassword(password: string): PasswordPolicyResult {
   return reasons.length === 0 ? { ok: true } : { ok: false, reasons };
 }
 
-export function describeReason(reason: PasswordPolicyReason): string {
+type TFn = (key: string, opts?: Record<string, unknown>) => string;
+
+/**
+ * Human-readable copy for a failed rule. Pass the i18next `t` for a localized
+ * sentence (keys live in the `auth` namespace); called without `t` it returns
+ * the English fallback — keeps the pure-lib unit test and non-React callers
+ * working.
+ */
+export function describeReason(
+  reason: PasswordPolicyReason,
+  t?: TFn,
+): string {
+  if (t) {
+    const count = reason === 'too_long' ? MAX_LENGTH : MIN_LENGTH;
+    return t(`auth:password.reason.${reason}`, { count });
+  }
   switch (reason) {
     case 'too_short':
       return `Use at least ${MIN_LENGTH} characters.`;

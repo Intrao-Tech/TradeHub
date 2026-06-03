@@ -9,6 +9,7 @@ import { VerificationsCard } from '../components/profile/VerificationsCard';
 import { EmptyState } from '../components/EmptyState';
 import { ReviewsTab } from '@/components/reviews/ReviewsTab';
 import { languageName } from '../lib/iso-639-1';
+import { specLabel } from '../lib/specialisations';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -132,9 +133,9 @@ export default function WorkerDetailPage() {
   const specs = useMemo(
     () =>
       (worker?.worker_specialisations ?? [])
-        .map((s) => s.specialisation?.name)
+        .map((s) => (s.specialisation?.name ? specLabel(s.specialisation.name, t) : null))
         .filter(Boolean) as string[],
-    [worker?.worker_specialisations],
+    [worker?.worker_specialisations, t],
   );
 
   if (loading) {

@@ -135,5 +135,11 @@
     "tabAll": "All workers",
     "tabSaved": "Saved",
     "title": "Find workers"
+  },
+  "saveBtn": {
+    "saved": "Saved",
+    "saveWorker": "Save worker",
+    "unsaveWorker": "Unsave worker",
+    "error": "Could not update saved worker"
   }
 }

@@ -294,7 +294,7 @@ function ApplicationRow({
           ) : null}
           {post ? <span>{formatPay(post, t)}</span> : null}
           {application.created_at ? (
-            <span>{t('applicant.applied', { time: formatRelative(application.created_at) })}</span>
+            <span>{t('applicant.applied', { time: formatRelative(application.created_at, t) })}</span>
           ) : null}
           {application.proposed_rate != null ? (
             <span>

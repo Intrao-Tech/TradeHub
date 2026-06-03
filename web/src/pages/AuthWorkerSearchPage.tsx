@@ -8,6 +8,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { specLabel } from '@/lib/specialisations';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '@/hooks/useAccountMe';
 import { useSpecialisations } from '@/hooks/useSpecialisations';
@@ -334,7 +335,7 @@ export default function AuthWorkerSearchPage() {
             <SelectItem value="__any__">{t('search.anySpecialisation')}</SelectItem>
             {specialisationOptions.map((opt) => (
               <SelectItem key={opt.id} value={String(opt.id)}>
-                {opt.name}
+                {specLabel(opt.name, t)}
               </SelectItem>
             ))}
           </SelectContent>

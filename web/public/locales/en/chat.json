@@ -1,0 +1,52 @@
+{
+  "inbox": {
+    "title": "Inbox",
+    "conversations": "Conversations",
+    "loadError": "Could not load conversations.",
+    "backToInbox": "Back to inbox",
+    "noConversationsTitle": "No conversations yet",
+    "noConversationsDesc": "Once you confirm a collaboration, the chat with your counterparty appears here.",
+    "selectTitle": "Select a conversation",
+    "selectDesc": "Pick one from the list to view messages.",
+    "fallbackName": "Conversation",
+    "accountName": "Account {{id}}",
+    "sentFile": "Sent a file",
+    "sentFileNamed": "Sent a file: {{name}}",
+    "noMessages": "No messages yet"
+  },
+  "panel": {
+    "counterparty": "Counterparty",
+    "conversation": "Conversation",
+    "viewCollaboration": "View collaboration",
+    "unavailableTitle": "Conversation unavailable",
+    "notFound": "Conversation not found or you don’t have access.",
+    "loadError": "Could not load conversation.",
+    "emailNotVerified": "Verify your email to participate in this conversation.",
+    "accountDeactivated": "This account has been deactivated.",
+    "cannotSend": "You can’t send messages in your current account state."
+  },
+  "bubble": {
+    "sending": "Sending…",
+    "couldntSend": "Couldn’t send",
+    "seen": "Seen",
+    "retry": "Retry",
+    "discard": "Discard",
+    "attachment": "Attachment"
+  },
+  "composer": {
+    "placeholder": "Write a message…",
+    "messageAria": "Message",
+    "sendAria": "Send message"
+  },
+  "list": {
+    "newMessages": "New messages"
+  },
+  "day": {
+    "today": "Today",
+    "yesterday": "Yesterday"
+  },
+  "system": {
+    "jobAcceptedWelcome": "Job accepted. Welcome to TradeHub.",
+    "collaborationConfirmed": "Collaboration confirmed. You can now message each other about the project."
+  }
+}

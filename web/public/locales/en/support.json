@@ -1,0 +1,15 @@
+{
+  "title": "Support",
+  "subtitle": "One thread for everything. Our team usually replies within a few hours.",
+  "cardTitle": "TradeHub Support",
+  "cardDesc": "Tell us what's going on — billing, account, payouts, anything. We keep the full conversation here so any agent can pick up from where we left off.",
+  "loadError": "Failed to load support thread",
+  "loading": "Loading…",
+  "noMessages": "No messages yet",
+  "emptyDesc": "Send your first message below — support will reply here.",
+  "attachment": "attachment",
+  "placeholder": "Write a message… (⌘/Ctrl + Enter to send)",
+  "send": "Send",
+  "sending": "Sending…",
+  "sendError": "Send failed"
+}

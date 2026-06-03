@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { StarRating } from '@/components/StarRating';
 import { VerificationBadge, verificationFromLevel } from './VerificationBadge';
 import { cn } from '@/lib/utils';
+import { specLabel, tagLabel } from '@/lib/specialisations';
 
 export type WorkerCardData = {
   id: string | number;
@@ -100,10 +101,10 @@ export function WorkerCard({
   const showVerification = verification !== 'unverified';
 
   const specs = (worker.specialisations ?? worker.worker_specialisations ?? [])
-    .map((s) => s.specialisation?.name)
+    .map((s) => (s.specialisation?.name ? specLabel(s.specialisation.name, t) : null))
     .filter(Boolean) as string[];
   const tagNames = (worker.tags ?? [])
-    .map((t) => t.tag?.name)
+    .map((tg) => (tg.tag?.name ? tagLabel(tg.tag.name, t) : null))
     .filter(Boolean) as string[];
   const allChips = [...specs, ...tagNames];
   const visibleChips = allChips.slice(0, 5);

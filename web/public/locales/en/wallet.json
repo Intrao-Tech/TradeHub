@@ -165,7 +165,8 @@
     "setupTitle": "Set up payouts",
     "startError": "Failed to start onboarding.",
     "starting": "Starting…",
-    "waitingOn": "Stripe is waiting on: {{list}}."
+    "waitingOn": "Stripe is waiting on: {{list}}.",
+    "stripeNotConfigured": "Payments are temporarily unavailable. Please try again later."
   },
   "page": {
     "activeEscrow": "Active escrow",

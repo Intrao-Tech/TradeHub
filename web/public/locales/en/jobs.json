@@ -307,5 +307,11 @@
     "twoWayReviews": "Two-way reviews",
     "verifiedEmployers": "Verified employers",
     "whyAria": "Why TradeHub"
+  },
+  "saveBtn": {
+    "saved": "Saved",
+    "saveJob": "Save job",
+    "unsaveJob": "Unsave job",
+    "error": "Could not update saved job"
   }
 }

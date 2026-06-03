@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Hammer, Plus, Trash2 } from 'lucide-react';
 import { api, parseApiError } from '../../api';
+import { specLabel } from '../../lib/specialisations';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -140,7 +141,7 @@ export function AdminSpecialisationsTab() {
                 {rows.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="text-xs text-fg-muted">{s.id}</TableCell>
-                    <TableCell className="font-medium">{s.name}</TableCell>
+                    <TableCell className="font-medium">{specLabel(s.name, t)}</TableCell>
                     <TableCell className="text-xs text-fg-muted font-mono">
                       {s.slug}
                     </TableCell>

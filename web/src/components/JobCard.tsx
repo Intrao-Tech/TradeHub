@@ -11,6 +11,7 @@ import {
   verificationFromLevel,
 } from '@/components/VerificationBadge';
 import { cn } from '@/lib/utils';
+import { specLabel, tagLabel } from '@/lib/specialisations';
 
 export type JobCardData = {
   id: string | number;
@@ -105,10 +106,10 @@ export function JobCard({
 }: JobCardProps) {
   const { t } = useTranslation('jobs');
   const specs = (job.specialisations ?? [])
-    .map((s) => s.specialisation?.name)
+    .map((s) => (s.specialisation?.name ? specLabel(s.specialisation.name, t) : null))
     .filter(Boolean) as string[];
   const tagNames = (job.tags ?? [])
-    .map((t) => t.tag?.name)
+    .map((tg) => (tg.tag?.name ? tagLabel(tg.tag.name, t) : null))
     .filter(Boolean) as string[];
   const chips = [...specs, ...tagNames].slice(0, 5);
   const posted = relativeTime(job.created_at, t);

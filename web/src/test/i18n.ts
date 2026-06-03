@@ -14,7 +14,12 @@ import workers from '../../public/locales/en/workers.json';
 import collaborations from '../../public/locales/en/collaborations.json';
 import wallet from '../../public/locales/en/wallet.json';
 import admin from '../../public/locales/en/admin.json';
+import profile from '../../public/locales/en/profile.json';
+import referrals from '../../public/locales/en/referrals.json';
 import validation from '../../public/locales/en/validation.json';
+import chat from '../../public/locales/en/chat.json';
+import support from '../../public/locales/en/support.json';
+import settings from '../../public/locales/en/settings.json';
 
 export const SUPPORTED_LNGS = ['en', 'uk'] as const;
 export type SupportedLng = (typeof SUPPORTED_LNGS)[number];
@@ -27,7 +32,12 @@ export const NAMESPACES = [
   'collaborations',
   'wallet',
   'admin',
+  'profile',
+  'referrals',
   'validation',
+  'chat',
+  'support',
+  'settings',
 ] as const;
 
 void i18n.use(initReactI18next).init({
@@ -36,7 +46,7 @@ void i18n.use(initReactI18next).init({
   ns: NAMESPACES as unknown as string[],
   defaultNS: 'common',
   resources: {
-    en: { common, auth, jobs, workers, collaborations, wallet, admin, validation },
+    en: { common, auth, jobs, workers, collaborations, wallet, admin, profile, referrals, validation, chat, support, settings },
   },
   interpolation: { escapeValue: false },
   react: { useSuspense: false },

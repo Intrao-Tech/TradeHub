@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, activeLocale } from '@/lib/format';
 import {
   ArrowRight,
   ClipboardCheck,
@@ -360,7 +360,7 @@ export function AdminDashboardTab() {
                     ...data.timeseries.accounts_per_day_7d.map((x) => x.count),
                   );
                   const pct = Math.round((r.count / max) * 100);
-                  const date = new Date(r.day).toLocaleDateString(undefined, {
+                  const date = new Date(r.day).toLocaleDateString(activeLocale(), {
                     weekday: 'short',
                     day: 'numeric',
                   });

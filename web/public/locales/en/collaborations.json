@@ -146,5 +146,16 @@
     "totalReleased": "Total released:",
     "untitled": "Untitled",
     "workerFallback": "Worker"
+  },
+  "contractStatus": {
+    "draft": "Draft",
+    "proposed": "Proposed",
+    "active": "Active",
+    "ended": "Ended"
+  },
+  "endReason": {
+    "completed": "Completed",
+    "canceled": "Canceled",
+    "abandoned": "Abandoned"
   }
 }

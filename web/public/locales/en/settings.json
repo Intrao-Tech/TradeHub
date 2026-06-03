@@ -1,0 +1,39 @@
+{
+  "title": "Security",
+  "subtitle": "Manage your password and active sessions.",
+  "changePassword": {
+    "title": "Change password",
+    "desc": "Pick a password you don't use anywhere else. After saving, all your other devices will be signed out (this device stays signed in).",
+    "currentLabel": "Current password",
+    "newLabel": "New password",
+    "confirmLabel": "Confirm new password",
+    "mismatchInline": "Passwords don't match.",
+    "save": "Update password",
+    "saving": "Saving…",
+    "successTitle": "Password changed",
+    "successBody": "Other devices have been signed out. Your password is now active.",
+    "rejectedTitle": "Password rejected",
+    "mismatchTitle": "Password mismatch",
+    "mismatchMsg": "The new password and confirmation do not match.",
+    "wrongCurrentTitle": "Wrong current password",
+    "wrongCurrentMsg": "The current password you entered is incorrect.",
+    "sameTitle": "Same as before",
+    "sameMsg": "New password must be different from the current one.",
+    "googleTitle": "Google-only account",
+    "googleMsg": "This account uses Google sign-in. Use \"Forgot password\" to set one.",
+    "failTitle": "Could not change password",
+    "failMsg": "Something went wrong.",
+    "pickStronger": "Pick a stronger password."
+  },
+  "logoutAll": {
+    "title": "Sign out of all devices",
+    "desc": "Ends every active TradeHub session, including this one. Use this if you've signed in on a device you no longer have, or suspect your account has been accessed without your permission.",
+    "revokedTitle": "All sessions revoked",
+    "revokedBody_one": "{{count}} session signed out. Redirecting you to sign in…",
+    "revokedBody_other": "{{count}} sessions signed out. Redirecting you to sign in…",
+    "failTitle": "Could not complete",
+    "failMsg": "Could not sign you out — please try again.",
+    "button": "Sign out everywhere",
+    "busy": "Signing out…"
+  }
+}

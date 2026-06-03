@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { formatDate as formatDateLib } from '@/lib/format';
+import { specLabel, tagLabel } from '@/lib/specialisations';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -157,10 +158,10 @@ export default function PublicJobDetailPage() {
   }
 
   const specs = (detail.specialisations ?? [])
-    .map((s) => s.specialisation?.name)
+    .map((s) => (s.specialisation?.name ? specLabel(s.specialisation.name, t) : null))
     .filter(Boolean) as string[];
   const tagNames = (detail.tags ?? [])
-    .map((t) => t.tag?.name)
+    .map((tg) => (tg.tag?.name ? tagLabel(tg.tag.name, t) : null))
     .filter(Boolean) as string[];
   const skills = [...specs, ...tagNames];
 
@@ -194,7 +195,7 @@ export default function PublicJobDetailPage() {
             </h1>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-fg-muted">
               {detail.created_at ? (
-                <span>{t('detail.posted', { time: formatRelative(detail.created_at) })}</span>
+                <span>{t('detail.posted', { time: formatRelative(detail.created_at, t) })}</span>
               ) : null}
               {detail.postcode_area ? (
                 <span className="inline-flex items-center gap-1">

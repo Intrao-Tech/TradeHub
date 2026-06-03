@@ -23,7 +23,12 @@ export const NAMESPACES = [
   'collaborations',
   'wallet',
   'admin',
+  'profile',
+  'referrals',
   'validation',
+  'chat',
+  'support',
+  'settings',
 ] as const;
 
 void i18n

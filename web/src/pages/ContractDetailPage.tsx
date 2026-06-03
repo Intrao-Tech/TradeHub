@@ -277,10 +277,14 @@ export default function ContractDetailPage() {
             <div>
               <dt className="text-xs text-fg-muted">{t('contractDetail.status')}</dt>
               <dd>
-                <Badge variant="info">{contract?.status ?? '—'}</Badge>
+                <Badge variant="info">
+                  {contract?.status
+                    ? t(`contractStatus.${contract.status.toLowerCase()}`, { defaultValue: contract.status })
+                    : '—'}
+                </Badge>
                 {contract?.end_reason ? (
                   <span className="ml-2 text-xs text-fg-muted">
-                    ({contract.end_reason})
+                    ({t(`endReason.${contract.end_reason.toLowerCase()}`, { defaultValue: contract.end_reason })})
                   </span>
                 ) : null}
               </dd>

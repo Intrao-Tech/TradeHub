@@ -314,7 +314,7 @@ function JobRow({
               <Users className="h-3 w-3" />
               {t('myJobs.applications', { count: applicationCount })}
             </Link>
-            <span>{t('card.posted', { time: formatRelative(post.created_at) })}</span>
+            <span>{t('card.posted', { time: formatRelative(post.created_at, t) })}</span>
           </div>
         </CardHeader>
         <CardContent className="flex flex-shrink-0 items-center gap-2 p-0">

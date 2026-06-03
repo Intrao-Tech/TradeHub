@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Bookmark } from 'lucide-react';
 import { api, parseApiError } from '../../api';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ export function SaveJobButton({
   variant = 'icon',
   className,
 }: SaveJobButtonProps) {
+  const { t } = useTranslation('jobs');
   const [saved, setSaved] = useState(initialSaved);
   const [pending, setPending] = useState(false);
 
@@ -46,13 +48,13 @@ export function SaveJobButton({
     } catch (err) {
       // Roll the optimistic toggle back so the icon matches server truth.
       setSaved(!next);
-      toast.error(parseApiError(err)?.message ?? 'Could not update saved job');
+      toast.error(parseApiError(err)?.message ?? t('saveBtn.error'));
     } finally {
       setPending(false);
     }
   }
 
-  const label = saved ? 'Unsave job' : 'Save job';
+  const label = saved ? t('saveBtn.unsaveJob') : t('saveBtn.saveJob');
 
   if (variant === 'pill') {
     return (
@@ -67,7 +69,7 @@ export function SaveJobButton({
         <Bookmark
           className={cn('h-4 w-4', saved && 'fill-current text-primary')}
         />
-        {saved ? 'Saved' : 'Save job'}
+        {saved ? t('saveBtn.saved') : t('saveBtn.saveJob')}
       </Button>
     );
   }

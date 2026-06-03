@@ -1,4 +1,5 @@
 import { BadgeCheck, Circle, ShieldCheck, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -21,24 +22,25 @@ type VerificationBadgeProps = {
 const CONFIG: Record<
   VerificationState,
   {
-    label: string;
+    labelKey: string;
     variant: 'outline' | 'info' | 'warning' | 'success';
     icon: typeof BadgeCheck;
   }
 > = {
-  unverified: { label: 'Unverified', variant: 'outline', icon: Circle },
-  basic: { label: 'Basic — ID verified', variant: 'info', icon: ShieldCheck },
-  certified: { label: 'Certified', variant: 'success', icon: BadgeCheck },
-  premium: { label: 'Premium', variant: 'warning', icon: Sparkles },
+  unverified: { labelKey: 'verification.unverified', variant: 'outline', icon: Circle },
+  basic: { labelKey: 'verification.basic', variant: 'info', icon: ShieldCheck },
+  certified: { labelKey: 'verification.certified', variant: 'success', icon: BadgeCheck },
+  premium: { labelKey: 'verification.premium', variant: 'warning', icon: Sparkles },
 };
 
 export function VerificationBadge({ state, className }: VerificationBadgeProps) {
+  const { t } = useTranslation('common');
   const cfg = CONFIG[state];
   const Icon = cfg.icon;
   return (
-    <Badge variant={cfg.variant} className={cn('gap-1', className)}>
-      <Icon className="h-3 w-3" />
-      {cfg.label}
+    <Badge variant={cfg.variant} className={cn('max-w-full gap-1', className)}>
+      <Icon className="h-3 w-3 shrink-0" />
+      <span className="truncate">{t(cfg.labelKey)}</span>
     </Badge>
   );
 }

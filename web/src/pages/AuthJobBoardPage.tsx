@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { specLabel } from '@/lib/specialisations';
 import {
   Briefcase,
   ChevronLeft,
@@ -329,7 +330,7 @@ export default function AuthJobBoardPage() {
             <SelectItem value="__any__">{t('board.anySpecialisation')}</SelectItem>
             {specialisationOptions.map((opt) => (
               <SelectItem key={opt.id} value={String(opt.id)}>
-                {opt.name}
+                {specLabel(opt.name, t)}
               </SelectItem>
             ))}
           </SelectContent>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MapPin, CalendarCheck } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -46,10 +47,10 @@ type PublicLevelResponse = {
   reviews?: { count?: number; average?: number | null };
 };
 
-const ROLE_LABEL: Record<ProfileHeaderProps['role'], string> = {
-  WORKER: 'Tradesperson',
-  EMPLOYER: 'Employer',
-  CLIENT: 'Client',
+const ROLE_LABEL_KEY: Record<ProfileHeaderProps['role'], string> = {
+  WORKER: 'profileHeader.roleWorker',
+  EMPLOYER: 'profileHeader.roleEmployer',
+  CLIENT: 'profileHeader.roleClient',
 };
 
 function initials(name: string): string {
@@ -77,6 +78,7 @@ export function ProfileHeader({
   isAvailable,
   hideMilestonesStrip = false,
 }: ProfileHeaderProps) {
+  const { t } = useTranslation('common');
   const ratingNum = rating != null ? Number(rating) : null;
   const hasReviews = ratingNum != null && (ratingCount ?? 0) > 0;
   const verification = verificationFromLevel(verificationLevel);
@@ -118,11 +120,11 @@ export function ProfileHeader({
             <h1 className="text-2xl font-semibold tracking-tight text-fg">
               {displayName}
             </h1>
-            <Badge variant="secondary">{ROLE_LABEL[role]}</Badge>
+            <Badge variant="secondary">{t(ROLE_LABEL_KEY[role])}</Badge>
             {role === 'WORKER' && isAvailable ? (
               <Badge variant="success" className="gap-1">
                 <CalendarCheck className="h-3 w-3" />
-                Available
+                {t('profileHeader.available')}
               </Badge>
             ) : null}
           </div>
@@ -140,12 +142,12 @@ export function ProfileHeader({
               <div className="flex items-center gap-2">
                 <StarRating value={Math.round(ratingNum!)} size="sm" />
                 <span className="text-fg-muted">
-                  {ratingNum!.toFixed(1)} · {ratingCount} review
-                  {ratingCount === 1 ? '' : 's'}
+                  {ratingNum!.toFixed(1)} ·{' '}
+                  {t('profileHeader.reviewsCount', { count: ratingCount ?? 0 })}
                 </span>
               </div>
             ) : (
-              <span className="text-fg-muted">No reviews yet</span>
+              <span className="text-fg-muted">{t('profileHeader.noReviews')}</span>
             )}
           </div>
           {publicLevel && !hideMilestonesStrip ? (

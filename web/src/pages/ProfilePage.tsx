@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { MapPin, Pencil } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '../hooks/useAccountMe';
@@ -67,14 +68,23 @@ function initialsFor(name: string): string {
     .join('') || 'TH';
 }
 
-function formatRate(min?: string | number | null, max?: string | number | null): string {
+type TFn = (key: string, opts?: Record<string, unknown>) => string;
+
+function formatRate(
+  min: string | number | null | undefined,
+  max: string | number | null | undefined,
+  t: TFn,
+): string {
   const m = min == null || min === '' ? null : Number(min);
   const x = max == null || max === '' ? null : Number(max);
   if (m == null && x == null) return '—';
   if (m != null && x != null)
-    return `${formatMoney(m, { decimals: 0 })}–${formatMoney(x, { decimals: 0 })}/day`;
-  if (m != null) return `from ${formatMoney(m, { decimals: 0 })}/day`;
-  return `up to ${formatMoney(Number(x), { decimals: 0 })}/day`;
+    return t('rate.perDay', {
+      min: formatMoney(m, { decimals: 0 }),
+      max: formatMoney(x, { decimals: 0 }),
+    });
+  if (m != null) return t('rate.from', { min: formatMoney(m, { decimals: 0 }) });
+  return t('rate.upTo', { max: formatMoney(Number(x), { decimals: 0 }) });
 }
 
 function formatRating(avg?: string | number | null, count?: number | null): {
@@ -89,6 +99,7 @@ function formatRating(avg?: string | number | null, count?: number | null): {
 }
 
 export default function ProfilePage() {
+  const { t } = useTranslation('profile');
   const {
     account,
     clientProfile,
@@ -228,7 +239,7 @@ export default function ProfilePage() {
         method: 'PATCH',
         body: JSON.stringify(patch),
       });
-      flash('Public details updated');
+      flash(t('publicUpdated'));
       await refetch();
     } catch (err) {
       reportError(err);
@@ -241,7 +252,7 @@ export default function ProfilePage() {
     const min = dayRateMin.trim() !== '' ? Number(dayRateMin) : null;
     const max = dayRateMax.trim() !== '' ? Number(dayRateMax) : null;
     if (min != null && max != null && max < min) {
-      setActionError('Day rate max must be greater than or equal to min.');
+      setActionError(t('rateMinMaxError'));
       return;
     }
     try {
@@ -261,7 +272,7 @@ export default function ProfilePage() {
         method: 'PATCH',
         body: JSON.stringify(bodyObj),
       });
-      flash('Worker details updated');
+      flash(t('workerUpdated'));
       await refetch();
     } catch (err) {
       reportError(err);
@@ -280,7 +291,7 @@ export default function ProfilePage() {
         method: 'PATCH',
         body: JSON.stringify(bodyObj),
       });
-      flash('Employer profile updated');
+      flash(t('employerUpdated'));
       await refetch();
     } catch (err) {
       reportError(err);
@@ -303,7 +314,7 @@ export default function ProfilePage() {
   if (loading && !account) {
     return (
       <div className="space-y-4">
-        <p className="text-sm text-fg-muted">Loading…</p>
+        <p className="text-sm text-fg-muted">{t('loading')}</p>
       </div>
     );
   }
@@ -325,7 +336,7 @@ export default function ProfilePage() {
           />
           <div className="min-w-0 flex-1 space-y-1">
             <h2 className="truncate text-lg font-semibold text-fg">
-              {displayName || 'Add a display name'}
+              {displayName || t('header.addDisplayName')}
             </h2>
             <div>
               <VerificationBadge
@@ -351,7 +362,7 @@ export default function ProfilePage() {
                   : `/employers/${String(cp.id)}`
               }
             >
-              View public profile
+              {t('header.viewPublicProfile')}
             </Link>
           </Button>
         ) : null}
@@ -363,16 +374,17 @@ export default function ProfilePage() {
     <Card>
       <CardContent className="grid grid-cols-2 gap-4 pt-6">
         <div>
-          <p className="text-xs uppercase tracking-wide text-fg-muted">Rating</p>
+          <p className="text-xs uppercase tracking-wide text-fg-muted">{t('stats.rating')}</p>
           <p className="text-lg font-semibold text-fg">{rating.avg}</p>
-          <p className="text-xs text-fg-muted">{rating.count} reviews</p>
+          <p className="text-xs text-fg-muted">{t('stats.reviews', { count: rating.count })}</p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wide text-fg-muted">Day rate</p>
+          <p className="text-xs uppercase tracking-wide text-fg-muted">{t('stats.dayRate')}</p>
           <p className="text-lg font-semibold text-fg">
             {formatRate(
               cp?.worker_profile?.day_rate_min,
               cp?.worker_profile?.day_rate_max,
+              t,
             )}
           </p>
         </div>
@@ -388,12 +400,12 @@ export default function ProfilePage() {
     <Card>
       <CardContent className="grid grid-cols-2 gap-4 pt-6">
         <div>
-          <p className="text-xs uppercase tracking-wide text-fg-muted">Rating</p>
+          <p className="text-xs uppercase tracking-wide text-fg-muted">{t('stats.rating')}</p>
           <p className="text-lg font-semibold text-fg">{employerRating.avg}</p>
-          <p className="text-xs text-fg-muted">{employerRating.count} reviews</p>
+          <p className="text-xs text-fg-muted">{t('stats.reviews', { count: employerRating.count })}</p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wide text-fg-muted">Team size</p>
+          <p className="text-xs uppercase tracking-wide text-fg-muted">{t('stats.teamSize')}</p>
           <p className="text-lg font-semibold text-fg">
             {cp?.employer_profile?.team_size ?? '—'}
           </p>
@@ -405,7 +417,7 @@ export default function ProfilePage() {
   const availabilityCard = isWorker && cp ? (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Availability</CardTitle>
+        <CardTitle className="text-base">{t('availability.title')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <label className="flex items-center gap-2 text-sm text-fg">
@@ -415,11 +427,11 @@ export default function ProfilePage() {
             onChange={(e) => setWorkerAvailable(e.target.checked)}
             className="h-4 w-4"
           />
-          Available for work
+          {t('availability.availableForWork')}
         </label>
         <div className="flex flex-col gap-2.5">
           <Label htmlFor="w-available-from" className="text-xs">
-            Available from
+            {t('availability.availableFrom')}
           </Label>
           <Input
             id="w-available-from"
@@ -429,7 +441,7 @@ export default function ProfilePage() {
           />
         </div>
         <Button type="button" size="sm" onClick={(e) => submitWorker(e as unknown as FormEvent)}>
-          Save
+          {t('availability.save')}
         </Button>
       </CardContent>
     </Card>
@@ -438,12 +450,12 @@ export default function ProfilePage() {
   const languagesCard = isWorker && cp ? (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Languages</CardTitle>
+        <CardTitle className="text-base">{t('languages.title')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <LanguagesEditor value={languages} onChange={setLanguages} />
         <Button type="button" size="sm" onClick={(e) => submitWorker(e as unknown as FormEvent)}>
-          Save
+          {t('languages.save')}
         </Button>
       </CardContent>
     </Card>
@@ -516,8 +528,8 @@ export default function ProfilePage() {
             {cp ? (
               <Card id="section-client">
                 <CardHeader>
-                  <CardTitle>Public details</CardTitle>
-                  <CardDescription>What clients see on your profile.</CardDescription>
+                  <CardTitle>{t('publicDetails.title')}</CardTitle>
+                  <CardDescription>{t('publicDetails.descWorker')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <form
@@ -525,7 +537,7 @@ export default function ProfilePage() {
                     className="grid gap-4 sm:grid-cols-2"
                   >
                     <div className="flex flex-col gap-2.5 sm:col-span-2">
-                      <Label htmlFor="p-display-name">Display name</Label>
+                      <Label htmlFor="p-display-name">{t('publicDetails.displayName')}</Label>
                       <Input
                         id="p-display-name"
                         value={displayName}
@@ -534,18 +546,18 @@ export default function ProfilePage() {
                       />
                     </div>
                     <div className="flex flex-col gap-2.5 sm:col-span-2">
-                      <Label htmlFor="p-bio">Bio</Label>
+                      <Label htmlFor="p-bio">{t('publicDetails.bio')}</Label>
                       <Textarea
                         id="p-bio"
                         rows={4}
                         value={bio}
                         onChange={(e) => setBio(e.target.value)}
                         maxLength={2000}
-                        placeholder="Tell clients what you do, your specialties, and what makes you stand out."
+                        placeholder={t('publicDetails.bioPlaceholderWorker')}
                       />
                     </div>
                     <div className="flex flex-col gap-2.5">
-                      <Label htmlFor="p-city">City (London borough)</Label>
+                      <Label htmlFor="p-city">{t('publicDetails.city')}</Label>
                       <Select
                         value={city || '__none__'}
                         onValueChange={(v) => {
@@ -566,10 +578,10 @@ export default function ProfilePage() {
                         }}
                       >
                         <SelectTrigger id="p-city">
-                          <SelectValue placeholder="Select borough" />
+                          <SelectValue placeholder={t('publicDetails.selectBorough')} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__none__">Not set</SelectItem>
+                          <SelectItem value="__none__">{t('publicDetails.notSet')}</SelectItem>
                           {LONDON_BOROUGH_NAMES.map((b) => (
                             <SelectItem key={b} value={b}>
                               {b}
@@ -579,7 +591,7 @@ export default function ProfilePage() {
                       </Select>
                     </div>
                     <div className="flex flex-col gap-2.5">
-                      <Label htmlFor="p-postcode">Postcode area</Label>
+                      <Label htmlFor="p-postcode">{t('publicDetails.postcode')}</Label>
                       <Select
                         value={postcodeAreaClient || '__none__'}
                         onValueChange={(v) => {
@@ -591,12 +603,12 @@ export default function ProfilePage() {
                         <SelectTrigger id="p-postcode">
                           <SelectValue
                             placeholder={
-                              city ? 'Select outward code' : 'Pick a borough first'
+                              city ? t('publicDetails.selectOutward') : t('publicDetails.pickBoroughFirst')
                             }
                           />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__none__">Not set</SelectItem>
+                          <SelectItem value="__none__">{t('publicDetails.notSet')}</SelectItem>
                           {postcodeOptions.map((p) => (
                             <SelectItem key={p} value={p}>
                               {p}
@@ -607,26 +619,26 @@ export default function ProfilePage() {
                       {postcodeAreaClient &&
                       !POSTCODE_OUTWARD_REGEX.test(postcodeAreaClient) ? (
                         <p className="text-xs text-danger">
-                          Outward code looks invalid (e.g. SW1, EC2A, NW10).
+                          {t('publicDetails.outwardInvalid')}
                         </p>
                       ) : null}
                     </div>
                     <div className="sm:col-span-2">
-                      <Button type="submit">Save public details</Button>
+                      <Button type="submit">{t('publicDetails.save')}</Button>
                     </div>
                   </form>
                 </CardContent>
               </Card>
             ) : (
-              <p className="text-sm text-fg-muted">No client profile on this account.</p>
+              <p className="text-sm text-fg-muted">{t('noClientProfile')}</p>
             )}
 
             {/* Worker rate + experience */}
             {cp ? (
               <Card id="section-worker">
                 <CardHeader>
-                  <CardTitle>Rate & experience</CardTitle>
-                  <CardDescription>How clients price and find you.</CardDescription>
+                  <CardTitle>{t('rateExp.title')}</CardTitle>
+                  <CardDescription>{t('rateExp.desc')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <form
@@ -634,7 +646,7 @@ export default function ProfilePage() {
                     className="grid gap-4 sm:grid-cols-3"
                   >
                     <div className="flex flex-col gap-2.5">
-                      <Label htmlFor="w-years">Years experience</Label>
+                      <Label htmlFor="w-years">{t('rateExp.years')}</Label>
                       <Input
                         id="w-years"
                         type="number"
@@ -644,7 +656,7 @@ export default function ProfilePage() {
                       />
                     </div>
                     <div className="flex flex-col gap-2.5">
-                      <Label htmlFor="w-rate-min">Day rate min (£)</Label>
+                      <Label htmlFor="w-rate-min">{t('rateExp.rateMin')}</Label>
                       <Input
                         id="w-rate-min"
                         type="number"
@@ -654,7 +666,7 @@ export default function ProfilePage() {
                       />
                     </div>
                     <div className="flex flex-col gap-2.5">
-                      <Label htmlFor="w-rate-max">Day rate max (£)</Label>
+                      <Label htmlFor="w-rate-max">{t('rateExp.rateMax')}</Label>
                       <Input
                         id="w-rate-max"
                         type="number"
@@ -666,12 +678,12 @@ export default function ProfilePage() {
                       dayRateMax &&
                       Number(dayRateMax) < Number(dayRateMin) ? (
                         <p className="text-xs text-danger">
-                          Max must be ≥ min.
+                          {t('rateExp.maxGteMin')}
                         </p>
                       ) : null}
                     </div>
                     <div className="sm:col-span-3">
-                      <Button type="submit">Save rate & experience</Button>
+                      <Button type="submit">{t('rateExp.save')}</Button>
                     </div>
                   </form>
                 </CardContent>
@@ -682,10 +694,8 @@ export default function ProfilePage() {
             {cp ? (
               <Card id="section-skills">
                 <CardHeader>
-                  <CardTitle>Skills</CardTitle>
-                  <CardDescription>
-                    Trades you cover. These power filters in worker search.
-                  </CardDescription>
+                  <CardTitle>{t('skills.title')}</CardTitle>
+                  <CardDescription>{t('skills.desc')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <SpecialisationPicker
@@ -700,10 +710,8 @@ export default function ProfilePage() {
             {cp ? (
               <Card id="section-portfolio">
                 <CardHeader>
-                  <CardTitle>Portfolio</CardTitle>
-                  <CardDescription>
-                    Showcase past projects with photos and descriptions.
-                  </CardDescription>
+                  <CardTitle>{t('portfolio.title')}</CardTitle>
+                  <CardDescription>{t('portfolio.desc')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <PortfolioTab workerId={workerId} flash={flash} />
@@ -715,10 +723,8 @@ export default function ProfilePage() {
             {cp ? (
               <Card id="section-documents">
                 <CardHeader>
-                  <CardTitle>Documents</CardTitle>
-                  <CardDescription>
-                    Insurance, accreditations, and other verification artefacts.
-                  </CardDescription>
+                  <CardTitle>{t('documents.title')}</CardTitle>
+                  <CardDescription>{t('documents.descWorker')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <DocumentsTab
@@ -747,8 +753,8 @@ export default function ProfilePage() {
             {cp ? (
               <Card id="section-client">
                 <CardHeader>
-                  <CardTitle>Public details</CardTitle>
-                  <CardDescription>What workers see on your profile.</CardDescription>
+                  <CardTitle>{t('publicDetails.title')}</CardTitle>
+                  <CardDescription>{t('publicDetails.descEmployer')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <form
@@ -756,7 +762,7 @@ export default function ProfilePage() {
                     className="grid gap-4 sm:grid-cols-2"
                   >
                     <div className="flex flex-col gap-2.5 sm:col-span-2">
-                      <Label htmlFor="p-display-name-e">Display name</Label>
+                      <Label htmlFor="p-display-name-e">{t('publicDetails.displayName')}</Label>
                       <Input
                         id="p-display-name-e"
                         value={displayName}
@@ -765,18 +771,18 @@ export default function ProfilePage() {
                       />
                     </div>
                     <div className="flex flex-col gap-2.5 sm:col-span-2">
-                      <Label htmlFor="p-bio-e">Bio</Label>
+                      <Label htmlFor="p-bio-e">{t('publicDetails.bio')}</Label>
                       <Textarea
                         id="p-bio-e"
                         rows={4}
                         value={bio}
                         onChange={(e) => setBio(e.target.value)}
                         maxLength={2000}
-                        placeholder="Tell workers about your business, the kind of jobs you post, and how you work."
+                        placeholder={t('publicDetails.bioPlaceholderEmployer')}
                       />
                     </div>
                     <div className="flex flex-col gap-2.5">
-                      <Label htmlFor="p-city-e">City (London borough)</Label>
+                      <Label htmlFor="p-city-e">{t('publicDetails.city')}</Label>
                       <Select
                         value={city || '__none__'}
                         onValueChange={(v) => {
@@ -793,10 +799,10 @@ export default function ProfilePage() {
                         }}
                       >
                         <SelectTrigger id="p-city-e">
-                          <SelectValue placeholder="Select borough" />
+                          <SelectValue placeholder={t('publicDetails.selectBorough')} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__none__">Not set</SelectItem>
+                          <SelectItem value="__none__">{t('publicDetails.notSet')}</SelectItem>
                           {LONDON_BOROUGH_NAMES.map((b) => (
                             <SelectItem key={b} value={b}>
                               {b}
@@ -806,7 +812,7 @@ export default function ProfilePage() {
                       </Select>
                     </div>
                     <div className="flex flex-col gap-2.5">
-                      <Label htmlFor="p-postcode-e">Postcode area</Label>
+                      <Label htmlFor="p-postcode-e">{t('publicDetails.postcode')}</Label>
                       <Select
                         value={postcodeAreaClient || '__none__'}
                         onValueChange={(v) => {
@@ -818,12 +824,12 @@ export default function ProfilePage() {
                         <SelectTrigger id="p-postcode-e">
                           <SelectValue
                             placeholder={
-                              city ? 'Select outward code' : 'Pick a borough first'
+                              city ? t('publicDetails.selectOutward') : t('publicDetails.pickBoroughFirst')
                             }
                           />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__none__">Not set</SelectItem>
+                          <SelectItem value="__none__">{t('publicDetails.notSet')}</SelectItem>
                           {postcodeOptions.map((p) => (
                             <SelectItem key={p} value={p}>
                               {p}
@@ -833,7 +839,7 @@ export default function ProfilePage() {
                       </Select>
                     </div>
                     <div className="sm:col-span-2">
-                      <Button type="submit">Save public details</Button>
+                      <Button type="submit">{t('publicDetails.save')}</Button>
                     </div>
                   </form>
                 </CardContent>
@@ -844,10 +850,8 @@ export default function ProfilePage() {
             {cp ? (
               <Card id="section-employer">
                 <CardHeader>
-                  <CardTitle>Company details</CardTitle>
-                  <CardDescription>
-                    How workers identify and verify your business.
-                  </CardDescription>
+                  <CardTitle>{t('company.title')}</CardTitle>
+                  <CardDescription>{t('company.desc')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <form
@@ -855,7 +859,7 @@ export default function ProfilePage() {
                     className="grid gap-4 sm:grid-cols-2"
                   >
                     <div className="flex flex-col gap-2.5 sm:col-span-2">
-                      <Label htmlFor="e-company">Company name</Label>
+                      <Label htmlFor="e-company">{t('company.name')}</Label>
                       <Input
                         id="e-company"
                         value={companyName}
@@ -863,16 +867,16 @@ export default function ProfilePage() {
                       />
                     </div>
                     <div className="flex flex-col gap-2.5">
-                      <Label htmlFor="e-number">Companies House number</Label>
+                      <Label htmlFor="e-number">{t('company.number')}</Label>
                       <Input
                         id="e-number"
                         value={companyNumber}
                         onChange={(e) => setCompanyNumber(e.target.value)}
-                        placeholder="e.g. 12345678"
+                        placeholder={t('company.numberPlaceholder')}
                       />
                     </div>
                     <div className="flex flex-col gap-2.5">
-                      <Label htmlFor="e-team">Team size</Label>
+                      <Label htmlFor="e-team">{t('company.teamSize')}</Label>
                       <Input
                         id="e-team"
                         type="number"
@@ -882,7 +886,7 @@ export default function ProfilePage() {
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <Button type="submit">Save company details</Button>
+                      <Button type="submit">{t('company.save')}</Button>
                     </div>
                   </form>
                 </CardContent>
@@ -893,10 +897,8 @@ export default function ProfilePage() {
             {cp ? (
               <Card id="section-documents">
                 <CardHeader>
-                  <CardTitle>Documents</CardTitle>
-                  <CardDescription>
-                    Insurance, company letterhead, and other verification artefacts.
-                  </CardDescription>
+                  <CardTitle>{t('documents.title')}</CardTitle>
+                  <CardDescription>{t('documents.descEmployer')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <DocumentsTab
@@ -934,50 +936,51 @@ function AccountSection({
   verificationState,
   onPhoneChanged,
 }: AccountSectionProps) {
+  const { t } = useTranslation('profile');
   const verifiedDate = formatDate(emailVerifiedAt);
   const [phoneOpen, setPhoneOpen] = useState(false);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Account</CardTitle>
+        <CardTitle className="text-base">{t('account.title')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wide text-fg-muted">Email</p>
+            <p className="text-xs uppercase tracking-wide text-fg-muted">{t('account.email')}</p>
             <p className="truncate text-sm text-fg">{email}</p>
             {verifiedDate ? (
-              <p className="text-xs text-fg-muted">Verified on {verifiedDate}</p>
+              <p className="text-xs text-fg-muted">{t('account.verifiedOn', { date: verifiedDate })}</p>
             ) : null}
           </div>
           {emailVerifiedAt ? (
             <Badge variant="success" title={emailVerifiedAt}>
-              Verified
+              {t('account.verified')}
             </Badge>
           ) : (
-            <Badge variant="warning">Pending</Badge>
+            <Badge variant="warning">{t('account.pending')}</Badge>
           )}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wide text-fg-muted">Phone</p>
-            <p className="text-sm text-fg">{phone || 'Not set'}</p>
+            <p className="text-xs uppercase tracking-wide text-fg-muted">{t('account.phone')}</p>
+            <p className="text-sm text-fg">{phone || t('account.notSet')}</p>
           </div>
           <div className="flex items-center gap-2">
             {phone ? (
               phoneVerified ? (
-                <Badge variant="success">Verified</Badge>
+                <Badge variant="success">{t('account.verified')}</Badge>
               ) : (
-                <Badge variant="outline">Unverified</Badge>
+                <Badge variant="outline">{t('account.unverified')}</Badge>
               )
             ) : null}
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              aria-label={phone ? 'Edit phone' : 'Add phone'}
+              aria-label={phone ? t('account.editPhone') : t('account.addPhone')}
               onClick={() => setPhoneOpen(true)}
             >
               <Pencil className="h-4 w-4" />
@@ -994,7 +997,7 @@ function AccountSection({
 
         <div className="border-t border-border-default pt-3">
           <Button asChild variant="outline" size="sm" className="w-full">
-            <Link to="/settings/security">Manage security</Link>
+            <Link to="/settings/security">{t('account.manageSecurity')}</Link>
           </Button>
         </div>
       </CardContent>
@@ -1046,6 +1049,7 @@ function EditPhoneDialog({
   currentPhone,
   onSaved,
 }: EditPhoneDialogProps) {
+  const { t } = useTranslation('profile');
   const initial = useMemo(() => parseE164(currentPhone), [currentPhone]);
   const [iso, setIso] = useState(initial.iso);
   const [local, setLocal] = useState(initial.local);
@@ -1073,7 +1077,7 @@ function EditPhoneDialog({
       onOpenChange(false);
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Could not update phone number.');
+      setError(parsed?.message ?? t('phone.updateError'));
     } finally {
       setSaving(false);
     }
@@ -1082,7 +1086,7 @@ function EditPhoneDialog({
   function handleSave() {
     const combined = combinePhone(iso, local);
     if (!combined) {
-      setError('Enter a phone number, or press Remove to clear it.');
+      setError(t('phone.enterOrRemove'));
       return;
     }
     void save(combined);
@@ -1096,10 +1100,8 @@ function EditPhoneDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{currentPhone ? 'Edit phone' : 'Add phone'}</DialogTitle>
-          <DialogDescription>
-            Used by support and verified clients. Not shown publicly.
-          </DialogDescription>
+          <DialogTitle>{currentPhone ? t('phone.editTitle') : t('phone.addTitle')}</DialogTitle>
+          <DialogDescription>{t('phone.desc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <PhoneInput
@@ -1120,7 +1122,7 @@ function EditPhoneDialog({
         </div>
         <DialogFooter className="flex flex-row-reverse gap-2 sm:justify-between">
           <Button type="button" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? t('phone.saving') : t('phone.save')}
           </Button>
           {currentPhone ? (
             <Button
@@ -1130,7 +1132,7 @@ function EditPhoneDialog({
               disabled={saving}
               className="text-danger hover:text-danger"
             >
-              Remove
+              {t('phone.remove')}
             </Button>
           ) : null}
         </DialogFooter>
@@ -1140,6 +1142,7 @@ function EditPhoneDialog({
 }
 
 function EmailNotVerifiedBanner({ email }: { email: string }) {
+  const { t } = useTranslation('profile');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
@@ -1155,7 +1158,7 @@ function EmailNotVerifiedBanner({ email }: { email: string }) {
       setSent(true);
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Failed to resend verification email.');
+      setError(parsed?.message ?? t('emailBanner.resendError'));
     } finally {
       setSending(false);
     }
@@ -1164,20 +1167,21 @@ function EmailNotVerifiedBanner({ email }: { email: string }) {
   return (
     <AuthBanner
       variant="warning"
-      title="Verify your email"
+      title={t('emailBanner.title')}
       action={
         sent ? (
-          <p className="text-xs">Check your inbox for the link.</p>
+          <p className="text-xs">{t('emailBanner.checkInbox')}</p>
         ) : (
           <Button type="button" size="sm" onClick={resend} disabled={sending}>
-            {sending ? 'Sending…' : 'Resend verification email'}
+            {sending ? t('emailBanner.sending') : t('emailBanner.resend')}
           </Button>
         )
       }
     >
       <p>
-        We sent a confirmation link to <strong>{email}</strong>. You can keep
-        editing your profile in the meantime.
+        {t('emailBanner.sentToPre')}
+        <strong>{email}</strong>
+        {t('emailBanner.sentToPost')}
       </p>
       {error ? <p className="mt-1 text-xs">{error}</p> : null}
     </AuthBanner>
@@ -1190,14 +1194,19 @@ type StripeIdentityStatus =
   | 'verified'
   | 'canceled';
 
-const VERIFICATION_LEVEL_LABEL: Record<string, string> = {
-  UNVERIFIED: 'Unverified',
-  BASIC: 'Basic — identity verified',
-  CERTIFIED: 'Certified',
-  PREMIUM: 'Premium',
+const VERIFICATION_LEVEL_LABEL_KEY: Record<string, string> = {
+  UNVERIFIED: 'verification.levelUnverified',
+  BASIC: 'verification.levelBasic',
+  CERTIFIED: 'verification.levelCertified',
+  PREMIUM: 'verification.levelPremium',
 };
 
 function VerificationSection() {
+  const { t } = useTranslation('profile');
+  const levelLabel = (lv: string) => {
+    const k = VERIFICATION_LEVEL_LABEL_KEY[lv];
+    return k ? t(k) : lv;
+  };
   const [searchParams] = useSearchParams();
   const justCompleted = searchParams.get('verification') === 'complete';
   const cameFromRetryEmail = searchParams.get('verification') === 'retry';
@@ -1270,8 +1279,8 @@ function VerificationSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Identity verification</CardTitle>
-        <CardDescription>Build trust with verified ID.</CardDescription>
+        <CardTitle className="text-base">{t('verification.title')}</CardTitle>
+        <CardDescription>{t('verification.desc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {justCompleted && !verified && !lastAttemptFailed ? (
@@ -1279,8 +1288,7 @@ function VerificationSection() {
             role="status"
             className="rounded-md border border-info/40 bg-info-subtle px-3 py-2 text-sm text-info"
           >
-            Verification submitted — your status will update once Stripe finishes
-            the check (usually a few seconds).
+            {t('verification.submitted')}
           </div>
         ) : null}
         {(cameFromRetryEmail || lastAttemptFailed) && !verified && !inProgress ? (
@@ -1288,12 +1296,11 @@ function VerificationSection() {
             role="status"
             className="rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-warning"
           >
-            Your last verification attempt didn't go through. Try again with a
-            sharper photo and an in-date ID.
+            {t('verification.lastFailed')}
           </div>
         ) : null}
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-fg-muted">Status:</span>
+          <span className="text-fg-muted">{t('verification.status')}</span>
           <Badge
             variant={
               verified
@@ -1306,29 +1313,24 @@ function VerificationSection() {
             }
           >
             {verified
-              ? VERIFICATION_LEVEL_LABEL[level!] ?? level
+              ? levelLabel(level!)
               : inProgress
-                ? 'In review'
+                ? t('verification.inReview')
                 : lastAttemptFailed
-                  ? 'Last attempt failed'
+                  ? t('verification.lastAttemptFailed')
                   : level
-                    ? VERIFICATION_LEVEL_LABEL[level] ?? level
-                    : 'Loading…'}
+                    ? levelLabel(level)
+                    : t('verification.loading')}
           </Badge>
         </div>
         {verified ? (
-          <p className="text-sm text-success">Your identity has been verified.</p>
+          <p className="text-sm text-success">{t('verification.verifiedMsg')}</p>
         ) : inProgress ? (
-          <p className="text-sm text-info">
-            We're waiting for Stripe to confirm your check.
-          </p>
+          <p className="text-sm text-info">{t('verification.waitingStripe')}</p>
         ) : (
           <>
             {!lastAttemptFailed ? (
-              <p className="text-sm text-fg-muted">
-                Verify your identity with a passport, driving licence, or
-                national ID card.
-              </p>
+              <p className="text-sm text-fg-muted">{t('verification.prompt')}</p>
             ) : null}
             {error ? (
               <div
@@ -1340,10 +1342,10 @@ function VerificationSection() {
             ) : null}
             <Button type="button" size="sm" onClick={startVerification} disabled={loading}>
               {loading
-                ? 'Starting…'
+                ? t('verification.starting')
                 : lastAttemptFailed
-                  ? 'Try again'
-                  : 'Verify my identity'}
+                  ? t('verification.tryAgain')
+                  : t('verification.verifyMyIdentity')}
             </Button>
           </>
         )}

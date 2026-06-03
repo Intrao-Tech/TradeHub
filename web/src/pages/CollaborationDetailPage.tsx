@@ -274,8 +274,10 @@ export default function CollaborationDetailPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={contractStatusVariant(c.status)}>
-                        {c.status}
-                        {c.end_reason ? ` · ${c.end_reason}` : ''}
+                        {t(`contractStatus.${c.status.toLowerCase()}`, { defaultValue: c.status })}
+                        {c.end_reason
+                          ? ` · ${t(`endReason.${c.end_reason.toLowerCase()}`, { defaultValue: c.end_reason })}`
+                          : ''}
                       </Badge>
                       <Button asChild variant="outline" size="sm">
                         <Link to={`/contracts/${c.id}`}>{t('relationship.open')}</Link>

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, X } from 'lucide-react';
 import { api, parseApiError } from '../../api';
+import { specLabel } from '../../lib/specialisations';
 import type { SpecialisationLink } from '../../hooks/useAccountMe';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,6 +29,7 @@ export function SpecialisationPicker({
   links,
   onChanged,
 }: SpecialisationPickerProps) {
+  const { t } = useTranslation('profile');
   const [options, setOptions] = useState<SpecialisationOption[] | null>(null);
   const [picked, setPicked] = useState('');
   const [error, setError] = useState('');
@@ -37,7 +40,7 @@ export function SpecialisationPicker({
       .then(setOptions)
       .catch((err) => {
         const parsed = parseApiError(err);
-        setError(parsed?.message ?? 'Could not load specialisations.');
+        setError(parsed?.message ?? t('skills.loadError'));
       });
   }, []);
 
@@ -63,7 +66,7 @@ export function SpecialisationPicker({
       await onChanged();
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Could not link specialisation.');
+      setError(parsed?.message ?? t('skills.linkError'));
     } finally {
       setBusy(false);
     }
@@ -79,7 +82,7 @@ export function SpecialisationPicker({
       await onChanged();
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Could not unlink.');
+      setError(parsed?.message ?? t('skills.unlinkError'));
     } finally {
       setBusy(false);
     }
@@ -100,10 +103,12 @@ export function SpecialisationPicker({
         {(links ?? []).length > 0 ? (
           (links ?? []).map((l) => {
             const id = l.specialisation?.id ?? l.specialisation_id;
-            const label =
+            const label = specLabel(
               l.specialisation?.name ??
-              l.specialisation?.slug ??
-              `#${String(id ?? '?')}`;
+                l.specialisation?.slug ??
+                `#${String(id ?? '?')}`,
+              t,
+            );
             return (
               <Badge
                 key={String(id)}
@@ -114,7 +119,7 @@ export function SpecialisationPicker({
                 <button
                   type="button"
                   className="rounded-full p-0.5 hover:bg-overlay/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={`Remove ${label}`}
+                  aria-label={t('skills.remove', { name: label })}
                   disabled={busy || typeof id !== 'number'}
                   onClick={() => typeof id === 'number' && remove(id)}
                 >
@@ -124,7 +129,7 @@ export function SpecialisationPicker({
             );
           })
         ) : (
-          <p className="text-xs text-fg-muted">No specialisations yet.</p>
+          <p className="text-xs text-fg-muted">{t('skills.none')}</p>
         )}
       </div>
 
@@ -138,24 +143,24 @@ export function SpecialisationPicker({
             <SelectValue
               placeholder={
                 options == null
-                  ? 'Loading…'
+                  ? t('skills.loading')
                   : available.length === 0
-                    ? 'All specialisations linked'
-                    : 'Pick a specialisation'
+                    ? t('skills.allLinked')
+                    : t('skills.pick')
               }
             />
           </SelectTrigger>
           <SelectContent>
             {available.map((o) => (
               <SelectItem key={o.id} value={String(o.id)}>
-                {o.name ?? o.slug ?? `#${o.id}`}
+                {specLabel(o.name ?? o.slug ?? `#${o.id}`, t)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Button type="button" onClick={add} disabled={!picked || busy}>
           <Plus />
-          Add
+          {t('skills.add')}
         </Button>
       </div>
     </div>
