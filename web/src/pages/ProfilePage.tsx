@@ -327,7 +327,7 @@ export default function ProfilePage() {
   );
 
   const headerCard = cp ? (
-    <Card className="overflow-hidden">
+    <Card id="section-avatar" className="overflow-hidden">
       <CardContent className="space-y-4 pt-6">
         <div className="flex items-start gap-4">
           <AvatarUploader

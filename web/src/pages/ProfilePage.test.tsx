@@ -89,6 +89,23 @@ describe('TEST-PROF-101 ProfilePage account section (PROF-010)', () => {
   });
 });
 
+describe('TEST-PROF-104 ProfilePage completeness CTA anchors (PROF-037)', () => {
+  test('PROF-037 — "Add photo" scroll target #section-avatar exists in the DOM (regression: CTA silently no-opped without it)', async () => {
+    stubProfileLoaders();
+    renderWithProfile(<ProfilePage />, {
+      account: mockAccountMe(),
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/manage security/i)).toBeInTheDocument();
+    });
+    // CompletenessPanel CTAs scroll via document.getElementById(...) with
+    // optional chaining — a missing anchor fails silently, so assert each
+    // scroll target the panel can emit actually exists on the page.
+    expect(document.getElementById('section-avatar')).not.toBeNull();
+    expect(document.getElementById('section-client')).not.toBeNull();
+  });
+});
+
 describe('TEST-PROF-102 ProfilePage worker editor (PROF-011 / PROF-012 / PROF-015)', () => {
   test('PROF-015 — region picker is constrained to the London-borough preset (city options are present in the DOM)', async () => {
     stubProfileLoaders();

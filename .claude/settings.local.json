@@ -18,7 +18,9 @@
       "Bash(npm ls *)",
       "Bash(lsof *)",
       "Bash(docker compose *)",
-      "mcp__surf__surf_reddit_post"
+      "mcp__surf__surf_reddit_post",
+      "mcp__Railway__list_projects",
+      "mcp__Railway__list_services"
     ]
   },
   "enabledMcpjsonServers": [
