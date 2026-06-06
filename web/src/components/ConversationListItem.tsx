@@ -1,9 +1,11 @@
+import { useTranslation } from 'react-i18next';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
   VerificationBadge,
   verificationFromLevel,
 } from './VerificationBadge';
+import { activeLocale } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 export type ConversationListItemData = {
@@ -42,14 +44,15 @@ function formatTime(iso?: string | null): string {
     d.getFullYear() === now.getFullYear() &&
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate();
-  if (sameDay) return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  if (sameDay) return d.toLocaleTimeString(activeLocale(), { hour: '2-digit', minute: '2-digit' });
   const diffDays = Math.round((now.getTime() - d.getTime()) / 86400000);
-  if (diffDays < 7) return d.toLocaleDateString(undefined, { weekday: 'short' });
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (diffDays < 7) return d.toLocaleDateString(activeLocale(), { weekday: 'short' });
+  return d.toLocaleDateString(activeLocale(), { month: 'short', day: 'numeric' });
 }
 
 export function ConversationListItem({ conversation, active, onSelect, className }: ConversationListItemProps) {
-  const name = conversation.other_party_name ?? 'Conversation';
+  const { t } = useTranslation('chat');
+  const name = conversation.other_party_name ?? t('inbox.fallbackName');
   const unread = conversation.unread_count ?? 0;
 
   return (
@@ -70,7 +73,7 @@ export function ConversationListItem({ conversation, active, onSelect, className
       </Avatar>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <span className={cn('truncate text-sm', unread > 0 ? 'font-semibold text-fg' : 'font-medium text-fg')}>
               {name}
             </span>
@@ -78,10 +81,12 @@ export function ConversationListItem({ conversation, active, onSelect, className
               state={verificationFromLevel(
                 conversation.other_party_verification_level,
               )}
-              className="shrink-0"
+              className="min-w-0 shrink"
             />
           </div>
-          <span className="shrink-0 text-xs text-fg-subtle">{formatTime(conversation.last_message_at)}</span>
+          <span className="shrink-0 whitespace-nowrap text-xs text-fg-subtle">
+            {formatTime(conversation.last_message_at)}
+          </span>
         </div>
         <div className="flex items-center justify-between gap-2">
           <p
@@ -90,7 +95,7 @@ export function ConversationListItem({ conversation, active, onSelect, className
               unread > 0 ? 'text-fg' : 'text-fg-muted',
             )}
           >
-            {conversation.last_message_preview ?? 'No messages yet'}
+            {conversation.last_message_preview ?? t('inbox.noMessages')}
           </p>
           {unread > 0 ? (
             <Badge variant="default" className="h-5 min-w-5 shrink-0 justify-center px-1.5 text-xs">

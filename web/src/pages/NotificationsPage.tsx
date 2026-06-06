@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Bell, X } from 'lucide-react';
 import { api, parseApiError } from '../api';
+import { formatDateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -31,10 +33,7 @@ type ListResponse = {
 };
 
 function formatWhen(iso?: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString(undefined, {
+  return formatDateTime(iso, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -44,6 +43,7 @@ function formatWhen(iso?: string | null): string {
 }
 
 export default function NotificationsPage() {
+  const { t } = useTranslation('common');
   const [page, setPage] = useState(1);
   const [res, setRes] = useState<ListResponse | null>(null);
   const [error, setError] = useState('');
@@ -59,9 +59,9 @@ export default function NotificationsPage() {
       setRes(data);
     } catch (e) {
       const parsed = parseApiError(e);
-      setError(parsed?.message ?? 'Could not load notifications.');
+      setError(parsed?.message ?? t('notifications.loadError'));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load(page);
@@ -75,7 +75,7 @@ export default function NotificationsPage() {
       await load(page);
     } catch (e) {
       const parsed = parseApiError(e);
-      setError(parsed?.message ?? 'Could not mark notification as read.');
+      setError(parsed?.message ?? t('notifications.markReadError'));
     }
   }
 
@@ -85,7 +85,7 @@ export default function NotificationsPage() {
       await load(page);
     } catch (e) {
       const parsed = parseApiError(e);
-      setError(parsed?.message ?? 'Could not mark all as read.');
+      setError(parsed?.message ?? t('notifications.markAllError'));
     }
   }
 
@@ -99,15 +99,15 @@ export default function NotificationsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">
-            Notifications
+            {t('notifications.title')}
           </h1>
           <p className="text-sm text-fg-muted">
-            Job invites, milestone updates, and platform alerts.
+            {t('notifications.subtitle')}
           </p>
         </div>
         {hasUnread ? (
           <Button type="button" variant="outline" size="sm" onClick={() => void markAllRead()}>
-            Mark all read
+            {t('notifications.markAllRead')}
           </Button>
         ) : null}
       </div>
@@ -123,24 +123,24 @@ export default function NotificationsPage() {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Activity</CardTitle>
+          <CardTitle className="text-base">{t('notifications.activity')}</CardTitle>
           <CardDescription>
             {total > 0
-              ? `${total} notification${total === 1 ? '' : 's'}`
-              : 'No notifications yet'}
+              ? t('notifications.count', { count: total })
+              : t('notifications.countNone')}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {res == null ? (
             <p className="px-4 py-8 text-center text-sm text-fg-muted">
-              Loading…
+              {t('notifications.loading')}
             </p>
           ) : rows.length === 0 ? (
             <div className="px-4 py-8">
               <EmptyState
                 icon={Bell}
-                title="No notifications yet"
-                description="When platform events happen on your account, they'll appear here."
+                title={t('notifications.emptyTitle')}
+                description={t('notifications.emptyDesc')}
               />
             </div>
           ) : (
@@ -172,7 +172,7 @@ export default function NotificationsPage() {
                       size="icon"
                       variant="ghost"
                       className="h-8 w-8 shrink-0"
-                      aria-label="Mark read"
+                      aria-label={t('notifications.markRead')}
                       onClick={() => void markRead(n.id)}
                     >
                       <X className="h-4 w-4" />
@@ -188,7 +188,7 @@ export default function NotificationsPage() {
       {total > LIMIT ? (
         <div className="flex items-center justify-between text-sm text-fg-muted">
           <span>
-            Page {page} of {totalPages}
+            {t('notifications.pageLine', { page, pages: totalPages })}
           </span>
           <div className="flex gap-2">
             <Button
@@ -198,7 +198,7 @@ export default function NotificationsPage() {
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
-              Previous
+              {t('notifications.previous')}
             </Button>
             <Button
               type="button"
@@ -207,7 +207,7 @@ export default function NotificationsPage() {
               disabled={page >= totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             >
-              Next
+              {t('notifications.next')}
             </Button>
           </div>
         </div>

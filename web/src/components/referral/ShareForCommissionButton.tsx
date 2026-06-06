@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Copy, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,6 +26,7 @@ export function ShareForCommissionButton({
   targetTitle?: string | null;
   className?: string;
 }) {
+  const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -47,12 +49,8 @@ export function ShareForCommissionButton({
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const label =
-    kind === 'JOB' ? 'Share for commission' : 'Share with another employer';
-  const description =
-    kind === 'JOB'
-      ? 'Send this link to a worker. If they apply and get hired, you earn the W→W referral % of the agreed amount, paid from platform fee.'
-      : 'Send this link to another employer. If they hire this same worker, you earn the E→E referral % of the agreed amount, paid from platform fee.';
+  const label = kind === 'JOB' ? t('share.jobLabel') : t('share.workerLabel');
+  const description = kind === 'JOB' ? t('share.jobDesc') : t('share.workerDesc');
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -70,22 +68,22 @@ export function ShareForCommissionButton({
         <div className="space-y-2 py-2">
           {targetTitle ? (
             <p className="text-xs text-fg-muted">
-              Sharing: <strong>{targetTitle}</strong>
+              {t('share.sharingPre')}<strong>{targetTitle}</strong>
             </p>
           ) : null}
           <div className="flex items-center gap-2">
             <code className="flex-1 truncate rounded-md border border-border-default bg-subtle px-3 py-2 text-xs">
-              {link || 'Loading link…'}
+              {link || t('share.loadingLink')}
             </code>
             <Button type="button" variant="outline" onClick={copyLink} disabled={!link}>
               <Copy className="h-4 w-4" />
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? t('share.copied') : t('share.copy')}
             </Button>
           </div>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-            Close
+            {t('share.close')}
           </Button>
         </DialogFooter>
       </DialogContent>

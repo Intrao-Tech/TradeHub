@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '@/hooks/useAccountMe';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,7 @@ const FROZEN_FIELDS = new Set<keyof JobPostFormValues>([
 ]);
 
 export default function EditJobPage() {
+  const { t } = useTranslation('jobs');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isEmployer, clientProfile, loading: accountLoading } = useAccountMe();
@@ -72,7 +74,7 @@ export default function EditJobPage() {
         const parsed = parseApiError(err);
         setError({
           status: parsed?.status ?? 0,
-          message: parsed?.message ?? 'Could not load this job.',
+          message: parsed?.message ?? t('detail.loadError'),
         });
       })
       .finally(() => {
@@ -136,7 +138,7 @@ export default function EditJobPage() {
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/my-jobs">
             <ArrowLeft />
-            Back to my jobs
+            {t('applicants.backToMyJobs')}
           </Link>
         </Button>
       </div>
@@ -157,7 +159,7 @@ export default function EditJobPage() {
         <>
           <header className="space-y-1">
             <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">
-              Edit job
+              {t('editJob.title')}
             </h1>
             <p className="break-words text-sm text-fg-muted">{post.title}</p>
           </header>
@@ -167,9 +169,7 @@ export default function EditJobPage() {
               role="status"
               className="rounded-md border border-info/40 bg-info-subtle px-3 py-2 text-sm text-info"
             >
-              This job has {applicationsCount} application
-              {applicationsCount === 1 ? '' : 's'}. Pay, location, and
-              specialisations are locked so applicants aren't surprised.
+              {t('editJob.lockedNotice', { count: applicationsCount })}
             </div>
           ) : null}
 
@@ -180,11 +180,11 @@ export default function EditJobPage() {
             initial={initial}
             frozenFields={frozenFields}
             onSuccess={() => {
-              toast.success('Job updated');
+              toast.success(t('editJob.updatedToast'));
               navigate(`/jobs/${post.id}`);
             }}
             onCancel={() => navigate('/my-jobs')}
-            submitLabel="Save changes"
+            submitLabel={t('form.saveChanges')}
           />
         </>
       ) : null}

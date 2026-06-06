@@ -1,0 +1,7 @@
+{
+  "file": {
+    "invalidType": "Use a PDF, JPEG, PNG, or WebP file.",
+    "tooLarge": "Files must be under {{maxMb}} MB.",
+    "tooMany": "Up to {{count}} files."
+  }
+}

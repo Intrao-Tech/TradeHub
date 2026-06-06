@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Copy, Inbox as InboxIcon, RefreshCw } from 'lucide-react';
 import { parseApiError } from '../api';
+import { formatMoney, formatDate } from '@/lib/format';
 import {
   getOwnReferralCode,
   getAccountReferralStats,
@@ -24,13 +26,11 @@ import {
 
 const fmtGbp = (s: string | null | undefined) => {
   const n = Number(s ?? 0);
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(Number.isFinite(n) ? n : 0);
+  return formatMoney(Number.isFinite(n) ? n : 0);
 };
 
 export default function ReferralsPage() {
+  const { t } = useTranslation('referrals');
   const [error, setError] = useState('');
   const [code, setCode] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
@@ -60,7 +60,15 @@ export default function ReferralsPage() {
       setIncoming(i);
       setPending(pp);
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Failed to load referrals');
+      const parsed = parseApiError(err);
+      // 429 rate-limit errors come back as a raw English "ThrottlerException"
+      // message — show a localized one instead. Otherwise prefer the API
+      // message, then the generic translated fallback.
+      const msg =
+        parsed?.status === 429
+          ? t('tooManyRequests')
+          : (parsed?.message ?? t('loadError'));
+      setError(msg);
     }
   }
 
@@ -78,14 +86,8 @@ export default function ReferralsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Referrals</h1>
-        <p className="text-sm text-fg-muted">
-          Earn commission when people you refer sign up, apply, or get hired.
-          Two referral types: <strong>Account</strong> (signup link, paid as
-          % of platform fee on every milestone of their first contract) and{' '}
-          <strong>Project</strong> (per-job or per-worker link, paid as % of
-          agreed amount).
-        </p>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t('title')}</h1>
+        <p className="text-sm text-fg-muted">{t('desc')}</p>
       </div>
 
       {error ? (
@@ -100,11 +102,8 @@ export default function ReferralsPage() {
       {/* 1. Your code */}
       <Card>
         <CardHeader>
-          <CardTitle>Your referral code</CardTitle>
-          <CardDescription>
-            Share this link anywhere — when someone signs up via it, you'll
-            earn % of the platform fee on their first contract.
-          </CardDescription>
+          <CardTitle>{t('codeTitle')}</CardTitle>
+          <CardDescription>{t('codeDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {code ? (
@@ -118,12 +117,12 @@ export default function ReferralsPage() {
                 </code>
                 <Button type="button" variant="outline" onClick={copyLink} className="sm:w-auto">
                   <Copy className="h-4 w-4" />
-                  {copied ? 'Copied' : 'Copy'}
+                  {copied ? t('copied') : t('copy')}
                 </Button>
               </div>
             </>
           ) : (
-            <p className="text-sm text-fg-muted">Loading…</p>
+            <p className="text-sm text-fg-muted">{t('loading')}</p>
           )}
         </CardContent>
       </Card>
@@ -133,15 +132,12 @@ export default function ReferralsPage() {
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <CardTitle>Account referrals</CardTitle>
-              <CardDescription>
-                People who signed up via your code. You earn a share of the
-                platform fee on every milestone of their first contract.
-              </CardDescription>
+              <CardTitle>{t('accountTitle')}</CardTitle>
+              <CardDescription>{t('accountDesc')}</CardDescription>
             </div>
             <Button type="button" variant="outline" onClick={() => void loadAll()} className="self-start sm:self-auto">
               <RefreshCw />
-              Refresh
+              {t('refresh')}
             </Button>
           </div>
         </CardHeader>
@@ -150,11 +146,11 @@ export default function ReferralsPage() {
             <>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-md border border-border-default bg-raised px-3 py-2">
-                  <p className="text-xs text-fg-muted">Lifetime signups</p>
+                  <p className="text-xs text-fg-muted">{t('lifetimeSignups')}</p>
                   <p className="text-lg font-semibold">{stats.lifetime_signups}</p>
                 </div>
                 <div className="rounded-md border border-border-default bg-raised px-3 py-2">
-                  <p className="text-xs text-fg-muted">Total earned</p>
+                  <p className="text-xs text-fg-muted">{t('totalEarned')}</p>
                   <p className="text-lg font-semibold">
                     {fmtGbp(stats.total_earned_gbp)}
                   </p>
@@ -163,8 +159,8 @@ export default function ReferralsPage() {
               {stats.items.length === 0 ? (
                 <EmptyState
                   icon={InboxIcon}
-                  title="No signups yet"
-                  description="Share your link to start earning."
+                  title={t('noSignups')}
+                  description={t('noSignupsDesc')}
                 />
               ) : (
                 <ul className="space-y-2 text-sm">
@@ -181,7 +177,7 @@ export default function ReferralsPage() {
                       </span>
                       <span className="text-xs text-fg-muted">
                         {it.referred_at
-                          ? new Date(it.referred_at).toLocaleDateString()
+                          ? formatDate(it.referred_at, 'short')
                           : '—'}
                       </span>
                     </li>
@@ -196,15 +192,12 @@ export default function ReferralsPage() {
       {/* 3. Job shares (W→W) — project shares from JobApplication */}
       <Card>
         <CardHeader>
-          <CardTitle>Job shares (W→W)</CardTitle>
-          <CardDescription>
-            Workers you referred to specific jobs. To share, open any job and
-            click "Share for commission".
-          </CardDescription>
+          <CardTitle>{t('jobSharesTitle')}</CardTitle>
+          <CardDescription>{t('jobSharesDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           {!shares?.applications.length ? (
-            <p className="text-sm text-fg-muted">No job shares yet.</p>
+            <p className="text-sm text-fg-muted">{t('noJobShares')}</p>
           ) : (
             <ul className="space-y-2 text-sm">
               {shares.applications.map((a) => (
@@ -213,9 +206,11 @@ export default function ReferralsPage() {
                   className="flex flex-col gap-2 rounded-md border border-border-default bg-raised px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <span className="min-w-0 truncate">
-                    {a.job_post?.title ?? `Job #${a.id}`}
+                    {a.job_post?.title ?? t('jobFallback', { id: a.id })}
                   </span>
-                  <Badge variant="info" className="self-start sm:self-auto">{a.status}</Badge>
+                  <Badge variant="info" className="self-start sm:self-auto">
+                    {t(`common:appStatus.${a.status.toLowerCase()}`, { defaultValue: a.status })}
+                  </Badge>
                 </li>
               ))}
             </ul>
@@ -226,16 +221,12 @@ export default function ReferralsPage() {
       {/* 4. Worker shares (E→E) — project shares from Contract attribution */}
       <Card>
         <CardHeader>
-          <CardTitle>Worker shares (E→E)</CardTitle>
-          <CardDescription>
-            Workers you recommended to other employers. To share, open a
-            worker profile (employer view) and click "Share with another
-            employer".
-          </CardDescription>
+          <CardTitle>{t('workerSharesTitle')}</CardTitle>
+          <CardDescription>{t('workerSharesDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           {!shares?.contracts.length ? (
-            <p className="text-sm text-fg-muted">No worker shares yet.</p>
+            <p className="text-sm text-fg-muted">{t('noWorkerShares')}</p>
           ) : (
             <ul className="space-y-2 text-sm">
               {shares.contracts.map((c) => (
@@ -245,10 +236,12 @@ export default function ReferralsPage() {
                 >
                   <span className="min-w-0 break-words">
                     {c.collaboration.worker.client_profile.display_name} ·{' '}
-                    {c.project_type ?? 'Untitled'}
+                    {c.project_type ?? t('untitled')}
                   </span>
                   <span className="flex flex-wrap items-center gap-2">
-                    <Badge variant="info">{c.status}</Badge>
+                    <Badge variant="info">
+                      {t(`collaborations:contractStatus.${c.status.toLowerCase()}`, { defaultValue: c.status })}
+                    </Badge>
                     {c.agreed_amount ? (
                       <span className="text-fg-muted">
                         {fmtGbp(c.agreed_amount)}
@@ -265,29 +258,24 @@ export default function ReferralsPage() {
       {/* 5. Incoming attribution */}
       <Card>
         <CardHeader>
-          <CardTitle>Incoming attribution</CardTitle>
-          <CardDescription>
-            Who referred you, and what they've earned from your contracts.
-          </CardDescription>
+          <CardTitle>{t('incomingTitle')}</CardTitle>
+          <CardDescription>{t('incomingDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {incoming?.referrer ? (
             <>
               <p>
-                Referred by:{' '}
+                {t('referredBy')}{' '}
                 <strong>
-                  {incoming.referrer.display_name ?? 'Unknown'}
+                  {incoming.referrer.display_name ?? t('unknown')}
                 </strong>
               </p>
               <p className="text-fg-muted">
-                Total earned from your activity to date:{' '}
-                {fmtGbp(incoming.total_paid_gbp)}
+                {t('totalFromActivity')} {fmtGbp(incoming.total_paid_gbp)}
               </p>
             </>
           ) : (
-            <p className="text-fg-muted">
-              You signed up directly — no referrer.
-            </p>
+            <p className="text-fg-muted">{t('directSignup')}</p>
           )}
         </CardContent>
       </Card>
@@ -296,17 +284,13 @@ export default function ReferralsPage() {
       <Card>
         <CardHeader>
           <div>
-            <CardTitle>Commission payments</CardTitle>
-            <CardDescription>
-              Referral commissions earned on milestone releases. Held
-              commissions (PENDING) are paid out automatically once you
-              finish Stripe Connect onboarding.
-            </CardDescription>
+            <CardTitle>{t('commissionTitle')}</CardTitle>
+            <CardDescription>{t('commissionDesc')}</CardDescription>
           </div>
         </CardHeader>
         <CardContent>
           {pending.length === 0 ? (
-            <p className="text-sm text-fg-muted">No commission payments yet.</p>
+            <p className="text-sm text-fg-muted">{t('noCommission')}</p>
           ) : (
             <ul className="space-y-2 text-sm">
               {pending.map((p) => (
@@ -315,13 +299,17 @@ export default function ReferralsPage() {
                   className="flex flex-col gap-2 rounded-md border border-border-default bg-raised px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <span className="min-w-0 break-words">
-                    {p.type} · milestone #{p.milestone_id}
+                    {t('milestoneLine', { type: p.type, id: p.milestone_id })}
                   </span>
                   <span className="flex flex-wrap items-center gap-2">
                     <Badge
                       variant={p.status === 'PAID' ? 'success' : 'warning'}
                     >
-                      {p.status}
+                      {p.status === 'PAID'
+                        ? t('statusPaid')
+                        : p.status === 'PENDING'
+                          ? t('statusPending')
+                          : p.status}
                     </Badge>{' '}
                     <strong>{fmtGbp(p.amount)}</strong>
                   </span>

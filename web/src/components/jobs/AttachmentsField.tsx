@@ -1,4 +1,5 @@
 import { useId, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,7 @@ export function AttachmentsField({
   helperText,
   disabled,
 }: AttachmentsFieldProps) {
+  const { t } = useTranslation(['jobs', 'validation']);
   const inputRef = useRef<HTMLInputElement>(null);
   const headingId = useId();
   const helperId = useId();
@@ -60,7 +62,7 @@ export function AttachmentsField({
             kind: 'error',
             tempId,
             name: file.name,
-            message: 'Use a PDF, JPEG, PNG, or WebP file.',
+            message: t('validation:file.invalidType'),
           },
         ];
         continue;
@@ -72,7 +74,7 @@ export function AttachmentsField({
             kind: 'error',
             tempId,
             name: file.name,
-            message: 'Files must be under 25 MB.',
+            message: t('validation:file.tooLarge', { maxMb: 25 }),
           },
         ];
         continue;
@@ -89,8 +91,8 @@ export function AttachmentsField({
         {
           kind: 'error',
           tempId: `overflow-${Date.now()}`,
-          name: `${overflow} file${overflow === 1 ? '' : 's'} not added`,
-          message: `Up to ${MAX_FILES} files.`,
+          name: t('attachments.notAdded', { count: overflow }),
+          message: t('validation:file.tooMany', { count: MAX_FILES }),
         },
       ];
     }
@@ -115,13 +117,13 @@ export function AttachmentsField({
       className="space-y-3"
     >
       <h3 id={headingId} className="text-base font-semibold text-fg">
-        Attachments
+        {t('attachments.title')}
       </h3>
       <p id={helperId} className="text-sm text-fg-muted">
         {helperText}
       </p>
       <p className="text-xs text-fg-muted">
-        Up to {MAX_FILES} files (max 25 MB each)
+        {t('attachments.limitHint', { count: MAX_FILES, maxMb: 25 })}
       </p>
 
       <input
@@ -143,17 +145,17 @@ export function AttachmentsField({
         className="gap-2"
       >
         <Paperclip className="h-4 w-4" />
-        Attach files
+        {t('attachments.attach')}
       </Button>
 
       {atLimit ? (
         <p className="text-xs text-fg-muted" role="status">
-          Limit reached — remove a file to add another.
+          {t('attachments.limitReached')}
         </p>
       ) : null}
 
       {value.length > 0 ? (
-        <ul className="space-y-2" aria-label="Attached files">
+        <ul className="space-y-2" aria-label={t('attachments.listAria')}>
           {value.map((row) => (
             <AttachmentRow
               key={
@@ -180,6 +182,7 @@ function AttachmentRow({
   onRemove: () => void;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation('jobs');
   const isError = row.kind === 'error';
   return (
     <li
@@ -213,7 +216,7 @@ function AttachmentRow({
       <button
         type="button"
         onClick={onRemove}
-        aria-label={`Remove ${row.name}`}
+        aria-label={t('attachments.removeAria', { name: row.name })}
         disabled={disabled}
         className={cn(
           'flex h-9 w-9 items-center justify-center rounded-md text-fg-muted hover:bg-bg-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50',

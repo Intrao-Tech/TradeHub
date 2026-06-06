@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { VerificationBadge, verificationFromLevel } from '@/components/VerificationBadge';
@@ -33,8 +34,11 @@ export function CounterpartyChip({
   showBadge = true,
   size = 'md',
 }: Props) {
+  const { t } = useTranslation('collaborations');
   const cp = party?.client_profile ?? null;
-  const name = cp?.display_name ?? (role === 'WORKER' ? 'Worker' : 'Employer');
+  const name =
+    cp?.display_name ??
+    (role === 'WORKER' ? t('chip.workerFallback') : t('chip.employerFallback'));
   const initial = name.charAt(0).toUpperCase() || '?';
   const level = cp?.verification_level ?? null;
   const ratingAvg = party?.rating_avg != null ? Number(party.rating_avg) : 0;
@@ -76,8 +80,7 @@ export function CounterpartyChip({
           <div className="flex items-center gap-2 text-xs text-fg-muted">
             <StarRating value={Math.round(ratingAvg)} size="sm" />
             <span>
-              {ratingAvg.toFixed(1)} · {ratingCount} review
-              {ratingCount === 1 ? '' : 's'}
+              {ratingAvg.toFixed(1)} · {t('chip.reviews', { count: ratingCount })}
             </span>
           </div>
         ) : null}

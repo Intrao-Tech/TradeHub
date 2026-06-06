@@ -1,5 +1,8 @@
+import type { ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import { Apple, Smartphone } from 'lucide-react';
+
+// Auth-page footer is intentionally English-only (I18N decision): language is an authenticated-only setting, switched from the account menu.
 
 type FooterLink = { to: string; label: string };
 type FooterColumn = FooterLink[];
@@ -28,7 +31,10 @@ const COLUMNS: FooterColumn[] = [
   ],
 ];
 
-type SocialDef = { label: string; Icon: (props: { className?: string }) => JSX.Element };
+type SocialDef = {
+  label: string;
+  Icon: (props: { className?: string }) => ReactElement;
+};
 
 const SOCIALS: SocialDef[] = [
   { label: 'Facebook', Icon: FacebookIcon },
@@ -98,7 +104,9 @@ export function AuthFooter() {
           </div>
         </div>
 
-        <div className="mt-6 text-xs text-fg-muted">© {year} TradeHub UK</div>
+        <div className="mt-6 text-xs text-fg-muted">
+          © {year} TradeHub UK
+        </div>
       </div>
     </footer>
   );

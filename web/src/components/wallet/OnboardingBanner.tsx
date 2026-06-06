@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CheckCircle2, CircleAlert, Loader2 } from 'lucide-react';
 import { api, parseApiError } from '../../api';
 import { Button } from '@/components/ui/button';
@@ -24,13 +25,14 @@ type OnboardingBannerProps = {
  * onboarding"; complete → success badge.
  */
 export function OnboardingBanner({ status, onRefresh }: OnboardingBannerProps) {
+  const { t } = useTranslation(['wallet', 'common']);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState('');
 
   if (!status) {
     return (
       <div className="rounded-md border border-border-default bg-raised p-4 text-sm text-fg-muted">
-        Loading payout status…
+        {t('onboarding.loadingStatus')}
       </div>
     );
   }
@@ -48,7 +50,16 @@ export function OnboardingBanner({ status, onRefresh }: OnboardingBannerProps) {
       }
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Failed to start onboarding.');
+      // Prefer a localized message for known backend conditions (the raw API
+      // message is English-only): rate-limit (429) and the Stripe-not-
+      // configured code. Falls back to the API message, then a generic error.
+      const msg =
+        parsed?.status === 429
+          ? t('common:tooManyRequests')
+          : parsed?.code === 'STRIPE_NOT_CONFIGURED'
+            ? t('onboarding.stripeNotConfigured')
+            : (parsed?.message ?? t('onboarding.startError'));
+      setError(msg);
       setStarting(false);
     }
   }
@@ -67,13 +78,9 @@ export function OnboardingBanner({ status, onRefresh }: OnboardingBannerProps) {
       >
         <div className="flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4" />
-          <span className="font-medium">Payouts enabled</span>
+          <span className="font-medium">{t('onboarding.enabledTitle')}</span>
         </div>
-        <p className="mt-1 text-success/80">
-          You're set up to receive funds. When an employer approves a milestone,
-          payment goes straight to your linked bank account on Stripe's standard
-          schedule (usually within 2 working days for UK accounts).
-        </p>
+        <p className="mt-1 text-success/80">{t('onboarding.enabledBody')}</p>
       </div>
     );
   }
@@ -86,28 +93,26 @@ export function OnboardingBanner({ status, onRefresh }: OnboardingBannerProps) {
       <div className="rounded-md border border-warning/40 bg-warning-subtle p-4 text-sm text-warning space-y-3">
         <div className="flex items-center gap-2">
           <CircleAlert className="h-4 w-4" />
-          <span className="font-medium">Onboarding incomplete</span>
+          <span className="font-medium">{t('onboarding.incompleteTitle')}</span>
         </div>
-        <p>
-          You've started Stripe Connect onboarding but haven't finished. Until
-          it's complete, employers can't fund milestones for your work.
-        </p>
+        <p>{t('onboarding.incompleteBody')}</p>
         {hasOpenRequirements ? (
           <p className="text-xs text-warning/80">
-            Stripe is waiting on:{' '}
-            {[
-              ...status.requirements.past_due,
-              ...status.requirements.currently_due,
-            ]
-              .slice(0, 5)
-              .map((r) => r.replace(/_/g, ' '))
-              .join(', ')}
-            {status.requirements.currently_due.length +
-              status.requirements.past_due.length >
-            5
-              ? '…'
-              : ''}
-            .
+            {t('onboarding.waitingOn', {
+              list:
+                [
+                  ...status.requirements.past_due,
+                  ...status.requirements.currently_due,
+                ]
+                  .slice(0, 5)
+                  .map((r) => r.replace(/_/g, ' '))
+                  .join(', ') +
+                (status.requirements.currently_due.length +
+                  status.requirements.past_due.length >
+                5
+                  ? '…'
+                  : ''),
+            })}
           </p>
         ) : null}
         {error ? (
@@ -121,11 +126,11 @@ export function OnboardingBanner({ status, onRefresh }: OnboardingBannerProps) {
             onClick={resume}
             disabled={!status.onboarding_url}
           >
-            Resume onboarding
+            {t('onboarding.resume')}
           </Button>
           {onRefresh ? (
             <Button type="button" variant="ghost" onClick={onRefresh}>
-              Refresh status
+              {t('onboarding.refreshStatus')}
             </Button>
           ) : null}
         </div>
@@ -137,13 +142,9 @@ export function OnboardingBanner({ status, onRefresh }: OnboardingBannerProps) {
     <div className="rounded-md border border-info/40 bg-info-subtle p-4 text-sm text-info space-y-3">
       <div className="flex items-center gap-2">
         <CircleAlert className="h-4 w-4" />
-        <span className="font-medium">Set up payouts</span>
+        <span className="font-medium">{t('onboarding.setupTitle')}</span>
       </div>
-      <p>
-        To receive payments for collaborations, you need to set up your Stripe
-        Connect account. Stripe handles the verification and pays funds straight
-        to your bank.
-      </p>
+      <p>{t('onboarding.setupBody')}</p>
       {error ? (
         <div role="alert" className="text-xs text-danger">
           {error}
@@ -152,10 +153,10 @@ export function OnboardingBanner({ status, onRefresh }: OnboardingBannerProps) {
       <Button type="button" onClick={start} disabled={starting}>
         {starting ? (
           <span className="inline-flex items-center gap-1">
-            <Loader2 className="h-3 w-3 animate-spin" /> Starting…
+            <Loader2 className="h-3 w-3 animate-spin" /> {t('onboarding.starting')}
           </span>
         ) : (
-          'Set up payouts'
+          t('onboarding.setupTitle')
         )}
       </Button>
     </div>

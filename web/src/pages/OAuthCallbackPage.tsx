@@ -17,6 +17,8 @@ import {
   type AccountSummary,
 } from '@/lib/auth-routing';
 
+// Auth pages are intentionally English-only (I18N decision): language is an authenticated-only setting, switched from the account menu.
+
 type Props = { onLogin: () => void };
 
 export default function OAuthCallbackPage({ onLogin }: Props) {
@@ -143,14 +145,12 @@ export default function OAuthCallbackPage({ onLogin }: Props) {
             <CardHeader>
               <CardTitle>No TradeHub account yet</CardTitle>
               <CardDescription>
-                We couldn't find a TradeHub account for this Google identity.
-                Sign up first, then you can use Google to sign in.
+                We couldn't find a TradeHub account for this Google identity. Sign up first, then you can use Google to sign in.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <AuthBanner variant="info" title="Why this step?">
-                We never silently create accounts when you click "Sign in" —
-                that way you always know when an account is being made for you.
+                We never silently create accounts when you click "Sign in" — that way you always know when an account is being made for you.
               </AuthBanner>
               <Button asChild size="lg" className="w-full">
                 <Link to="/register">Create a TradeHub account</Link>

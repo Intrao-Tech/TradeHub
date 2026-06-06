@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import type { ParseKeys } from 'i18next';
 import { Badge } from '@/components/ui/badge';
 
 type AppStatus =
@@ -18,20 +20,22 @@ const VARIANT_BY_STATUS: Record<string, 'success' | 'warning' | 'danger' | 'info
   WITHDRAWN: 'danger',
 };
 
-const LABEL_BY_STATUS: Record<string, string> = {
-  PENDING: 'Pending',
-  REVIEWED: 'Reviewed',
-  SHORTLISTED: 'Shortlisted',
-  ACCEPTED: 'Accepted',
-  REJECTED: 'Rejected',
-  WITHDRAWN: 'Withdrawn',
+const LABEL_KEY_BY_STATUS: Record<string, ParseKeys<'common'>> = {
+  PENDING: 'appStatus.pending',
+  REVIEWED: 'appStatus.reviewed',
+  SHORTLISTED: 'appStatus.shortlisted',
+  ACCEPTED: 'appStatus.accepted',
+  REJECTED: 'appStatus.rejected',
+  WITHDRAWN: 'appStatus.withdrawn',
 };
 
 export function ApplicationStatusBadge({ status }: { status: AppStatus | undefined }) {
+  const { t } = useTranslation('common');
   if (!status) return null;
   const upper = String(status).toUpperCase();
   const variant = VARIANT_BY_STATUS[upper] ?? 'outline';
-  const label = LABEL_BY_STATUS[upper] ?? upper;
+  const labelKey = LABEL_KEY_BY_STATUS[upper];
+  const label = labelKey ? t(labelKey) : upper;
   return <Badge variant={variant}>{label}</Badge>;
 }
 ApplicationStatusBadge.displayName = 'ApplicationStatusBadge';

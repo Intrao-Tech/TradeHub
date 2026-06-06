@@ -17,6 +17,9 @@ import {
 } from '@/components/referral/pendingProjectRef';
 import { isSafeNext } from '@/lib/auth-routing';
 
+// Auth pages are intentionally English-only (I18N decision): language is an
+// authenticated-only setting, switched from the account menu.
+
 type RegisterResponse = {
   pending_verification: boolean;
   email: string;
@@ -110,13 +113,13 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
     if (!policy.ok) {
       setError({
         title: 'Password rejected',
-        message: policy.reasons.map(describeReason).join(' '),
+        message: policy.reasons.map((r) => describeReason(r)).join(' '),
       });
       return;
     }
     if (!passwordsMatch) {
       setError({
-        title: 'Passwords don\'t match',
+        title: "Passwords don't match",
         message: 'Re-type the same password in the confirm field.',
       });
       return;
@@ -225,8 +228,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
     } catch {
       setError({
         title: 'Google unavailable',
-        message:
-          'Google sign-up is not available right now. Try again or use email + password.',
+        message: 'Google sign-up is not available right now. Try again or use email + password.',
       });
     }
   }
@@ -456,7 +458,8 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
             </div>
             <div className="flex flex-col gap-2.5">
               <Label htmlFor="reg-phone">
-                Phone <span className="text-fg-subtle">(optional)</span>
+                Phone{' '}
+                <span className="text-fg-subtle">(optional)</span>
               </Label>
               <PhoneInput
                 inputId="reg-phone"

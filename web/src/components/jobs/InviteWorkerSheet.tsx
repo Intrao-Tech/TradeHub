@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '../../api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,7 @@ export function InviteWorkerSheet({
   jobPostId,
   onInvited,
 }: InviteWorkerSheetProps) {
+  const { t } = useTranslation('jobs');
   const [workerId, setWorkerId] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -44,12 +46,12 @@ export function InviteWorkerSheet({
 
     const trimmed = workerId.trim();
     if (!trimmed) {
-      setError('Worker ID is required.');
+      setError(t('inviteWorker.workerIdRequired'));
       return;
     }
     const n = Number(trimmed);
     if (!Number.isInteger(n) || n <= 0) {
-      setError('Worker ID must be a positive whole number.');
+      setError(t('inviteWorker.workerIdInvalid'));
       return;
     }
 
@@ -62,12 +64,12 @@ export function InviteWorkerSheet({
           message: message.trim() || undefined,
         }),
       });
-      toast.success('Worker invited');
+      toast.success(t('inviteWorker.invited'));
       reset();
       onInvited();
       onOpenChange(false);
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Could not send invitation.');
+      setError(parseApiError(err)?.message ?? t('inviteWorker.sendError'));
     } finally {
       setSubmitting(false);
     }
@@ -83,15 +85,12 @@ export function InviteWorkerSheet({
     >
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Invite a worker</SheetTitle>
-          <SheetDescription>
-            Worker IDs can be found on a worker's profile page. Search by name
-            is coming soon.
-          </SheetDescription>
+          <SheetTitle>{t('inviteWorker.title')}</SheetTitle>
+          <SheetDescription>{t('inviteWorker.description')}</SheetDescription>
         </SheetHeader>
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="invite-worker-id">Worker ID</Label>
+            <Label htmlFor="invite-worker-id">{t('inviteWorker.workerIdLabel')}</Label>
             <Input
               id="invite-worker-id"
               type="number"
@@ -103,14 +102,14 @@ export function InviteWorkerSheet({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="invite-message">Message (optional)</Label>
+            <Label htmlFor="invite-message">{t('inviteWorker.messageLabel')}</Label>
             <Textarea
               id="invite-message"
               rows={3}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               maxLength={1000}
-              placeholder="A short note for the worker."
+              placeholder={t('inviteWorker.messagePlaceholder')}
             />
           </div>
           {error ? (
@@ -130,10 +129,10 @@ export function InviteWorkerSheet({
                 reset();
               }}
             >
-              Cancel
+              {t('inviteWorker.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? 'Sending…' : 'Send invitation'}
+              {submitting ? t('inviteWorker.sending') : t('inviteWorker.send')}
             </Button>
           </SheetFooter>
         </form>

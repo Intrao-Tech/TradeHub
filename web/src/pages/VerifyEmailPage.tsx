@@ -14,6 +14,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+// Auth pages are intentionally English-only (I18N decision): language is an
+// authenticated-only setting, switched from the account menu.
+
 const RESEND_COOLDOWN_SECONDS = 30;
 
 export default function VerifyEmailPage() {
@@ -58,8 +61,8 @@ export default function VerifyEmailPage() {
             {queryEmail ? (
               <>
                 We sent a confirmation link to{' '}
-                <span className="font-medium text-fg">{queryEmail}</span>. Click
-                it to activate your account.
+                <span className="font-medium text-fg">{queryEmail}</span>. Click it to
+                activate your account.
               </>
             ) : (
               'Open the email we sent you and click the confirmation link to activate your account.'
@@ -68,15 +71,14 @@ export default function VerifyEmailPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <AuthBanner variant="info" title="Why this step?">
-            TradeHub is built on verified identities. Confirming your email
-            keeps fake accounts out of the marketplace and protects the people
-            you'll work with.
+            TradeHub is built on verified identities. Confirming your email keeps fake
+            accounts out of the marketplace and protects the people you'll work with.
           </AuthBanner>
 
           {sent ? (
             <AuthBanner variant="success" title="Email sent">
-              If an account exists with that email, a fresh confirmation link
-              is on its way. The link is valid for 24 hours.
+              If an account exists with that email, a fresh confirmation link is on its
+              way. The link is valid for 24 hours.
             </AuthBanner>
           ) : null}
 

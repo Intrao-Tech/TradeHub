@@ -1,5 +1,6 @@
 import { useRef, useState, type ChangeEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   FileText,
   Image as ImageIcon,
@@ -10,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { formatMoney, formatDate } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -76,24 +78,7 @@ const STATUS_VARIANT: Record<
   RELEASE_FAILED: 'danger',
 };
 
-const STATUS_LABEL: Record<Milestone['status'], string> = {
-  REQUESTED: 'Awaiting employer approval',
-  PENDING: 'Not funded',
-  FUNDED: 'In escrow',
-  SUBMITTED: 'Awaiting review',
-  RELEASED: 'Released',
-  DISPUTED: 'Disputed',
-  REFUNDED: 'Refunded',
-  CANCELED: 'Canceled',
-  DECLINED: 'Declined by employer',
-  RELEASE_FAILED: 'Payout failed',
-};
-
-const fmt = (s: string) =>
-  new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(Number(s));
+const fmt = (s: string) => formatMoney(Number(s));
 
 export function MilestoneRow({
   milestone,
@@ -104,6 +89,7 @@ export function MilestoneRow({
   fundLockReason = null,
   onChanged,
 }: MilestoneRowProps) {
+  const { t } = useTranslation('wallet');
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(milestone.title);
   const [amount, setAmount] = useState(milestone.amount);
@@ -168,21 +154,21 @@ export function MilestoneRow({
       setEditing(false);
       onChanged();
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Save failed');
+      setError(parseApiError(err)?.message ?? t('milestoneRow.saveError'));
     } finally {
       setBusy(false);
     }
   }
 
   async function remove() {
-    if (!confirm(`Delete milestone "${milestone.title}"? This can't be undone.`)) return;
+    if (!confirm(t('milestoneRow.deleteConfirm', { title: milestone.title }))) return;
     setError('');
     setBusy(true);
     try {
       await deleteMilestone(milestone.id);
       onChanged();
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Delete failed');
+      setError(parseApiError(err)?.message ?? t('milestoneRow.deleteError'));
       setBusy(false);
     }
   }
@@ -193,11 +179,7 @@ export function MilestoneRow({
     try {
       const res = await fundMilestone(milestone.id);
       if (res.worker_onboarding_pending) {
-        const ok = confirm(
-          "Worker hasn't completed payout setup yet. Funds will sit in escrow until they do — they'll be notified by email. " +
-          'You can refund anytime before they submit work.\n\n' +
-          'Continue to checkout?',
-        );
+        const ok = confirm(t('milestoneRow.onboardingPendingConfirm'));
         if (!ok) {
           setBusy(false);
           return;
@@ -206,7 +188,7 @@ export function MilestoneRow({
       if (res.checkout_url) window.location.href = res.checkout_url;
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Could not start checkout');
+      setError(parsed?.message ?? t('milestoneRow.checkoutError'));
       setBusy(false);
     }
   }
@@ -220,21 +202,21 @@ export function MilestoneRow({
       setSubmitMsg('');
       onChanged();
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Submit failed');
+      setError(parseApiError(err)?.message ?? t('milestoneRow.submitError'));
     } finally {
       setBusy(false);
     }
   }
 
   async function doApprove() {
-    if (!confirm(`Approve milestone "${milestone.title}" and release funds?`)) return;
+    if (!confirm(t('milestoneRow.approveConfirm', { title: milestone.title }))) return;
     setError('');
     setBusy(true);
     try {
       await approveMilestone(milestone.id);
       onChanged();
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Approve failed');
+      setError(parseApiError(err)?.message ?? t('milestoneRow.approveError'));
     } finally {
       setBusy(false);
     }
@@ -247,21 +229,21 @@ export function MilestoneRow({
       await approveMilestoneRequest(milestone.id);
       onChanged();
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Approve failed');
+      setError(parseApiError(err)?.message ?? t('milestoneRow.approveError'));
     } finally {
       setBusy(false);
     }
   }
 
   async function doDeclineRequest() {
-    if (!confirm(`Decline milestone request "${milestone.title}"? The worker can re-request with different terms.`)) return;
+    if (!confirm(t('milestoneRow.declineConfirm', { title: milestone.title }))) return;
     setError('');
     setBusy(true);
     try {
       await declineMilestoneRequest(milestone.id);
       onChanged();
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Decline failed');
+      setError(parseApiError(err)?.message ?? t('milestoneRow.declineError'));
     } finally {
       setBusy(false);
     }
@@ -274,7 +256,7 @@ export function MilestoneRow({
       await retryRelease(milestone.id);
       onChanged();
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Retry failed');
+      setError(parseApiError(err)?.message ?? t('milestoneRow.retryError'));
     } finally {
       setBusy(false);
     }
@@ -283,7 +265,7 @@ export function MilestoneRow({
   async function doRefund() {
     setError('');
     if (refundReason.trim().length < 10) {
-      setError('Refund reason must be at least 10 characters.');
+      setError(t('milestoneRow.refundReasonError'));
       return;
     }
     setBusy(true);
@@ -293,7 +275,7 @@ export function MilestoneRow({
       setRefundReason('');
       onChanged();
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Refund failed');
+      setError(parseApiError(err)?.message ?? t('milestoneRow.refundError'));
     } finally {
       setBusy(false);
     }
@@ -302,7 +284,7 @@ export function MilestoneRow({
   async function doDispute() {
     setError('');
     if (disputeReason.trim().length < 10) {
-      setError('Dispute reason must be at least 10 characters.');
+      setError(t('milestoneRow.disputeReasonError'));
       return;
     }
     setBusy(true);
@@ -312,7 +294,7 @@ export function MilestoneRow({
       setDisputeReason('');
       onChanged();
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Dispute failed');
+      setError(parseApiError(err)?.message ?? t('milestoneRow.disputeError'));
     } finally {
       setBusy(false);
     }
@@ -330,32 +312,32 @@ export function MilestoneRow({
     try {
       for (const f of list) {
         if (!ALLOWED_MIME.includes(f.type)) {
-          setError(`${f.name}: only PDF, JPEG, PNG, WebP allowed.`);
+          setError(t('milestone.fileTypeError', { name: f.name }));
           continue;
         }
         if (f.size > 25 * 1024 * 1024) {
-          setError(`${f.name}: max 25 MB.`);
+          setError(t('milestone.fileSizeError', { name: f.name }));
           continue;
         }
         await uploadMilestoneAttachment(milestone.id, f, phase);
       }
       onChanged();
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Upload failed');
+      setError(parseApiError(err)?.message ?? t('milestoneRow.uploadError'));
     } finally {
       setUploading(null);
     }
   }
 
   async function removeAttachment(att: MilestoneAttachment) {
-    if (!confirm(`Remove "${att.original_name}"?`)) return;
+    if (!confirm(t('milestoneRow.removeConfirm', { name: att.original_name }))) return;
     setError('');
     setBusy(true);
     try {
       await deleteMilestoneAttachment(att.id);
       onChanged();
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Remove failed');
+      setError(parseApiError(err)?.message ?? t('milestoneRow.removeError'));
     } finally {
       setBusy(false);
     }
@@ -370,7 +352,7 @@ export function MilestoneRow({
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Milestone title"
+                placeholder={t('milestoneRow.titlePlaceholder')}
                 disabled={busy}
               />
               <Input
@@ -379,20 +361,20 @@ export function MilestoneRow({
                 type="number"
                 step="0.01"
                 min="5"
-                placeholder="Amount"
+                placeholder={t('milestoneRow.amountPlaceholder')}
                 disabled={busy}
               />
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Description (optional)"
+                placeholder={t('milestoneRow.descriptionPlaceholder')}
                 rows={3}
                 maxLength={2000}
                 disabled={busy}
               />
               <div className="flex gap-2">
                 <Button type="button" size="sm" onClick={saveEdit} disabled={busy}>
-                  Save
+                  {t('milestoneRow.save')}
                 </Button>
                 <Button
                   type="button"
@@ -406,7 +388,7 @@ export function MilestoneRow({
                   }}
                   disabled={busy}
                 >
-                  Cancel
+                  {t('milestoneRow.cancel')}
                 </Button>
               </div>
             </div>
@@ -418,15 +400,15 @@ export function MilestoneRow({
                 {isWorker &&
                 milestone.status === 'RELEASED' &&
                 milestone.worker_payout_on_hold ? (
-                  <Badge variant="warning">Held — connect Stripe to receive</Badge>
+                  <Badge variant="warning">{t('milestoneRow.heldBadge')}</Badge>
                 ) : (
                   <Badge variant={STATUS_VARIANT[milestone.status]}>
-                    {STATUS_LABEL[milestone.status]}
+                    {t(`milestoneRow.status.${milestone.status}`)}
                   </Badge>
                 )}
                 {isRequested && milestone.created_by_role === 'WORKER' ? (
                   <span className="text-xs text-fg-muted">
-                    (worker-requested)
+                    {t('milestoneRow.workerRequested')}
                   </span>
                 ) : null}
               </div>
@@ -434,12 +416,12 @@ export function MilestoneRow({
                 {fmt(milestone.amount)}
                 {milestone.released_at ? (
                   <span className="ml-2 text-xs">
-                    Released {new Date(milestone.released_at).toLocaleDateString()}
+                    {t('milestoneRow.released', { date: formatDate(milestone.released_at, 'short') })}
                   </span>
                 ) : null}
                 {milestone.refunded_at ? (
                   <span className="ml-2 text-xs">
-                    Refunded {new Date(milestone.refunded_at).toLocaleDateString()}
+                    {t('milestoneRow.refunded', { date: formatDate(milestone.refunded_at, 'short') })}
                   </span>
                 ) : null}
               </div>
@@ -455,7 +437,7 @@ export function MilestoneRow({
                   type="button"
                   size="icon"
                   variant="ghost"
-                  aria-label="Edit"
+                  aria-label={t('milestoneRow.edit')}
                   onClick={() => setEditing(true)}
                   disabled={busy}
                 >
@@ -465,7 +447,7 @@ export function MilestoneRow({
                   type="button"
                   size="icon"
                   variant="ghost"
-                  aria-label="Delete"
+                  aria-label={t('milestoneRow.delete')}
                   onClick={remove}
                   disabled={busy}
                 >
@@ -480,7 +462,7 @@ export function MilestoneRow({
                   onClick={doApproveRequest}
                   disabled={busy}
                 >
-                  {busy ? 'Approving…' : 'Approve'}
+                  {busy ? t('milestoneRow.approving') : t('milestoneRow.approve')}
                 </Button>
                 <Button
                   type="button"
@@ -488,7 +470,7 @@ export function MilestoneRow({
                   onClick={doDeclineRequest}
                   disabled={busy}
                 >
-                  Decline
+                  {t('milestoneRow.decline')}
                 </Button>
               </>
             ) : null}
@@ -497,16 +479,16 @@ export function MilestoneRow({
                 type="button"
                 onClick={fund}
                 disabled={busy || fundLocked}
-                title={fundLocked && fundLockReason ? `Release "${fundLockReason}" first` : undefined}
+                title={fundLocked && fundLockReason ? t('milestoneRow.releaseFirst', { title: fundLockReason }) : undefined}
               >
                 {busy ? (
                   <span className="inline-flex items-center gap-1">
-                    <Loader2 className="h-3 w-3 animate-spin" /> Starting…
+                    <Loader2 className="h-3 w-3 animate-spin" /> {t('milestoneRow.starting')}
                   </span>
                 ) : fundLocked ? (
-                  'Locked'
+                  t('milestoneRow.locked')
                 ) : (
-                  'Fund'
+                  t('milestoneRow.fund')
                 )}
               </Button>
             ) : null}
@@ -516,17 +498,17 @@ export function MilestoneRow({
                 onClick={() => setSubmittingMilestone(true)}
                 disabled={busy}
               >
-                Submit work
+                {t('milestoneRow.submitWork')}
               </Button>
             ) : null}
             {isSubmitted && isEmployer ? (
               <Button type="button" onClick={doApprove} disabled={busy}>
-                {busy ? 'Approving…' : 'Approve & release'}
+                {busy ? t('milestoneRow.approving') : t('milestoneRow.approveRelease')}
               </Button>
             ) : null}
             {isReleaseFailed && isWorker ? (
               <Button type="button" onClick={doRetry} disabled={busy}>
-                {busy ? 'Retrying…' : 'Retry payout'}
+                {busy ? t('milestoneRow.retrying') : t('milestoneRow.retryPayout')}
               </Button>
             ) : null}
             {isFunded && isEmployer ? (
@@ -536,7 +518,7 @@ export function MilestoneRow({
                 onClick={() => setRefundMode(true)}
                 disabled={busy}
               >
-                Refund
+                {t('milestoneRow.refund')}
               </Button>
             ) : null}
             {(isFunded || isSubmitted) && (isWorker || isEmployer) ? (
@@ -546,7 +528,7 @@ export function MilestoneRow({
                 onClick={() => setDisputeMode(true)}
                 disabled={busy}
               >
-                Dispute
+                {t('milestoneRow.dispute')}
               </Button>
             ) : null}
           </div>
@@ -563,18 +545,16 @@ export function MilestoneRow({
       milestone.status === 'RELEASED' &&
       milestone.worker_payout_on_hold ? (
         <div className="mt-2 rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-xs text-warning">
-          The employer released {fmt(milestone.amount)}, but we couldn't pay it
-          out yet — your Stripe payout account isn't connected. Funds are held
-          on the platform and will sweep to you the moment you finish setup.{' '}
+          {t('milestoneRow.heldNotice', { amount: fmt(milestone.amount) })}{' '}
           <Link to="/payments" className="font-medium underline">
-            Connect Stripe in Payments →
+            {t('milestoneRow.connectStripe')}
           </Link>
         </div>
       ) : null}
 
       {creationAttachments.length > 0 || canAddCreationAttachment ? (
         <AttachmentSection
-          heading="Attachments"
+          heading={t('milestoneRow.attachments')}
           attachments={creationAttachments}
           canRemove={isCreator}
           onRemove={removeAttachment}
@@ -589,7 +569,7 @@ export function MilestoneRow({
 
       {submissionAttachments.length > 0 || canAddSubmissionAttachment ? (
         <AttachmentSection
-          heading="Submission files"
+          heading={t('milestoneRow.submissionFiles')}
           attachments={submissionAttachments}
           canRemove={isWorker}
           onRemove={removeAttachment}
@@ -605,8 +585,8 @@ export function MilestoneRow({
       {isSubmitted && reviewDeadline !== null ? (
         <div className="mt-2 text-xs text-fg-muted">
           {reviewDeadline > 0
-            ? `${reviewDeadline} day${reviewDeadline === 1 ? '' : 's'} left for employer review (auto-releases after).`
-            : 'Auto-release window has passed — release will fire on the next sweep.'}
+            ? t('milestoneRow.reviewDaysLeft', { count: reviewDeadline })
+            : t('milestoneRow.autoReleasePassed')}
           {milestone.submission_message ? (
             <div className="mt-1 italic">"{milestone.submission_message}"</div>
           ) : null}
@@ -618,13 +598,13 @@ export function MilestoneRow({
           <Input
             value={submitMsg}
             onChange={(e) => setSubmitMsg(e.target.value)}
-            placeholder="Optional message to employer (e.g. 'Photos in chat')"
+            placeholder={t('milestoneRow.submitMsgPlaceholder')}
             maxLength={2000}
             disabled={busy}
           />
           <div className="flex gap-2">
             <Button type="button" size="sm" onClick={doSubmit} disabled={busy}>
-              {busy ? 'Submitting…' : 'Confirm submit'}
+              {busy ? t('milestoneRow.submitting') : t('milestoneRow.confirmSubmit')}
             </Button>
             <Button
               type="button"
@@ -636,7 +616,7 @@ export function MilestoneRow({
               }}
               disabled={busy}
             >
-              Cancel
+              {t('milestoneRow.cancel')}
             </Button>
           </div>
         </div>
@@ -644,16 +624,15 @@ export function MilestoneRow({
 
       {isReleaseFailed ? (
         <div className="mt-2 text-xs text-danger">
-          Last payout attempt failed. Worker should fix their Stripe Connect
-          account at /payments, then click Retry.
+          {t('milestoneRow.payoutFailedNotice')}
         </div>
       ) : null}
 
       {fundLocked && isPending && isEmployer ? (
         <div className="mt-2 text-xs text-fg-muted">
-          🔒 Locked — release{' '}
-          {fundLockReason ? <em>"{fundLockReason}"</em> : 'the in-flight milestone'}{' '}
-          before funding this one. Only one milestone can be in flight at a time.
+          {t('milestoneRow.lockedNoticePrefix')}{' '}
+          {fundLockReason ? <em>"{fundLockReason}"</em> : t('milestoneRow.lockedNoticeInFlight')}{' '}
+          {t('milestoneRow.lockedNoticeSuffix')}
         </div>
       ) : null}
 
@@ -662,17 +641,17 @@ export function MilestoneRow({
           <Textarea
             value={refundReason}
             onChange={(e) => setRefundReason(e.target.value)}
-            placeholder="Reason for refund (visible to worker)"
+            placeholder={t('milestoneRow.refundPlaceholder')}
             rows={2}
             maxLength={500}
             disabled={busy}
           />
           <div className="flex gap-2">
             <Button type="button" size="sm" variant="primary" onClick={doRefund} disabled={busy}>
-              {busy ? 'Refunding…' : 'Confirm refund'}
+              {busy ? t('milestoneRow.refunding') : t('milestoneRow.confirmRefund')}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => { setRefundMode(false); setRefundReason(''); }}>
-              Cancel
+              {t('milestoneRow.cancel')}
             </Button>
           </div>
         </div>
@@ -683,17 +662,17 @@ export function MilestoneRow({
           <Textarea
             value={disputeReason}
             onChange={(e) => setDisputeReason(e.target.value)}
-            placeholder="Why are you disputing? (≥10 characters, visible to other party + moderator)"
+            placeholder={t('milestoneRow.disputePlaceholder')}
             rows={3}
             maxLength={2000}
             disabled={busy}
           />
           <div className="flex gap-2">
             <Button type="button" size="sm" variant="primary" onClick={doDispute} disabled={busy}>
-              {busy ? 'Filing…' : 'File dispute'}
+              {busy ? t('milestoneRow.filing') : t('milestoneRow.fileDispute')}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => { setDisputeMode(false); setDisputeReason(''); }}>
-              Cancel
+              {t('milestoneRow.cancel')}
             </Button>
           </div>
         </div>
@@ -747,6 +726,7 @@ function AttachmentSection({
   remaining,
   busy,
 }: AttachmentSectionProps) {
+  const { t } = useTranslation('wallet');
   return (
     <div className="mt-3 space-y-1">
       <div className="text-xs font-medium text-fg-muted">{heading}</div>
@@ -775,7 +755,7 @@ function AttachmentSection({
                   }}
                   disabled={busy}
                   className="ml-1 hover:text-danger"
-                  aria-label={`Remove ${att.original_name}`}
+                  aria-label={t('milestoneRow.removeFile', { name: att.original_name })}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -803,11 +783,11 @@ function AttachmentSection({
             >
               {uploading ? (
                 <>
-                  <Loader2 className="h-3 w-3 animate-spin" /> Uploading…
+                  <Loader2 className="h-3 w-3 animate-spin" /> {t('milestoneRow.uploading')}
                 </>
               ) : (
                 <>
-                  <Paperclip className="h-3 w-3" /> Add file ({remaining} left)
+                  <Paperclip className="h-3 w-3" /> {t('milestoneRow.addFile', { count: remaining })}
                 </>
               )}
             </Button>

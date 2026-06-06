@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import i18n from '@/i18n';
+import { formatDate as formatDateLib } from '@/lib/format';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -17,7 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { EmptyState } from '@/components/EmptyState';
 import { VerificationBadge, verificationFromLevel } from '@/components/VerificationBadge';
-import { formatPay } from '@/components/jobs/PayLine';
+import { formatMoney } from '@/lib/format';
 import { formatRelative } from '@/lib/relative-time';
 
 type Specialisation = { id?: number; name?: string };
@@ -53,18 +55,40 @@ type JobDetail = {
   tags?: Array<{ tag?: TagItem }>;
 };
 
-function payTypeLabel(payType?: string): string {
+// Marketing surface for logged-out visitors — intentionally English-only
+// (not part of the i18n catalogs; see I18N task decision). Shared i18n-driven
+// helpers (formatPay, spec/tag labels) are replaced with English equivalents;
+// relative time reuses the shared helper pinned to the English catalog.
+
+const tEn = i18n.getFixedT('en');
+
+function payTypeLabel(payType: string | undefined): string {
   if (payType === 'DAY_RATE') return 'Day rate';
   if (payType === 'FIXED_PRICE') return 'Fixed price';
   return 'Pay';
 }
 
+function formatPayEn(j: JobDetail): string {
+  if (j.pay_type === 'DAY_RATE') {
+    if (j.day_rate_min != null && j.day_rate_max != null) {
+      return `${formatMoney(Number(j.day_rate_min), { decimals: 0 })}–${formatMoney(Number(j.day_rate_max), { decimals: 0 })} / day`;
+    }
+    if (j.day_rate_min != null)
+      return `From ${formatMoney(Number(j.day_rate_min), { decimals: 0 })} / day`;
+    if (j.day_rate_max != null)
+      return `Up to ${formatMoney(Number(j.day_rate_max), { decimals: 0 })} / day`;
+    return 'Day rate';
+  }
+  if (j.pay_type === 'FIXED_PRICE') {
+    return j.fixed_price != null
+      ? `Fixed ${formatMoney(Number(j.fixed_price), { decimals: 0 })}`
+      : 'Fixed price';
+  }
+  return j.pay_type ?? '—';
+}
+
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  return formatDateLib(iso, 'long');
 }
 
 function initials(name?: string | null): string {
@@ -156,10 +180,10 @@ export default function PublicJobDetailPage() {
   }
 
   const specs = (detail.specialisations ?? [])
-    .map((s) => s.specialisation?.name)
+    .map((s) => s.specialisation?.name ?? null)
     .filter(Boolean) as string[];
   const tagNames = (detail.tags ?? [])
-    .map((t) => t.tag?.name)
+    .map((tg) => tg.tag?.name ?? null)
     .filter(Boolean) as string[];
   const skills = [...specs, ...tagNames];
 
@@ -193,7 +217,7 @@ export default function PublicJobDetailPage() {
             </h1>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-fg-muted">
               {detail.created_at ? (
-                <span>Posted {formatRelative(detail.created_at)}</span>
+                <span>{`Posted ${formatRelative(detail.created_at, tEn)}`}</span>
               ) : null}
               {detail.postcode_area ? (
                 <span className="inline-flex items-center gap-1">
@@ -218,7 +242,7 @@ export default function PublicJobDetailPage() {
           ) : null}
 
           <section className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
-            <Stat icon={Tag} value={formatPay(detail)} label={payTypeLabel(detail.pay_type)} />
+            <Stat icon={Tag} value={formatPayEn(detail)} label={payTypeLabel(detail.pay_type)} />
             {detail.duration_days != null ? (
               <Stat
                 icon={Clock}

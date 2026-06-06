@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Download, FileText, Image as ImageIcon, Paperclip } from 'lucide-react';
 import { getToken } from '../../api';
 import {
@@ -36,6 +37,7 @@ export function AttachmentList({
   heading,
   previewImages,
 }: AttachmentListProps) {
+  const { t } = useTranslation('jobs');
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string>('');
   const [lightbox, setLightbox] = useState<ReadAttachment | null>(null);
@@ -105,12 +107,12 @@ export function AttachmentList({
       );
       if (!res.ok) {
         if (res.status === 403) {
-          throw new Error("You don't have access to this attachment.");
+          throw new Error(t('attachments.noAccess'));
         }
         if (res.status === 404) {
-          throw new Error('This attachment is no longer available.');
+          throw new Error(t('attachments.notAvailable'));
         }
-        throw new Error('Could not open attachment.');
+        throw new Error(t('attachments.openError'));
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(
@@ -127,7 +129,7 @@ export function AttachmentList({
         a.remove();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not open attachment.');
+      setError(err instanceof Error ? err.message : t('attachments.openError'));
     } finally {
       setPendingId(null);
     }
@@ -150,7 +152,7 @@ export function AttachmentList({
                   type="button"
                   onClick={() => setLightbox(a)}
                   className="group block w-full overflow-hidden rounded-md border border-border-default bg-bg-subtle text-left transition-colors hover:border-border-strong focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={`Preview ${a.original_name}`}
+                  aria-label={t('attachments.previewAria', { name: a.original_name })}
                 >
                   <div className="flex aspect-[4/3] w-full items-center justify-center overflow-hidden bg-bg-muted">
                     {src ? (
@@ -197,7 +199,7 @@ export function AttachmentList({
                     {a.original_name}
                   </span>
                   <span className="shrink-0 text-xs text-fg-muted">
-                    {loading ? 'Opening…' : formatSize(a.size_bytes)}
+                    {loading ? t('attachments.opening') : formatSize(a.size_bytes)}
                   </span>
                 </button>
               </li>
@@ -225,7 +227,7 @@ export function AttachmentList({
                 {lightbox.original_name}
               </DialogTitle>
               <DialogDescription className="sr-only">
-                Attachment preview
+                {t('attachments.previewSr')}
               </DialogDescription>
               <div className="flex items-center justify-center overflow-hidden rounded-md bg-bg-muted">
                 {imageUrls[String(lightbox.id)] ? (
@@ -250,7 +252,9 @@ export function AttachmentList({
                   disabled={pendingId === String(lightbox.id)}
                 >
                   <Download className="h-4 w-4" />
-                  {pendingId === String(lightbox.id) ? 'Opening…' : 'Download'}
+                  {pendingId === String(lightbox.id)
+                    ? t('attachments.opening')
+                    : t('attachments.download')}
                 </Button>
               </div>
             </>

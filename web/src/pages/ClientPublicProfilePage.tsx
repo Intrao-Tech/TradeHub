@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
+// Public profile for logged-out visitors — intentionally English-only
+// (not part of the i18n catalogs; see I18N task decision).
+
 type ClientProfile = {
   id: string | number;
   slug?: string;
@@ -82,9 +85,7 @@ export default function ClientPublicProfilePage() {
           {profile.bio ? (
             <p className="whitespace-pre-line text-sm text-fg">{profile.bio}</p>
           ) : (
-            <p className="text-sm text-fg-muted">
-              This member hasn’t added a bio yet.
-            </p>
+            <p className="text-sm text-fg-muted">This member hasn’t added a bio yet.</p>
           )}
         </CardContent>
       </Card>

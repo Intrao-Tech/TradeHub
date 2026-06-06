@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Lock, ShieldCheck, Star, Users } from 'lucide-react';
 import { api } from '../api';
+import { formatMoney } from '@/lib/format';
 import { WorkerCard, type WorkerCardData } from '@/components/WorkerCard';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { SignupGatePopup, type SignupGateStat } from '@/components/SignupGatePopup';
+
+// Marketing surface for logged-out visitors — intentionally English-only
+// (not part of the i18n catalogs; see I18N task decision).
 
 type WorkerSpec = {
   specialisation_id?: string | number;
@@ -197,9 +201,9 @@ export default function PublicWorkerSearchPage() {
 function workerStats(w: WorkerRow): SignupGateStat[] {
   const out: SignupGateStat[] = [];
   if (w.day_rate_min != null && w.day_rate_max != null) {
-    out.push({ label: 'Day rate', value: `£${w.day_rate_min}–${w.day_rate_max}` });
+    out.push({ label: 'Day rate', value: `${formatMoney(Number(w.day_rate_min), { decimals: 0 })}–${formatMoney(Number(w.day_rate_max), { decimals: 0 })}` });
   } else if (w.day_rate_min != null) {
-    out.push({ label: 'Day rate', value: `£${w.day_rate_min}` });
+    out.push({ label: 'Day rate', value: formatMoney(Number(w.day_rate_min), { decimals: 0 }) });
   }
   if (w.rating_avg != null) {
     out.push({ label: 'Rating', value: Number(w.rating_avg).toFixed(1) });

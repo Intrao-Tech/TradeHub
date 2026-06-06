@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Briefcase, Handshake, MessageCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '@/hooks/useAccountMe';
+import { formatMoney, formatDate } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -69,14 +71,6 @@ const STATUS_TABS: StatusTab[] = [
   'ACTIVE',
   'ENDED',
 ];
-const STATUS_LABEL: Record<StatusTab, string> = {
-  ALL: 'All',
-  CHAT_ONLY: 'Chat only',
-  PROPOSED: 'Proposed',
-  ACTIVE: 'Active',
-  ENDED: 'Ended',
-};
-
 function pickRowState(row: CollaborationRow): StatusTab {
   const contracts = row.contracts ?? [];
   if (contracts.length === 0) return 'CHAT_ONLY';
@@ -91,22 +85,11 @@ function fmtGbp(value?: string | number | null) {
   if (value == null || value === '') return '—';
   const n = Number(value);
   if (!Number.isFinite(n)) return String(value);
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(n);
+  return formatMoney(n);
 }
 
 function fmtDate(value?: string | null) {
-  if (!value) return '—';
-  const d = new Date(value);
-  return Number.isNaN(d.getTime())
-    ? '—'
-    : d.toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      });
+  return formatDate(value) || '—';
 }
 
 const stateBadgeVariant: Record<
@@ -121,6 +104,7 @@ const stateBadgeVariant: Record<
 };
 
 export default function CollaborationsPage() {
+  const { t } = useTranslation('collaborations');
   const { account, isWorker, isEmployer, loading: accountLoading } =
     useAccountMe();
 
@@ -142,7 +126,7 @@ export default function CollaborationsPage() {
       setData(res.items ?? []);
     } catch (err) {
       setError(
-        parseApiError(err)?.message ?? 'Could not load your collaborations.',
+        parseApiError(err)?.message ?? t('list.loadError'),
       );
       setData([]);
     } finally {
@@ -206,12 +190,9 @@ export default function CollaborationsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-            Collaborations
+            {t('list.title')}
           </h1>
-          <p className="text-sm text-fg-muted">
-            Each row is a long-running working relationship with one
-            counterparty. Contracts live inside.
-          </p>
+          <p className="text-sm text-fg-muted">{t('list.subtitle')}</p>
         </div>
       </div>
 
@@ -231,10 +212,10 @@ export default function CollaborationsPage() {
         >
           <TabsList>
             <TabsTrigger value="WORKER">
-              <Briefcase className="h-4 w-4" /> As worker
+              <Briefcase className="h-4 w-4" /> {t('list.asWorker')}
             </TabsTrigger>
             <TabsTrigger value="EMPLOYER">
-              <Handshake className="h-4 w-4" /> As employer
+              <Handshake className="h-4 w-4" /> {t('list.asEmployer')}
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -244,7 +225,7 @@ export default function CollaborationsPage() {
         <TabsList className="flex flex-wrap gap-1 h-auto">
           {STATUS_TABS.map((s) => (
             <TabsTrigger key={s} value={s}>
-              {STATUS_LABEL[s]}
+              {t(`list.status.${s}`)}
               <Badge variant="outline" className="ml-1 text-xs">
                 {counts[s]}
               </Badge>
@@ -261,11 +242,11 @@ export default function CollaborationsPage() {
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={Handshake}
-          title="No collaborations here"
+          title={t('list.emptyTitle')}
           description={
             isEmployer
-              ? 'Accept a worker on a job post to start a working relationship.'
-              : 'Apply for jobs and an employer accept will create a collaboration here.'
+              ? t('list.emptyDescEmployer')
+              : t('list.emptyDescWorker')
           }
         />
       ) : (
@@ -290,46 +271,49 @@ export default function CollaborationsPage() {
                         <CardTitle className="text-base truncate">{cpName}</CardTitle>
                         <CardDescription>
                           {cpCity ? `${cpCity} · ` : ''}
-                          since {fmtDate(row.first_contracted_at ?? row.created_at)}
+                          {t('list.since', {
+                            date: fmtDate(row.first_contracted_at ?? row.created_at),
+                          })}
                           {' · '}
-                          {contractsCount} contract
-                          {contractsCount === 1 ? '' : 's'}
+                          {t('list.contracts', { count: contractsCount })}
                         </CardDescription>
                       </div>
                       <Badge variant={stateBadgeVariant[state]}>
-                        {STATUS_LABEL[state]}
+                        {t(`list.status.${state}`)}
                       </Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-1 text-sm">
                     {lastContract ? (
                       <p>
-                        Latest:{' '}
+                        {t('list.latest')}{' '}
                         <strong>
-                          {lastContract.project_type ?? 'Untitled'}
+                          {lastContract.project_type ?? t('list.untitledContract')}
                         </strong>{' '}
                         · {fmtGbp(lastContract.agreed_amount)} ·{' '}
-                        <Badge variant="outline">{lastContract.status}</Badge>
+                        <Badge variant="outline">
+                          {t(`contractStatus.${lastContract.status.toLowerCase()}`, {
+                            defaultValue: lastContract.status,
+                          })}
+                        </Badge>
                       </p>
                     ) : (
                       <p className="text-fg-muted">
-                        No contracts yet — talk in chat then{' '}
                         {meIsWorker
-                          ? 'wait for the employer to propose one'
-                          : 'create one tied to one of your job posts'}
-                        .
+                          ? t('list.noContractsWorker')
+                          : t('list.noContractsEmployer')}
                       </p>
                     )}
                   </CardContent>
                   <CardFooter className="flex flex-wrap gap-2 border-t border-border-default pt-4">
                     <Button asChild>
-                      <Link to={`/collaborations/${row.id}`}>Open</Link>
+                      <Link to={`/collaborations/${row.id}`}>{t('list.open')}</Link>
                     </Button>
                     {row.conversation?.id ? (
                       <Button asChild variant="outline">
                         <Link to={`/inbox/${row.conversation.id}`}>
                           <MessageCircle className="h-4 w-4" />
-                          Chat
+                          {t('list.chat')}
                         </Link>
                       </Button>
                     ) : null}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Tag, Trash2 } from 'lucide-react';
 import { api, parseApiError } from '../../api';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ import { EmptyState } from '../EmptyState';
 type TagRow = { id: number; name: string; slug: string };
 
 export function AdminTagsTab() {
+  const { t } = useTranslation('admin');
   const [rows, setRows] = useState<TagRow[]>([]);
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
@@ -38,11 +40,11 @@ export function AdminTagsTab() {
       const data = await api<TagRow[]>('/tags');
       setRows(data);
     } catch (e) {
-      setErr(parseApiError(e)?.message ?? 'Failed to load');
+      setErr(parseApiError(e)?.message ?? t('catalog.loadError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -60,13 +62,13 @@ export function AdminTagsTab() {
       setName('');
       void load();
     } catch (err) {
-      setCreateErr(parseApiError(err)?.message ?? 'Create failed');
+      setCreateErr(parseApiError(err)?.message ?? t('catalog.createFailed'));
     }
   }
 
   async function remove(id: number) {
     setRowErr((m) => ({ ...m, [id]: '' }));
-    if (!confirm('Delete this tag? Workers tagged with it will lose the tag.')) {
+    if (!confirm(t('catalog.tagConfirmDelete'))) {
       return;
     }
     try {
@@ -75,7 +77,7 @@ export function AdminTagsTab() {
     } catch (err) {
       setRowErr((m) => ({
         ...m,
-        [id]: parseApiError(err)?.message ?? 'Delete failed',
+        [id]: parseApiError(err)?.message ?? t('catalog.deleteFailed'),
       }));
     }
   }
@@ -85,12 +87,9 @@ export function AdminTagsTab() {
       <CardHeader>
         <div className="flex items-center gap-2">
           <Tag className="h-4 w-4 text-fg-muted" />
-          <CardTitle>Tags</CardTitle>
+          <CardTitle>{t('catalog.tagTitle')}</CardTitle>
         </div>
-        <CardDescription>
-          Free-form labels workers can apply to themselves and employers can
-          filter on. Deleting a tag removes it from every worker.
-        </CardDescription>
+        <CardDescription>{t('catalog.tagDesc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {err ? (
@@ -101,19 +100,19 @@ export function AdminTagsTab() {
 
         <form onSubmit={create} className="flex items-end gap-2">
           <div className="flex-1 space-y-2">
-            <Label htmlFor="tag-name">New tag</Label>
+            <Label htmlFor="tag-name">{t('catalog.tagNew')}</Label>
             <Input
               id="tag-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. heritage-buildings"
+              placeholder={t('catalog.tagPlaceholder')}
               required
               minLength={2}
             />
           </div>
           <Button type="submit">
             <Plus className="h-3.5 w-3.5" />
-            Create
+            {t('catalog.create')}
           </Button>
         </form>
         {createErr ? (
@@ -123,18 +122,18 @@ export function AdminTagsTab() {
         {rows.length === 0 ? (
           <EmptyState
             icon={Tag}
-            title={loading ? 'Loading…' : 'No tags yet'}
-            description="Add the first label above."
+            title={loading ? t('catalog.loading') : t('catalog.tagNoRows')}
+            description={t('catalog.tagNoRowsDesc')}
           />
         ) : (
           <div className="rounded border border-border-subtle">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-16">ID</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Slug</TableHead>
-                  <TableHead className="w-32 text-right">Actions</TableHead>
+                  <TableHead className="w-16">{t('catalog.colId')}</TableHead>
+                  <TableHead>{t('catalog.colName')}</TableHead>
+                  <TableHead>{t('catalog.colSlug')}</TableHead>
+                  <TableHead className="w-32 text-right">{t('catalog.colActions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -152,7 +151,7 @@ export function AdminTagsTab() {
                         onClick={() => void remove(s.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                        Delete
+                        {t('catalog.delete')}
                       </Button>
                       {rowErr[s.id] ? (
                         <p className="text-[11px] text-danger mt-1">

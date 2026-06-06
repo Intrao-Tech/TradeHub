@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
+// Shown only on public marketing pages — intentionally English-only
+// (not part of the i18n catalogs; see I18N task decision).
+
 export type SignupGateStat = { label: string; value: string };
 
 type SignupGatePopupProps = {

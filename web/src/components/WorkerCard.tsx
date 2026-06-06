@@ -1,12 +1,16 @@
 import type { ReactNode } from 'react';
+import type { TranslateFn } from '@/i18n/types';
 import { MapPin } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
+import { formatMoney } from '@/lib/format';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StarRating } from '@/components/StarRating';
 import { VerificationBadge, verificationFromLevel } from './VerificationBadge';
 import { cn } from '@/lib/utils';
+import { specLabel, tagLabel } from '@/lib/specialisations';
 
 export type WorkerCardData = {
   id: string | number;
@@ -60,15 +64,19 @@ function initials(name?: string | null): string {
     .join('');
 }
 
-function rateLine(w: WorkerCardData): string | null {
+type TFn = TranslateFn;
+
+function rateLine(w: WorkerCardData, t: TFn): string | null {
   if (w.day_rate_min != null || w.day_rate_max != null) {
-    const a = w.day_rate_min != null ? `£${w.day_rate_min}` : '—';
-    const b = w.day_rate_max != null ? `£${w.day_rate_max}` : '—';
-    if (a === b) return `${a}/day`;
-    return `${a}–${b}/day`;
+    const a = w.day_rate_min != null ? formatMoney(Number(w.day_rate_min), { decimals: 0 }) : '—';
+    const b = w.day_rate_max != null ? formatMoney(Number(w.day_rate_max), { decimals: 0 }) : '—';
+    if (a === b) return t('card.perDay', { rate: a });
+    return t('card.perDayRange', { range: `${a}–${b}` });
   }
-  if (w.day_rate != null) return `£${w.day_rate}/day`;
-  if (w.hourly_rate != null) return `£${w.hourly_rate}/hr`;
+  if (w.day_rate != null)
+    return t('card.perDay', { rate: formatMoney(Number(w.day_rate), { decimals: 0 }) });
+  if (w.hourly_rate != null)
+    return t('card.perHour', { rate: formatMoney(Number(w.hourly_rate), { decimals: 0 }) });
   return null;
 }
 
@@ -80,7 +88,8 @@ export function WorkerCard({
   selected,
   className,
 }: WorkerCardProps) {
-  const name = worker.client_profile?.display_name ?? 'Worker';
+  const { t } = useTranslation(['workers', 'common']);
+  const name = worker.client_profile?.display_name ?? t('card.fallbackName');
   const avatar =
     worker.avatar_url ?? worker.client_profile?.avatar_url ?? undefined;
   const postcode =
@@ -93,10 +102,10 @@ export function WorkerCard({
   const showVerification = verification !== 'unverified';
 
   const specs = (worker.specialisations ?? worker.worker_specialisations ?? [])
-    .map((s) => s.specialisation?.name)
+    .map((s) => (s.specialisation?.name ? specLabel(s.specialisation.name, t) : null))
     .filter(Boolean) as string[];
   const tagNames = (worker.tags ?? [])
-    .map((t) => t.tag?.name)
+    .map((tg) => (tg.tag?.name ? tagLabel(tg.tag.name, t) : null))
     .filter(Boolean) as string[];
   const allChips = [...specs, ...tagNames];
   const visibleChips = allChips.slice(0, 5);
@@ -111,7 +120,7 @@ export function WorkerCard({
     reviewCount != null &&
     reviewCount > 0;
 
-  const rate = rateLine(worker);
+  const rate = rateLine(worker, t);
   const headline =
     worker.headline?.trim() || worker.client_profile?.bio?.trim() || null;
   const years = worker.years_experience ?? null;
@@ -143,7 +152,7 @@ export function WorkerCard({
                     className="inline-block h-2 w-2 rounded-full bg-success"
                     aria-hidden
                   />
-                  Available now
+                  {t('card.availableNow')}
                 </span>
               ) : null}
             </div>
@@ -180,14 +189,12 @@ export function WorkerCard({
             <span className="inline-flex items-center gap-1 text-fg-muted">
               <StarRating value={Math.round(rating)} size="sm" />
               <span className="font-medium text-fg">{rating.toFixed(1)}</span>
-              <span>
-                ({reviewCount} review{reviewCount === 1 ? '' : 's'})
-              </span>
+              <span>{t('common:reviews', { count: reviewCount })}</span>
             </span>
           ) : null}
           {years != null ? (
             <span className="text-fg-muted">
-              {years} year{years === 1 ? '' : 's'} exp
+              {t('card.yearsExp', { count: years })}
             </span>
           ) : null}
         </div>
@@ -217,7 +224,7 @@ export function WorkerCard({
 
       <div>
         <Button type="button" size="sm" variant="outline" tabIndex={-1}>
-          See profile
+          {t('card.seeProfile')}
         </Button>
       </div>
     </Card>

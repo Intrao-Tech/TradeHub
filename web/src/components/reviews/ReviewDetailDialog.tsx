@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { formatDate as formatDateLocale } from '@/lib/format';
 import {
   Dialog,
   DialogContent,
@@ -17,14 +18,7 @@ type ReviewDetailDialogProps = {
 };
 
 function formatDate(value?: string | null): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatDateLocale(value) || null;
 }
 
 export function ReviewDetailDialog({

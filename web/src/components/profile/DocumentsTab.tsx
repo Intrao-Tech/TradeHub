@@ -6,6 +6,9 @@ import {
   useState,
   type DragEvent,
 } from 'react';
+import { formatDate } from '@/lib/format';
+import type { ParseKeys } from 'i18next';
+import type { TranslateFn } from '@/i18n/types';
 import {
   CircleCheck,
   CircleDashed,
@@ -14,6 +17,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '../../api';
 import { publicFileUrl } from '../../lib/files';
 import { EmptyState } from '../EmptyState';
@@ -54,24 +58,26 @@ type DocType =
   | 'COMPANY_LETTERHEAD'
   | 'OTHER';
 
-const DOC_LABELS: Record<DocType, string> = {
-  INSURANCE: 'Insurance certificate',
-  CSCS_CARD: 'CSCS card',
-  GAS_SAFE_CERT: 'Gas Safe certificate',
-  NICEIC_CERT: 'NICEIC certificate',
-  FIRAS_CERT: 'FIRAS certificate',
-  COMPANY_LETTERHEAD: 'Company letterhead',
-  OTHER: 'Other',
+type TFn = TranslateFn;
+
+const DOC_LABEL_KEY: Record<DocType, ParseKeys<'profile'>> = {
+  INSURANCE: 'documents.labelInsurance',
+  CSCS_CARD: 'documents.labelCscs',
+  GAS_SAFE_CERT: 'documents.labelGasSafe',
+  NICEIC_CERT: 'documents.labelNiceic',
+  FIRAS_CERT: 'documents.labelFiras',
+  COMPANY_LETTERHEAD: 'documents.labelLetterhead',
+  OTHER: 'documents.labelOther',
 };
 
-const DOC_FORMAT_HINT: Record<DocType, string> = {
-  INSURANCE: 'PDF preferred · max 10 MB.',
-  CSCS_CARD: 'Photo of both sides · JPEG, PNG, or WebP · max 10 MB.',
-  GAS_SAFE_CERT: 'PDF or image · max 10 MB.',
-  NICEIC_CERT: 'PDF or image · max 10 MB.',
-  FIRAS_CERT: 'PDF or image · max 10 MB.',
-  COMPANY_LETTERHEAD: 'Company letterhead PDF or image · max 10 MB.',
-  OTHER: 'PDF or image · max 10 MB.',
+const DOC_FORMAT_HINT_KEY: Record<DocType, ParseKeys<'profile'>> = {
+  INSURANCE: 'documents.hintInsurance',
+  CSCS_CARD: 'documents.hintCscs',
+  GAS_SAFE_CERT: 'documents.hintGasSafe',
+  NICEIC_CERT: 'documents.hintNiceic',
+  FIRAS_CERT: 'documents.hintFiras',
+  COMPANY_LETTERHEAD: 'documents.hintLetterhead',
+  OTHER: 'documents.hintOther',
 };
 
 const ACCEPT_BY_TYPE: Record<DocType, string> = {
@@ -96,11 +102,11 @@ const STATUS_VARIANT: Record<
   PENDING: 'warning',
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  APPROVED: 'Approved',
-  REJECTED: 'Rejected',
-  IN_REVIEW: 'In review',
-  PENDING: 'Pending',
+const STATUS_LABEL_KEY: Record<string, ParseKeys<'profile'>> = {
+  APPROVED: 'documents.statusApproved',
+  REJECTED: 'documents.statusRejected',
+  IN_REVIEW: 'documents.statusInReview',
+  PENDING: 'documents.statusPending',
 };
 
 // Doc types relevant per role — drives BOTH the upload dropdown and the
@@ -138,6 +144,7 @@ type DocumentsTabProps = {
 };
 
 export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps) {
+  const { t } = useTranslation('profile');
   // Role drives BOTH the upload dropdown and the static checklist. Workers
   // get worker-relevant types, employers get employer-relevant types.
   // Users with neither role (rare — staff-only accounts) get an empty list.
@@ -169,7 +176,7 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
       setDocs(data);
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Could not load documents.');
+      setError(parsed?.message ?? t('documents.loadError'));
     }
   }, []);
 
@@ -189,7 +196,7 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
     if (!file) return;
     setError('');
     if (file.size > DOC_MAX_BYTES) {
-      setError(`${file.name}: file is too large. Max 10 MB for documents.`);
+      setError(t('documents.fileTooLargeNamed', { name: file.name }));
       return;
     }
     setPendingFile(file);
@@ -207,11 +214,11 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
 
   async function upload() {
     if (!pendingFile) {
-      setError('Choose a file to upload.');
+      setError(t('documents.chooseFile'));
       return;
     }
     if (requiresTitle && !titleValid) {
-      setError('Enter a title (3–100 characters) so staff can identify the document.');
+      setError(t('documents.titleRequired'));
       return;
     }
     setError('');
@@ -229,7 +236,7 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
         body: formData,
       });
       setProgress(100);
-      flash('Document uploaded');
+      flash(t('documents.uploaded'));
       setPendingFile(null);
       setOtherTitle('');
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -238,11 +245,11 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
       const parsed = parseApiError(err);
       const status = parsed?.status ?? 0;
       if (status === 413) {
-        setError('File is too large. Max 10 MB for documents.');
+        setError(t('documents.fileTooLarge'));
       } else if (status === 415) {
-        setError('Unsupported file type for this document.');
+        setError(t('documents.unsupportedType'));
       } else {
-        setError(parsed?.message ?? 'Upload failed.');
+        setError(parsed?.message ?? t('documents.uploadFailed'));
       }
     } finally {
       setProgress(null);
@@ -253,11 +260,11 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
     setError('');
     try {
       await api(`/documents/${id}`, { method: 'DELETE' });
-      flash('Document deleted');
+      flash(t('documents.deleted'));
       await reload();
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Could not delete document.');
+      setError(parsed?.message ?? t('documents.deleteError'));
     }
   }
 
@@ -275,26 +282,26 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
       {checklistTypes.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Verification checklist</CardTitle>
+            <CardTitle>{t('documents.checklistTitle')}</CardTitle>
             <CardDescription>
               {isWorker
-                ? 'Documents that workers can submit for verification. Each type contributes to the Basic and Certified rungs of your trust ladder.'
-                : 'Documents that employers can submit. Combined with the Companies House check, they strengthen your employer profile.'}
+                ? t('documents.checklistDescWorker')
+                : t('documents.checklistDescEmployer')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="grid gap-2 sm:grid-cols-2">
-              {checklistTypes.map((t) => {
-                const state = stateFor(docs, t);
+              {checklistTypes.map((docTypeItem) => {
+                const state = stateFor(docs, docTypeItem);
                 return (
                   <li
-                    key={t}
+                    key={docTypeItem}
                     className="flex items-center justify-between gap-2 rounded-md border border-border-default bg-raised px-3 py-2 text-sm"
                   >
                     <div className="flex min-w-0 items-center gap-2">
                       <RequirementIcon state={state} />
                       <span className="truncate font-medium text-fg">
-                        {DOC_LABELS[t]}
+                        {t(DOC_LABEL_KEY[docTypeItem])}
                       </span>
                     </div>
                     <RequirementChip state={state} />
@@ -308,14 +315,12 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
 
       <Card>
         <CardHeader>
-          <CardTitle>My documents</CardTitle>
-          <CardDescription>
-            Upload verification documents for staff review.
-          </CardDescription>
+          <CardTitle>{t('documents.myDocsTitle')}</CardTitle>
+          <CardDescription>{t('documents.myDocsDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           {docs == null ? (
-            <p className="text-sm text-fg-muted">Loading…</p>
+            <p className="text-sm text-fg-muted">{t('documents.loading')}</p>
           ) : docs.length > 0 ? (
             <ul className="divide-y divide-border-default">
               {docs.map((doc) => (
@@ -329,8 +334,8 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
           ) : (
             <EmptyState
               icon={FileText}
-              title="No documents yet"
-              description="Upload your first document below."
+              title={t('documents.noneTitle')}
+              description={t('documents.noneDesc')}
             />
           )}
         </CardContent>
@@ -338,21 +343,21 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
 
       <Card>
         <CardHeader>
-          <CardTitle>Upload document</CardTitle>
-          <CardDescription>{DOC_FORMAT_HINT[docType]}</CardDescription>
+          <CardTitle>{t('documents.uploadTitle')}</CardTitle>
+          <CardDescription>{t(DOC_FORMAT_HINT_KEY[docType])}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2.5">
-              <Label>Document type</Label>
+              <Label>{t('documents.docType')}</Label>
               <Select value={docType} onValueChange={(v) => setDocType(v as DocType)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {allowedTypes.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {DOC_LABELS[t]}
+                  {allowedTypes.map((dt) => (
+                    <SelectItem key={dt} value={dt}>
+                      {t(DOC_LABEL_KEY[dt])}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -360,7 +365,7 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
               {requiresTitle ? (
                 <div className="flex flex-col gap-2.5 pt-2">
                   <Label htmlFor="doc-other-title">
-                    Title <span className="text-danger">*</span>
+                    {t('documents.titleLabel')} <span className="text-danger">*</span>
                   </Label>
                   <input
                     id="doc-other-title"
@@ -368,17 +373,15 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
                     value={otherTitle}
                     onChange={(e) => setOtherTitle(e.target.value)}
                     maxLength={100}
-                    placeholder="e.g. Public liability proof, Trade reference letter"
+                    placeholder={t('documents.titlePlaceholder')}
                     className="flex h-9 w-full rounded-md border border-border-default bg-raised px-3 py-1 text-sm text-fg shadow-sm transition-colors placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   />
-                  <p className="text-xs text-fg-muted">
-                    3–100 chars. Shown to staff and on your profile checklist.
-                  </p>
+                  <p className="text-xs text-fg-muted">{t('documents.titleHint')}</p>
                 </div>
               ) : null}
             </div>
             <div className="flex flex-col gap-2.5">
-              <Label htmlFor="doc-file">File</Label>
+              <Label htmlFor="doc-file">{t('documents.file')}</Label>
               <input
                 ref={fileInputRef}
                 id="doc-file"
@@ -415,9 +418,9 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
                   <>
                     <Upload className="h-4 w-4" />
                     <span className="font-medium text-fg">
-                      Drop a file here
+                      {t('documents.dropHere')}
                     </span>
-                    <span className="text-xs">or click to browse</span>
+                    <span className="text-xs">{t('documents.orBrowse')}</span>
                   </>
                 )}
               </div>
@@ -430,7 +433,7 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
                 aria-live="polite"
                 className="text-xs text-fg-muted"
               >
-                {progress < 100 ? 'Uploading…' : 'Done.'}
+                {progress < 100 ? t('documents.uploading') : t('documents.done')}
               </p>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-subtle">
                 <div
@@ -447,7 +450,7 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
               onClick={upload}
               disabled={progress != null || !pendingFile || !titleValid}
             >
-              {progress != null ? 'Uploading…' : 'Upload'}
+              {progress != null ? t('documents.uploading') : t('documents.upload')}
             </Button>
             {pendingFile ? (
               <Button
@@ -458,7 +461,7 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
                   if (fileInputRef.current) fileInputRef.current.value = '';
                 }}
               >
-                Cancel
+                {t('documents.cancel')}
               </Button>
             ) : null}
           </div>
@@ -468,13 +471,14 @@ export function DocumentsTab({ isWorker, isEmployer, flash }: DocumentsTabProps)
   );
 }
 
-function documentDisplayName(doc: DocumentRow): string {
+function documentDisplayName(doc: DocumentRow, t: TFn): string {
   // OTHER carries a user-supplied title in metadata.title — surface it so the
   // row reads "Public liability proof" instead of a generic "Other".
   if (doc.doc_type === 'OTHER' && doc.metadata?.title) {
     return doc.metadata.title;
   }
-  return DOC_LABELS[doc.doc_type as DocType] ?? doc.doc_type;
+  const key = DOC_LABEL_KEY[doc.doc_type as DocType];
+  return key ? t(key) : doc.doc_type;
 }
 
 type RequirementState = 'approved' | 'pending' | 'rejected' | 'missing';
@@ -500,10 +504,11 @@ function RequirementIcon({ state }: { state: RequirementState }) {
 }
 
 function RequirementChip({ state }: { state: RequirementState }) {
-  if (state === 'approved') return <Badge variant="success">Done</Badge>;
-  if (state === 'rejected') return <Badge variant="danger">Re-upload</Badge>;
-  if (state === 'pending') return <Badge variant="info">In review</Badge>;
-  return <Badge variant="outline">Not started</Badge>;
+  const { t } = useTranslation('profile');
+  if (state === 'approved') return <Badge variant="success">{t('documents.chipDone')}</Badge>;
+  if (state === 'rejected') return <Badge variant="danger">{t('documents.chipReupload')}</Badge>;
+  if (state === 'pending') return <Badge variant="info">{t('documents.chipInReview')}</Badge>;
+  return <Badge variant="outline">{t('documents.chipNotStarted')}</Badge>;
 }
 
 function DocumentRowItem({
@@ -513,14 +518,16 @@ function DocumentRowItem({
   doc: DocumentRow;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation('profile');
   const url = publicFileUrl(doc.file_url);
   const ext = doc.file_url ? doc.file_url.split('.').pop()?.toUpperCase() : '';
   const isImage = /\.(jpe?g|png|webp|gif)$/i.test(doc.file_url ?? '');
   const isPdf = /\.pdf$/i.test(doc.file_url ?? '');
   const variant = STATUS_VARIANT[doc.status] ?? 'outline';
-  const label = STATUS_LABEL[doc.status] ?? doc.status;
+  const statusKey = STATUS_LABEL_KEY[doc.status];
+  const label = statusKey ? t(statusKey) : doc.status;
   const date = doc.created_at
-    ? new Date(doc.created_at).toLocaleDateString()
+    ? formatDate(doc.created_at, 'short')
     : null;
 
   return (
@@ -540,17 +547,17 @@ function DocumentRowItem({
         <div className="min-w-0 flex-1 text-sm">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-fg">
-              {documentDisplayName(doc)}
+              {documentDisplayName(doc, t)}
             </span>
             <Badge variant={variant}>{label}</Badge>
             {isPdf ? <Badge variant="outline">{ext}</Badge> : null}
           </div>
           {date ? (
-            <p className="text-xs text-fg-muted">Uploaded {date}</p>
+            <p className="text-xs text-fg-muted">{t('documents.uploadedOn', { date })}</p>
           ) : null}
           {doc.status === 'REJECTED' && doc.rejection_reason ? (
             <p className="mt-1 text-xs text-danger">
-              Reason: {doc.rejection_reason}
+              {t('documents.reason', { reason: doc.rejection_reason })}
             </p>
           ) : null}
         </div>
@@ -559,7 +566,7 @@ function DocumentRowItem({
         {url ? (
           <Button asChild variant="ghost" size="sm">
             <a href={url} target="_blank" rel="noopener noreferrer">
-              View
+              {t('documents.view')}
             </a>
           </Button>
         ) : null}
@@ -568,7 +575,7 @@ function DocumentRowItem({
             type="button"
             variant="ghost"
             size="icon"
-            aria-label="Delete document"
+            aria-label={t('documents.deleteAria')}
             onClick={onDelete}
           >
             <Trash2 />

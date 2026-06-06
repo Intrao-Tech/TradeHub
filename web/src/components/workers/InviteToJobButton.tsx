@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Mail } from 'lucide-react';
 import { api, parseApiError } from '../../api';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,7 @@ export function InviteToJobButton({
   workerId,
   workerName,
 }: InviteToJobButtonProps) {
+  const { t } = useTranslation('workers');
   const [open, setOpen] = useState(false);
   const [jobs, setJobs] = useState<EmployerJob[] | null>(null);
   const [jobsError, setJobsError] = useState('');
@@ -69,7 +71,7 @@ export function InviteToJobButton({
       } catch (e) {
         if (cancelled) return;
         setJobsError(
-          parseApiError(e)?.message ?? 'Could not load your open jobs.',
+          parseApiError(e)?.message ?? t('inviteToJob.loadJobsError'),
         );
       }
     })();
@@ -82,12 +84,12 @@ export function InviteToJobButton({
     e.preventDefault();
     setSubmitError('');
     if (!selectedJobId) {
-      setSubmitError('Pick a job to invite this worker to.');
+      setSubmitError(t('inviteToJob.pickJob'));
       return;
     }
     const wn = Number(workerId);
     if (!Number.isInteger(wn) || wn <= 0) {
-      setSubmitError('Invalid worker.');
+      setSubmitError(t('inviteToJob.invalidWorker'));
       return;
     }
     setSubmitting(true);
@@ -100,13 +102,15 @@ export function InviteToJobButton({
         }),
       });
       toast.success(
-        workerName ? `Invited ${workerName} to the job` : 'Worker invited',
+        workerName
+          ? t('inviteToJob.invitedNamed', { name: workerName })
+          : t('inviteToJob.invitedGeneric'),
       );
       setMessage('');
       setOpen(false);
     } catch (err) {
       setSubmitError(
-        parseApiError(err)?.message ?? 'Could not send invitation.',
+        parseApiError(err)?.message ?? t('inviteToJob.sendError'),
       );
     } finally {
       setSubmitting(false);
@@ -125,7 +129,7 @@ export function InviteToJobButton({
         }}
       >
         <Mail />
-        Invite to job
+        {t('inviteToJob.button')}
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
@@ -135,16 +139,15 @@ export function InviteToJobButton({
         >
           <SheetHeader>
             <SheetTitle>
-              Invite {workerName ? workerName : 'this worker'} to a job
+              {workerName
+                ? t('inviteToJob.titleNamed', { name: workerName })
+                : t('inviteToJob.titleGeneric')}
             </SheetTitle>
-            <SheetDescription>
-              Pick one of your open jobs and add an optional note. The worker
-              will receive an invitation to apply.
-            </SheetDescription>
+            <SheetDescription>{t('inviteToJob.description')}</SheetDescription>
           </SheetHeader>
           <form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div className="flex flex-col gap-2.5">
-              <Label htmlFor="invite-job-select">Job</Label>
+              <Label htmlFor="invite-job-select">{t('inviteToJob.jobLabel')}</Label>
               {jobsError ? (
                 <div
                   role="alert"
@@ -153,18 +156,16 @@ export function InviteToJobButton({
                   {jobsError}
                 </div>
               ) : jobs == null ? (
-                <p className="text-sm text-fg-muted">Loading your jobs…</p>
+                <p className="text-sm text-fg-muted">{t('inviteToJob.loadingJobs')}</p>
               ) : hasNoOpenJobs ? (
-                <p className="text-sm text-fg-muted">
-                  You have no open jobs. Post a job before inviting workers.
-                </p>
+                <p className="text-sm text-fg-muted">{t('inviteToJob.noOpenJobs')}</p>
               ) : (
                 <Select
                   value={selectedJobId}
                   onValueChange={(v) => setSelectedJobId(v)}
                 >
                   <SelectTrigger id="invite-job-select">
-                    <SelectValue placeholder="Select a job" />
+                    <SelectValue placeholder={t('inviteToJob.jobPlaceholder')} />
                   </SelectTrigger>
                   <SelectContent>
                     {jobs.map((j) => (
@@ -177,14 +178,14 @@ export function InviteToJobButton({
               )}
             </div>
             <div className="flex flex-col gap-2.5">
-              <Label htmlFor="invite-message">Message (optional)</Label>
+              <Label htmlFor="invite-message">{t('inviteToJob.messageLabel')}</Label>
               <Textarea
                 id="invite-message"
                 rows={3}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 maxLength={1000}
-                placeholder="A short note for the worker."
+                placeholder={t('inviteToJob.messagePlaceholder')}
               />
             </div>
             {submitError ? (
@@ -201,13 +202,13 @@ export function InviteToJobButton({
                 variant="outline"
                 onClick={() => setOpen(false)}
               >
-                Cancel
+                {t('inviteToJob.cancel')}
               </Button>
               <Button
                 type="submit"
                 disabled={submitting || hasNoOpenJobs || !selectedJobId}
               >
-                {submitting ? 'Sending…' : 'Send invitation'}
+                {submitting ? t('inviteToJob.sending') : t('inviteToJob.send')}
               </Button>
             </SheetFooter>
           </form>

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pencil, Upload, Trash2 } from 'lucide-react';
 import Cropper, { type Area } from 'react-easy-crop';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -45,6 +46,7 @@ export function AvatarUploader({
   compact = false,
   compactClassName,
 }: AvatarUploaderProps) {
+  const { t } = useTranslation('profile');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stage, setStage] = useState<Stage>('idle');
   const [error, setError] = useState('');
@@ -71,10 +73,10 @@ export function AvatarUploader({
 
   function validateFile(file: File): string | null {
     if (!ALLOWED_MIMES.includes(file.type)) {
-      return 'Use a JPEG, PNG, or WebP image.';
+      return t('avatar.useImageType');
     }
     if (file.size > MAX_AVATAR_BYTES) {
-      return 'File is too large. Max 5 MB for avatars.';
+      return t('avatar.tooLarge');
     }
     return null;
   }
@@ -99,7 +101,7 @@ export function AvatarUploader({
       // Close the compact "Manage photo" dialog so the crop dialog has the stage to itself.
       setManageOpen(false);
     };
-    reader.onerror = () => setError('Could not read this file.');
+    reader.onerror = () => setError(t('avatar.readError'));
     reader.readAsDataURL(file);
   }
 
@@ -111,7 +113,7 @@ export function AvatarUploader({
     if (!imageSrc || !croppedAreaPixels) return;
     setStage('uploading');
     setError('');
-    setStatus('Uploading…');
+    setStatus(t('avatar.uploading'));
     try {
       const blob = await getCroppedBlob(
         imageSrc,
@@ -130,12 +132,12 @@ export function AvatarUploader({
         method: 'POST',
         body: formData,
       });
-      setStatus('Uploaded.');
+      setStatus(t('avatar.uploaded'));
       await onChanged();
       reset();
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Upload failed.');
+      setError(parsed?.message ?? t('avatar.uploadFailed'));
       setStage('cropping');
       setStatus('');
     }
@@ -144,18 +146,18 @@ export function AvatarUploader({
   async function remove() {
     setStage('removing');
     setError('');
-    setStatus('Removing…');
+    setStatus(t('avatar.removing'));
     try {
       await api('/client-profiles/me', {
         method: 'PATCH',
         body: JSON.stringify({ avatar_url: '' }),
       });
-      setStatus('Removed.');
+      setStatus(t('avatar.removed'));
       await onChanged();
       setStage('idle');
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Could not remove avatar.');
+      setError(parsed?.message ?? t('avatar.removeError'));
       setStage('idle');
       setStatus('');
     }
@@ -206,10 +208,8 @@ export function AvatarUploader({
     >
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Edit photo</DialogTitle>
-          <DialogDescription>
-            Drag to reposition · pinch or use the slider to zoom.
-          </DialogDescription>
+          <DialogTitle>{t('avatar.editTitle')}</DialogTitle>
+          <DialogDescription>{t('avatar.editDesc')}</DialogDescription>
         </DialogHeader>
         <div className="relative h-72 w-full overflow-hidden rounded-md bg-subtle">
           {imageSrc ? (
@@ -228,7 +228,7 @@ export function AvatarUploader({
         </div>
         <div className="space-y-2">
           <label htmlFor="avatar-zoom" className="text-sm font-medium text-fg">
-            Zoom
+            {t('avatar.zoom')}
           </label>
           <input
             id="avatar-zoom"
@@ -247,7 +247,7 @@ export function AvatarUploader({
             onClick={save}
             disabled={stage === 'uploading' || !croppedAreaPixels}
           >
-            {stage === 'uploading' ? 'Uploading…' : 'Save photo'}
+            {stage === 'uploading' ? t('avatar.uploading') : t('avatar.savePhoto')}
           </Button>
           <Button
             type="button"
@@ -255,7 +255,7 @@ export function AvatarUploader({
             onClick={reset}
             disabled={stage === 'uploading'}
           >
-            Cancel
+            {t('avatar.cancel')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -268,13 +268,13 @@ export function AvatarUploader({
         <div className="relative inline-block">
           <Avatar className={cn('h-20 w-20', compactClassName)}>
             {renderedUrl ? (
-              <AvatarImage src={renderedUrl} alt="Current avatar" />
+              <AvatarImage src={renderedUrl} alt={t('avatar.currentAlt')} />
             ) : null}
             <AvatarFallback className="text-base">{fallback}</AvatarFallback>
           </Avatar>
           <button
             type="button"
-            aria-label="Edit photo"
+            aria-label={t('avatar.editAria')}
             onClick={() => setManageOpen(true)}
             className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full border-2 border-raised bg-primary text-primary-fg shadow-sm transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -294,15 +294,13 @@ export function AvatarUploader({
         >
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Photo</DialogTitle>
-              <DialogDescription>
-                Square photo, ≥ 256×256 px. JPEG, PNG, or WebP up to 5 MB.
-              </DialogDescription>
+              <DialogTitle>{t('avatar.photoTitle')}</DialogTitle>
+              <DialogDescription>{t('avatar.photoDesc')}</DialogDescription>
             </DialogHeader>
             <div className="flex flex-col items-center gap-4 py-2">
               <Avatar className="h-32 w-32">
                 {renderedUrl ? (
-                  <AvatarImage src={renderedUrl} alt="Current avatar" />
+                  <AvatarImage src={renderedUrl} alt={t('avatar.currentAlt')} />
                 ) : null}
                 <AvatarFallback className="text-2xl">{fallback}</AvatarFallback>
               </Avatar>
@@ -321,7 +319,7 @@ export function AvatarUploader({
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Upload />
-                {avatarUrl ? 'Change image' : 'Upload photo'}
+                {avatarUrl ? t('avatar.changeImage') : t('avatar.uploadPhoto')}
               </Button>
               {avatarUrl ? (
                 <Button
@@ -332,7 +330,7 @@ export function AvatarUploader({
                   className="text-danger hover:text-danger"
                 >
                   <Trash2 />
-                  {stage === 'removing' ? 'Removing…' : 'Delete current image'}
+                  {stage === 'removing' ? t('avatar.removing') : t('avatar.deleteCurrent')}
                 </Button>
               ) : null}
             </DialogFooter>
@@ -349,14 +347,14 @@ export function AvatarUploader({
       <div className="flex flex-wrap items-center gap-4">
         <Avatar className="h-20 w-20">
           {renderedUrl ? (
-            <AvatarImage src={renderedUrl} alt="Current avatar" />
+            <AvatarImage src={renderedUrl} alt={t('avatar.currentAlt')} />
           ) : null}
           <AvatarFallback className="text-base">{fallback}</AvatarFallback>
         </Avatar>
         <div
           role="button"
           tabIndex={0}
-          aria-label="Drop a photo here, or press Enter to browse"
+          aria-label={t('avatar.dropAria')}
           onClick={() => fileInputRef.current?.click()}
           onKeyDown={onPickerKeyDown}
           onDrop={onDrop}
@@ -369,8 +367,8 @@ export function AvatarUploader({
           }`}
         >
           <Upload className="h-4 w-4" />
-          <span className="font-medium text-fg">Drop a photo here</span>
-          <span className="text-xs">JPEG, PNG, or WebP · max 5 MB · ≥ 256×256</span>
+          <span className="font-medium text-fg">{t('avatar.dropHere')}</span>
+          <span className="text-xs">{t('avatar.formatHint')}</span>
         </div>
         <input
           ref={fileInputRef}
@@ -392,7 +390,7 @@ export function AvatarUploader({
           onClick={() => fileInputRef.current?.click()}
         >
           <Upload />
-          {avatarUrl ? 'Replace' : 'Upload'}
+          {avatarUrl ? t('avatar.replace') : t('avatar.upload')}
         </Button>
         {avatarUrl ? (
           <Button
@@ -403,7 +401,7 @@ export function AvatarUploader({
             disabled={stage === 'removing'}
           >
             <Trash2 />
-            Remove
+            {t('avatar.remove')}
           </Button>
         ) : null}
       </div>

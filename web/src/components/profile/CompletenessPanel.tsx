@@ -3,6 +3,8 @@ import {
   CircleCheck,
   CircleDashed,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import type { TranslateFn } from '@/i18n/types';
 import type {
   ClientProfile,
   WorkerProfile,
@@ -62,15 +64,19 @@ export function CompletenessPanel({
   hasUploadedDocument,
   onAction,
 }: CompletenessPanelProps) {
-  const reqs = buildRequirements({
-    isWorker,
-    isEmployer,
-    clientProfile,
-    workerProfile,
-    employerProfile,
-    hasPortfolioItem,
-    hasUploadedDocument,
-  });
+  const { t } = useTranslation('profile');
+  const reqs = buildRequirements(
+    {
+      isWorker,
+      isEmployer,
+      clientProfile,
+      workerProfile,
+      employerProfile,
+      hasPortfolioItem,
+      hasUploadedDocument,
+    },
+    t,
+  );
 
   if (reqs.length === 0) return null;
 
@@ -86,9 +92,9 @@ export function CompletenessPanel({
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <CardTitle>Profile completeness</CardTitle>
+            <CardTitle>{t('completeness.title')}</CardTitle>
             <CardDescription>
-              {percent}% complete · {done}/{reqs.length} sections done
+              {t('completeness.summary', { percent, done, total: reqs.length })}
             </CardDescription>
           </div>
         </div>
@@ -100,7 +106,7 @@ export function CompletenessPanel({
           aria-valuenow={percent}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-label="Profile completeness"
+          aria-label={t('completeness.aria')}
         >
           <div
             className="h-full bg-primary transition-[width]"
@@ -135,7 +141,7 @@ export function CompletenessPanel({
         ) : (
           <p className="flex items-center gap-2 text-sm text-success">
             <CircleCheck className="h-4 w-4" />
-            All sections complete.
+            {t('completeness.allComplete')}
           </p>
         )}
       </CardContent>
@@ -151,34 +157,38 @@ function buildRequirements({
   employerProfile,
   hasPortfolioItem,
   hasUploadedDocument,
-}: Omit<CompletenessPanelProps, 'onAction'>): CompletenessRequirement[] {
+}: Omit<CompletenessPanelProps, 'onAction'>,
+  t: TranslateFn,
+): CompletenessRequirement[] {
   const cp = clientProfile;
   const reqs: CompletenessRequirement[] = [];
 
   if (isWorker || isEmployer) {
     reqs.push({
       id: 'avatar',
-      title: 'Profile photo',
+      title: t('completeness.reqPhoto'),
       done: Boolean(cp?.avatar_url),
-      cta: { label: 'Add photo', scrollTo: 'section-avatar' },
+      cta: { label: t('completeness.ctaAddPhoto'), scrollTo: 'section-avatar' },
     });
     reqs.push({
       id: 'display_name',
-      title: isEmployer ? 'Display name + company name' : 'Display name',
+      title: isEmployer
+        ? t('completeness.reqDisplayNameCompany')
+        : t('completeness.reqDisplayName'),
       done: Boolean((cp?.display_name ?? '').trim().length > 0),
-      cta: { label: 'Edit', scrollTo: 'section-client' },
+      cta: { label: t('completeness.ctaEdit'), scrollTo: 'section-client' },
     });
     reqs.push({
       id: 'bio',
-      title: 'Bio',
+      title: t('completeness.reqBio'),
       done: Boolean((cp?.bio ?? '').trim().length > 0),
-      cta: { label: 'Add bio', scrollTo: 'section-client' },
+      cta: { label: t('completeness.ctaAddBio'), scrollTo: 'section-client' },
     });
     reqs.push({
       id: 'location',
-      title: 'City + postcode area',
+      title: t('completeness.reqLocation'),
       done: Boolean(cp?.city && cp?.postcode_area),
-      cta: { label: 'Set location', scrollTo: 'section-client' },
+      cta: { label: t('completeness.ctaSetLocation'), scrollTo: 'section-client' },
     });
   }
 
@@ -188,31 +198,31 @@ function buildRequirements({
     const max = wp?.day_rate_max;
     reqs.push({
       id: 'day_rate',
-      title: 'Day rate (min and max)',
+      title: t('completeness.reqDayRate'),
       done:
         min != null &&
         max != null &&
         Number(min) > 0 &&
         Number(max) > 0,
-      cta: { label: 'Set rate', scrollTo: 'section-worker' },
+      cta: { label: t('completeness.ctaSetRate'), scrollTo: 'section-worker' },
     });
     reqs.push({
       id: 'specialisation',
-      title: '≥ 1 specialisation',
+      title: t('completeness.reqSpecialisation'),
       done: (wp?.worker_specialisations?.length ?? 0) > 0,
-      cta: { label: 'Pick one', scrollTo: 'section-worker' },
+      cta: { label: t('completeness.ctaPickOne'), scrollTo: 'section-worker' },
     });
     reqs.push({
       id: 'portfolio',
-      title: '≥ 1 portfolio item',
+      title: t('completeness.reqPortfolio'),
       done: hasPortfolioItem,
-      cta: { label: 'Add item', switchTab: 'portfolio' },
+      cta: { label: t('completeness.ctaAddItem'), switchTab: 'portfolio' },
     });
     reqs.push({
       id: 'document',
-      title: '≥ 1 verification document',
+      title: t('completeness.reqDocument'),
       done: hasUploadedDocument,
-      cta: { label: 'Upload document', switchTab: 'documents' },
+      cta: { label: t('completeness.ctaUploadDocument'), switchTab: 'documents' },
     });
   }
 
@@ -220,15 +230,15 @@ function buildRequirements({
     const ep = employerProfile;
     reqs.push({
       id: 'company_name',
-      title: 'Company name',
+      title: t('completeness.reqCompanyName'),
       done: Boolean((ep?.company_name ?? '').trim().length > 0),
-      cta: { label: 'Edit', scrollTo: 'section-employer' },
+      cta: { label: t('completeness.ctaEdit'), scrollTo: 'section-employer' },
     });
     reqs.push({
       id: 'team_size',
-      title: 'Team size',
+      title: t('completeness.reqTeamSize'),
       done: ep?.team_size != null,
-      cta: { label: 'Set team size', scrollTo: 'section-employer' },
+      cta: { label: t('completeness.ctaSetTeamSize'), scrollTo: 'section-employer' },
     });
   }
 

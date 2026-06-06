@@ -1,5 +1,7 @@
 import { lazy, Suspense, useMemo } from 'react';
+import type { ParseKeys } from 'i18next';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAccountMe } from '@/hooks/useAccountMe';
 import {
   Bell,
@@ -49,7 +51,7 @@ const NotificationsPage = lazy(() => import('./NotificationsPage'));
 
 type TabDef = {
   id: string;
-  label: string;
+  label: ParseKeys<'admin'>;
   icon: React.ComponentType<{ className?: string }>;
   render: () => React.ReactNode;
   /**
@@ -63,18 +65,18 @@ type TabDef = {
 
 type Section = {
   id: string;
-  label: string;
+  label: ParseKeys<'admin'>;
   tabs: TabDef[];
 };
 
 const SECTIONS: Section[] = [
   {
     id: 'personal',
-    label: 'Personal',
+    label: 'sections.personal',
     tabs: [
       {
         id: 'notifications',
-        label: 'Notifications',
+        label: 'tabs.notifications',
         icon: Bell,
         // Open to every staff member — no permission gate.
         render: () => (
@@ -87,11 +89,11 @@ const SECTIONS: Section[] = [
   },
   {
     id: 'overview',
-    label: 'Overview',
+    label: 'sections.overview',
     tabs: [
       {
         id: 'dashboard',
-        label: 'Dashboard',
+        label: 'tabs.dashboard',
         icon: Gauge,
         requiredPermission: 'dashboard.read',
         render: () => <AdminDashboardTab />,
@@ -100,25 +102,25 @@ const SECTIONS: Section[] = [
   },
   {
     id: 'people',
-    label: 'People',
+    label: 'sections.people',
     tabs: [
       {
         id: 'users',
-        label: 'Users',
+        label: 'tabs.users',
         icon: Users,
         requiredPermission: 'users.read',
         render: () => <AdminUsersTab />,
       },
       {
         id: 'staff',
-        label: 'Staff members',
+        label: 'tabs.staff',
         icon: ShieldCheck,
         requiredPermission: 'staff.read',
         render: () => <StaffManagementCard />,
       },
       {
         id: 'roles',
-        label: 'Roles & permissions',
+        label: 'tabs.roles',
         icon: ShieldCheck,
         requiredPermission: 'staff.read',
         render: () => <AdminRolesTab />,
@@ -127,25 +129,25 @@ const SECTIONS: Section[] = [
   },
   {
     id: 'operations',
-    label: 'Operations',
+    label: 'sections.operations',
     tabs: [
       {
         id: 'approvals',
-        label: 'Approvals',
+        label: 'tabs.approvals',
         icon: ShieldAlert,
         requiredPermission: 'approvals.read',
         render: () => <AdminApprovalsTab />,
       },
       {
         id: 'approval-rules',
-        label: 'Approval rules',
+        label: 'tabs.approvalRules',
         icon: ListChecks,
         requiredPermission: 'approvals.read',
         render: () => <AdminApprovalRulesTab />,
       },
       {
         id: 'sla',
-        label: 'SLA',
+        label: 'tabs.sla',
         icon: ShieldAlert,
         // SLA list view is staff-readable; manage is gated inside the tab.
         requiredPermission: 'dashboard.read',
@@ -153,14 +155,14 @@ const SECTIONS: Section[] = [
       },
       {
         id: 'documents',
-        label: 'Verification',
+        label: 'tabs.documents',
         icon: ClipboardCheck,
         requiredPermission: 'verification.read',
         render: () => <VerificationQueueTab />,
       },
       {
         id: 'escrow-disputes',
-        label: 'Escrow disputes',
+        label: 'tabs.escrowDisputes',
         icon: ScaleIcon,
         requiredPermission: 'escrow_disputes.read',
         render: () => <EscrowDisputesTab />,
@@ -169,11 +171,11 @@ const SECTIONS: Section[] = [
   },
   {
     id: 'support',
-    label: 'Support',
+    label: 'sections.support',
     tabs: [
       {
         id: 'support',
-        label: 'Support threads',
+        label: 'tabs.support',
         icon: LifeBuoy,
         requiredPermission: 'support.read',
         render: () => <AdminSupportTab />,
@@ -182,11 +184,11 @@ const SECTIONS: Section[] = [
   },
   {
     id: 'catalog',
-    label: 'Catalog',
+    label: 'sections.catalog',
     tabs: [
       {
         id: 'specialisations',
-        label: 'Specialisations',
+        label: 'tabs.specialisations',
         icon: Hammer,
         // Catalog list views are public on the marketplace; gate by staff.read
         // so non-staff don't see admin chrome but any staff can browse.
@@ -195,14 +197,14 @@ const SECTIONS: Section[] = [
       },
       {
         id: 'tags',
-        label: 'Tags',
+        label: 'tabs.tags',
         icon: Tag,
         requiredPermission: 'staff.read',
         render: () => <AdminTagsTab />,
       },
       {
         id: 'plans',
-        label: 'Subscription plans',
+        label: 'tabs.plans',
         icon: CreditCard,
         requiredPermission: 'staff.read',
         render: () => <AdminPlansTab />,
@@ -211,11 +213,11 @@ const SECTIONS: Section[] = [
   },
   {
     id: 'system',
-    label: 'System',
+    label: 'sections.system',
     tabs: [
       {
         id: 'platform-settings',
-        label: 'Platform settings',
+        label: 'tabs.platformSettings',
         icon: Settings,
         // Settings page reads platform_setting (public) but is admin-only to
         // write. We gate visibility on the write perm to avoid teasing it.
@@ -224,7 +226,7 @@ const SECTIONS: Section[] = [
       },
       {
         id: 'audit',
-        label: 'Audit log',
+        label: 'tabs.audit',
         icon: ScrollText,
         requiredPermission: 'audit.read',
         render: () => <AdminAuditTab />,
@@ -242,6 +244,7 @@ function visibleSections(canSee: (perm?: string) => boolean): Section[] {
 
 export default function AdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { t } = useTranslation('admin');
   const { hasPermission, loading } = useAccountMe();
   const tabParam = searchParams.get('tab');
 
@@ -269,15 +272,12 @@ export default function AdminPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
-        <p className="text-sm text-fg-muted">
-          Operate the platform — review queues, approve actions, manage users,
-          and configure the catalog.
-        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('page.title')}</h1>
+        <p className="text-sm text-fg-muted">{t('page.subtitle')}</p>
       </div>
 
       {loading ? (
-        <p className="text-sm text-fg-muted">Loading…</p>
+        <p className="text-sm text-fg-muted">{t('page.loading')}</p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
           <div className="lg:hidden">
@@ -285,16 +285,16 @@ export default function AdminPage() {
               value={active?.id ?? ''}
               onValueChange={(v) => v && setTab(v)}
             >
-              <SelectTrigger aria-label="Admin section">
-                <SelectValue placeholder="Select section" />
+              <SelectTrigger aria-label={t('page.sectionAria')}>
+                <SelectValue placeholder={t('page.selectSection')} />
               </SelectTrigger>
               <SelectContent>
                 {sections.map((section) => (
                   <SelectGroup key={section.id}>
-                    <SelectLabel>{section.label}</SelectLabel>
+                    <SelectLabel>{t(section.label)}</SelectLabel>
                     {section.tabs.map((tab) => (
                       <SelectItem key={tab.id} value={tab.id}>
-                        {tab.label}
+                        {t(tab.label)}
                       </SelectItem>
                     ))}
                   </SelectGroup>
@@ -304,13 +304,13 @@ export default function AdminPage() {
           </div>
 
           <nav
-            aria-label="Admin sections"
+            aria-label={t('page.sectionsAria')}
             className="hidden space-y-4 lg:block lg:sticky lg:top-4 lg:self-start"
           >
             {sections.map((section) => (
               <div key={section.id} className="space-y-1">
                 <div className="px-2 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
-                  {section.label}
+                  {t(section.label)}
                 </div>
                 <div className="space-y-0.5">
                   {section.tabs.map((tab) => {
@@ -329,7 +329,7 @@ export default function AdminPage() {
                         )}
                       >
                         <Icon className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">{tab.label}</span>
+                        <span className="truncate">{t(tab.label)}</span>
                       </button>
                     );
                   })}

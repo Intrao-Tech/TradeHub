@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Building2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api, getToken, parseApiError } from '../api';
+import { formatDate } from '@/lib/format';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
 import { VerificationsCard } from '../components/profile/VerificationsCard';
 import { EmptyState } from '../components/EmptyState';
@@ -38,12 +40,11 @@ type EmployerDetail = {
 
 function formatMemberSince(iso: string | null | undefined): string | null {
   if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short' });
+  return formatDate(iso, 'monthYear') || null;
 }
 
 export default function EmployerDetailPage() {
+  const { t } = useTranslation('workers');
   const { id } = useParams<{ id: string }>();
   const [employer, setEmployer] = useState<EmployerDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,7 +58,7 @@ export default function EmployerDetailPage() {
       .then((data) => setEmployer(data))
       .catch((err) => {
         const parsed = parseApiError(err);
-        setError(parsed?.message ?? 'Could not load this employer.');
+        setError(parsed?.message ?? t('employerDetail.loadError'));
       })
       .finally(() => setLoading(false));
   }, [id]);
@@ -75,11 +76,11 @@ export default function EmployerDetailPage() {
     return (
       <EmptyState
         icon={Building2}
-        title="Employer not found"
-        description={error || 'This profile may have been removed.'}
+        title={t('employerDetail.notFoundTitle')}
+        description={error || t('detail.notFoundDesc')}
         action={
           <Button asChild variant="outline">
-            <Link to="/employers">Back to employer search</Link>
+            <Link to="/employers">{t('employerDetail.backToSearch')}</Link>
           </Button>
         }
       />
@@ -87,7 +88,7 @@ export default function EmployerDetailPage() {
   }
 
   const cp = employer.client_profile;
-  const displayName = employer.company_name ?? cp?.display_name ?? 'Employer';
+  const displayName = employer.company_name ?? cp?.display_name ?? t('employerCard.fallbackName');
   const memberSince = formatMemberSince(cp?.created_at);
   const loggedIn = Boolean(getToken());
 
@@ -109,9 +110,9 @@ export default function EmployerDetailPage() {
       {!loggedIn ? (
         <div className="rounded-md border border-info/40 bg-info-subtle px-3 py-2 text-sm text-info">
           <Link to="/login" className="font-medium underline">
-            Sign in
-          </Link>{' '}
-          to contact this employer or apply to their jobs.
+            {t('detail.signIn')}
+          </Link>
+          {t('employerDetail.toContact')}
         </div>
       ) : null}
 
@@ -121,13 +122,13 @@ export default function EmployerDetailPage() {
           <Card>
             <CardContent className="grid grid-cols-2 gap-4 pt-6">
               <Stat
-                label="Team size"
+                label={t('employerDetail.teamSize')}
                 value={
                   employer.team_size != null ? String(employer.team_size) : '—'
                 }
               />
               {memberSince ? (
-                <Stat label="Member since" value={memberSince} />
+                <Stat label={t('detail.memberSince')} value={memberSince} />
               ) : null}
             </CardContent>
           </Card>
@@ -139,42 +140,40 @@ export default function EmployerDetailPage() {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>About</CardTitle>
+              <CardTitle>{t('detail.about')}</CardTitle>
             </CardHeader>
             <CardContent>
               {cp?.bio ? (
                 <p className="whitespace-pre-line text-sm text-fg">{cp.bio}</p>
               ) : (
-                <p className="text-sm text-fg-muted">
-                  This employer hasn’t added a bio yet.
-                </p>
+                <p className="text-sm text-fg-muted">{t('employerDetail.noBio')}</p>
               )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Company</CardTitle>
+              <CardTitle>{t('employerDetail.company')}</CardTitle>
             </CardHeader>
             <CardContent>
               <dl className="grid gap-3 text-sm sm:grid-cols-2">
                 {employer.company_name ? (
-                  <Field label="Company" value={employer.company_name} />
+                  <Field label={t('employerDetail.company')} value={employer.company_name} />
                 ) : null}
                 {employer.company_number ? (
                   <Field
-                    label="Companies House"
+                    label={t('employerDetail.companiesHouse')}
                     value={employer.company_number}
                   />
                 ) : null}
                 {employer.team_size != null ? (
-                  <Field label="Team size" value={String(employer.team_size)} />
+                  <Field label={t('employerDetail.teamSize')} value={String(employer.team_size)} />
                 ) : null}
                 {!employer.company_name &&
                 !employer.company_number &&
                 employer.team_size == null ? (
                   <p className="text-sm text-fg-muted sm:col-span-2">
-                    This employer hasn’t added company details yet.
+                    {t('employerDetail.noCompanyDetails')}
                   </p>
                 ) : null}
               </dl>
@@ -183,7 +182,7 @@ export default function EmployerDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Reviews</CardTitle>
+              <CardTitle>{t('detail.reviews')}</CardTitle>
             </CardHeader>
             <CardContent>
               <ReviewsTab

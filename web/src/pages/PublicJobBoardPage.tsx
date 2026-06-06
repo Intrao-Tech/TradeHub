@@ -6,6 +6,9 @@ import { JobCard, type JobCardData } from '@/components/JobCard';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
 
+// Marketing surface for logged-out visitors — intentionally English-only
+// (not part of the i18n catalogs; see I18N task decision).
+
 type JobPostRow = JobCardData & {
   pay_type: string;
   description?: string | null;
@@ -119,7 +122,7 @@ export default function PublicJobBoardPage() {
       <section className="space-y-4">
         {list ? (
           <h2 className="text-base font-semibold tracking-tight sm:text-lg">
-            Check out a sample of the {list.total} jobs posted on TradeHub
+            {`Check out a sample of the ${list.total} job${list.total === 1 ? '' : 's'} posted on TradeHub`}
           </h2>
         ) : null}
         {list?.items?.length ? (

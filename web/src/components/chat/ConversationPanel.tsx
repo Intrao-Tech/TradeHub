@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, MessageSquare } from 'lucide-react';
 import { ApiError, api, parseApiError } from '@/api';
@@ -56,6 +57,7 @@ export function ConversationPanel({
   onBack,
   onConversationGone,
 }: ConversationPanelProps) {
+  const { t } = useTranslation('chat');
   const { on, emit, connected, socket } = useChatSocket();
 
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
@@ -93,7 +95,7 @@ export function ConversationPanel({
   const otherDisplayName =
     otherParty?.display_name ??
     inboxRow?.other_participant?.display_name ??
-    'Counterparty';
+    t('panel.counterparty');
   const otherAvatar =
     otherParty?.avatar_url ?? inboxRow?.other_participant?.avatar_url ?? null;
   const otherVerification =
@@ -137,29 +139,24 @@ export function ConversationPanel({
         err instanceof ApiError &&
         (err.status === 403 || err.status === 404)
       ) {
-        setAccessError(
-          parsed?.message ??
-            'Conversation not found or you don’t have access.',
-        );
+        setAccessError(parsed?.message ?? t('panel.notFound'));
       } else if (parsed?.code === 'EMAIL_NOT_VERIFIED') {
         setAuthError({
           code: 'EMAIL_NOT_VERIFIED',
-          message:
-            parsed.message ??
-            'Verify your email to participate in this conversation.',
+          message: parsed.message ?? t('panel.emailNotVerified'),
         });
       } else if (parsed?.code === 'ACCOUNT_DEACTIVATED') {
         setAuthError({
           code: 'ACCOUNT_NOT_ACTIVE',
-          message: parsed.message ?? 'This account has been deactivated.',
+          message: parsed.message ?? t('panel.accountDeactivated'),
         });
       } else {
-        setAccessError(parsed?.message ?? 'Could not load conversation.');
+        setAccessError(parsed?.message ?? t('panel.loadError'));
       }
     } finally {
       setLoading(false);
     }
-  }, [conversationId]);
+  }, [conversationId, t]);
 
   useEffect(() => {
     void load();
@@ -253,9 +250,7 @@ export function ConversationPanel({
       ) {
         setAuthError({
           code: evt.code,
-          message:
-            evt.message ??
-            'You can’t send messages in your current account state.',
+          message: evt.message ?? t('panel.cannotSend'),
         });
       }
       if (evt.client_id) {
@@ -347,7 +342,7 @@ export function ConversationPanel({
               type="button"
               size="icon"
               variant="ghost"
-              aria-label="Back to inbox"
+              aria-label={t('inbox.backToInbox')}
               onClick={onBack}
             >
               <ArrowLeft className="h-4 w-4" />
@@ -357,12 +352,12 @@ export function ConversationPanel({
         <div className="flex flex-1 items-center justify-center p-6">
           <EmptyState
             icon={MessageSquare}
-            title="Conversation unavailable"
+            title={t('panel.unavailableTitle')}
             description={accessError}
             action={
               onConversationGone ? (
                 <Button variant="outline" onClick={onConversationGone}>
-                  Back to inbox
+                  {t('inbox.backToInbox')}
                 </Button>
               ) : null
             }
@@ -409,9 +404,7 @@ export function ConversationPanel({
             parsed.code === 'ACCOUNT_DEACTIVATED'
               ? 'ACCOUNT_NOT_ACTIVE'
               : 'EMAIL_NOT_VERIFIED',
-          message:
-            parsed.message ??
-            'You can’t send messages in your current account state.',
+          message: parsed.message ?? t('panel.cannotSend'),
         });
       }
       setOptimisticById(opt.client_id, (prev) => ({
@@ -470,7 +463,7 @@ export function ConversationPanel({
             size="icon"
             variant="ghost"
             className="lg:hidden"
-            aria-label="Back to inbox"
+            aria-label={t('inbox.backToInbox')}
             onClick={onBack}
           >
             <ArrowLeft className="h-4 w-4" />
@@ -495,11 +488,11 @@ export function ConversationPanel({
                 to={`/collaborations/${String(collaboration.id)}`}
                 className="inline-flex items-center gap-1 underline-offset-2 hover:underline"
               >
-                View collaboration
+                {t('panel.viewCollaboration')}
                 <ExternalLink className="h-3 w-3" />
               </Link>
             ) : (
-              'Conversation'
+              t('panel.conversation')
             )}
           </p>
         </div>

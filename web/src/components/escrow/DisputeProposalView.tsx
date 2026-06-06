@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Clock, ScaleIcon, Undo2, XCircle } from 'lucide-react';
 import { parseApiError } from '../../api';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +39,7 @@ export function DisputeProposalView({
   filedByRole,
   onCanceled,
 }: Props) {
+  const { t } = useTranslation('wallet');
   const [view, setView] = useState<DisputeProposalView | null>(null);
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(true);
@@ -53,22 +55,18 @@ export function DisputeProposalView({
       const data = await getDisputeProposals(disputeId);
       setView(data);
     } catch (e) {
-      setErr(parseApiError(e)?.message ?? 'Failed to load proposal');
+      setErr(parseApiError(e)?.message ?? t('disputeProposal.loadError'));
     } finally {
       setLoading(false);
     }
-  }, [disputeId]);
+  }, [disputeId, t]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   async function cancelMine() {
-    if (
-      !confirm(
-        'Cancel this dispute? The milestone will go back to its previous state and the other party will be notified.',
-      )
-    ) {
+    if (!confirm(t('disputeProposal.cancelConfirm'))) {
       return;
     }
     setActionErr('');
@@ -77,7 +75,7 @@ export function DisputeProposalView({
       await cancelDispute(disputeId);
       onCanceled?.();
     } catch (e) {
-      setActionErr(parseApiError(e)?.message ?? 'Failed to cancel dispute');
+      setActionErr(parseApiError(e)?.message ?? t('disputeProposal.cancelError'));
     } finally {
       setBusy(false);
     }
@@ -98,7 +96,7 @@ export function DisputeProposalView({
       setNote('');
       setNoteOpen(false);
     } catch (e) {
-      setActionErr(parseApiError(e)?.message ?? 'Failed to record decision');
+      setActionErr(parseApiError(e)?.message ?? t('disputeProposal.decideError'));
     } finally {
       setBusy(false);
     }
@@ -106,7 +104,7 @@ export function DisputeProposalView({
 
   if (loading) {
     return (
-      <p className="text-xs text-fg-muted mt-2">Loading proposal…</p>
+      <p className="text-xs text-fg-muted mt-2">{t('disputeProposal.loading')}</p>
     );
   }
   if (err) {
@@ -124,12 +122,9 @@ export function DisputeProposalView({
       <div className="mt-3 rounded-md border border-danger/40 bg-danger-subtle/30 p-3 space-y-1">
         <div className="flex items-center gap-2 text-sm font-medium text-danger">
           <ScaleIcon className="h-4 w-4" />
-          Dispute escalated to arbitration
+          {t('disputeProposal.escalatedTitle')}
         </div>
-        <p className="text-xs text-fg-muted">
-          In-platform mediation has ended. Our team will be in touch by email
-          about next steps.
-        </p>
+        <p className="text-xs text-fg-muted">{t('disputeProposal.escalatedBody')}</p>
       </div>
     );
   }
@@ -144,12 +139,9 @@ export function DisputeProposalView({
       <div className="mt-3 rounded-md border border-border-subtle bg-subtle/40 p-3 space-y-2">
         <div className="flex items-center gap-2 text-sm">
           <Clock className="h-3.5 w-3.5 text-fg-muted" />
-          <span className="font-medium">Awaiting mediator</span>
+          <span className="font-medium">{t('disputeProposal.awaitingMediator')}</span>
         </div>
-        <p className="text-xs text-fg-muted">
-          A staff mediator will propose a worker/employer split. You'll see it
-          here and can Accept or Reject.
-        </p>
+        <p className="text-xs text-fg-muted">{t('disputeProposal.awaitingBody')}</p>
         {canCancel ? (
           <div className="pt-1 space-y-1">
             {actionErr ? (
@@ -162,12 +154,11 @@ export function DisputeProposalView({
               onClick={() => void cancelMine()}
             >
               <Undo2 className="h-3.5 w-3.5" />
-              {busy ? 'Cancelling…' : 'Cancel this dispute'}
+              {busy
+                ? t('disputeProposal.cancelling')
+                : t('disputeProposal.cancelDispute')}
             </Button>
-            <p className="text-[11px] text-fg-muted">
-              Filed by mistake? You can pull it back as long as no one has
-              responded yet. The milestone returns to its previous state.
-            </p>
+            <p className="text-[11px] text-fg-muted">{t('disputeProposal.cancelHint')}</p>
           </div>
         ) : null}
       </div>
@@ -186,55 +177,59 @@ export function DisputeProposalView({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-medium">
           <ScaleIcon className="h-4 w-4 text-primary" />
-          Mediator proposal
+          {t('disputeProposal.title')}
         </div>
         <Badge variant="warning">{p.status}</Badge>
       </div>
       <div className="grid gap-1 sm:grid-cols-3 text-xs">
         <div>
-          <span className="text-fg-muted">Worker share:</span>{' '}
+          <span className="text-fg-muted">{t('disputeProposal.workerShare')}</span>{' '}
           <span className="font-semibold">{p.worker_pct}%</span>
         </div>
         <div>
-          <span className="text-fg-muted">Employer refund:</span>{' '}
+          <span className="text-fg-muted">{t('disputeProposal.employerRefund')}</span>{' '}
           <span className="font-semibold">{p.employer_refund_pct}%</span>
         </div>
         <div>
-          <span className="text-fg-muted">Platform fee:</span>{' '}
+          <span className="text-fg-muted">{t('disputeProposal.platformFee')}</span>{' '}
           <span className="font-semibold">
-            {p.keep_platform_fee ? 'kept' : 'refunded'}
+            {p.keep_platform_fee
+              ? t('disputeProposal.feeKept')
+              : t('disputeProposal.feeRefunded')}
           </span>
         </div>
       </div>
       <div className="text-xs">
-        <span className="text-fg-muted">From {p.proposed_by.display_name}:</span>
+        <span className="text-fg-muted">
+          {t('disputeProposal.from', { name: p.proposed_by.display_name })}
+        </span>
         <p className="mt-1 whitespace-pre-wrap text-fg">{p.reasoning}</p>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs">
         {myRole ? (
           <>
-            <span className="text-fg-muted">You:</span>
+            <span className="text-fg-muted">{t('disputeProposal.you')}</span>
             <DecisionBadge d={myDecision} />
-            <span className="text-fg-muted">· Other party:</span>
+            <span className="text-fg-muted">{t('disputeProposal.otherParty')}</span>
             <DecisionBadge d={otherDecision} />
           </>
         ) : (
           <>
-            <span className="text-fg-muted">Worker:</span>
+            <span className="text-fg-muted">{t('disputeProposal.worker')}</span>
             <DecisionBadge d={p.worker_decision} />
-            <span className="text-fg-muted">· Employer:</span>
+            <span className="text-fg-muted">{t('disputeProposal.employer')}</span>
             <DecisionBadge d={p.employer_decision} />
           </>
         )}
       </div>
       {p.worker_decision_note ? (
         <p className="text-xs text-fg-muted">
-          Worker note: {p.worker_decision_note}
+          {t('disputeProposal.workerNote', { note: p.worker_decision_note })}
         </p>
       ) : null}
       {p.employer_decision_note ? (
         <p className="text-xs text-fg-muted">
-          Employer note: {p.employer_decision_note}
+          {t('disputeProposal.employerNote', { note: p.employer_decision_note })}
         </p>
       ) : null}
 
@@ -244,7 +239,7 @@ export function DisputeProposalView({
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Optional note (shown to the other party + mediator)"
+              placeholder={t('disputeProposal.notePlaceholder')}
               rows={2}
               className="text-sm"
             />
@@ -259,7 +254,7 @@ export function DisputeProposalView({
               disabled={busy}
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Accept
+              {t('disputeProposal.accept')}
             </Button>
             <Button
               size="sm"
@@ -268,22 +263,26 @@ export function DisputeProposalView({
               disabled={busy}
             >
               <XCircle className="h-3.5 w-3.5" />
-              Reject
+              {t('disputeProposal.reject')}
             </Button>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => setNoteOpen((v) => !v)}
             >
-              {noteOpen ? 'Hide note' : 'Add note'}
+              {noteOpen
+                ? t('disputeProposal.hideNote')
+                : t('disputeProposal.addNote')}
             </Button>
           </div>
         </div>
       ) : myRole ? (
         <p className="text-xs text-fg-muted pt-1">
-          {myDecision !== 'PENDING'
-            ? `You ${myDecision.toLowerCase()} this proposal — waiting on the other party.`
-            : 'Awaiting your decision.'}
+          {myDecision === 'ACCEPTED'
+            ? t('disputeProposal.youAccepted')
+            : myDecision === 'REJECTED'
+              ? t('disputeProposal.youRejected')
+              : t('disputeProposal.awaitingYourDecision')}
         </p>
       ) : null}
     </div>
@@ -291,24 +290,25 @@ export function DisputeProposalView({
 }
 
 function DecisionBadge({ d }: { d: 'PENDING' | 'ACCEPTED' | 'REJECTED' }) {
+  const { t } = useTranslation('wallet');
   if (d === 'ACCEPTED')
     return (
       <Badge variant="success">
         <CheckCircle2 className="h-3 w-3" />
-        Accepted
+        {t('disputeProposal.decisionAccepted')}
       </Badge>
     );
   if (d === 'REJECTED')
     return (
       <Badge variant="danger">
         <XCircle className="h-3 w-3" />
-        Rejected
+        {t('disputeProposal.decisionRejected')}
       </Badge>
     );
   return (
     <Badge variant="outline">
       <Clock className="h-3 w-3" />
-      Pending
+      {t('disputeProposal.decisionPending')}
     </Badge>
   );
 }
