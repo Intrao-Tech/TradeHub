@@ -7,6 +7,7 @@ import {
   useRef,
 } from 'react';
 import { Send } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,7 @@ type ComposerProps = {
  */
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(
   function Composer(props, ref) {
+    const { t } = useTranslation('chat');
     const {
       value,
       disabled,
@@ -157,7 +159,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(
           <Textarea
             ref={textareaRef}
             value={value}
-            placeholder={placeholder ?? 'Write a message…'}
+            placeholder={placeholder ?? t('composer.placeholder')}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
@@ -165,14 +167,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(
             rows={1}
             data-testid="chat-composer-textarea"
             className="max-h-[176px] min-h-[44px] flex-1 resize-none py-2"
-            aria-label="Message"
+            aria-label={t('composer.messageAria')}
           />
           <Button
             type="button"
             disabled={sendDisabled}
             onClick={trySubmit}
             data-testid="chat-composer-send"
-            aria-label="Send message"
+            aria-label={t('composer.sendAria')}
             size="icon"
           >
             <Send className="h-4 w-4" />

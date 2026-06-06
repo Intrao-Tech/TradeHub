@@ -20,6 +20,8 @@ import {
   MIN_LENGTH,
 } from '@/lib/password-policy';
 
+// Auth pages are intentionally English-only (I18N decision): language is an authenticated-only setting, switched from the account menu.
+
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -44,7 +46,7 @@ export default function ResetPasswordPage() {
     if (!policy.ok) {
       setError({
         title: 'Password rejected',
-        message: policy.reasons.map(describeReason).join(' '),
+        message: policy.reasons.map((r) => describeReason(r)).join(' '),
       });
       return;
     }
@@ -65,8 +67,7 @@ export default function ResetPasswordPage() {
       if (parsed?.code === 'TOKEN_INVALID') {
         setError({
           title: 'Link expired',
-          message:
-            'This reset link is invalid or has already been used. Request a new one.',
+          message: 'This reset link is invalid or has already been used. Request a new one.',
         });
       } else if (parsed?.code === 'WEAK_PASSWORD') {
         const reasons = (parsed.body?.reasons as string[]) ?? [];
@@ -92,10 +93,7 @@ export default function ResetPasswordPage() {
       <Card>
         <CardHeader>
           <CardTitle>Choose a new password</CardTitle>
-          <CardDescription>
-            Pick a password you don't use anywhere else. After saving, all of
-            your active TradeHub sessions will be signed out.
-          </CardDescription>
+          <CardDescription>Pick a password you don't use anywhere else. After saving, all of your active TradeHub sessions will be signed out.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {!token ? (

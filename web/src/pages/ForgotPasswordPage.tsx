@@ -14,6 +14,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+// Auth pages are intentionally English-only (I18N decision): language is an authenticated-only setting, switched from the account menu.
+
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -32,11 +34,7 @@ export default function ForgotPasswordPage() {
       // Always show the same success copy regardless of whether the email exists.
       setSubmitted(true);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Something went wrong. Try again in a moment.',
-      );
+      setError(err instanceof Error ? err.message : 'Something went wrong. Try again in a moment.');
     } finally {
       setSubmitting(false);
     }
@@ -47,17 +45,13 @@ export default function ForgotPasswordPage() {
       <Card>
         <CardHeader>
           <CardTitle>Forgot your password?</CardTitle>
-          <CardDescription>
-            Enter the email you used to sign up — we'll send a one-time reset
-            link if the account exists.
-          </CardDescription>
+          <CardDescription>Enter the email you used to sign up — we'll send a one-time reset link if the account exists.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {submitted ? (
             <>
               <AuthBanner variant="success" title="Check your inbox">
-                If an account exists with that email, a password reset link is
-                on its way. The link is valid for 1 hour and can be used once.
+                If an account exists with that email, a password reset link is on its way. The link is valid for 1 hour and can be used once.
               </AuthBanner>
               <Button asChild variant="outline" className="w-full">
                 <Link to="/login">Back to sign in</Link>

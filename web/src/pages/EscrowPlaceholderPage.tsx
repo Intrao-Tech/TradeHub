@@ -3,6 +3,8 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Banknote } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '../hooks/useAccountMe';
+import { useTranslation } from 'react-i18next';
+import { formatMoney } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/EmptyState';
@@ -58,11 +60,7 @@ type ContractSummary = {
   collaboration: CollabSummary;
 };
 
-const fmt = (s: string) =>
-  new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(Number(s));
+const fmt = (s: string) => formatMoney(Number(s));
 
 export default function EscrowDetailPage() {
   // Two routes share this component:
@@ -77,6 +75,7 @@ export default function EscrowDetailPage() {
   const [searchParams] = useSearchParams();
   const fundedMilestoneId = searchParams.get('funded');
   const canceledMilestoneId = searchParams.get('canceled');
+  const { t } = useTranslation('wallet');
   const { clientProfile } = useAccountMe();
   const myClientProfileId = clientProfile?.id != null ? String(clientProfile.id) : null;
   const [collab, setCollab] = useState<CollabSummary | null>(null);
@@ -127,7 +126,7 @@ export default function EscrowDetailPage() {
         setMilestones([]);
       }
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Could not load escrow.');
+      setError(parseApiError(err)?.message ?? t('escrow.loadError'));
     } finally {
       setLoading(false);
     }
@@ -160,10 +159,10 @@ export default function EscrowDetailPage() {
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to={backHref}>
             <ArrowLeft />
-            Back to collaboration
+            {t('escrow.backToCollab')}
           </Link>
         </Button>
-        <p className="text-sm text-fg-muted">Loading escrow…</p>
+        <p className="text-sm text-fg-muted">{t('escrow.loading')}</p>
       </div>
     );
   }
@@ -174,11 +173,11 @@ export default function EscrowDetailPage() {
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to={backHref}>
             <ArrowLeft />
-            Back to collaboration
+            {t('escrow.backToCollab')}
           </Link>
         </Button>
         <div role="alert" className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger">
-          {error || 'Collaboration not found.'}
+          {error || t('escrow.collabNotFound')}
         </div>
       </div>
     );
@@ -190,13 +189,13 @@ export default function EscrowDetailPage() {
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to={backHref}>
             <ArrowLeft />
-            Back
+            {t('escrow.back')}
           </Link>
         </Button>
         <EmptyState
           icon={Banknote}
-          title="Escrow is private"
-          description="Only the worker and employer parties can view the escrow surface for this collaboration."
+          title={t('escrow.privateTitle')}
+          description={t('escrow.privateDesc')}
         />
       </div>
     );
@@ -224,19 +223,19 @@ export default function EscrowDetailPage() {
       <Button asChild variant="ghost" size="sm" className="-ml-2">
         <Link to={backHref}>
           <ArrowLeft />
-          Back to collaboration
+          {t('escrow.backToCollab')}
         </Link>
       </Button>
 
       {fundedMilestoneId ? (
         <div role="status" className="rounded-md border border-info/40 bg-info-subtle px-3 py-2 text-sm text-info">
-          Funding submitted — waiting for Stripe confirmation. Status updates as soon as the webhook lands (usually a few seconds).
+          {t('escrow.fundingSubmitted')}
         </div>
       ) : null}
 
       {canceledMilestoneId ? (
         <div role="status" className="rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-warning">
-          Checkout canceled. The milestone is still available to fund.
+          {t('escrow.checkoutCanceled')}
         </div>
       ) : null}
 
@@ -244,33 +243,30 @@ export default function EscrowDetailPage() {
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <CardTitle>Escrow</CardTitle>
-              <CardDescription>Collaboration #{String(collab.id)}</CardDescription>
+              <CardTitle>{t('escrow.title')}</CardTitle>
+              <CardDescription>{t('escrow.collabNumber', { id: String(collab.id) })}</CardDescription>
             </div>
             {escrow ? <Badge variant={STATUS_VARIANT[escrow.status]}>{escrow.status}</Badge> : null}
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3 text-sm">
-          <Stat label="Funded" value={fmt(String(totalFunded))} />
-          <Stat label="Released" value={fmt(String(totalReleased))} />
-          <Stat label="Refunded" value={fmt(String(totalRefunded))} />
+          <Stat label={t('escrow.statFunded')} value={fmt(String(totalFunded))} />
+          <Stat label={t('escrow.statReleased')} value={fmt(String(totalReleased))} />
+          <Stat label={t('escrow.statRefunded')} value={fmt(String(totalRefunded))} />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Milestones</CardTitle>
-          <CardDescription>
-            Add as many milestones as needed. Each one is funded, submitted, and approved
-            independently. Only one milestone can be in flight at a time (Upwork pattern).
-          </CardDescription>
+          <CardTitle>{t('escrow.milestones')}</CardTitle>
+          <CardDescription>{t('escrow.milestonesDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {!escrow ? (
             <EmptyState
               icon={Banknote}
-              title="No escrow created yet"
-              description="An escrow contract is automatically created when the collaboration is confirmed."
+              title={t('escrow.noEscrowTitle')}
+              description={t('escrow.noEscrowDesc')}
             />
           ) : milestones && milestones.length > 0 ? (
             (() => {
@@ -312,7 +308,7 @@ export default function EscrowDetailPage() {
               });
             })()
           ) : (
-            <p className="text-sm text-fg-muted">No milestones yet.</p>
+            <p className="text-sm text-fg-muted">{t('escrow.noMilestones')}</p>
           )}
           {escrow && escrow.status !== 'ENDED' ? (
             <div className="pt-2">
@@ -324,7 +320,7 @@ export default function EscrowDetailPage() {
               ) : isWorker ? (
                 <AddMilestoneForm
                   contractId={escrow.contract_id}
-                  submitLabel="Request milestone"
+                  submitLabel={t('escrow.requestMilestone')}
                   onAdded={reload}
                 />
               ) : null}
@@ -336,10 +332,8 @@ export default function EscrowDetailPage() {
       {escrow && escrow.status === 'ACTIVE' && everFunded ? (
         <Card>
           <CardHeader>
-            <CardTitle>Contract actions</CardTitle>
-            <CardDescription>
-              Wrap up or back out of this contract once work has started.
-            </CardDescription>
+            <CardTitle>{t('escrow.contractActions')}</CardTitle>
+            <CardDescription>{t('escrow.contractActionsDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             <Button
@@ -347,7 +341,7 @@ export default function EscrowDetailPage() {
               variant="outline"
               onClick={() => setEndOpen(true)}
             >
-              End contract
+              {t('escrow.endContract')}
             </Button>
             {isWorker ? (
               <Button
@@ -355,7 +349,7 @@ export default function EscrowDetailPage() {
                 variant="outline"
                 onClick={() => setDeclineOpen(true)}
               >
-                Decline contract
+                {t('escrow.declineContract')}
               </Button>
             ) : null}
           </CardContent>
@@ -365,10 +359,8 @@ export default function EscrowDetailPage() {
       {escrow && escrow.status === 'ACTIVE' && !everFunded ? (
         <Card>
           <CardHeader>
-            <CardTitle>Cancel before funding</CardTitle>
-            <CardDescription>
-              No milestones funded yet. Either party can cancel.
-            </CardDescription>
+            <CardTitle>{t('escrow.cancelBeforeFunding')}</CardTitle>
+            <CardDescription>{t('escrow.cancelBeforeFundingDesc')}</CardDescription>
           </CardHeader>
           <CardContent>
             <Button
@@ -376,7 +368,7 @@ export default function EscrowDetailPage() {
               variant="outline"
               onClick={() => setCancelOpen(true)}
             >
-              Cancel contract
+              {t('escrow.cancelContract')}
             </Button>
           </CardContent>
         </Card>
@@ -385,11 +377,11 @@ export default function EscrowDetailPage() {
       <ReasonDialog
         open={cancelOpen}
         onOpenChange={setCancelOpen}
-        title="Cancel contract"
-        description="No milestones have been funded yet. This is reversible only by creating a new collaboration."
-        confirmLabel="Cancel contract"
+        title={t('escrow.cancelContract')}
+        description={t('escrow.cancelDesc')}
+        confirmLabel={t('escrow.cancelContract')}
         destructive
-        placeholder="Why are you canceling? (Both parties + audit log will see this.)"
+        placeholder={t('escrow.cancelPlaceholder')}
         onConfirm={async (reason) => {
           if (resolvedContractId) {
             await cancelEscrow(resolvedContractId, reason);
@@ -401,11 +393,11 @@ export default function EscrowDetailPage() {
       <ReasonDialog
         open={declineOpen}
         onOpenChange={setDeclineOpen}
-        title="Decline contract"
-        description="As the worker, declining will refund all funded milestones to the employer and cancel the collaboration. No reviews window opens."
-        confirmLabel="Decline + refund"
+        title={t('escrow.declineContract')}
+        description={t('escrow.declineDesc')}
+        confirmLabel={t('escrow.declineConfirm')}
         destructive
-        placeholder="Why are you declining the contract?"
+        placeholder={t('escrow.declinePlaceholder')}
         onConfirm={async (reason) => {
           if (resolvedContractId) {
             await declineContract(resolvedContractId, reason);
@@ -417,32 +409,28 @@ export default function EscrowDetailPage() {
       <Dialog open={endOpen} onOpenChange={setEndOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>End contract</DialogTitle>
-            <DialogDescription>
-              Other party will have 7 days to contest. If silent, the contract
-              auto-completes, the collab status moves to COMPLETED, and the
-              review window opens.
-            </DialogDescription>
+            <DialogTitle>{t('escrow.endContract')}</DialogTitle>
+            <DialogDescription>{t('escrow.endDesc')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setEndOpen(false)}>
-              Cancel
+              {t('escrow.cancel')}
             </Button>
             <Button
               onClick={async () => {
                 try {
                   if (!resolvedContractId)
-                    throw new Error('No active contract to end');
+                    throw new Error(t('escrow.noActiveContract'));
                   await initiateEndContract(resolvedContractId);
                   setEndOpen(false);
                   await reload();
                 } catch (err) {
-                  setError(parseApiError(err)?.message ?? 'Could not end');
+                  setError(parseApiError(err)?.message ?? t('escrow.endError'));
                   setEndOpen(false);
                 }
               }}
             >
-              Initiate end
+              {t('escrow.initiateEnd')}
             </Button>
           </DialogFooter>
         </DialogContent>

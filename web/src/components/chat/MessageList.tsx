@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { buildRenderedRows } from './helpers';
+import { buildRenderedRows, translateSystemMessage } from './helpers';
 import { MessageBubble } from './MessageBubble';
 import { SystemMessagePill } from './SystemMessagePill';
 import type {
@@ -36,13 +37,14 @@ export function MessageList({
   onLoadOlder,
   hasMoreOlder,
 }: MessageListProps) {
+  const { t } = useTranslation('chat');
   const parentRef = useRef<HTMLDivElement | null>(null);
   const [stuckToBottom, setStuckToBottom] = useState(true);
   const [unseenBelow, setUnseenBelow] = useState(false);
 
   const rows = useMemo(
-    () => buildRenderedRows(messages, myAccountId),
-    [messages, myAccountId],
+    () => buildRenderedRows(messages, myAccountId, t),
+    [messages, myAccountId, t],
   );
 
   const lastMyMessageIndex = useMemo(() => {
@@ -138,7 +140,9 @@ export function MessageList({
                     </span>
                   </div>
                 ) : row.message.message_type === 'SYSTEM' ? (
-                  <SystemMessagePill>{row.message.content}</SystemMessagePill>
+                  <SystemMessagePill>
+                    {translateSystemMessage(row.message.content ?? '', t)}
+                  </SystemMessagePill>
                 ) : (
                   <MessageBubble
                     message={row.message}
@@ -185,7 +189,7 @@ export function MessageList({
           }}
         >
           <ChevronDown className="h-3 w-3" />
-          New messages
+          {t('list.newMessages')}
         </Button>
       ) : null}
     </div>

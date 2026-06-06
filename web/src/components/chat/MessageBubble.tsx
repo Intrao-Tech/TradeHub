@@ -1,4 +1,5 @@
 import { AlertCircle, FileText, Loader2, RotateCcw, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { fileBytesPretty, formatTimeShort } from './helpers';
@@ -33,6 +34,7 @@ export function MessageBubble({
   onRetry,
   onDiscard,
 }: MessageBubbleProps) {
+  const { t } = useTranslation('chat');
   const optimistic = isOptimistic(message) ? message : null;
   const status = optimistic?.status;
   const failed = status === 'failed';
@@ -74,7 +76,7 @@ export function MessageBubble({
           >
             <FileText className="h-4 w-4 shrink-0" />
             <span className="min-w-0 flex-1 truncate font-medium">
-              {message.original_name ?? 'Attachment'}
+              {message.original_name ?? t('bubble.attachment')}
             </span>
             {message.size_bytes != null ? (
               <span className={mine ? 'text-primary-fg/80' : 'text-fg-muted'}>
@@ -96,17 +98,17 @@ export function MessageBubble({
           {sending ? (
             <span className="flex items-center gap-1">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Sending…
+              {t('bubble.sending')}
             </span>
           ) : null}
           {failed ? (
             <span className="flex items-center gap-1 text-danger">
               <AlertCircle className="h-3 w-3" />
-              Couldn’t send
+              {t('bubble.couldntSend')}
             </span>
           ) : null}
           {showSeen && status !== 'sending' && status !== 'failed' ? (
-            <span>Seen</span>
+            <span>{t('bubble.seen')}</span>
           ) : null}
         </div>
       ) : null}
@@ -122,7 +124,7 @@ export function MessageBubble({
               onClick={onRetry}
             >
               <RotateCcw className="h-3 w-3" />
-              Retry
+              {t('bubble.retry')}
             </Button>
           ) : null}
           {(exhausted || onDiscard) && onDiscard ? (
@@ -134,7 +136,7 @@ export function MessageBubble({
               onClick={onDiscard}
             >
               <Trash2 className="h-3 w-3" />
-              Discard
+              {t('bubble.discard')}
             </Button>
           ) : null}
         </div>

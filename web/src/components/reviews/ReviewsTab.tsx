@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Star } from 'lucide-react';
 import { parseApiError } from '@/api';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ export function ReviewsTab({
   subjectKind,
   subjectName,
 }: ReviewsTabProps) {
+  const { t } = useTranslation('common');
   const [page, setPage] = useState(1);
   const [data, setData] = useState<ReviewListResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,7 +49,7 @@ export function ReviewsTab({
       const res = await fetcher(subjectId, page, PAGE_SIZE);
       setData(res);
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Could not load reviews.');
+      setError(parseApiError(err)?.message ?? t('review.loadError'));
     } finally {
       setLoading(false);
     }
@@ -87,19 +89,23 @@ export function ReviewsTab({
           variant="outline"
           onClick={() => setRefreshKey((k) => k + 1)}
         >
-          Retry
+          {t('review.retry')}
         </Button>
       </div>
     );
   }
 
   if (!data || data.total === 0) {
-    const subject = subjectName ?? (subjectKind === 'worker' ? 'this worker' : 'this employer');
+    const subject =
+      subjectName ??
+      (subjectKind === 'worker'
+        ? t('review.subjectWorker')
+        : t('review.subjectEmployer'));
     return (
       <EmptyState
         icon={Star}
-        title="No reviews yet"
-        description={`${subject}'s first review will appear here once a collaboration completes.`}
+        title={t('review.noneTitle')}
+        description={t('review.noneDesc', { subject })}
       />
     );
   }
@@ -127,8 +133,9 @@ export function ReviewsTab({
 
       <footer className="flex flex-wrap items-center justify-between gap-3 pt-1 text-sm text-fg-muted">
         <span>
-          Page {currentPage} of {Math.max(1, totalPages)} · {total} review
-          {total === 1 ? '' : 's'}
+          {t('review.pageOf', { page: currentPage, pages: Math.max(1, totalPages) })}
+          {' · '}
+          {t('profileHeader.reviewsCount', { count: total })}
         </span>
         <div className="flex gap-2">
           <Button
@@ -138,7 +145,7 @@ export function ReviewsTab({
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={currentPage <= 1}
           >
-            Previous
+            {t('review.previous')}
           </Button>
           <Button
             type="button"
@@ -147,7 +154,7 @@ export function ReviewsTab({
             onClick={() => setPage((p) => p + 1)}
             disabled={currentPage >= Math.max(1, totalPages)}
           >
-            Next
+            {t('review.next')}
           </Button>
         </div>
       </footer>

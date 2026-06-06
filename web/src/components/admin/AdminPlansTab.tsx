@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CreditCard, Pencil, Plus } from 'lucide-react';
 import { api, parseApiError } from '../../api';
+import { formatMoney } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -43,10 +45,11 @@ type PlanList = Plan[] | { data: Plan[] };
 
 function formatPrice(v: number | string | null | undefined): string {
   if (v == null || v === '') return '—';
-  return `£${Number(v).toFixed(2)}`;
+  return formatMoney(Number(v));
 }
 
 export function AdminPlansTab() {
+  const { t } = useTranslation('admin');
   const [plans, setPlans] = useState<Plan[]>([]);
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
@@ -62,11 +65,11 @@ export function AdminPlansTab() {
       const items = Array.isArray(data) ? data : (data.data ?? []);
       setPlans(items);
     } catch (e) {
-      setErr(parseApiError(e)?.message ?? 'Failed to load plans');
+      setErr(parseApiError(e)?.message ?? t('plans.loadError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -80,7 +83,7 @@ export function AdminPlansTab() {
       });
       void load();
     } catch (e) {
-      setErr(parseApiError(e)?.message ?? 'Update failed');
+      setErr(parseApiError(e)?.message ?? t('plans.updateFailed'));
     }
   }
 
@@ -92,13 +95,9 @@ export function AdminPlansTab() {
             <div>
               <div className="flex items-center gap-2">
                 <CreditCard className="h-4 w-4 text-fg-muted" />
-                <CardTitle>Subscription plans</CardTitle>
+                <CardTitle>{t('plans.title')}</CardTitle>
               </div>
-              <CardDescription>
-                Activating a plan makes it visible to clients on the
-                /subscriptions endpoint immediately. They will see it as an
-                option to subscribe to.
-              </CardDescription>
+              <CardDescription>{t('plans.desc')}</CardDescription>
             </div>
             <Button
               size="sm"
@@ -109,7 +108,7 @@ export function AdminPlansTab() {
               }}
             >
               <Plus className="h-3.5 w-3.5" />
-              {createOpen ? 'Cancel' : 'New plan'}
+              {createOpen ? t('plans.cancel') : t('plans.newPlan')}
             </Button>
           </div>
         </CardHeader>
@@ -146,21 +145,21 @@ export function AdminPlansTab() {
           {plans.length === 0 ? (
             <EmptyState
               icon={CreditCard}
-              title={loading ? 'Loading…' : 'No subscription plans'}
-              description="Create the first plan above. Inactive plans are hidden from clients."
+              title={loading ? t('plans.loading') : t('plans.noPlans')}
+              description={t('plans.noPlansDesc')}
             />
           ) : (
             <div className="rounded border border-border-subtle">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-16">ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Monthly</TableHead>
-                    <TableHead>Yearly</TableHead>
-                    <TableHead>Max refs</TableHead>
-                    <TableHead>Visible</TableHead>
-                    <TableHead className="w-40 text-right">Actions</TableHead>
+                    <TableHead className="w-16">{t('plans.colId')}</TableHead>
+                    <TableHead>{t('plans.colName')}</TableHead>
+                    <TableHead>{t('plans.colMonthly')}</TableHead>
+                    <TableHead>{t('plans.colYearly')}</TableHead>
+                    <TableHead>{t('plans.colMaxRefs')}</TableHead>
+                    <TableHead>{t('plans.colVisible')}</TableHead>
+                    <TableHead className="w-40 text-right">{t('plans.colActions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -173,7 +172,7 @@ export function AdminPlansTab() {
                       <TableCell>{p.max_referrals ?? '—'}</TableCell>
                       <TableCell>
                         <Badge variant={p.is_active ? 'success' : 'secondary'}>
-                          {p.is_active ? 'Visible to clients' : 'Hidden'}
+                          {p.is_active ? t('plans.visibleToClients') : t('plans.hidden')}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
@@ -186,14 +185,14 @@ export function AdminPlansTab() {
                           }}
                         >
                           <Pencil className="h-3.5 w-3.5" />
-                          Edit
+                          {t('plans.edit')}
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => void toggleActive(p)}
                         >
-                          {p.is_active ? 'Hide' : 'Publish'}
+                          {p.is_active ? t('plans.hide') : t('plans.publish')}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -219,6 +218,7 @@ function PlanForm({
   onSaved: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation('admin');
   const [name, setName] = useState(plan?.name ?? '');
   const [monthly, setMonthly] = useState(
     plan?.price_monthly != null ? String(plan.price_monthly) : '',
@@ -261,7 +261,7 @@ function PlanForm({
       }
       onSaved();
     } catch (e2) {
-      setErr(parseApiError(e2)?.message ?? 'Save failed');
+      setErr(parseApiError(e2)?.message ?? t('plans.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -274,12 +274,14 @@ function PlanForm({
     >
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm font-medium">
-          {mode === 'create' ? 'New plan' : `Edit plan #${plan?.id}`}
+          {mode === 'create'
+            ? t('plans.newPlan')
+            : t('plans.editPlan', { id: plan?.id })}
         </div>
         <div className="text-xs text-fg-muted">
           {active === 'true'
-            ? '⚠️ Will be visible to clients immediately'
-            : 'Hidden — no client will see it'}
+            ? t('plans.willBeVisible')
+            : t('plans.hiddenNote')}
         </div>
       </div>
       {err ? (
@@ -289,11 +291,11 @@ function PlanForm({
       ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-2 sm:col-span-2">
-          <Label>Name</Label>
+          <Label>{t('plans.name')}</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} required />
         </div>
         <div className="space-y-2">
-          <Label>Monthly price (£)</Label>
+          <Label>{t('plans.monthlyPrice')}</Label>
           <Input
             type="number"
             step="0.01"
@@ -304,7 +306,7 @@ function PlanForm({
           />
         </div>
         <div className="space-y-2">
-          <Label>Yearly price (£)</Label>
+          <Label>{t('plans.yearlyPrice')}</Label>
           <Input
             type="number"
             step="0.01"
@@ -314,7 +316,7 @@ function PlanForm({
           />
         </div>
         <div className="space-y-2">
-          <Label>Max referrals</Label>
+          <Label>{t('plans.maxReferrals')}</Label>
           <Input
             type="number"
             min={0}
@@ -323,24 +325,28 @@ function PlanForm({
           />
         </div>
         <div className="space-y-2">
-          <Label>Visibility</Label>
+          <Label>{t('plans.visibility')}</Label>
           <Select value={active} onValueChange={(v: 'true' | 'false') => setActive(v)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="true">Visible to clients</SelectItem>
-              <SelectItem value="false">Hidden</SelectItem>
+              <SelectItem value="true">{t('plans.visibleToClients')}</SelectItem>
+              <SelectItem value="false">{t('plans.hidden')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
       <div className="flex gap-2">
         <Button type="submit" disabled={submitting}>
-          {submitting ? 'Saving…' : mode === 'create' ? 'Create' : 'Save changes'}
+          {submitting
+            ? t('plans.saving')
+            : mode === 'create'
+              ? t('plans.create')
+              : t('plans.saveChanges')}
         </Button>
         <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
+          {t('plans.cancel')}
         </Button>
       </div>
     </form>

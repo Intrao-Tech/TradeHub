@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -45,6 +46,7 @@ export function ReasonDialog({
   destructive,
   onConfirm,
 }: ReasonDialogProps) {
+  const { t } = useTranslation('wallet');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -52,7 +54,7 @@ export function ReasonDialog({
   async function submit() {
     setError('');
     if (reason.trim().length < minChars) {
-      setError(`Reason must be at least ${minChars} characters.`);
+      setError(t('reasonDialog.tooShort', { count: minChars }));
       return;
     }
     setBusy(true);
@@ -61,7 +63,7 @@ export function ReasonDialog({
       setReason('');
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Action failed');
+      setError(err instanceof Error ? err.message : t('reasonDialog.actionFailed'));
     } finally {
       setBusy(false);
     }
@@ -85,7 +87,7 @@ export function ReasonDialog({
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
         <div className="flex flex-col gap-2.5">
-          <Label htmlFor="reason-dialog-textarea">Reason</Label>
+          <Label htmlFor="reason-dialog-textarea">{t('reasonDialog.reasonLabel')}</Label>
           <Textarea
             id="reason-dialog-textarea"
             value={reason}
@@ -96,7 +98,11 @@ export function ReasonDialog({
             disabled={busy}
           />
           <p className="text-xs text-fg-muted">
-            {reason.trim().length}/{minChars} min · {maxChars} max
+            {t('reasonDialog.counter', {
+              current: reason.trim().length,
+              min: minChars,
+              max: maxChars,
+            })}
           </p>
           {error ? (
             <div role="alert" className="text-xs text-danger">
@@ -111,7 +117,7 @@ export function ReasonDialog({
             onClick={() => onOpenChange(false)}
             disabled={busy}
           >
-            Cancel
+            {t('reasonDialog.cancel')}
           </Button>
           <Button
             type="button"
@@ -119,7 +125,7 @@ export function ReasonDialog({
             disabled={busy || reason.trim().length < minChars}
             variant={destructive ? 'destructive' : 'primary'}
           >
-            {busy ? 'Working…' : confirmLabel}
+            {busy ? t('reasonDialog.working') : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

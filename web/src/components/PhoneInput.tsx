@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -36,13 +37,14 @@ export function PhoneInput({
   inputId,
   required,
 }: PhoneInputProps) {
+  const { t } = useTranslation('common');
   const country =
     COUNTRIES.find((c) => c.iso === countryIso) ?? DEFAULT_COUNTRY;
 
   return (
     <div className="grid grid-cols-[7rem_1fr] gap-2">
       <Select value={country.iso} onValueChange={onCountryIsoChange}>
-        <SelectTrigger aria-label="Country dial code">
+        <SelectTrigger aria-label={t('phone.dialCodeAria')}>
           <SelectValue>
             <span className="inline-flex items-center gap-1.5">
               <Flag iso={country.iso} />

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, clearTokens, parseApiError } from '../api';
 import { AuthBanner } from '@/components/AuthBanner';
@@ -20,15 +21,14 @@ import {
 } from '@/lib/password-policy';
 
 export default function SettingsSecurityPage() {
+  const { t } = useTranslation('settings');
   const navigate = useNavigate();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Security</h1>
-        <p className="text-sm text-fg-muted">
-          Manage your password and active sessions.
-        </p>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t('title')}</h1>
+        <p className="text-sm text-fg-muted">{t('subtitle')}</p>
       </div>
 
       <ChangePasswordCard />
@@ -40,6 +40,7 @@ export default function SettingsSecurityPage() {
 // ── Change password ─────────────────────────────────────────────────
 
 function ChangePasswordCard() {
+  const { t } = useTranslation(['settings', 'auth']);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -59,16 +60,16 @@ function ChangePasswordCard() {
     if (!policy.ok) {
       setResult({
         ok: false,
-        title: 'Password rejected',
-        message: policy.reasons.map(describeReason).join(' '),
+        title: t('settings:changePassword.rejectedTitle'),
+        message: policy.reasons.map((r) => describeReason(r, t)).join(' '),
       });
       return;
     }
     if (!passwordsMatch) {
       setResult({
         ok: false,
-        title: 'Password mismatch',
-        message: 'The new password and confirmation do not match.',
+        title: t('settings:changePassword.mismatchTitle'),
+        message: t('settings:changePassword.mismatchMsg'),
       });
       return;
     }
@@ -91,37 +92,35 @@ function ChangePasswordCard() {
       if (parsed?.code === 'INVALID_CURRENT_PASSWORD') {
         setResult({
           ok: false,
-          title: 'Wrong current password',
-          message: 'The current password you entered is incorrect.',
+          title: t('settings:changePassword.wrongCurrentTitle'),
+          message: t('settings:changePassword.wrongCurrentMsg'),
         });
       } else if (parsed?.code === 'WEAK_PASSWORD') {
         const reasons = (parsed.body?.reasons as string[]) ?? [];
         setResult({
           ok: false,
-          title: 'Password rejected',
+          title: t('settings:changePassword.rejectedTitle'),
           message:
-            reasons.map((r) => describeReason(r as never)).join(' ') ||
-            (parsed.message ?? 'Pick a stronger password.'),
+            reasons.map((r) => describeReason(r as never, t)).join(' ') ||
+            (parsed.message ?? t('settings:changePassword.pickStronger')),
         });
       } else if (parsed?.code === 'SAME_PASSWORD') {
         setResult({
           ok: false,
-          title: 'Same as before',
-          message: 'New password must be different from the current one.',
+          title: t('settings:changePassword.sameTitle'),
+          message: t('settings:changePassword.sameMsg'),
         });
       } else if (parsed?.code === 'NO_PASSWORD_SET') {
         setResult({
           ok: false,
-          title: 'Google-only account',
-          message:
-            parsed.message ??
-            'This account uses Google sign-in. Use "Forgot password" to set one.',
+          title: t('settings:changePassword.googleTitle'),
+          message: parsed.message ?? t('settings:changePassword.googleMsg'),
         });
       } else {
         setResult({
           ok: false,
-          title: 'Could not change password',
-          message: parsed?.message ?? 'Something went wrong.',
+          title: t('settings:changePassword.failTitle'),
+          message: parsed?.message ?? t('settings:changePassword.failMsg'),
         });
       }
     } finally {
@@ -132,16 +131,16 @@ function ChangePasswordCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Change password</CardTitle>
-        <CardDescription>
-          Pick a password you don't use anywhere else. After saving, all your
-          other devices will be signed out (this device stays signed in).
-        </CardDescription>
+        <CardTitle>{t('settings:changePassword.title')}</CardTitle>
+        <CardDescription>{t('settings:changePassword.desc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {result && 'ok' in result && result.ok ? (
-          <AuthBanner variant="success" title="Password changed">
-            Other devices have been signed out. Your password is now active.
+          <AuthBanner
+            variant="success"
+            title={t('settings:changePassword.successTitle')}
+          >
+            {t('settings:changePassword.successBody')}
           </AuthBanner>
         ) : null}
         {result && !result.ok ? (
@@ -152,7 +151,7 @@ function ChangePasswordCard() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex flex-col gap-2.5">
-            <Label htmlFor="cp-current">Current password</Label>
+            <Label htmlFor="cp-current">{t('settings:changePassword.currentLabel')}</Label>
             <Input
               id="cp-current"
               type="password"
@@ -163,7 +162,7 @@ function ChangePasswordCard() {
             />
           </div>
           <div className="flex flex-col gap-2.5">
-            <Label htmlFor="cp-new">New password</Label>
+            <Label htmlFor="cp-new">{t('settings:changePassword.newLabel')}</Label>
             <Input
               id="cp-new"
               type="password"
@@ -172,12 +171,12 @@ function ChangePasswordCard() {
               autoComplete="new-password"
               minLength={MIN_LENGTH}
               required
-              placeholder={`At least ${MIN_LENGTH} characters`}
+              placeholder={t('auth:shared.atLeastChars', { count: MIN_LENGTH })}
             />
             <PasswordRules password={next} dirty={next.length > 0} />
           </div>
           <div className="flex flex-col gap-2.5">
-            <Label htmlFor="cp-confirm">Confirm new password</Label>
+            <Label htmlFor="cp-confirm">{t('settings:changePassword.confirmLabel')}</Label>
             <Input
               id="cp-confirm"
               type="password"
@@ -187,11 +186,15 @@ function ChangePasswordCard() {
               required
             />
             {confirm.length > 0 && !passwordsMatch ? (
-              <p className="text-xs text-warning">Passwords don't match.</p>
+              <p className="text-xs text-warning">
+                {t('settings:changePassword.mismatchInline')}
+              </p>
             ) : null}
           </div>
           <Button type="submit" disabled={!canSubmit}>
-            {submitting ? 'Saving…' : 'Update password'}
+            {submitting
+              ? t('settings:changePassword.saving')
+              : t('settings:changePassword.save')}
           </Button>
         </form>
       </CardContent>
@@ -202,6 +205,7 @@ function ChangePasswordCard() {
 // ── Logout all ──────────────────────────────────────────────────────
 
 function LogoutAllCard({ navigate }: { navigate: ReturnType<typeof useNavigate> }) {
+  const { t } = useTranslation('settings');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<
     | { ok: true; revoked: number }
@@ -227,8 +231,7 @@ function LogoutAllCard({ navigate }: { navigate: ReturnType<typeof useNavigate> 
       const parsed = parseApiError(err);
       setResult({
         ok: false,
-        message:
-          parsed?.message ?? 'Could not sign you out — please try again.',
+        message: parsed?.message ?? t('logoutAll.failMsg'),
       });
     } finally {
       setBusy(false);
@@ -238,22 +241,17 @@ function LogoutAllCard({ navigate }: { navigate: ReturnType<typeof useNavigate> 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Sign out of all devices</CardTitle>
-        <CardDescription>
-          Ends every active TradeHub session, including this one. Use this if
-          you've signed in on a device you no longer have, or suspect your
-          account has been accessed without your permission.
-        </CardDescription>
+        <CardTitle>{t('logoutAll.title')}</CardTitle>
+        <CardDescription>{t('logoutAll.desc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {result?.ok ? (
-          <AuthBanner variant="success" title="All sessions revoked">
-            {result.revoked} session{result.revoked === 1 ? '' : 's'} signed
-            out. Redirecting you to sign in…
+          <AuthBanner variant="success" title={t('logoutAll.revokedTitle')}>
+            {t('logoutAll.revokedBody', { count: result.revoked })}
           </AuthBanner>
         ) : null}
         {result && !result.ok ? (
-          <AuthBanner variant="danger" title="Could not complete">
+          <AuthBanner variant="danger" title={t('logoutAll.failTitle')}>
             {result.message}
           </AuthBanner>
         ) : null}
@@ -263,7 +261,7 @@ function LogoutAllCard({ navigate }: { navigate: ReturnType<typeof useNavigate> 
           onClick={handleLogoutAll}
           disabled={busy}
         >
-          {busy ? 'Signing out…' : 'Sign out everywhere'}
+          {busy ? t('logoutAll.busy') : t('logoutAll.button')}
         </Button>
       </CardContent>
     </Card>

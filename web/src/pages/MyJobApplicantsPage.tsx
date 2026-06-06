@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, Inbox, UserPlus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '../api';
 import { useAccountMe } from '@/hooks/useAccountMe';
 import { Button } from '@/components/ui/button';
@@ -49,17 +50,8 @@ const TAB_ORDER: AppStatusTab[] = [
   'WITHDRAWN',
 ];
 
-const TAB_LABEL: Record<AppStatusTab, string> = {
-  ALL: 'All',
-  PENDING: 'Pending',
-  REVIEWED: 'Reviewed',
-  SHORTLISTED: 'Shortlisted',
-  ACCEPTED: 'Accepted',
-  REJECTED: 'Rejected',
-  WITHDRAWN: 'Withdrawn',
-};
-
 export default function MyJobApplicantsPage() {
+  const { t } = useTranslation('jobs');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isEmployer, loading: accountLoading } = useAccountMe();
@@ -93,7 +85,7 @@ export default function MyJobApplicantsPage() {
       setApps(appsRes.items ?? []);
     } catch (err) {
       const parsed = parseApiError(err);
-      const message = parsed?.message ?? 'Could not load applicants.';
+      const message = parsed?.message ?? t('applicants.loadError');
       if (parsed?.status === 403) setAppsError(message);
       else setPostError(message);
     } finally {
@@ -152,11 +144,11 @@ export default function MyJobApplicantsPage() {
         method: 'PATCH',
         body: JSON.stringify({ status: nextStatus }),
       });
-      toast.success(`Marked ${nextStatus.toLowerCase()}`);
+      toast.success(t(`applicants.marked.${nextStatus}`));
       await load();
     } catch (err) {
       setOptimisticStatus((s) => ({ ...s, [sid]: previous }));
-      toast.error(parseApiError(err)?.message ?? 'Action failed.');
+      toast.error(parseApiError(err)?.message ?? t('applicants.actionFailed'));
     } finally {
       setPendingIds((p) => {
         const next = new Set(p);
@@ -190,7 +182,7 @@ export default function MyJobApplicantsPage() {
         navigate('/collaborations');
         return;
       }
-      toast.error(parsed?.message ?? 'Could not open collaboration.');
+      toast.error(parsed?.message ?? t('applicants.openCollabError'));
     } finally {
       setPendingIds((p) => {
         const next = new Set(p);
@@ -206,7 +198,7 @@ export default function MyJobApplicantsPage() {
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/my-jobs">
             <ArrowLeft />
-            Back to my jobs
+            {t('applicants.backToMyJobs')}
           </Link>
         </Button>
       </div>
@@ -229,12 +221,13 @@ export default function MyJobApplicantsPage() {
             {post.is_urgent ? (
               <Badge variant="danger" className="gap-1">
                 <AlertTriangle className="h-3 w-3" />
-                Urgent
+                {t('card.urgent')}
               </Badge>
             ) : null}
             <Badge variant="secondary">
-              {post._count?.applications ?? apps.length} application
-              {(post._count?.applications ?? apps.length) === 1 ? '' : 's'}
+              {t('myJobs.applications', {
+                count: post._count?.applications ?? apps.length,
+              })}
             </Badge>
           </div>
           <h1 className="break-words text-xl font-semibold tracking-tight text-fg sm:text-2xl">
@@ -251,11 +244,11 @@ export default function MyJobApplicantsPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Tabs value={tab} onValueChange={(v) => setTab(v as AppStatusTab)}>
           <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-subtle p-1 sm:w-auto">
-            {TAB_ORDER.map((t) => (
-              <TabsTrigger key={t} value={t} className="gap-2">
-                {TAB_LABEL[t]}
+            {TAB_ORDER.map((st) => (
+              <TabsTrigger key={st} value={st} className="gap-2">
+                {t(`myApplications.tab.${st}`)}
                 <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
-                  {counts[t]}
+                  {counts[st]}
                 </Badge>
               </TabsTrigger>
             ))}
@@ -263,7 +256,7 @@ export default function MyJobApplicantsPage() {
         </Tabs>
         <Button onClick={() => setInviteOpen(true)} variant="outline">
           <UserPlus />
-          Invite worker
+          {t('applicants.inviteWorker')}
         </Button>
       </div>
 
@@ -284,11 +277,11 @@ export default function MyJobApplicantsPage() {
       ) : visible.length === 0 ? (
         <EmptyState
           icon={Inbox}
-          title="No applicants in this view"
+          title={t('applicants.emptyTitle')}
           description={
             tab === 'ALL'
-              ? "When workers apply or you invite them, they'll appear here."
-              : 'Try a different tab to see applicants in another status.'
+              ? t('applicants.emptyDescAll')
+              : t('applicants.emptyDescFiltered')
           }
         />
       ) : (

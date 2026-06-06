@@ -7,6 +7,9 @@ import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { SignupGatePopup, type SignupGateStat } from '@/components/SignupGatePopup';
 
+// Marketing surface for logged-out visitors — intentionally English-only
+// (not part of the i18n catalogs; see I18N task decision).
+
 type EmployerRow = EmployerCardData & {
   rating_avg?: string | number;
   team_size?: number | null;

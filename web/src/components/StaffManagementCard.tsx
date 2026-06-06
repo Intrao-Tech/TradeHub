@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   KeyRound,
   Mail,
@@ -8,6 +9,7 @@ import {
 } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { AuthBanner } from '@/components/AuthBanner';
+import { formatDateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -55,6 +57,7 @@ type RoleRow = {
 };
 
 export function StaffManagementCard() {
+  const { t } = useTranslation('admin');
   const [me, setMe] = useState<AccountMe | null>(null);
   const isAdmin =
     typeof me?.staff_member?.staff_role === 'string' &&
@@ -88,11 +91,9 @@ export function StaffManagementCard() {
     } catch (err) {
       const parsed = parseApiError(err);
       if (parsed?.status === 403) {
-        setLoadError(
-          'You don\'t have permission to manage staff. Only admins can access this section.',
-        );
+        setLoadError(t('staff.noPermission'));
       } else {
-        setLoadError(parsed?.message ?? 'Could not load staff list.');
+        setLoadError(parsed?.message ?? t('staff.loadFailed'));
       }
     }
   }
@@ -135,16 +136,16 @@ export function StaffManagementCard() {
       const code = parsed?.code;
       const title =
         code === 'ALREADY_STAFF'
-          ? 'Already a staff member'
+          ? t('staff.errAlreadyStaff')
           : code === 'ACCOUNT_DEACTIVATED'
-            ? 'Account is deactivated'
+            ? t('staff.errDeactivated')
             : code === 'ACCOUNT_NOT_VERIFIED'
-              ? 'Account is not verified'
-              : 'Could not create staff account';
+              ? t('staff.errNotVerified')
+              : t('staff.errCreateFailed');
       setCreateResult({
         ok: false,
         title,
-        message: parsed?.message ?? 'Something went wrong.',
+        message: parsed?.message ?? t('staff.errGeneric'),
       });
     } finally {
       setSubmitting(false);
@@ -166,7 +167,7 @@ export function StaffManagementCard() {
       const parsed = parseApiError(err);
       setRowResult({
         ok: false,
-        message: parsed?.message ?? 'Action failed.',
+        message: parsed?.message ?? t('staff.actionFailed'),
       });
     }
   }
@@ -179,43 +180,39 @@ export function StaffManagementCard() {
           method: 'PATCH',
           body: JSON.stringify({ staff_role: newRole }),
         }),
-      `${row.email} is now ${newRole}.`,
+      t('staff.roleChanged', { email: row.email, role: newRole }),
     );
   }
 
   function handleReinvite(row: StaffRow) {
     void withRowAction(
       () => api(`/staff/${row.id}/reinvite`, { method: 'POST' }),
-      `Fresh invite emailed to ${row.email}.`,
+      t('staff.reinvited', { email: row.email }),
     );
   }
 
   function handleResetPassword(row: StaffRow) {
-    if (
-      !confirm(
-        `Reset password for ${row.email}? A new password will be emailed and they'll be signed out everywhere.`,
-      )
-    ) {
+    if (!confirm(t('staff.resetConfirm', { email: row.email }))) {
       return;
     }
     void withRowAction(
       () => api(`/staff/${row.id}/reset-password`, { method: 'POST' }),
-      `New password emailed to ${row.email}. They've been signed out of all devices.`,
+      t('staff.resetDone', { email: row.email }),
     );
   }
 
   function handleDeactivate(row: StaffRow) {
-    if (!confirm(`Deactivate staff account ${row.email}?`)) return;
+    if (!confirm(t('staff.deactivateConfirm', { email: row.email }))) return;
     void withRowAction(
       () => api(`/staff/${row.id}`, { method: 'DELETE' }),
-      `${row.email} deactivated.`,
+      t('staff.deactivated', { email: row.email }),
     );
   }
 
   function handleReactivate(row: StaffRow) {
     void withRowAction(
       () => api(`/staff/${row.id}/reactivate`, { method: 'POST' }),
-      `${row.email} reactivated.`,
+      t('staff.reactivated', { email: row.email }),
     );
   }
 
@@ -226,12 +223,10 @@ export function StaffManagementCard() {
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <div>
-            <CardTitle>Members</CardTitle>
+            <CardTitle>{t('staff.title')}</CardTitle>
             <CardDescription>
-              All TradeHub admins and moderators.{' '}
-              {isAdmin
-                ? 'You can create new staff, change roles, reset passwords, and deactivate accounts.'
-                : 'Only admins can change roles, create new staff, or reset passwords.'}
+              {t('staff.descBase')}
+              {isAdmin ? t('staff.descAdmin') : t('staff.descNonAdmin')}
             </CardDescription>
           </div>
           {isAdmin ? (
@@ -241,26 +236,24 @@ export function StaffManagementCard() {
               size="sm"
               onClick={() => setCreateOpen((v) => !v)}
             >
-              {createOpen ? 'Cancel' : 'Add staff'}
+              {createOpen ? t('staff.cancel') : t('staff.addStaff')}
             </Button>
           ) : null}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {createResult?.ok ? (
-          <AuthBanner variant="success" title={createResult.promoted ? 'Existing account promoted to staff' : 'Staff account created'}>
+          <AuthBanner variant="success" title={createResult.promoted ? t('staff.promotedTitle') : t('staff.createdTitle')}>
             {createResult.promoted ? (
               <>
-                <span className="font-medium text-fg">{createResult.email}</span>{' '}
-                already had a TradeHub account — we promoted it to staff and
-                sent them a notification email. Their existing password still
-                works.
+                <span className="font-medium text-fg">{createResult.email}</span>
+                {t('staff.promotedBody')}
               </>
             ) : (
               <>
-                We emailed sign-in instructions to{' '}
-                <span className="font-medium text-fg">{createResult.email}</span>.
-                The invite expires in 24 hours.
+                {t('staff.createdPre')}
+                <span className="font-medium text-fg">{createResult.email}</span>
+                {t('staff.createdPost')}
               </>
             )}
           </AuthBanner>
@@ -274,32 +267,30 @@ export function StaffManagementCard() {
         {createOpen && isAdmin ? (
           <form onSubmit={handleCreate} className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="staff-email">Email</Label>
+              <Label htmlFor="staff-email">{t('staff.email')}</Label>
               <Input
                 id="staff-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="jane.moderator@tradehub.co.uk"
+                placeholder={t('staff.emailPlaceholder')}
                 required
               />
-              <p className="text-xs text-fg-muted">
-                Existing client emails can be promoted — they keep their current password.
-              </p>
+              <p className="text-xs text-fg-muted">{t('staff.emailHint')}</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="staff-name">Display name</Label>
+              <Label htmlFor="staff-name">{t('staff.displayName')}</Label>
               <Input
                 id="staff-name"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Jane Moderator"
+                placeholder={t('staff.displayNamePlaceholder')}
                 required
                 minLength={2}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="staff-role">Role</Label>
+              <Label htmlFor="staff-role">{t('staff.role')}</Label>
               <Select
                 value={staffRole}
                 onValueChange={setStaffRole}
@@ -324,14 +315,14 @@ export function StaffManagementCard() {
             </div>
             <div className="sm:col-span-2">
               <Button type="submit" disabled={submitting}>
-                {submitting ? 'Sending…' : 'Create + send invite'}
+                {submitting ? t('staff.sending') : t('staff.createSendInvite')}
               </Button>
             </div>
           </form>
         ) : null}
 
         {loadError ? (
-          <AuthBanner variant="danger" title="Could not load staff">
+          <AuthBanner variant="danger" title={t('staff.loadErrorTitle')}>
             {loadError}
           </AuthBanner>
         ) : null}
@@ -339,7 +330,7 @@ export function StaffManagementCard() {
         {rowResult ? (
           <AuthBanner
             variant={rowResult.ok ? 'success' : 'danger'}
-            title={rowResult.ok ? 'Done' : 'Action failed'}
+            title={rowResult.ok ? t('staff.done') : t('staff.rowActionFailed')}
           >
             {rowResult.message}
           </AuthBanner>
@@ -347,7 +338,7 @@ export function StaffManagementCard() {
 
         {staff ? (
           staff.length === 0 ? (
-            <p className="text-sm text-fg-muted">No staff accounts yet.</p>
+            <p className="text-sm text-fg-muted">{t('staff.noStaff')}</p>
           ) : (
             <ul className="divide-y divide-border-default rounded-md border border-border-default">
               {staff.map((s) => {
@@ -362,7 +353,7 @@ export function StaffManagementCard() {
                         {s.display_name}{' '}
                         <span className="text-xs text-fg-muted">({s.email})</span>
                         {isSelf ? (
-                          <span className="ml-2 text-xs text-primary">you</span>
+                          <span className="ml-2 text-xs text-primary">{t('staff.you')}</span>
                         ) : null}
                       </p>
                       <div className="flex flex-wrap items-center gap-1.5 text-xs text-fg-muted">
@@ -373,14 +364,16 @@ export function StaffManagementCard() {
                           {s.staff_role}
                         </Badge>
                         {s.invite_expired ? (
-                          <Badge variant="danger">invite expired</Badge>
+                          <Badge variant="danger">{t('staff.inviteExpired')}</Badge>
                         ) : s.invite_active ? (
-                          <Badge variant="warning">invite pending</Badge>
+                          <Badge variant="warning">{t('staff.invitePending')}</Badge>
                         ) : null}
                         <span>
                           {s.last_login_at
-                            ? `last seen ${new Date(s.last_login_at).toLocaleString()}`
-                            : 'never signed in'}
+                            ? t('staff.lastSeen', {
+                                when: formatDateTime(s.last_login_at),
+                              })
+                            : t('staff.neverSignedIn')}
                         </span>
                       </div>
                     </div>
@@ -422,7 +415,7 @@ export function StaffManagementCard() {
                               onClick={() => handleReinvite(s)}
                             >
                               <Mail />
-                              Resend invite
+                              {t('staff.resendInvite')}
                             </Button>
                           ) : null}
                           {s.has_signed_in && s.status === 'ACTIVE' ? (
@@ -433,7 +426,7 @@ export function StaffManagementCard() {
                               onClick={() => handleResetPassword(s)}
                             >
                               <KeyRound />
-                              Reset password
+                              {t('staff.resetPassword')}
                             </Button>
                           ) : null}
 
@@ -446,7 +439,7 @@ export function StaffManagementCard() {
                               onClick={() => handleDeactivate(s)}
                             >
                               <ShieldOff />
-                              Deactivate
+                              {t('staff.deactivate')}
                             </Button>
                           ) : (
                             <Button
@@ -456,7 +449,7 @@ export function StaffManagementCard() {
                               onClick={() => handleReactivate(s)}
                             >
                               <UserCheck />
-                              Reactivate
+                              {t('staff.reactivate')}
                             </Button>
                           )}
                         </>
@@ -464,7 +457,7 @@ export function StaffManagementCard() {
                       {isSelf ? (
                         <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
                           <ShieldCheck className="h-3.5 w-3.5" />
-                          You can't change your own role here
+                          {t('staff.cantChangeOwnRole')}
                         </span>
                       ) : null}
                     </div>
@@ -474,7 +467,7 @@ export function StaffManagementCard() {
             </ul>
           )
         ) : (
-          <p className="text-sm text-fg-muted">Loading…</p>
+          <p className="text-sm text-fg-muted">{t('staff.loading')}</p>
         )}
       </CardContent>
     </Card>

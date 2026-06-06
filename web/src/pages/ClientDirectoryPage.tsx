@@ -19,6 +19,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+// Public directory for logged-out visitors — intentionally English-only
+// (not part of the i18n catalogs; see I18N task decision).
+
 type ClientProfile = {
   id: string | number;
   slug?: string;
@@ -84,9 +87,7 @@ export default function ClientDirectoryPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Members</h1>
-        <p className="text-sm text-fg-muted">
-          Browse everyone with a TradeHub profile.
-        </p>
+        <p className="text-sm text-fg-muted">Browse everyone with a TradeHub profile.</p>
       </div>
 
       {error ? (

@@ -1,7 +1,9 @@
+import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { StarRating } from '@/components/StarRating';
 import { cn } from '@/lib/utils';
+import { formatDate as formatDateLib } from '@/lib/format';
 import type { Review } from './api';
 
 /**
@@ -10,24 +12,17 @@ import type { Review } from './api';
  */
 
 const SUB_RATINGS = [
-  { key: 'quality_rating', label: 'Quality' },
-  { key: 'reliability_rating', label: 'Reliability' },
-  { key: 'communication_rating', label: 'Communication' },
-  { key: 'payment_rating', label: 'Payment' },
-  { key: 'safety_rating', label: 'Safety' },
+  { key: 'quality_rating', labelKey: 'review.quality' },
+  { key: 'reliability_rating', labelKey: 'review.reliability' },
+  { key: 'communication_rating', labelKey: 'review.communication' },
+  { key: 'payment_rating', labelKey: 'review.payment' },
+  { key: 'safety_rating', labelKey: 'review.safety' },
 ] as const;
 
 type SubKey = (typeof SUB_RATINGS)[number]['key'];
 
 function formatDate(value?: string | null): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatDateLib(value) || null;
 }
 
 type ReviewCardProps = {
@@ -41,8 +36,9 @@ export function ReviewCard({
   onClick,
   className,
 }: ReviewCardProps) {
+  const { t } = useTranslation('common');
   const reviewerLabel =
-    review.reviewer_role === 'EMPLOYER' ? 'From an employer' : 'From a worker';
+    review.reviewer_role === 'EMPLOYER' ? t('review.fromEmployer') : t('review.fromWorker');
   const publishedAt = formatDate(review.published_at);
   const collab = review.collaboration;
   const projectType = collab?.project_type ?? null;
@@ -51,8 +47,8 @@ export function ReviewCard({
 
   let datesLabel: string | null = null;
   if (startDate && endDate) datesLabel = `${startDate} – ${endDate}`;
-  else if (startDate) datesLabel = `Started ${startDate}`;
-  else if (endDate) datesLabel = `Ended ${endDate}`;
+  else if (startDate) datesLabel = t('review.started', { date: startDate });
+  else if (endDate) datesLabel = t('review.ended', { date: endDate });
 
   const inner = (
     <Card
@@ -73,7 +69,7 @@ export function ReviewCard({
             ) : null}
           </div>
           {!review.is_published ? (
-            <Badge variant="warning">Draft</Badge>
+            <Badge variant="warning">{t('review.draft')}</Badge>
           ) : null}
         </div>
 
@@ -81,7 +77,7 @@ export function ReviewCard({
           <StarRating
             value={review.overall_rating}
             size="md"
-            label="Overall rating"
+            label={t('review.overallRating')}
           />
           <span className="text-sm font-medium text-fg">
             {review.overall_rating} / 5
@@ -89,10 +85,10 @@ export function ReviewCard({
         </div>
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-5">
-          {SUB_RATINGS.map(({ key, label }) => (
+          {SUB_RATINGS.map(({ key, labelKey }) => (
             <SubRatingRow
               key={key}
-              label={label}
+              label={t(labelKey)}
               value={review[key as SubKey] ?? null}
             />
           ))}
@@ -102,13 +98,13 @@ export function ReviewCard({
           {review.comment ? (
             review.comment
           ) : (
-            <em className="text-fg-subtle">No comment</em>
+            <em className="text-fg-subtle">{t('review.noComment')}</em>
           )}
         </p>
 
         {projectType || datesLabel ? (
           <footer className="flex flex-wrap items-center gap-2 border-t border-border-default pt-3 text-xs text-fg-muted">
-            {projectType ? <span>Project: {projectType}</span> : null}
+            {projectType ? <span>{t('review.project', { type: projectType })}</span> : null}
             {projectType && datesLabel ? <span aria-hidden>·</span> : null}
             {datesLabel ? <span>{datesLabel}</span> : null}
           </footer>

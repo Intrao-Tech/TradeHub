@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   Check,
   LogOut,
@@ -32,13 +33,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { useTheme, useThemePreference, type ThemePreference } from "@/lib/theme";
+import { useThemePreference, type ThemePreference } from "@/lib/theme";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { useAccountMe } from "@/hooks/useAccountMe";
 import { publicFileUrl } from "@/lib/files";
 import { Footer } from "@/components/Footer";
 import { AuthFooter } from "@/components/AuthFooter";
+import { LanguageSubmenu } from "@/components/LanguageSwitcher";
 
 export type NavItem = {
   to: string;
@@ -55,6 +57,21 @@ export type NavItem = {
    * /workers in their nav. Logged-out viewers always see these items.
    */
   hideForRole?: 'worker' | 'employer';
+};
+
+// Route → common-namespace key for nav labels. The English `label` in App.tsx
+// stays as the fallback; adding a route here translates its nav chip.
+const NAV_LABEL_KEY: Record<string, string> = {
+  "/jobs": "nav.jobs",
+  "/workers": "nav.workers",
+  "/employers": "nav.employers",
+  "/my-applications": "nav.applications",
+  "/my-jobs": "nav.postedJobs",
+  "/collaborations": "nav.collaborations",
+  "/payments": "nav.payments",
+  "/referrals": "nav.referrals",
+  "/inbox": "nav.inbox",
+  "/support": "nav.support",
 };
 
 type AppShellProps = {
@@ -79,6 +96,7 @@ export function AppShell({
   children,
 }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { t } = useTranslation("common");
   const location = useLocation();
   // Reset scroll on route change — without this the browser keeps the
   // previous page's scroll Y, dropping users into the middle of the next page.
@@ -126,7 +144,10 @@ export function AppShell({
             <Badge
               variant={staffRole === 'ADMIN' ? 'default' : 'secondary'}
               className="gap-1.5 text-[10px] uppercase tracking-wide"
-              aria-label={`Logged in as ${staffRole}${isOnDuty ? ', on duty' : ', off duty'}`}
+              aria-label={t('menu.staffBadgeAria', {
+                role: staffRole,
+                duty: isOnDuty ? t('menu.dutyOn') : t('menu.dutyOff'),
+              })}
             >
               <span
                 className={cn(
@@ -154,17 +175,16 @@ export function AppShell({
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            {/* <ThemeToggle /> */}
             {loggedIn ? <NotificationsBell /> : null}
             {loggedIn ? (
               <UserMenu onLogout={onLogout} isStaff={!!staffMember} isOnDuty={isOnDuty} />
             ) : (
               <div className="hidden items-center gap-2 sm:flex">
                 <Button size="sm" variant="ghost" asChild>
-                  <NavLink to="/login">Login</NavLink>
+                  <NavLink to="/login">{t("header.login")}</NavLink>
                 </Button>
                 <Button size="sm" asChild>
-                  <NavLink to="/register">Sign up</NavLink>
+                  <NavLink to="/register">{t("header.signUp")}</NavLink>
                 </Button>
               </div>
             )}
@@ -172,7 +192,7 @@ export function AppShell({
               size="icon"
               variant="ghost"
               className="md:hidden"
-              aria-label="Open menu"
+              aria-label={t("menu.open")}
               onClick={() => setMobileOpen(true)}
             >
               <Menu className="h-5 w-5" />
@@ -184,7 +204,7 @@ export function AppShell({
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="w-72 p-0">
           <SheetHeader className="border-b border-border-default px-4 py-3">
-            <SheetTitle>Menu</SheetTitle>
+            <SheetTitle>{t("menu.title")}</SheetTitle>
           </SheetHeader>
           <nav className="flex flex-col gap-1 p-3">
             {items.map((n) => (
@@ -201,7 +221,7 @@ export function AppShell({
                   )
                 }
               >
-                <span>{n.label}</span>
+                <span>{t(NAV_LABEL_KEY[n.to] ?? "", { defaultValue: n.label })}</span>
                 {loggedIn && n.to === "/inbox" && unreadTotal > 0 ? (
                   <Badge
                     variant="default"
@@ -219,14 +239,14 @@ export function AppShell({
                   onClick={() => setMobileOpen(false)}
                   className="mt-2 flex min-h-12 items-center rounded-md px-3 text-sm font-medium text-fg-muted hover:bg-subtle hover:text-fg"
                 >
-                  Login
+                  {t("header.login")}
                 </NavLink>
                 <NavLink
                   to="/register"
                   onClick={() => setMobileOpen(false)}
                   className="flex min-h-12 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-fg hover:bg-primary-hover"
                 >
-                  Sign up
+                  {t("header.signUp")}
                 </NavLink>
               </>
             )}
@@ -253,6 +273,7 @@ function NavItemLink({
   item: NavItem;
   badge?: number | null;
 }) {
+  const { t } = useTranslation("common");
   return (
     <NavLink
       to={item.to}
@@ -265,7 +286,7 @@ function NavItemLink({
         )
       }
     >
-      <span>{item.label}</span>
+      <span>{t(NAV_LABEL_KEY[item.to] ?? "", { defaultValue: item.label })}</span>
       {badge != null && badge > 0 ? (
         <Badge
           variant="default"
@@ -287,6 +308,7 @@ function UserMenu({
   isStaff: boolean;
   isOnDuty: boolean;
 }) {
+  const { t } = useTranslation("common");
   const { account, clientProfile, refetch } = useAccountMe();
   const [dutyBusy, setDutyBusy] = useState(false);
   const [dutyErr, setDutyErr] = useState('');
@@ -301,7 +323,7 @@ function UserMenu({
       });
       await refetch();
     } catch (e) {
-      setDutyErr(parseApiError(e)?.message ?? 'Failed to toggle duty');
+      setDutyErr(parseApiError(e)?.message ?? t('menu.dutyError'));
     } finally {
       setDutyBusy(false);
     }
@@ -309,7 +331,7 @@ function UserMenu({
   const displayName =
     clientProfile?.display_name?.trim() ||
     account?.email?.split("@")[0] ||
-    "Account";
+    t("menu.account");
   const email = account?.email ?? "";
   const avatarSrc = publicFileUrl(clientProfile?.avatar_url ?? undefined);
   const initials = displayName
@@ -325,7 +347,7 @@ function UserMenu({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label="Open account menu"
+          aria-label={t("menu.openAccount")}
           className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-raised transition-colors hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Avatar className="h-9 w-9">
@@ -362,14 +384,14 @@ function UserMenu({
                   isOnDuty ? 'text-success' : 'text-fg-muted',
                 )}
               />
-              <span>{isOnDuty ? 'On duty' : 'Off duty'}</span>
+              <span>{isOnDuty ? t('menu.onDuty') : t('menu.offDuty')}</span>
             </span>
             <span className="text-xs text-fg-muted">
               {dutyBusy
                 ? '…'
                 : isOnDuty
-                  ? 'Click to go off'
-                  : 'Click to go on'}
+                  ? t('menu.clickToGoOff')
+                  : t('menu.clickToGoOn')}
             </span>
           </DropdownMenuItem>
         ) : null}
@@ -380,17 +402,18 @@ function UserMenu({
           <DropdownMenuItem asChild>
             <NavLink to="/profile" className="flex items-center gap-2">
               <User className="h-4 w-4" />
-              <span>Profile</span>
+              <span>{t("menu.profile")}</span>
             </NavLink>
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem asChild>
           <NavLink to="/settings/security" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
-            <span>Settings</span>
+            <span>{t("menu.settings")}</span>
           </NavLink>
         </DropdownMenuItem>
         <ThemeSubmenu />
+        <LanguageSubmenu />
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={(e) => {
@@ -400,7 +423,7 @@ function UserMenu({
           className="text-fg"
         >
           <LogOut className="h-4 w-4" />
-          <span>Log out</span>
+          <span>{t("menu.logOut")}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -434,25 +457,25 @@ const THEME_OPTIONS: {
 ];
 
 function ThemeSubmenu() {
+  const { t } = useTranslation("common");
   const { preference, effective, setPreference } = useThemePreference();
   const ActiveIcon =
     preference === "system" ? Monitor : effective === "dark" ? Moon : Sun;
-  const activeLabel =
-    preference === "system"
-      ? "Auto"
-      : preference === "dark"
-      ? "Dark"
-      : "Light";
+  const activeKey =
+    preference === "system" ? "auto" : preference === "dark" ? "dark" : "light";
 
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger className="gap-2">
         <ActiveIcon className="h-4 w-4" />
-        <span>Theme: {activeLabel}</span>
+        <span>
+          {t("theme.label")}: {t(`theme.${activeKey}`)}
+        </span>
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-72">
-        {THEME_OPTIONS.map(({ value, label, description, Icon }) => {
+        {THEME_OPTIONS.map(({ value, Icon }) => {
           const active = preference === value;
+          const key = value === "system" ? "auto" : value;
           return (
             <DropdownMenuItem
               key={value}
@@ -464,8 +487,8 @@ function ThemeSubmenu() {
             >
               <Icon className="mt-0.5 h-4 w-4 shrink-0" />
               <div className="flex min-w-0 flex-1 flex-col">
-                <span className="text-sm font-medium text-fg">{label}</span>
-                <span className="text-xs text-fg-muted">{description}</span>
+                <span className="text-sm font-medium text-fg">{t(`theme.${key}`)}</span>
+                <span className="text-xs text-fg-muted">{t(`theme.${key}Desc`)}</span>
               </div>
               {active ? (
                 <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -475,26 +498,6 @@ function ThemeSubmenu() {
         })}
       </DropdownMenuSubContent>
     </DropdownMenuSub>
-  );
-}
-
-function ThemeToggle() {
-  const { theme, toggle } = useTheme();
-  return (
-    <Button
-      size="icon"
-      variant="ghost"
-      aria-label={
-        theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
-      }
-      onClick={toggle}
-    >
-      {theme === "dark" ? (
-        <Sun className="h-4 w-4" />
-      ) : (
-        <Moon className="h-4 w-4" />
-      )}
-    </Button>
   );
 }
 

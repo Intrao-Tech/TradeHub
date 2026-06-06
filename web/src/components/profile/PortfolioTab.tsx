@@ -6,6 +6,8 @@ import {
   useState,
   type FormEvent,
 } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TranslateFn } from '@/i18n/types';
 import {
   ArrowDown,
   ArrowUp,
@@ -153,6 +155,7 @@ type PortfolioTabProps = {
 };
 
 export function PortfolioTab({ workerId, flash }: PortfolioTabProps) {
+  const { t } = useTranslation('profile');
   const [items, setItems] = useState<PortfolioItem[] | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<PortfolioItem | null>(null);
@@ -166,7 +169,7 @@ export function PortfolioTab({ workerId, flash }: PortfolioTabProps) {
       setItems(data);
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Could not load portfolio.');
+      setError(parsed?.message ?? t('portfolio.loadError'));
     }
   }, [workerId]);
 
@@ -226,12 +229,12 @@ export function PortfolioTab({ workerId, flash }: PortfolioTabProps) {
           body: JSON.stringify(body),
         });
       }
-      flash(`${labelFor(createType)} added`);
+      flash(t('portfolio.added', { type: labelFor(createType, t) }));
       startCreate(createType);
       await reload();
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Could not save.');
+      setError(parsed?.message ?? t('portfolio.saveError'));
     }
   }
 
@@ -239,11 +242,11 @@ export function PortfolioTab({ workerId, flash }: PortfolioTabProps) {
     setError('');
     try {
       await api(`/portfolio/${id}`, { method: 'DELETE' });
-      flash('Portfolio item deleted');
+      flash(t('portfolio.deleted'));
       await reload();
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Could not delete.');
+      setError(parsed?.message ?? t('portfolio.deleteError'));
     }
   }
 
@@ -272,7 +275,7 @@ export function PortfolioTab({ workerId, flash }: PortfolioTabProps) {
       await reload();
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Could not reorder.');
+      setError(parsed?.message ?? t('portfolio.reorderError'));
     }
   }
 
@@ -299,14 +302,12 @@ export function PortfolioTab({ workerId, flash }: PortfolioTabProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Portfolio</CardTitle>
-          <CardDescription>
-            Showcase your experience, projects, and certifications.
-          </CardDescription>
+          <CardTitle>{t('portfolio.cardTitle')}</CardTitle>
+          <CardDescription>{t('portfolio.cardDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           {!sortedItems ? (
-            <p className="text-sm text-fg-muted">Loading portfolio…</p>
+            <p className="text-sm text-fg-muted">{t('portfolio.loading')}</p>
           ) : sortedItems.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {sortedItems.map((item, idx) => (
@@ -327,8 +328,8 @@ export function PortfolioTab({ workerId, flash }: PortfolioTabProps) {
           ) : (
             <EmptyState
               icon={Briefcase}
-              title="No portfolio items yet"
-              description="Add an experience, project, or certification below."
+              title={t('portfolio.noneTitle')}
+              description={t('portfolio.noneDesc')}
             />
           )}
         </CardContent>
@@ -336,12 +337,12 @@ export function PortfolioTab({ workerId, flash }: PortfolioTabProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Add portfolio item</CardTitle>
-          <CardDescription>Choose a type to add a new entry.</CardDescription>
+          <CardTitle>{t('portfolio.addTitle')}</CardTitle>
+          <CardDescription>{t('portfolio.addDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-2.5">
-            <Label>Item type</Label>
+            <Label>{t('portfolio.itemType')}</Label>
             <Select
               value={createType}
               onValueChange={(v) => {
@@ -353,9 +354,9 @@ export function PortfolioTab({ workerId, flash }: PortfolioTabProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="EXPERIENCE">Experience</SelectItem>
-                <SelectItem value="PROJECT">Project</SelectItem>
-                <SelectItem value="CERTIFICATION">Certification</SelectItem>
+                <SelectItem value="EXPERIENCE">{t('portfolio.typeExperience')}</SelectItem>
+                <SelectItem value="PROJECT">{t('portfolio.typeProject')}</SelectItem>
+                <SelectItem value="CERTIFICATION">{t('portfolio.typeCertification')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -395,14 +396,13 @@ export function PortfolioTab({ workerId, flash }: PortfolioTabProps) {
   );
 }
 
-function labelFor(type: string): string {
-  return type === 'EXPERIENCE'
-    ? 'Experience'
-    : type === 'PROJECT'
-      ? 'Project'
-      : type === 'CERTIFICATION'
-        ? 'Certification'
-        : type;
+type TFn = TranslateFn;
+
+function labelFor(type: string, t: TFn): string {
+  if (type === 'EXPERIENCE') return t('portfolio.typeExperience');
+  if (type === 'PROJECT') return t('portfolio.typeProject');
+  if (type === 'CERTIFICATION') return t('portfolio.typeCertification');
+  return type;
 }
 
 function PortfolioItemRow({
@@ -418,6 +418,7 @@ function PortfolioItemRow({
   onMoveUp?: () => void;
   onMoveDown?: () => void;
 }) {
+  const { t } = useTranslation('profile');
   const firstMedia = item.portfolio_media?.[0];
   const thumb = publicFileUrl(firstMedia?.media_url);
 
@@ -434,11 +435,11 @@ function PortfolioItemRow({
           ) : null}
           <div className="min-w-0 flex-1">
             <div className="mb-1 flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{labelFor(item.item_type)}</Badge>
+              <Badge variant="outline">{labelFor(item.item_type, t)}</Badge>
               {item.verified ? (
                 <Badge variant="success" className="gap-1">
                   <ShieldCheck className="h-3 w-3" />
-                  Verified
+                  {t('portfolio.verified')}
                 </Badge>
               ) : null}
             </div>
@@ -456,7 +457,7 @@ function PortfolioItemRow({
               type="button"
               size="icon"
               variant="ghost"
-              aria-label="Move up"
+              aria-label={t('portfolio.moveUp')}
               disabled={!onMoveUp}
               onClick={onMoveUp}
             >
@@ -466,7 +467,7 @@ function PortfolioItemRow({
               type="button"
               size="icon"
               variant="ghost"
-              aria-label="Move down"
+              aria-label={t('portfolio.moveDown')}
               disabled={!onMoveDown}
               onClick={onMoveDown}
             >
@@ -476,13 +477,13 @@ function PortfolioItemRow({
           <div className="flex gap-1">
             <Button type="button" size="sm" variant="outline" onClick={onEdit}>
               <Pencil />
-              Edit
+              {t('portfolio.edit')}
             </Button>
             <Button
               type="button"
               size="icon"
               variant="ghost"
-              aria-label="Delete item"
+              aria-label={t('portfolio.deleteItem')}
               onClick={onDelete}
             >
               <Trash2 />
@@ -503,11 +504,12 @@ function CreateFormSection({
   onChange: (form: CreateForm) => void;
   onSubmit: (e: FormEvent) => void;
 }) {
+  const { t } = useTranslation('profile');
   if (form.type === 'EXPERIENCE') {
     return (
       <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
         <Field
-          label="Title *"
+          label={t('portfolio.fieldTitle')}
           id="exp-title"
           value={form.title}
           required
@@ -515,32 +517,32 @@ function CreateFormSection({
           colSpan2
         />
         <FieldArea
-          label="Description"
+          label={t('portfolio.fieldDescription')}
           id="exp-desc"
           value={form.description}
           onChange={(v) => onChange({ ...form, description: v })}
         />
         <Field
-          label="Company name"
+          label={t('portfolio.fieldCompany')}
           id="exp-company"
           value={form.company_name}
           onChange={(v) => onChange({ ...form, company_name: v })}
         />
         <Field
-          label="Role"
+          label={t('portfolio.fieldRole')}
           id="exp-role"
           value={form.role}
           onChange={(v) => onChange({ ...form, role: v })}
         />
         <Field
-          label="Start date"
+          label={t('portfolio.fieldStart')}
           id="exp-start"
           type="date"
           value={form.start_date}
           onChange={(v) => onChange({ ...form, start_date: v })}
         />
         <Field
-          label="End date"
+          label={t('portfolio.fieldEnd')}
           id="exp-end"
           type="date"
           value={form.end_date}
@@ -549,7 +551,7 @@ function CreateFormSection({
         <div className="sm:col-span-2">
           <Button type="submit">
             <Plus />
-            Add experience
+            {t('portfolio.addExperience')}
           </Button>
         </div>
       </form>
@@ -559,7 +561,7 @@ function CreateFormSection({
     return (
       <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
         <Field
-          label="Title *"
+          label={t('portfolio.fieldTitle')}
           id="proj-title"
           value={form.title}
           required
@@ -567,32 +569,32 @@ function CreateFormSection({
           colSpan2
         />
         <FieldArea
-          label="Description"
+          label={t('portfolio.fieldDescription')}
           id="proj-desc"
           value={form.description}
           onChange={(v) => onChange({ ...form, description: v })}
         />
         <Field
-          label="Project type"
+          label={t('portfolio.fieldProjectType')}
           id="proj-type"
           value={form.project_type}
           onChange={(v) => onChange({ ...form, project_type: v })}
         />
         <Field
-          label="Site postcode"
+          label={t('portfolio.fieldSitePostcode')}
           id="proj-postcode"
           value={form.site_postcode}
           onChange={(v) => onChange({ ...form, site_postcode: v })}
         />
         <Field
-          label="Completed at"
+          label={t('portfolio.fieldCompleted')}
           id="proj-completed"
           type="date"
           value={form.completed_at}
           onChange={(v) => onChange({ ...form, completed_at: v })}
         />
         <Field
-          label="Project value (£)"
+          label={t('portfolio.fieldProjectValue')}
           id="proj-value"
           type="number"
           step="0.01"
@@ -602,7 +604,7 @@ function CreateFormSection({
         <div className="sm:col-span-2">
           <Button type="submit">
             <Plus />
-            Add project
+            {t('portfolio.addProject')}
           </Button>
         </div>
       </form>
@@ -611,7 +613,7 @@ function CreateFormSection({
   return (
     <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
       <Field
-        label="Title *"
+        label={t('portfolio.fieldTitle')}
         id="cert-title"
         value={form.title}
         required
@@ -619,40 +621,40 @@ function CreateFormSection({
         colSpan2
       />
       <FieldArea
-        label="Description"
+        label={t('portfolio.fieldDescription')}
         id="cert-desc"
         value={form.description}
         onChange={(v) => onChange({ ...form, description: v })}
       />
       <Field
-        label="Cert type *"
+        label={t('portfolio.fieldCertType')}
         id="cert-type"
         value={form.cert_type}
         required
         onChange={(v) => onChange({ ...form, cert_type: v })}
       />
       <Field
-        label="Cert number"
+        label={t('portfolio.fieldCertNumber')}
         id="cert-number"
         value={form.cert_number}
         onChange={(v) => onChange({ ...form, cert_number: v })}
       />
       <Field
-        label="Issuing body"
+        label={t('portfolio.fieldIssuingBody')}
         id="cert-body"
         value={form.issuing_body}
         onChange={(v) => onChange({ ...form, issuing_body: v })}
         colSpan2
       />
       <Field
-        label="Issued at"
+        label={t('portfolio.fieldIssued')}
         id="cert-issued"
         type="date"
         value={form.issued_at}
         onChange={(v) => onChange({ ...form, issued_at: v })}
       />
       <Field
-        label="Expires at"
+        label={t('portfolio.fieldExpires')}
         id="cert-expires"
         type="date"
         value={form.expires_at}
@@ -661,7 +663,7 @@ function CreateFormSection({
       <div className="sm:col-span-2">
         <Button type="submit">
           <Plus />
-          Add certification
+          {t('portfolio.addCertification')}
         </Button>
       </div>
     </form>
@@ -739,17 +741,18 @@ function ItemEditor({
   onError: (msg: string) => void;
   flash: (msg: string, err?: string) => void;
 }) {
+  const { t } = useTranslation('profile');
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Edit {labelFor(item.item_type).toLowerCase()}</DialogTitle>
+        <DialogTitle>{t('portfolio.editTitle', { type: labelFor(item.item_type, t).toLowerCase() })}</DialogTitle>
         <DialogDescription>{item.title}</DialogDescription>
       </DialogHeader>
       <Tabs defaultValue="details" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="details">Details</TabsTrigger>
-          <TabsTrigger value="media">Media</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="details">{t('portfolio.tabDetails')}</TabsTrigger>
+          <TabsTrigger value="media">{t('portfolio.tabMedia')}</TabsTrigger>
+          <TabsTrigger value="documents">{t('portfolio.tabDocuments')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="details">
@@ -779,6 +782,7 @@ function DetailsForm({
   flash: (msg: string, err?: string) => void;
   onError: (msg: string) => void;
 }) {
+  const { t } = useTranslation('profile');
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description ?? '');
 
@@ -855,18 +859,18 @@ function DetailsForm({
           }),
         });
       }
-      flash('Updated');
+      flash(t('portfolio.updated'));
       await onSaved();
     } catch (err) {
       const parsed = parseApiError(err);
-      onError(parsed?.message ?? 'Could not save.');
+      onError(parsed?.message ?? t('portfolio.saveError'));
     }
   }
 
   return (
     <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
       <Field
-        label="Title *"
+        label={t('portfolio.fieldTitle')}
         id="ed-title"
         value={title}
         required
@@ -874,7 +878,7 @@ function DetailsForm({
         colSpan2
       />
       <FieldArea
-        label="Description"
+        label={t('portfolio.fieldDescription')}
         id="ed-desc"
         value={description}
         onChange={setDescription}
@@ -883,21 +887,21 @@ function DetailsForm({
       {item.item_type === 'EXPERIENCE' ? (
         <>
           <Field
-            label="Company name"
+            label={t('portfolio.fieldCompany')}
             id="ed-company"
             value={companyName}
             onChange={setCompanyName}
           />
-          <Field label="Role" id="ed-role" value={role} onChange={setRole} />
+          <Field label={t('portfolio.fieldRole')} id="ed-role" value={role} onChange={setRole} />
           <Field
-            label="Start date"
+            label={t('portfolio.fieldStart')}
             id="ed-start"
             type="date"
             value={startDate}
             onChange={setStartDate}
           />
           <Field
-            label="End date"
+            label={t('portfolio.fieldEnd')}
             id="ed-end"
             type="date"
             value={endDate}
@@ -909,26 +913,26 @@ function DetailsForm({
       {item.item_type === 'PROJECT' ? (
         <>
           <Field
-            label="Project type"
+            label={t('portfolio.fieldProjectType')}
             id="ed-proj-type"
             value={projectType}
             onChange={setProjectType}
           />
           <Field
-            label="Site postcode"
+            label={t('portfolio.fieldSitePostcode')}
             id="ed-postcode"
             value={sitePostcode}
             onChange={setSitePostcode}
           />
           <Field
-            label="Completed at"
+            label={t('portfolio.fieldCompleted')}
             id="ed-completed"
             type="date"
             value={completedAt}
             onChange={setCompletedAt}
           />
           <Field
-            label="Project value (£)"
+            label={t('portfolio.fieldProjectValue')}
             id="ed-value"
             type="number"
             step="0.01"
@@ -941,34 +945,34 @@ function DetailsForm({
       {item.item_type === 'CERTIFICATION' ? (
         <>
           <Field
-            label="Cert type *"
+            label={t('portfolio.fieldCertType')}
             id="ed-cert-type"
             value={certType}
             required
             onChange={setCertType}
           />
           <Field
-            label="Cert number"
+            label={t('portfolio.fieldCertNumber')}
             id="ed-cert-number"
             value={certNumber}
             onChange={setCertNumber}
           />
           <Field
-            label="Issuing body"
+            label={t('portfolio.fieldIssuingBody')}
             id="ed-issuing"
             value={issuingBody}
             onChange={setIssuingBody}
             colSpan2
           />
           <Field
-            label="Issued at"
+            label={t('portfolio.fieldIssued')}
             id="ed-issued"
             type="date"
             value={issuedAt}
             onChange={setIssuedAt}
           />
           <Field
-            label="Expires at"
+            label={t('portfolio.fieldExpires')}
             id="ed-expires"
             type="date"
             value={expiresAt}
@@ -978,7 +982,7 @@ function DetailsForm({
       ) : null}
 
       <DialogFooter className="sm:col-span-2">
-        <Button type="submit">Save changes</Button>
+        <Button type="submit">{t('portfolio.saveChanges')}</Button>
       </DialogFooter>
     </form>
   );
@@ -995,6 +999,7 @@ function MediaSection({
   flash: (msg: string, err?: string) => void;
   onError: (msg: string) => void;
 }) {
+  const { t } = useTranslation('profile');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [caption, setCaption] = useState('');
@@ -1004,7 +1009,7 @@ function MediaSection({
   async function upload(files: FileList | null) {
     if (!files || files.length === 0) return;
     if (atLimit) {
-      onError(`A portfolio item can have at most ${MEDIA_PER_ITEM_LIMIT} media files.`);
+      onError(t('portfolio.mediaLimit', { count: MEDIA_PER_ITEM_LIMIT }));
       return;
     }
     setUploading(true);
@@ -1015,11 +1020,11 @@ function MediaSection({
       );
       for (const file of accepted) {
         if (!MEDIA_ALLOWED_MIMES.includes(file.type)) {
-          onError(`${file.name}: use a JPEG, PNG, or WebP image.`);
+          onError(t('portfolio.mediaUseImage', { name: file.name }));
           continue;
         }
         if (file.size > MEDIA_MAX_BYTES) {
-          onError(`${file.name}: file is too large (max 10 MB).`);
+          onError(t('portfolio.mediaTooLarge', { name: file.name }));
           continue;
         }
         const formData = new FormData();
@@ -1030,12 +1035,12 @@ function MediaSection({
           body: formData,
         });
       }
-      flash('Media uploaded');
+      flash(t('portfolio.mediaUploaded'));
       setCaption('');
       await onChanged();
     } catch (err) {
       const parsed = parseApiError(err);
-      onError(parsed?.message ?? 'Upload failed.');
+      onError(parsed?.message ?? t('portfolio.mediaUploadFailed'));
     } finally {
       setUploading(false);
     }
@@ -1044,11 +1049,11 @@ function MediaSection({
   async function deleteMedia(mediaId: string | number) {
     try {
       await api(`/portfolio/media/${mediaId}`, { method: 'DELETE' });
-      flash('Media removed');
+      flash(t('portfolio.mediaRemoved'));
       await onChanged();
     } catch (err) {
       const parsed = parseApiError(err);
-      onError(parsed?.message ?? 'Could not remove media.');
+      onError(parsed?.message ?? t('portfolio.mediaRemoveError'));
     }
   }
 
@@ -1074,7 +1079,7 @@ function MediaSection({
                 <button
                   type="button"
                   onClick={() => deleteMedia(m.id)}
-                  aria-label="Remove media"
+                  aria-label={t('portfolio.removeMedia')}
                   className="absolute right-1 top-1 rounded-full bg-overlay p-1 text-fg-on-accent hover:bg-danger"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -1089,17 +1094,17 @@ function MediaSection({
           })}
         </div>
       ) : (
-        <p className="text-sm text-fg-muted">No media yet.</p>
+        <p className="text-sm text-fg-muted">{t('portfolio.noMedia')}</p>
       )}
 
       <div className="flex flex-col gap-2.5">
-        <Label htmlFor="media-caption">Caption (optional)</Label>
+        <Label htmlFor="media-caption">{t('portfolio.caption')}</Label>
         <Input
           id="media-caption"
           value={caption}
           onChange={(e) => setCaption(e.target.value)}
           maxLength={300}
-          placeholder="Applied to all files in this batch"
+          placeholder={t('portfolio.captionPlaceholder')}
         />
       </div>
 
@@ -1121,11 +1126,14 @@ function MediaSection({
         disabled={uploading || atLimit}
       >
         <Upload />
-        {uploading ? 'Uploading…' : atLimit ? 'Limit reached' : 'Upload media'}
+        {uploading
+          ? t('portfolio.uploading')
+          : atLimit
+            ? t('portfolio.limitReached')
+            : t('portfolio.uploadMedia')}
       </Button>
       <p className="text-xs text-fg-muted">
-        JPEG, PNG, or WebP · max 10 MB each · up to {MEDIA_PER_ITEM_LIMIT} per
-        item.
+        {t('portfolio.mediaHint', { count: MEDIA_PER_ITEM_LIMIT })}
       </p>
     </div>
   );
@@ -1142,6 +1150,7 @@ function DocumentsSection({
   flash: (msg: string, err?: string) => void;
   onError: (msg: string) => void;
 }) {
+  const { t } = useTranslation('profile');
   const [docs, setDocs] = useState<DocumentRow[] | null>(null);
   const [picked, setPicked] = useState('');
 
@@ -1150,7 +1159,7 @@ function DocumentsSection({
       .then((rows) => setDocs(rows.filter((d) => d.status === 'APPROVED')))
       .catch((err) => {
         const parsed = parseApiError(err);
-        onError(parsed?.message ?? 'Could not load documents.');
+        onError(parsed?.message ?? t('portfolio.docsLoadError'));
       });
   }, [onError]);
 
@@ -1164,12 +1173,12 @@ function DocumentsSection({
       await api(`/portfolio/${item.id}/documents/${picked}`, {
         method: 'POST',
       });
-      flash('Document linked');
+      flash(t('portfolio.docLinked'));
       setPicked('');
       await onChanged();
     } catch (err) {
       const parsed = parseApiError(err);
-      onError(parsed?.message ?? 'Could not link document.');
+      onError(parsed?.message ?? t('portfolio.docLinkError'));
     }
   }
 
@@ -1178,11 +1187,11 @@ function DocumentsSection({
       await api(`/portfolio/${item.id}/documents/${documentId}`, {
         method: 'DELETE',
       });
-      flash('Document unlinked');
+      flash(t('portfolio.docUnlinked'));
       await onChanged();
     } catch (err) {
       const parsed = parseApiError(err);
-      onError(parsed?.message ?? 'Could not unlink document.');
+      onError(parsed?.message ?? t('portfolio.docUnlinkError'));
     }
   }
 
@@ -1198,7 +1207,7 @@ function DocumentsSection({
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-fg-muted" />
                 <span className="font-medium text-fg">
-                  {l.document?.doc_type ?? 'Document'}
+                  {l.document?.doc_type ?? t('portfolio.documentFallback')}
                 </span>
                 {l.document?.status ? (
                   <Badge variant="success">{l.document.status}</Badge>
@@ -1210,29 +1219,26 @@ function DocumentsSection({
                 size="sm"
                 onClick={() => unlink(l.document_id)}
               >
-                Unlink
+                {t('portfolio.unlink')}
               </Button>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-fg-muted">No documents linked yet.</p>
+        <p className="text-sm text-fg-muted">{t('portfolio.noDocsLinked')}</p>
       )}
 
       <div className="flex flex-col gap-2.5">
-        <Label>Link an approved document</Label>
+        <Label>{t('portfolio.linkApproved')}</Label>
         {docs == null ? (
-          <p className="text-sm text-fg-muted">Loading…</p>
+          <p className="text-sm text-fg-muted">{t('portfolio.loadingDocs')}</p>
         ) : available.length === 0 ? (
-          <p className="text-sm text-fg-muted">
-            No approved documents available. Upload and get them approved on
-            the Documents tab first.
-          </p>
+          <p className="text-sm text-fg-muted">{t('portfolio.noApproved')}</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             <Select value={picked} onValueChange={setPicked}>
               <SelectTrigger className="sm:w-72">
-                <SelectValue placeholder="Pick a document" />
+                <SelectValue placeholder={t('portfolio.pickDocument')} />
               </SelectTrigger>
               <SelectContent>
                 {available.map((d) => (
@@ -1243,7 +1249,7 @@ function DocumentsSection({
               </SelectContent>
             </Select>
             <Button type="button" onClick={link} disabled={!picked}>
-              Link
+              {t('portfolio.link')}
             </Button>
           </div>
         )}

@@ -18,6 +18,9 @@ import {
   type AccountSummary,
 } from '@/lib/auth-routing';
 
+// Auth pages are intentionally English-only (I18N decision): language is an
+// authenticated-only setting, switched from the account menu.
+
 type ConfirmResponse = {
   access_token: string;
   refresh_token: string;
@@ -86,8 +89,7 @@ export default function VerifyEmailConfirmPage({ onLogin }: Props) {
         setState({
           kind: 'error',
           code: parsed?.code,
-          message:
-            parsed?.message ?? 'This verification link is invalid or has expired.',
+          message: parsed?.message ?? 'This verification link is invalid or has expired.',
         });
       }
     })();
@@ -98,9 +100,7 @@ export default function VerifyEmailConfirmPage({ onLogin }: Props) {
       <Card>
         <CardHeader>
           <CardTitle>Confirming your email…</CardTitle>
-          <CardDescription>
-            One moment while we activate your account.
-          </CardDescription>
+          <CardDescription>One moment while we activate your account.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {state.kind === 'pending' ? (

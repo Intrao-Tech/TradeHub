@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, ChevronDown, Info } from 'lucide-react';
 import { api, parseApiError } from '../../api';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ import {
   POSTCODE_OUTWARD_REGEX,
 } from '@/lib/london-boroughs';
 import { cn } from '@/lib/utils';
+import { specLabel } from '@/lib/specialisations';
 
 export type JobPostFormValues = {
   title: string;
@@ -93,11 +95,13 @@ export function JobPostForm({
   initial,
   jobPostId,
   frozenFields,
-  freezeReason = 'Locked — applications received',
+  freezeReason,
   onSuccess,
   onCancel,
   submitLabel,
 }: JobPostFormProps) {
+  const { t } = useTranslation('jobs');
+  const freezeReasonText = freezeReason ?? t('form.freezeReason');
   const [values, setValues] = useState<JobPostFormValues>(() => ({
     ...EMPTY,
     ...initial,
@@ -128,52 +132,52 @@ export function JobPostForm({
 
   function validate(): Errors {
     const e: Errors = {};
-    if (!values.title.trim()) e.title = 'Title is required.';
-    else if (values.title.length > 200) e.title = 'Title must be 200 characters or fewer.';
+    if (!values.title.trim()) e.title = t('form.error.titleRequired');
+    else if (values.title.length > 200) e.title = t('form.error.titleTooLong');
 
     if (values.description.length > 10000)
-      e.description = 'Description is too long.';
+      e.description = t('form.error.descriptionTooLong');
 
     if (
       values.postcode_area &&
       !POSTCODE_OUTWARD_REGEX.test(values.postcode_area.toUpperCase())
     ) {
-      e.postcode_area = 'Use a valid UK outward code (e.g. SW1, EC2A).';
+      e.postcode_area = t('form.error.postcodeInvalid');
     }
 
     if (values.site_address.length > 300)
-      e.site_address = 'Site address must be 300 characters or fewer.';
+      e.site_address = t('form.error.siteAddressTooLong');
 
     if (values.pay_type === 'DAY_RATE') {
       const min = values.day_rate_min ? Number(values.day_rate_min) : null;
       const max = values.day_rate_max ? Number(values.day_rate_max) : null;
       if (min != null && (Number.isNaN(min) || min <= 0))
-        e.day_rate_min = 'Day rate min must be a positive number.';
+        e.day_rate_min = t('form.error.dayRateMinPositive');
       if (max != null && (Number.isNaN(max) || max <= 0))
-        e.day_rate_max = 'Day rate max must be a positive number.';
+        e.day_rate_max = t('form.error.dayRateMaxPositive');
       if (min != null && max != null && max < min)
-        e.day_rate_max = 'Max must be greater than or equal to min.';
+        e.day_rate_max = t('form.error.maxGteMin');
     } else {
       const fixed = values.fixed_price ? Number(values.fixed_price) : null;
       if (fixed != null && (Number.isNaN(fixed) || fixed <= 0))
-        e.fixed_price = 'Fixed price must be a positive number.';
+        e.fixed_price = t('form.error.fixedPositive');
     }
 
     if (values.duration_days) {
       const n = Number(values.duration_days);
       if (!Number.isInteger(n) || n <= 0)
-        e.duration_days = 'Duration must be a positive whole number.';
+        e.duration_days = t('form.error.durationPositive');
     }
 
     if (values.expires_at) {
-      const t = new Date(values.expires_at).getTime();
-      if (Number.isNaN(t)) e.expires_at = 'Invalid date.';
-      else if (t < Date.now()) e.expires_at = 'Expiry must be in the future.';
+      const ts = new Date(values.expires_at).getTime();
+      if (Number.isNaN(ts)) e.expires_at = t('form.error.invalidDate');
+      else if (ts < Date.now()) e.expires_at = t('form.error.expiryFuture');
     }
 
     if (values.specialisation_ids.length > 10)
-      e.specialisation_ids = 'Pick up to 10 specialisations.';
-    if (values.tag_ids.length > 10) e.tag_ids = 'Pick up to 10 tags.';
+      e.specialisation_ids = t('form.error.maxSpecialisations');
+    if (values.tag_ids.length > 10) e.tag_ids = t('form.error.maxTags');
 
     return e;
   }
@@ -229,7 +233,7 @@ export function JobPostForm({
         });
       } catch (err) {
         const parsed = parseApiError(err);
-        setErrors({ form: parsed?.message ?? 'Could not save the job.' });
+        setErrors({ form: parsed?.message ?? t('form.saveError') });
         return;
       }
 
@@ -258,8 +262,8 @@ export function JobPostForm({
   }
 
   const specOptions = useMemo(
-    () => specs.map((s) => ({ id: s.id, name: s.name })),
-    [specs],
+    () => specs.map((s) => ({ id: s.id, name: specLabel(s.name, t) })),
+    [specs, t],
   );
   const tagOptions = useMemo(
     () => tags.map((t) => ({ id: t.id, name: t.name })),
@@ -269,12 +273,12 @@ export function JobPostForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <Field
-        label="Title"
+        label={t('form.titleLabel')}
         required
         htmlFor="job-title"
         error={errors.title}
         frozen={isFrozen('title')}
-        freezeReason={freezeReason}
+        freezeReason={freezeReasonText}
       >
         <Input
           id="job-title"
@@ -289,11 +293,11 @@ export function JobPostForm({
       </Field>
 
       <Field
-        label="Description"
+        label={t('form.descriptionLabel')}
         htmlFor="job-description"
         error={errors.description}
         frozen={isFrozen('description')}
-        freezeReason={freezeReason}
+        freezeReason={freezeReasonText}
       >
         <Textarea
           id="job-description"
@@ -306,11 +310,11 @@ export function JobPostForm({
       </Field>
 
       <Field
-        label="Pay type"
+        label={t('form.payTypeLabel')}
         required
         htmlFor="job-pay-type"
         frozen={isFrozen('pay_type')}
-        freezeReason={freezeReason}
+        freezeReason={freezeReasonText}
       >
         <Select
           value={values.pay_type}
@@ -321,8 +325,8 @@ export function JobPostForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="DAY_RATE">Day rate</SelectItem>
-            <SelectItem value="FIXED_PRICE">Fixed price</SelectItem>
+            <SelectItem value="DAY_RATE">{t('card.payDayRate')}</SelectItem>
+            <SelectItem value="FIXED_PRICE">{t('card.payFixed')}</SelectItem>
           </SelectContent>
         </Select>
       </Field>
@@ -330,11 +334,11 @@ export function JobPostForm({
       {values.pay_type === 'DAY_RATE' ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field
-            label="Day rate min (£)"
+            label={t('form.dayRateMinLabel')}
             htmlFor="job-day-min"
             error={errors.day_rate_min}
             frozen={isFrozen('day_rate_min')}
-            freezeReason={freezeReason}
+            freezeReason={freezeReasonText}
           >
             <Input
               id="job-day-min"
@@ -348,11 +352,11 @@ export function JobPostForm({
             />
           </Field>
           <Field
-            label="Day rate max (£)"
+            label={t('form.dayRateMaxLabel')}
             htmlFor="job-day-max"
             error={errors.day_rate_max}
             frozen={isFrozen('day_rate_max')}
-            freezeReason={freezeReason}
+            freezeReason={freezeReasonText}
           >
             <Input
               id="job-day-max"
@@ -368,11 +372,11 @@ export function JobPostForm({
         </div>
       ) : (
         <Field
-          label="Fixed price (£)"
+          label={t('form.fixedPriceLabel')}
           htmlFor="job-fixed"
           error={errors.fixed_price}
           frozen={isFrozen('fixed_price')}
-          freezeReason={freezeReason}
+          freezeReason={freezeReasonText}
         >
           <Input
             id="job-fixed"
@@ -389,11 +393,11 @@ export function JobPostForm({
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field
-          label="Postcode area"
+          label={t('form.postcodeLabel')}
           htmlFor="job-postcode"
           error={errors.postcode_area}
           frozen={isFrozen('postcode_area')}
-          freezeReason={freezeReason}
+          freezeReason={freezeReasonText}
         >
           <PostcodeAreaSelect
             id="job-postcode"
@@ -405,7 +409,7 @@ export function JobPostForm({
           />
         </Field>
         <Field
-          label="Duration (days)"
+          label={t('form.durationLabel')}
           htmlFor="job-duration"
           error={errors.duration_days}
         >
@@ -421,7 +425,7 @@ export function JobPostForm({
       </div>
 
       <Field
-        label="Site address"
+        label={t('form.siteAddressLabel')}
         htmlFor="job-site-address"
         error={errors.site_address}
       >
@@ -430,12 +434,12 @@ export function JobPostForm({
           value={values.site_address}
           onChange={(e) => setValue('site_address', e.target.value)}
           maxLength={300}
-          placeholder="Optional — only shared with shortlisted workers"
+          placeholder={t('form.siteAddressPlaceholder')}
         />
       </Field>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Start date" htmlFor="job-start">
+        <Field label={t('form.startDateLabel')} htmlFor="job-start">
           <Input
             id="job-start"
             type="date"
@@ -444,7 +448,7 @@ export function JobPostForm({
           />
         </Field>
         <Field
-          label="Expires"
+          label={t('form.expiresLabel')}
           htmlFor="job-expires"
           error={errors.expires_at}
         >
@@ -464,24 +468,24 @@ export function JobPostForm({
           onChange={(e) => setValue('is_urgent', e.target.checked)}
           className="h-4 w-4"
         />
-        Mark as urgent
+        {t('form.markUrgent')}
       </label>
 
       <Field
-        label="Specialisations"
+        label={t('form.specialisationsLabel')}
         htmlFor="job-specs"
         error={errors.specialisation_ids}
         frozen={isFrozen('specialisation_ids')}
-        freezeReason={freezeReason}
+        freezeReason={freezeReasonText}
       >
         <ChipMultiSelect
           id="job-specs"
-          ariaLabel="Specialisations"
+          ariaLabel={t('form.specialisationsLabel')}
           options={specOptions}
           selectedIds={values.specialisation_ids}
           onChange={(next) => setValue('specialisation_ids', next)}
-          placeholder={specsLoading ? 'Loading…' : 'Search specialisations'}
-          emptyText="No specialisations match."
+          placeholder={specsLoading ? t('form.loading') : t('form.searchSpecialisations')}
+          emptyText={t('form.noSpecialisationsMatch')}
           disabled={isFrozen('specialisation_ids')}
           loading={specsLoading}
           maxSelectedHint={10}
@@ -489,18 +493,18 @@ export function JobPostForm({
       </Field>
 
       <Field
-        label="Tags"
+        label={t('form.tagsLabel')}
         htmlFor="job-tags"
         error={errors.tag_ids}
       >
         <ChipMultiSelect
           id="job-tags"
-          ariaLabel="Tags"
+          ariaLabel={t('form.tagsLabel')}
           options={tagOptions}
           selectedIds={values.tag_ids}
           onChange={(next) => setValue('tag_ids', next)}
-          placeholder={tagsLoading ? 'Loading…' : 'Search tags'}
-          emptyText="No tags match."
+          placeholder={tagsLoading ? t('form.loading') : t('form.searchTags')}
+          emptyText={t('form.noTagsMatch')}
           loading={tagsLoading}
           maxSelectedHint={10}
         />
@@ -509,7 +513,7 @@ export function JobPostForm({
       <AttachmentsField
         value={values.attachments}
         onChange={(next) => setValue('attachments', next)}
-        helperText="Add references — drawings, site photos, the spec sheet — so workers can size up the job."
+        helperText={t('form.attachmentsHelper')}
       />
 
       {errors.form ? (
@@ -524,15 +528,15 @@ export function JobPostForm({
       <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
         {onCancel ? (
           <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
+            {t('form.cancel')}
           </Button>
         ) : null}
         <Button type="submit" disabled={submitting}>
           {submitting
             ? mode === 'create'
-              ? 'Posting…'
-              : 'Saving…'
-            : (submitLabel ?? (mode === 'create' ? 'Post job' : 'Save changes'))}
+              ? t('form.posting')
+              : t('form.saving')
+            : (submitLabel ?? (mode === 'create' ? t('form.postJob') : t('form.saveChanges')))}
         </Button>
       </div>
     </form>
@@ -555,6 +559,7 @@ function PostcodeAreaSelect({
   disabled?: boolean;
   invalid?: boolean;
 }) {
+  const { t } = useTranslation('jobs');
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -629,7 +634,7 @@ function PostcodeAreaSelect({
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
-          placeholder="e.g. SW1"
+          placeholder={t('form.postcodePlaceholder')}
           maxLength={10}
           disabled={disabled}
           aria-invalid={invalid || undefined}
@@ -638,7 +643,7 @@ function PostcodeAreaSelect({
         <button
           type="button"
           tabIndex={-1}
-          aria-label={open ? 'Close postcode list' : 'Open postcode list'}
+          aria-label={open ? t('form.closePostcodeList') : t('form.openPostcodeList')}
           disabled={disabled}
           onClick={() => {
             if (disabled) return;
@@ -662,7 +667,7 @@ function PostcodeAreaSelect({
           className="absolute left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-md border border-border-default bg-raised shadow-lg"
         >
           {filtered.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-fg-muted">No matches.</p>
+            <p className="px-3 py-2 text-sm text-fg-muted">{t('form.noMatches')}</p>
           ) : (
             <ul className="py-1">
               {filtered.map((opt, idx) => {

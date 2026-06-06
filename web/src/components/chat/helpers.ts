@@ -3,9 +3,34 @@
  * tests can exercise them in isolation.
  */
 
+import { activeLocale } from '@/lib/format';
+import type { ParseKeys } from 'i18next';
+import type { TranslateFn } from '@/i18n/types';
 import type { ChatMessage } from './types';
 
 const SAME_SENDER_GROUP_MS = 60_000;
+
+/** Minimal `t` shape these helpers need — keeps them decoupled from react-i18next. */
+type TFn = TranslateFn;
+
+/**
+ * Backend SYSTEM messages are English strings persisted on the row. The
+ * non-interpolated ones (no contract number / job title baked in) can be
+ * mapped 1:1 to a translation key; everything dynamic falls through to the
+ * raw content. Keep these in sync with the backend's static SYSTEM bodies
+ * (conversation.service.ts, seed.ts).
+ */
+const STATIC_SYSTEM_MESSAGES: Record<string, ParseKeys<'chat'>> = {
+  'Job accepted. Welcome to TradeHub.': 'system.jobAcceptedWelcome',
+  'Collaboration confirmed. You can now message each other about the project.':
+    'system.collaborationConfirmed',
+};
+
+export function translateSystemMessage(content: string, t?: TFn): string {
+  if (!t) return content;
+  const key = STATIC_SYSTEM_MESSAGES[content.trim()];
+  return key ? t(`chat:${key}`) : content;
+}
 
 export function isSameDay(a: Date, b: Date): boolean {
   return (
@@ -19,25 +44,25 @@ function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-export function formatDayHeader(iso: string, now = new Date()): string {
+export function formatDayHeader(iso: string, now = new Date(), t?: TFn): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  if (isSameDay(d, now)) return 'Today';
+  if (isSameDay(d, now)) return t ? t('chat:day.today') : 'Today';
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  if (isSameDay(d, yesterday)) return 'Yesterday';
+  if (isSameDay(d, yesterday)) return t ? t('chat:day.yesterday') : 'Yesterday';
 
   const diffDays = Math.round(
     (startOfDay(now).getTime() - startOfDay(d).getTime()) / 86_400_000,
   );
   if (diffDays > 0 && diffDays < 7) {
-    return d.toLocaleDateString(undefined, {
+    return d.toLocaleDateString(activeLocale(), {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
     });
   }
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(activeLocale(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -48,7 +73,7 @@ export function formatTimeShort(iso?: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString(undefined, {
+  return d.toLocaleTimeString(activeLocale(), {
     hour: '2-digit',
     minute: '2-digit',
   });
@@ -66,9 +91,9 @@ export function formatInboxTime(iso?: string | null, now = new Date()): string {
     (startOfDay(now).getTime() - startOfDay(d).getTime()) / 86_400_000,
   );
   if (diffDays >= 0 && diffDays < 7) {
-    return d.toLocaleDateString(undefined, { weekday: 'short' });
+    return d.toLocaleDateString(activeLocale(), { weekday: 'short' });
   }
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString(activeLocale(), { day: 'numeric', month: 'short' });
 }
 
 export type RenderedRow =
@@ -92,6 +117,7 @@ export type RenderedRow =
 export function buildRenderedRows(
   messages: ChatMessage[],
   myId: string | number | null,
+  t?: TFn,
 ): RenderedRow[] {
   const rows: RenderedRow[] = [];
   let lastDay: string | null = null;
@@ -105,7 +131,7 @@ export function buildRenderedRows(
       rows.push({
         kind: 'day',
         key: `day:${dayKey}`,
-        label: created ? formatDayHeader(created) : '',
+        label: created ? formatDayHeader(created, new Date(), t) : '',
       });
       lastDay = dayKey;
       lastMsg = null;

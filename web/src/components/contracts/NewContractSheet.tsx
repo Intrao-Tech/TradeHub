@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Plus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '@/api';
+import { formatMoney } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,11 +33,7 @@ type JobPostRow = {
   status?: string;
 };
 
-const fmtGbp = (n: number) =>
-  new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(n);
+const fmtGbp = (n: number) => formatMoney(n);
 
 /**
  * Employer-only sheet to create a new Contract under a Collaboration.
@@ -51,6 +49,7 @@ export function NewContractSheet({
   initiator: 'WORKER' | 'EMPLOYER';
   onCreated?: () => void;
 }) {
+  const { t } = useTranslation('collaborations');
   const [open, setOpen] = useState(false);
   const [jobs, setJobs] = useState<JobPostRow[] | null>(null);
   const [loadErr, setLoadErr] = useState('');
@@ -67,7 +66,7 @@ export function NewContractSheet({
         const res = await api<{ items: JobPostRow[] }>('/job-posts/me');
         setJobs(res.items ?? []);
       } catch (err) {
-        setLoadErr(parseApiError(err)?.message ?? 'Could not load your jobs');
+        setLoadErr(parseApiError(err)?.message ?? t('newContract.loadJobsError'));
       }
     })();
   }, [open, jobs]);
@@ -89,11 +88,11 @@ export function NewContractSheet({
     e.preventDefault();
     if (submitting) return;
     if (!pickedJobId) {
-      toast.error('Pick a job post first');
+      toast.error(t('newContract.pickJobFirst'));
       return;
     }
     if (!projectType.trim()) {
-      toast.error('Project type required');
+      toast.error(t('newContract.projectTypeRequired'));
       return;
     }
     setSubmitting(true);
@@ -106,9 +105,7 @@ export function NewContractSheet({
         initiated_by: initiator,
         job_post_id: Number(pickedJobId),
       });
-      toast.success(
-        `Contract #${c.position} sent — waiting for the other side to accept.`,
-      );
+      toast.success(t('newContract.sentToast', { position: c.position }));
       setOpen(false);
       setPickedJobId('');
       setProjectType('');
@@ -116,7 +113,7 @@ export function NewContractSheet({
       setAgreedAmount('');
       onCreated?.();
     } catch (err) {
-      toast.error(parseApiError(err)?.message ?? 'Could not create contract');
+      toast.error(parseApiError(err)?.message ?? t('newContract.createError'));
     } finally {
       setSubmitting(false);
     }
@@ -127,18 +124,14 @@ export function NewContractSheet({
       <DialogTrigger asChild>
         <Button type="button">
           <Plus />
-          New contract
+          {t('newContract.title')}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>New contract</DialogTitle>
-            <DialogDescription>
-              Pick one of your existing job posts to base this contract on —
-              the project type, postcode, and agreed amount auto-fill from
-              the job. You can edit them before sending.
-            </DialogDescription>
+            <DialogTitle>{t('newContract.title')}</DialogTitle>
+            <DialogDescription>{t('newContract.description')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-3">
             {loadErr ? (
@@ -150,15 +143,13 @@ export function NewContractSheet({
               </div>
             ) : null}
             <div className="flex flex-col gap-2.5">
-              <Label htmlFor="picked-job">Job post *</Label>
+              <Label htmlFor="picked-job">{t('newContract.jobPostLabel')} *</Label>
               {jobs && jobs.length === 0 ? (
-                <p className="text-sm text-fg-muted">
-                  You have no job posts. Create one on the Posted jobs page first.
-                </p>
+                <p className="text-sm text-fg-muted">{t('newContract.noJobs')}</p>
               ) : (
                 <Select value={pickedJobId} onValueChange={pickJob}>
                   <SelectTrigger id="picked-job">
-                    <SelectValue placeholder="Pick one of your jobs…" />
+                    <SelectValue placeholder={t('newContract.pickJobPlaceholder')} />
                   </SelectTrigger>
                   <SelectContent>
                     {(jobs ?? []).map((j) => (
@@ -174,27 +165,27 @@ export function NewContractSheet({
               )}
             </div>
             <div className="flex flex-col gap-2.5">
-              <Label htmlFor="ct-project">Project type *</Label>
+              <Label htmlFor="ct-project">{t('newContract.projectTypeLabel')} *</Label>
               <Input
                 id="ct-project"
                 value={projectType}
                 onChange={(e) => setProjectType(e.target.value)}
-                placeholder="e.g. Bathroom refit"
+                placeholder={t('newContract.projectTypePlaceholder')}
                 required
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-2.5">
-                <Label htmlFor="ct-postcode">Site postcode</Label>
+                <Label htmlFor="ct-postcode">{t('newContract.postcodeLabel')}</Label>
                 <Input
                   id="ct-postcode"
                   value={sitePostcode}
                   onChange={(e) => setSitePostcode(e.target.value)}
-                  placeholder="SW1"
+                  placeholder={t('newContract.postcodePlaceholder')}
                 />
               </div>
               <div className="flex flex-col gap-2.5">
-                <Label htmlFor="ct-amount">Agreed amount (£)</Label>
+                <Label htmlFor="ct-amount">{t('newContract.amountLabel')}</Label>
                 <Input
                   id="ct-amount"
                   type="number"
@@ -202,7 +193,7 @@ export function NewContractSheet({
                   min="0"
                   value={agreedAmount}
                   onChange={(e) => setAgreedAmount(e.target.value)}
-                  placeholder="2500"
+                  placeholder={t('newContract.amountPlaceholder')}
                 />
               </div>
             </div>
@@ -214,10 +205,10 @@ export function NewContractSheet({
               onClick={() => setOpen(false)}
               disabled={submitting}
             >
-              Cancel
+              {t('newContract.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? 'Sending…' : 'Propose contract'}
+              {submitting ? t('newContract.sending') : t('newContract.propose')}
             </Button>
           </DialogFooter>
         </form>

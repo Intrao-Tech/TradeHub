@@ -18,6 +18,8 @@ import {
   type AccountSummary,
 } from '@/lib/auth-routing';
 
+// Auth pages are intentionally English-only (I18N decision): language is an authenticated-only setting, switched from the account menu.
+
 type LoginSuccess = {
   access_token: string;
   refresh_token: string;
@@ -121,8 +123,7 @@ export default function LoginPage({ onLogin }: Props) {
     } catch {
       setError({
         code: 'GOOGLE_UNAVAILABLE',
-        message:
-          'Google sign-in is not available right now. Try again or sign in with email.',
+        message: 'Google sign-in is not available right now. Try again or sign in with email.',
       });
     }
   }
@@ -234,7 +235,7 @@ export default function LoginPage({ onLogin }: Props) {
 
 function parseError(err: unknown): LoginError {
   const parsed = parseApiError(err);
-  if (!parsed) return { message: 'Something went wrong. Please try again.' };
+  if (!parsed) return {};
   return {
     code: parsed.code,
     message: parsed.message,
@@ -250,14 +251,15 @@ function parseError(err: unknown): LoginError {
   };
 }
 
-function errorTitle(error: NonNullable<LoginError>): string {
+function errorTitle(
+  error: NonNullable<LoginError>,
+): string {
   switch (error.code) {
-    case 'INVALID_CREDENTIALS':
-      return 'Sign in failed';
     case 'ACCOUNT_DEACTIVATED':
       return 'Account deactivated';
     case 'EMAIL_NOT_VERIFIED':
       return 'Email not verified';
+    case 'INVALID_CREDENTIALS':
     default:
       return 'Sign in failed';
   }

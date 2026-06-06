@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { TranslateFn } from '@/i18n/types';
 import { Link, useParams } from 'react-router-dom';
 import { Briefcase, Hammer, ShieldCheck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api, getToken, parseApiError } from '../api';
+import { formatMoney, formatDate } from '@/lib/format';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
 import { VerificationsCard } from '../components/profile/VerificationsCard';
 import { EmptyState } from '../components/EmptyState';
 import { ReviewsTab } from '@/components/reviews/ReviewsTab';
 import { languageName } from '../lib/iso-639-1';
+import { specLabel } from '../lib/specialisations';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -65,25 +69,27 @@ type WorkerDetail = {
   portfolio_items?: PortfolioItem[];
 };
 
+type TFn = TranslateFn;
+
 function formatRate(
   min: string | number | null | undefined,
   max: string | number | null | undefined,
+  t: TFn,
 ): string | null {
   if (min == null && max == null) return null;
-  if (min != null && max != null) {
-    return `£${Number(min).toFixed(0)} – £${Number(max).toFixed(0)} / day`;
-  }
-  return `£${Number(min ?? max).toFixed(0)} / day`;
+  const value =
+    min != null && max != null
+      ? `${formatMoney(Number(min), { decimals: 0 })} – ${formatMoney(Number(max), { decimals: 0 })}`
+      : formatMoney(Number(min ?? max), { decimals: 0 });
+  return t('detail.ratePerDay', { value });
 }
 
 function formatMemberSince(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short' });
+  return formatDate(iso, 'monthYear') || null;
 }
 
 export default function WorkerDetailPage() {
+  const { t } = useTranslation('workers');
   const { id } = useParams<{ id: string }>();
   const { isEmployer } = useAccountMe();
   useRefAttribution({ targetId: id ?? null, targetRole: 'EMPLOYER' });
@@ -99,7 +105,7 @@ export default function WorkerDetailPage() {
       .then((data) => setWorker(data))
       .catch((err) => {
         const parsed = parseApiError(err);
-        setError(parsed?.message ?? 'Could not load this worker.');
+        setError(parsed?.message ?? t('detail.loadError'));
       })
       .finally(() => setLoading(false));
   }, [id]);
@@ -128,9 +134,9 @@ export default function WorkerDetailPage() {
   const specs = useMemo(
     () =>
       (worker?.worker_specialisations ?? [])
-        .map((s) => s.specialisation?.name)
+        .map((s) => (s.specialisation?.name ? specLabel(s.specialisation.name, t) : null))
         .filter(Boolean) as string[],
-    [worker?.worker_specialisations],
+    [worker?.worker_specialisations, t],
   );
 
   if (loading) {
@@ -140,11 +146,11 @@ export default function WorkerDetailPage() {
     return (
       <EmptyState
         icon={Hammer}
-        title="Worker not found"
-        description={error || 'This profile may have been removed.'}
+        title={t('detail.notFoundTitle')}
+        description={error || t('detail.notFoundDesc')}
         action={
           <Button asChild variant="outline">
-            <Link to="/workers">Back to worker search</Link>
+            <Link to="/workers">{t('detail.backToSearch')}</Link>
           </Button>
         }
       />
@@ -152,8 +158,8 @@ export default function WorkerDetailPage() {
   }
 
   const cp = worker.client_profile;
-  const displayName = cp?.display_name ?? 'Tradesperson';
-  const rate = formatRate(worker.day_rate_min, worker.day_rate_max);
+  const displayName = cp?.display_name ?? t('detail.nameFallback');
+  const rate = formatRate(worker.day_rate_min, worker.day_rate_max, t);
   const memberSince = formatMemberSince(cp?.created_at);
   const loggedIn = Boolean(getToken());
 
@@ -178,12 +184,11 @@ export default function WorkerDetailPage() {
           {rate ? (
             <p className="text-lg font-semibold text-fg sm:text-xl">{rate}</p>
           ) : (
-            <p className="text-sm text-fg-muted">Rate not set</p>
+            <p className="text-sm text-fg-muted">{t('detail.rateNotSet')}</p>
           )}
           {worker.years_experience != null ? (
             <p className="text-xs text-fg-muted">
-              {worker.years_experience} year
-              {worker.years_experience === 1 ? '' : 's'} experience
+              {t('detail.yearsExperience', { count: worker.years_experience })}
             </p>
           ) : null}
         </div>
@@ -208,9 +213,9 @@ export default function WorkerDetailPage() {
       {!loggedIn ? (
         <div className="rounded-md border border-info/40 bg-info-subtle px-3 py-2 text-sm text-info">
           <Link to="/login" className="font-medium underline">
-            Sign in
-          </Link>{' '}
-          to contact this tradesperson.
+            {t('detail.signIn')}
+          </Link>
+          {t('detail.toContact')}
         </div>
       ) : null}
 
@@ -220,21 +225,21 @@ export default function WorkerDetailPage() {
           <Card>
             <CardContent className="grid grid-cols-2 gap-4 pt-6">
               <Stat
-                label="Experience"
+                label={t('detail.experience')}
                 value={
                   worker.years_experience != null
-                    ? `${worker.years_experience} yr${worker.years_experience === 1 ? '' : 's'}`
+                    ? t('detail.experienceYears', { count: worker.years_experience })
                     : '—'
                 }
               />
               {worker.available_from ? (
                 <Stat
-                  label="Available from"
-                  value={new Date(worker.available_from).toLocaleDateString()}
+                  label={t('detail.availableFrom')}
+                  value={formatDate(worker.available_from, 'short')}
                 />
               ) : null}
               {memberSince ? (
-                <Stat label="Member since" value={memberSince} />
+                <Stat label={t('detail.memberSince')} value={memberSince} />
               ) : null}
             </CardContent>
           </Card>
@@ -242,7 +247,7 @@ export default function WorkerDetailPage() {
           {worker.languages && worker.languages.length > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Languages</CardTitle>
+                <CardTitle className="text-base">{t('detail.languages')}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-1.5">
@@ -263,15 +268,13 @@ export default function WorkerDetailPage() {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>About</CardTitle>
+              <CardTitle>{t('detail.about')}</CardTitle>
             </CardHeader>
             <CardContent>
               {cp?.bio ? (
                 <p className="whitespace-pre-line text-sm text-fg">{cp.bio}</p>
               ) : (
-                <p className="text-sm text-fg-muted">
-                  This tradesperson hasn’t added a bio yet.
-                </p>
+                <p className="text-sm text-fg-muted">{t('detail.noBio')}</p>
               )}
             </CardContent>
           </Card>
@@ -279,7 +282,7 @@ export default function WorkerDetailPage() {
           {specs.length > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>Skills</CardTitle>
+                <CardTitle>{t('detail.skills')}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-1.5">
@@ -295,8 +298,8 @@ export default function WorkerDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Portfolio</CardTitle>
-              <CardDescription>Past projects and work samples.</CardDescription>
+              <CardTitle>{t('detail.portfolio')}</CardTitle>
+              <CardDescription>{t('detail.portfolioDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               {projects.length > 0 ? (
@@ -308,8 +311,8 @@ export default function WorkerDetailPage() {
               ) : (
                 <EmptyState
                   icon={Briefcase}
-                  title="No portfolio yet"
-                  description="This tradesperson hasn’t added any project history."
+                  title={t('detail.noPortfolioTitle')}
+                  description={t('detail.noPortfolioDesc')}
                 />
               )}
             </CardContent>
@@ -318,7 +321,7 @@ export default function WorkerDetailPage() {
           {otherExperiences.length > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>Other experiences</CardTitle>
+                <CardTitle>{t('detail.otherExperiences')}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -332,7 +335,7 @@ export default function WorkerDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Certifications</CardTitle>
+              <CardTitle>{t('detail.certifications')}</CardTitle>
             </CardHeader>
             <CardContent>
               {certifications.length > 0 ? (
@@ -342,16 +345,14 @@ export default function WorkerDetailPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-fg-muted">
-                  No certifications added yet.
-                </p>
+                <p className="text-sm text-fg-muted">{t('detail.noCertifications')}</p>
               )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Reviews</CardTitle>
+              <CardTitle>{t('detail.reviews')}</CardTitle>
             </CardHeader>
             <CardContent>
               <ReviewsTab
@@ -377,15 +378,16 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function PortfolioItemCard({ item }: { item: PortfolioItem }) {
+  const { t } = useTranslation('workers');
   return (
     <Card className="bg-subtle">
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base">{item.title ?? 'Untitled'}</CardTitle>
+          <CardTitle className="text-base">{item.title ?? t('detail.untitled')}</CardTitle>
           {item.verified ? (
             <Badge variant="success" className="gap-1">
               <ShieldCheck className="h-3 w-3" />
-              Verified
+              {t('detail.verified')}
             </Badge>
           ) : null}
         </div>
@@ -401,7 +403,7 @@ function PortfolioItemCard({ item }: { item: PortfolioItem }) {
             {item.description}
           </p>
         ) : (
-          <p className="text-sm text-fg-muted">No description provided.</p>
+          <p className="text-sm text-fg-muted">{t('detail.noDescription')}</p>
         )}
       </CardContent>
     </Card>

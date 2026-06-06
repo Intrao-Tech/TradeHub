@@ -19,5 +19,8 @@
       "Bash(lsof *)",
       "Bash(docker compose *)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "shadcn"
+  ]
 }

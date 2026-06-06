@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ParseKeys } from 'i18next';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Inbox, LifeBuoy, MessageCircle, Send } from 'lucide-react';
 import { api, parseApiError } from '../../api';
 import { useAccountMe } from '../../hooks/useAccountMe';
+import { formatDateTime } from '@/lib/format';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -72,7 +75,15 @@ type StaffRow = {
   status: string;
 };
 
+const FILTER_LABEL_KEY: Record<'all' | 'mine' | 'unassigned' | 'unread', ParseKeys<'admin'>> = {
+  all: 'support.filterAll',
+  mine: 'support.filterMine',
+  unassigned: 'support.filterUnassigned',
+  unread: 'support.filterUnread',
+};
+
 export function AdminSupportTab() {
+  const { t } = useTranslation('admin');
   const { account, isAdmin } = useAccountMe();
   const [searchParams] = useSearchParams();
   const deeplinkClientId = searchParams.get('clientId');
@@ -105,9 +116,9 @@ export function AdminSupportTab() {
       );
       setThreads(data.data);
     } catch (e) {
-      setErr(parseApiError(e)?.message ?? 'Failed to load threads');
+      setErr(parseApiError(e)?.message ?? t('support.loadThreadsError'));
     }
-  }, [q, filter]);
+  }, [q, filter, t]);
 
   useEffect(() => {
     void loadThreads();
@@ -163,28 +174,28 @@ export function AdminSupportTab() {
         await openThread(thread);
       } catch (e) {
         setSendErr(
-          parseApiError(e)?.message ?? 'Failed to open thread for this user',
+          parseApiError(e)?.message ?? t('support.openThreadError'),
         );
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deeplinkClientId]);
 
-  async function openThread(t: Thread) {
-    setActive({ clientId: t.client.id, thread: t });
+  async function openThread(thread: Thread) {
+    setActive({ clientId: thread.client.id, thread });
     setMessages([]);
     setSendErr('');
     try {
       const data = await api<{ data: Msg[] }>(
-        `/admin/support/threads/${t.client.id}/messages?limit=50`,
+        `/admin/support/threads/${thread.client.id}/messages?limit=50`,
       );
       setMessages(data.data);
-      await api(`/admin/support/threads/${t.client.id}/read`, {
+      await api(`/admin/support/threads/${thread.client.id}/read`, {
         method: 'POST',
       });
       void loadThreads();
     } catch (e) {
-      setSendErr(parseApiError(e)?.message ?? 'Failed to load messages');
+      setSendErr(parseApiError(e)?.message ?? t('support.loadMessagesError'));
     }
   }
 
@@ -203,7 +214,7 @@ export function AdminSupportTab() {
       setMessages((arr) => [...arr, m]);
       setDraft('');
     } catch (e) {
-      setSendErr(parseApiError(e)?.message ?? 'Send failed');
+      setSendErr(parseApiError(e)?.message ?? t('support.sendError'));
     }
   }
 
@@ -235,7 +246,7 @@ export function AdminSupportTab() {
       // And refresh the list (badges / order may shift)
       void loadThreads();
     } catch (e) {
-      setSendErr(parseApiError(e)?.message ?? 'Assign failed');
+      setSendErr(parseApiError(e)?.message ?? t('support.assignError'));
     }
   }
 
@@ -253,17 +264,14 @@ export function AdminSupportTab() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <LifeBuoy className="h-4 w-4 text-fg-muted" />
-            <CardTitle>Support threads</CardTitle>
+            <CardTitle>{t('support.title')}</CardTitle>
           </div>
-          <CardDescription>
-            One thread per client. Any staff member can reply as "TradeHub
-            Support".
-          </CardDescription>
+          <CardDescription>{t('support.desc')}</CardDescription>
         </CardHeader>
         <CardContent className="flex-1 overflow-auto space-y-2">
           <div className="flex items-center gap-2">
             <Input
-              placeholder="Search by name, email, slug"
+              placeholder={t('support.searchPlaceholder')}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               className="text-sm"
@@ -277,7 +285,7 @@ export function AdminSupportTab() {
                 variant={filter === f ? 'primary' : 'outline'}
                 onClick={() => setFilter(f)}
               >
-                {f}
+                {t(FILTER_LABEL_KEY[f])}
               </Button>
             ))}
           </div>
@@ -289,55 +297,59 @@ export function AdminSupportTab() {
           {threads.length === 0 ? (
             <EmptyState
               icon={Inbox}
-              title="No threads match"
-              description="Try a different filter or search term."
+              title={t('support.noThreads')}
+              description={t('support.noThreadsDesc')}
             />
           ) : (
             <div className="space-y-1">
-              {threads.map((t) => (
+              {threads.map((th) => (
                 <button
-                  key={t.id}
-                  onClick={() => void openThread(t)}
+                  key={th.id}
+                  onClick={() => void openThread(th)}
                   className={`w-full text-left rounded border px-3 py-2 transition-colors ${
-                    active?.clientId === t.client.id
+                    active?.clientId === th.client.id
                       ? 'border-primary bg-primary/5'
                       : 'border-border-subtle hover:border-border-strong'
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <Avatar className="h-8 w-8 shrink-0">
-                      {t.client.avatar_url ? (
+                      {th.client.avatar_url ? (
                         <AvatarImage
-                          src={publicFileUrl(t.client.avatar_url)}
-                          alt={t.client.display_name}
+                          src={publicFileUrl(th.client.avatar_url)}
+                          alt={th.client.display_name}
                         />
                       ) : null}
                       <AvatarFallback>
-                        {initials(t.client.display_name)}
+                        {initials(th.client.display_name)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium text-sm truncate">
-                          {t.client.display_name}
+                          {th.client.display_name}
                         </span>
-                        {t.unread_from_client > 0 ? (
+                        {th.unread_from_client > 0 ? (
                           <Badge variant="warning">
-                            {t.unread_from_client}
+                            {th.unread_from_client}
                           </Badge>
                         ) : null}
                       </div>
                       <div className="text-xs text-fg-muted truncate">
-                        {t.client.email}
+                        {th.client.email}
                       </div>
                       <div className="text-xs text-fg-muted">
-                        {t.last_message_at
-                          ? `Last: ${new Date(t.last_message_at).toLocaleString()}`
-                          : 'No messages yet'}
+                        {th.last_message_at
+                          ? t('support.lastLine', {
+                              when: formatDateTime(th.last_message_at),
+                            })
+                          : t('support.noMessagesYet')}
                       </div>
-                      {t.assignee ? (
+                      {th.assignee ? (
                         <div className="text-[10px] text-fg-muted mt-1">
-                          Assignee: {t.assignee.display_name}
+                          {t('support.assigneeLine', {
+                            name: th.assignee.display_name,
+                          })}
                         </div>
                       ) : null}
                     </div>
@@ -356,21 +368,19 @@ export function AdminSupportTab() {
             <CardTitle>
               {active
                 ? `${active.thread.client.display_name} (${active.thread.client.email})`
-                : 'Pick a thread'}
+                : t('support.pickThread')}
             </CardTitle>
           </div>
           {active ? (
-            <CardDescription>
-              The client sees you as "TradeHub Support".
-            </CardDescription>
+            <CardDescription>{t('support.detailDesc')}</CardDescription>
           ) : null}
         </CardHeader>
         <CardContent className="flex-1 overflow-hidden flex flex-col gap-3">
           {!active ? (
             <EmptyState
               icon={MessageCircle}
-              title="No thread selected"
-              description="Select a support thread on the left to read and reply."
+              title={t('support.noSelection')}
+              description={t('support.noSelectionDesc')}
             />
           ) : (
             <>
@@ -393,11 +403,11 @@ export function AdminSupportTab() {
                       }
                     >
                       <SelectTrigger className="h-8 w-56 text-xs">
-                        <SelectValue placeholder="Assign to…" />
+                        <SelectValue placeholder={t('support.assignToPlaceholder')} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__UNASSIGNED__">
-                          — Unassigned —
+                          {t('support.unassignedOption')}
                         </SelectItem>
                         {staffRoster
                           .filter((s) => s.status === 'ACTIVE')
@@ -414,7 +424,9 @@ export function AdminSupportTab() {
                       variant="outline"
                       onClick={() => unassign()}
                     >
-                      Unassign ({active.thread.assignee.display_name})
+                      {t('support.unassignBtn', {
+                        name: active.thread.assignee.display_name,
+                      })}
                     </Button>
                   ) : (
                     <Button
@@ -423,7 +435,7 @@ export function AdminSupportTab() {
                       onClick={() => assignMe()}
                       disabled={!myStaffId}
                     >
-                      Take ownership
+                      {t('support.takeOwnership')}
                     </Button>
                   )}
                 </div>
@@ -432,7 +444,7 @@ export function AdminSupportTab() {
               <div className="flex-1 overflow-auto rounded border border-border-subtle p-3 space-y-2 bg-subtle/50">
                 {messages.length === 0 ? (
                   <p className="text-sm text-fg-muted text-center py-6">
-                    No messages yet.
+                    {t('support.noMessages')}
                   </p>
                 ) : (
                   messages.map((m) => (
@@ -449,7 +461,9 @@ export function AdminSupportTab() {
                       {m.from !== 'SYSTEM' && m.sender_display_name ? (
                         <div className="text-[10px] opacity-80 mb-1">
                           {m.from === 'STAFF'
-                            ? `${m.sender_display_name} → client`
+                            ? t('support.staffToClient', {
+                                name: m.sender_display_name,
+                              })
                             : m.sender_display_name}
                         </div>
                       ) : null}
@@ -461,11 +475,11 @@ export function AdminSupportTab() {
                           target="_blank"
                           rel="noreferrer"
                         >
-                          📎 {m.original_name ?? 'attachment'}
+                          📎 {m.original_name ?? t('support.attachment')}
                         </a>
                       ) : null}
                       <div className="text-[10px] opacity-70 mt-1">
-                        {new Date(m.created_at).toLocaleString()}
+                        {formatDateTime(m.created_at)}
                       </div>
                     </div>
                   ))
@@ -479,7 +493,7 @@ export function AdminSupportTab() {
                 <Textarea
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
-                  placeholder="Reply as TradeHub Support… (⌘/Ctrl + Enter to send)"
+                  placeholder={t('support.replyPlaceholder')}
                   className="min-h-[60px] text-sm"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -490,7 +504,7 @@ export function AdminSupportTab() {
                 />
                 <Button onClick={() => void send()}>
                   <Send className="h-3.5 w-3.5" />
-                  Send
+                  {t('support.send')}
                 </Button>
               </div>
             </>

@@ -19,6 +19,8 @@ import {
   type AccountSummary,
 } from '@/lib/auth-routing';
 
+// Auth pages are intentionally English-only (I18N decision): language is an authenticated-only setting, switched from the account menu.
+
 type LoginResponse = {
   access_token: string;
   refresh_token: string;
@@ -61,14 +63,12 @@ export default function InternalLoginPage({ onLogin }: Props) {
       } else if (parsed?.code === 'INVITE_EXPIRED') {
         setError({
           title: 'Invite expired',
-          message:
-            'This invite link is older than 24 hours. Ask an admin to send you a fresh invite.',
+          message: 'This invite link is older than 24 hours. Ask an admin to send you a fresh invite.',
         });
       } else if (parsed?.status === 404) {
         setError({
           title: 'Wrong host',
-          message:
-            'Staff sign-in is only available on the internal subdomain. Open this page on internal.tradehub.co.uk (or internal.localhost in dev).',
+          message: 'Staff sign-in is only available on the internal subdomain. Open this page on internal.tradehub.co.uk (or internal.localhost in dev).',
         });
       } else {
         setError({
@@ -87,8 +87,7 @@ export default function InternalLoginPage({ onLogin }: Props) {
         <CardHeader>
           <CardTitle>Staff sign in</CardTitle>
           <CardDescription>
-            Restricted area — TradeHub staff and moderators only. This entry
-            point does not support Google sign-in.
+            Restricted area — TradeHub staff and moderators only. This entry point does not support Google sign-in.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -123,8 +122,7 @@ export default function InternalLoginPage({ onLogin }: Props) {
                 required
               />
               <p className="text-xs text-fg-muted">
-                Forgot your password? Ask an admin to reset it for you — staff
-                accounts cannot self-reset.
+                Forgot your password? Ask an admin to reset it for you — staff accounts cannot self-reset.
               </p>
             </div>
             <Button type="submit" size="lg" className="w-full" disabled={loading}>

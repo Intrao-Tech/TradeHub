@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { LifeBuoy, Send } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { cn } from '@/lib/utils';
+import { formatDateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -30,6 +32,7 @@ type ThreadResponse = {
 };
 
 export default function SupportPage() {
+  const { t } = useTranslation('support');
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState('');
   const [err, setErr] = useState('');
@@ -51,11 +54,11 @@ export default function SupportPage() {
         /* non-fatal */
       }
     } catch (e) {
-      setErr(parseApiError(e)?.message ?? 'Failed to load support thread');
+      setErr(parseApiError(e)?.message ?? t('loadError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -77,7 +80,7 @@ export default function SupportPage() {
       setMessages((arr) => [...arr, m]);
       setDraft('');
     } catch (e) {
-      setSendErr(parseApiError(e)?.message ?? 'Send failed');
+      setSendErr(parseApiError(e)?.message ?? t('sendError'));
     } finally {
       setSending(false);
     }
@@ -86,24 +89,17 @@ export default function SupportPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Support</h1>
-        <p className="text-sm text-fg-muted">
-          One thread for everything. Our team usually replies within a few
-          hours.
-        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
+        <p className="text-sm text-fg-muted">{t('subtitle')}</p>
       </div>
 
       <Card className="flex h-[calc(100vh-12rem)] min-h-[480px] flex-col sm:h-[70vh]">
         <CardHeader>
           <div className="flex items-center gap-2">
             <LifeBuoy className="h-4 w-4 text-fg-muted" />
-            <CardTitle>TradeHub Support</CardTitle>
+            <CardTitle>{t('cardTitle')}</CardTitle>
           </div>
-          <CardDescription>
-            Tell us what's going on — billing, account, payouts, anything. We
-            keep the full conversation here so any agent can pick up from
-            where we left off.
-          </CardDescription>
+          <CardDescription>{t('cardDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-1 flex-col gap-3 overflow-hidden">
           {err ? (
@@ -116,8 +112,8 @@ export default function SupportPage() {
             {messages.length === 0 ? (
               <EmptyState
                 icon={LifeBuoy}
-                title={loading ? 'Loading…' : 'No messages yet'}
-                description="Send your first message below — support will reply here."
+                title={loading ? t('loading') : t('noMessages')}
+                description={t('emptyDesc')}
               />
             ) : (
               <div className="space-y-2">
@@ -144,11 +140,11 @@ export default function SupportPage() {
                         target="_blank"
                         rel="noreferrer"
                       >
-                        📎 {m.original_name ?? 'attachment'}
+                        📎 {m.original_name ?? t('attachment')}
                       </a>
                     ) : null}
                     <div className="text-[10px] opacity-70 mt-1">
-                      {new Date(m.created_at).toLocaleString()}
+                      {formatDateTime(m.created_at)}
                     </div>
                   </div>
                 ))}
@@ -167,7 +163,7 @@ export default function SupportPage() {
             <Textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Write a message… (⌘/Ctrl + Enter to send)"
+              placeholder={t('placeholder')}
               className="min-h-[60px] flex-1 text-sm"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -182,7 +178,7 @@ export default function SupportPage() {
               className="sm:self-end"
             >
               <Send className="h-3.5 w-3.5" />
-              {sending ? 'Sending…' : 'Send'}
+              {sending ? t('sending') : t('send')}
             </Button>
           </div>
         </CardContent>

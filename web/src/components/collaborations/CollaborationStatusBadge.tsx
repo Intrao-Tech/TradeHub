@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 
 /**
@@ -14,15 +15,6 @@ export type CollaborationStatus =
   | 'REJECTED'
   | 'DISPUTED';
 
-const LABEL: Record<CollaborationStatus, string> = {
-  PENDING: 'Pending',
-  CONFIRMED: 'Confirmed',
-  IN_PROGRESS: 'In progress',
-  COMPLETED: 'Completed',
-  REJECTED: 'Rejected',
-  DISPUTED: 'Disputed',
-};
-
 const VARIANT: Record<
   CollaborationStatus,
   'success' | 'info' | 'warning' | 'danger' | 'secondary' | 'outline'
@@ -36,10 +28,11 @@ const VARIANT: Record<
 };
 
 export function CollaborationStatusBadge({ status }: { status?: string | null }) {
+  const { t } = useTranslation('collaborations');
   const upper = (status ?? '').toUpperCase() as CollaborationStatus;
-  if (upper in LABEL) {
-    return <Badge variant={VARIANT[upper]}>{LABEL[upper]}</Badge>;
+  if (upper in VARIANT) {
+    return <Badge variant={VARIANT[upper]}>{t(`status.${upper}`)}</Badge>;
   }
-  return <Badge variant="outline">{status ?? 'Unknown'}</Badge>;
+  return <Badge variant="outline">{status ?? t('status.unknown')}</Badge>;
 }
 CollaborationStatusBadge.displayName = 'CollaborationStatusBadge';

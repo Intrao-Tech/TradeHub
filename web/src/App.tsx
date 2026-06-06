@@ -6,6 +6,7 @@ import {
   useLocation,
 } from 'react-router-dom';
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import i18n from '@/i18n';
 import { api, clearTokens, getToken } from './api';
 import {
   IS_STAFF_HOST,
@@ -227,6 +228,26 @@ function MarketplaceRouter() {
     '/forgot-password',
     '/reset-password',
   ].some((p) => location.pathname === p);
+
+  // Language is an authenticated-only setting: logged-out surfaces (marketing
+  // AND auth pages) are English-only, so the saved choice (picked from the
+  // account menu while signed in) must not leak into the shared chrome /
+  // cards. Pin to EN without overwriting the saved choice; restore it after
+  // login.
+  useEffect(() => {
+    const saved = localStorage.getItem('i18nextLng');
+    if (!loggedIn) {
+      if (i18n.resolvedLanguage !== 'en') {
+        void i18n.changeLanguage('en').then(() => {
+          // changeLanguage caches to localStorage — put the real choice back.
+          if (saved) localStorage.setItem('i18nextLng', saved);
+          else localStorage.removeItem('i18nextLng');
+        });
+      }
+    } else if (saved && saved !== i18n.resolvedLanguage) {
+      void i18n.changeLanguage(saved);
+    }
+  }, [loggedIn]);
 
   if (isAuthRoute) {
     return (

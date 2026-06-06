@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Flag } from 'lucide-react';
 import { api, parseApiError } from '@/api';
 import { Button } from '@/components/ui/button';
@@ -38,15 +39,16 @@ export type FlagCategory =
   | 'ABUSIVE_BEHAVIOUR'
   | 'OTHER';
 
-const CATEGORY_OPTIONS: Array<{ value: FlagCategory; label: string }> = [
-  { value: 'PAYMENT_LATE', label: 'Payment is overdue' },
-  { value: 'PAYMENT_REFUSED', label: 'The other party refuses to pay' },
-  { value: 'WORK_QUALITY', label: 'Work quality is unacceptable' },
-  { value: 'WORK_NOT_DONE', label: 'Work was not completed as agreed' },
-  { value: 'SAFETY_CONCERN', label: 'Site safety / health concern' },
-  { value: 'MISREPRESENTATION', label: 'The other party misrepresented themselves' },
-  { value: 'ABUSIVE_BEHAVIOUR', label: 'Abusive / threatening behaviour' },
-  { value: 'OTHER', label: 'Something else (detail required)' },
+// Labels live in the `collaborations` namespace under `flag.category.<value>`.
+const CATEGORY_VALUES: FlagCategory[] = [
+  'PAYMENT_LATE',
+  'PAYMENT_REFUSED',
+  'WORK_QUALITY',
+  'WORK_NOT_DONE',
+  'SAFETY_CONCERN',
+  'MISREPRESENTATION',
+  'ABUSIVE_BEHAVIOUR',
+  'OTHER',
 ];
 
 const OTHER_DETAIL_MIN = 10;
@@ -64,6 +66,7 @@ export function FlagCollaborationDialog({
   collaborationId,
   onFlagged,
 }: Props) {
+  const { t } = useTranslation('collaborations');
   const [category, setCategory] = useState<FlagCategory | ''>('');
   const [detail, setDetail] = useState('');
   const [error, setError] = useState('');
@@ -95,12 +98,12 @@ export function FlagCollaborationDialog({
         method: 'POST',
         body: JSON.stringify({ reason }),
       });
-      toast.success('Flag submitted — staff will review');
+      toast.success(t('flag.submitted'));
       onOpenChange(false);
       onFlagged?.();
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Could not submit flag.');
+      setError(parsed?.message ?? t('flag.submitError'));
     } finally {
       setSubmitting(false);
     }
@@ -112,28 +115,25 @@ export function FlagCollaborationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Flag className="h-4 w-4" />
-            Flag this collaboration
+            {t('flag.title')}
           </DialogTitle>
-          <DialogDescription>
-            Pick a reason category. Staff will review the flag and may contact
-            either party.
-          </DialogDescription>
+          <DialogDescription>{t('flag.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="flex flex-col gap-2.5">
-            <Label htmlFor="flag-category">Reason category</Label>
+            <Label htmlFor="flag-category">{t('flag.categoryLabel')}</Label>
             <Select
               value={category}
               onValueChange={(v) => setCategory(v as FlagCategory)}
             >
               <SelectTrigger id="flag-category">
-                <SelectValue placeholder="Select a reason" />
+                <SelectValue placeholder={t('flag.categoryPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
-                {CATEGORY_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
+                {CATEGORY_VALUES.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {t(`flag.category.${value}`)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -142,23 +142,24 @@ export function FlagCollaborationDialog({
 
           <div className="flex flex-col gap-2.5">
             <Label htmlFor="flag-detail">
-              Detail{' '}
+              {t('flag.detailLabel')}{' '}
               <span className="text-fg-muted">
-                {category === 'OTHER' ? '(required, ≥ 10 chars)' : '(optional)'}
+                {category === 'OTHER'
+                  ? t('flag.detailRequired', { count: OTHER_DETAIL_MIN })
+                  : t('flag.detailOptional')}
               </span>
             </Label>
             <Textarea
               id="flag-detail"
               value={detail}
               onChange={(e) => setDetail(e.target.value)}
-              placeholder="Add anything that helps staff understand the situation."
+              placeholder={t('flag.detailPlaceholder')}
               rows={4}
               maxLength={250}
             />
             {otherInvalid && trimmedDetail.length > 0 ? (
               <p className="text-xs text-danger">
-                Add at least {OTHER_DETAIL_MIN} characters of detail when picking
-                Other.
+                {t('flag.detailTooShort', { count: OTHER_DETAIL_MIN })}
               </p>
             ) : null}
           </div>
@@ -180,7 +181,7 @@ export function FlagCollaborationDialog({
             onClick={() => onOpenChange(false)}
             disabled={submitting}
           >
-            Cancel
+            {t('flag.cancel')}
           </Button>
           <Button
             type="button"
@@ -188,7 +189,7 @@ export function FlagCollaborationDialog({
             onClick={() => void handleSubmit()}
             disabled={!canSubmit}
           >
-            {submitting ? 'Submitting…' : 'Submit flag'}
+            {submitting ? t('flag.submitting') : t('flag.submit')}
           </Button>
         </DialogFooter>
       </DialogContent>
