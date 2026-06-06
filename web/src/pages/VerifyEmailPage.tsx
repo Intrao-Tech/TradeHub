@@ -70,7 +70,7 @@ export default function VerifyEmailPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <AuthBanner variant="info" title="Why this step?">
+          <AuthBanner variant="info" title="Why is this required?">
             TradeHub is built on verified identities. Confirming your email keeps fake
             accounts out of the marketplace and protects the people you'll work with.
           </AuthBanner>

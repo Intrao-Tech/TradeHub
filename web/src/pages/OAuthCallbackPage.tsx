@@ -124,7 +124,7 @@ export default function OAuthCallbackPage({ onLogin }: Props) {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <AuthBanner variant="info" title="Why this step?">
+              <AuthBanner variant="info" title="Why we do this">
                 {view.intent === 'register'
                   ? 'We never duplicate accounts. If you forgot your password, use "Forgot password" on the sign-in screen.'
                   : 'We never automatically merge accounts based on email — that way nobody can take over your TradeHub account by signing into Google with the same address.'}
@@ -149,7 +149,7 @@ export default function OAuthCallbackPage({ onLogin }: Props) {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <AuthBanner variant="info" title="Why this step?">
+              <AuthBanner variant="info" title="Why we do this">
                 We never silently create accounts when you click "Sign in" — that way you always know when an account is being made for you.
               </AuthBanner>
               <Button asChild size="lg" className="w-full">
