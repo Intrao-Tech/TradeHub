@@ -214,6 +214,15 @@ html, body, #root {
   min-height: 100%;
 }
 
+/* Sheets slide in from offscreen-right (translateX(100%)). iOS Safari lets the
+   user pan/zoom toward content overflowing the right edge — even fixed
+   elements — leaving the viewport stuck offset with the panel half cut.
+   `clip` forbids that overflow without creating a scroll container (which
+   `overflow-x: hidden` would, breaking the sticky header). */
+html, body {
+  overflow-x: clip;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: var(--color-bg-page);

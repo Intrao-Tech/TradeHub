@@ -113,15 +113,19 @@ export function CompletenessPanel({
             style={{ width: `${percent}%` }}
           />
         </div>
+        {/* grid-cols-1 matters: without a template the implicit column is
+            content-sized, so long CTA labels push rows past the card edge
+            on mobile. flex-wrap lets the CTA drop under the title instead
+            of truncating it. */}
         {missing.length > 0 ? (
-          <ul className="grid gap-2 sm:grid-cols-2">
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {missing.map((r) => (
               <li
                 key={r.id}
-                className="flex items-center justify-between gap-2 rounded-md border border-border-default bg-raised px-3 py-2 text-sm"
+                className="flex flex-wrap items-center justify-between gap-x-2 rounded-md border border-border-default bg-raised px-3 py-2 text-sm"
               >
                 <div className="flex min-w-0 items-center gap-2">
-                  <CircleDashed className="h-4 w-4 text-fg-muted" />
+                  <CircleDashed className="h-4 w-4 shrink-0 text-fg-muted" />
                   <span className="truncate font-medium text-fg">
                     {r.title}
                   </span>
@@ -130,6 +134,7 @@ export function CompletenessPanel({
                   type="button"
                   variant="ghost"
                   size="sm"
+                  className="ml-auto"
                   onClick={() => onAction(r.cta)}
                 >
                   {r.cta.label}
