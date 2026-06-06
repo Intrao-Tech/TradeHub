@@ -55,9 +55,27 @@ test.describe('TEST-I18N-100 language switch', () => {
     await expect(page.locator('html')).toHaveAttribute('lang', 'uk');
     await expect(page.locator('header')).toContainText('Вакансії');
 
-    // And can be switched back (submenu label is now localised).
+    // Switch to Russian from the (now Ukrainian) account menu. Hovering the
+    // first submenu item moves the pointer into the sub content so Radix's
+    // open state settles before we click — clicking the bottom item straight
+    // after opening the submenu races its mount and flakes.
     await page.getByRole('button', { name: 'Відкрити меню акаунта' }).click();
     await page.getByRole('menuitem', { name: /^Мова/ }).click();
+    await page.getByRole('menuitem', { name: 'English' }).hover();
+    await page.getByRole('menuitem', { name: 'Русский' }).click();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
+    await expect(page.locator('header')).toContainText('Вакансии');
+    await expect
+      .poll(() => page.evaluate(() => window.localStorage.getItem('i18nextLng')))
+      .toBe('ru');
+
+    // And can be switched back (submenu label is now localised in Russian).
+    // Close the still-open dropdown first — while it's open the rest of the
+    // app is aria-hidden, so the trigger can't be found by role.
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Открыть меню аккаунта' }).click();
+    await page.getByRole('menuitem', { name: /^Язык/ }).click();
     await page.getByRole('menuitem', { name: 'English' }).click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   });

@@ -8,7 +8,7 @@ import LanguageDetector from 'i18next-browser-languagedetector';
  * change: drop a `public/locales/<lng>/` folder and add the code here — no
  * other code changes (see I18N task acceptance criteria).
  */
-export const SUPPORTED_LNGS = ['en', 'uk'] as const;
+export const SUPPORTED_LNGS = ['en', 'uk', 'ru'] as const;
 export type SupportedLng = (typeof SUPPORTED_LNGS)[number];
 
 /**

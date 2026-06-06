@@ -15,6 +15,7 @@ import i18n from '@/i18n';
 const FORMAT_LOCALE: Record<string, string> = {
   en: 'en-GB',
   uk: 'uk-UA',
+  ru: 'ru-RU',
 };
 
 /**
