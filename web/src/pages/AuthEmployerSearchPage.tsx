@@ -201,7 +201,7 @@ export default function AuthEmployerSearchPage() {
                 </Button>
               </SheetTrigger>
               <SheetContent
-                side="left"
+                side="right"
                 className="w-full overflow-y-auto sm:max-w-sm"
               >
                 <SheetHeader>

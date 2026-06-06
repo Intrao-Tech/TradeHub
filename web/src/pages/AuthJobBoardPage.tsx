@@ -501,7 +501,7 @@ export default function AuthJobBoardPage() {
                   ) : null}
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-full overflow-y-auto sm:max-w-sm">
+              <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-sm">
                 <SheetHeader>
                   <SheetTitle>{t('board.filters')}</SheetTitle>
                   <SheetDescription>{t('board.filtersDesc')}</SheetDescription>

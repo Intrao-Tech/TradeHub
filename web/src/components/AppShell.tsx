@@ -202,7 +202,7 @@ export function AppShell({
       </header>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-72 p-0">
+        <SheetContent side="right" className="w-72 p-0">
           <SheetHeader className="border-b border-border-default px-4 py-3">
             <SheetTitle>{t("menu.title")}</SheetTitle>
           </SheetHeader>
