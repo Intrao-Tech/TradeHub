@@ -31,7 +31,8 @@ export async function registerWorker(
 ) {
   const password = opts.password ?? TEST_PASSWORD;
   await page.goto('/register');
-  await page.getByText(/I'm a tradesperson/i).click();
+  // Role card title (en copy: register.roleWorker).
+  await page.getByText('Tradesperson', { exact: true }).click();
   await page.getByLabel(/Email/i).fill(opts.email);
   await page.getByLabel(/^Password$/i).fill(password);
   await page.getByLabel(/Confirm password/i).fill(password);
@@ -43,9 +44,9 @@ export async function registerWorker(
 }
 
 /**
- * Mirror of `registerWorker` for the EMPLOYER role. Picks "I'm hiring"
- * on the role-card screen and fills the Company-name field instead of
- * First/Surname. Lands on /verify-email like the worker flow.
+ * Mirror of `registerWorker` for the EMPLOYER role. Picks the "Employer"
+ * card on the role-card screen and fills the Company-name field instead
+ * of First/Surname. Lands on /verify-email like the worker flow.
  *
  * Unblocks the two-context Playwright specs that need an employer party
  * (TEST-CHAT-200 seeded variant, TEST-CHAT-210/220/240, TEST-COLLAB-203
@@ -57,7 +58,8 @@ export async function registerEmployer(
 ) {
   const password = opts.password ?? TEST_PASSWORD;
   await page.goto('/register');
-  await page.getByText(/I'm hiring/i).click();
+  // Role card title (en copy: register.roleEmployer).
+  await page.getByText('Employer', { exact: true }).click();
   await page.getByLabel(/Email/i).fill(opts.email);
   await page.getByLabel(/^Password$/i).fill(password);
   await page.getByLabel(/Confirm password/i).fill(password);

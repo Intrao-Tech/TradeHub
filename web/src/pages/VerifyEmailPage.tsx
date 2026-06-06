@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useTranslation, Trans } from 'react-i18next';
 import { api } from '../api';
 import { AuthShell } from '@/components/AppShell';
 import { AuthBanner } from '@/components/AuthBanner';
@@ -15,10 +14,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+// Auth pages are intentionally English-only (I18N decision): language is an
+// authenticated-only setting, switched from the account menu.
+
 const RESEND_COOLDOWN_SECONDS = 30;
 
 export default function VerifyEmailPage() {
-  const { t } = useTranslation('auth');
   const [searchParams] = useSearchParams();
   const queryEmail = searchParams.get('email') ?? '';
   const [email, setEmail] = useState(queryEmail);
@@ -45,7 +46,7 @@ export default function VerifyEmailPage() {
       setSent(true);
       setCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('verify.errorBody'));
+      setError(err instanceof Error ? err.message : 'Could not send the email. Try again in a moment.');
     } finally {
       setSending(false);
     }
@@ -55,40 +56,41 @@ export default function VerifyEmailPage() {
     <AuthShell>
       <Card>
         <CardHeader>
-          <CardTitle>{t('verify.title')}</CardTitle>
+          <CardTitle>Confirm your email</CardTitle>
           <CardDescription>
             {queryEmail ? (
-              <Trans
-                i18nKey="verify.descriptionWithEmail"
-                ns="auth"
-                values={{ email: queryEmail }}
-                components={[<span className="font-medium text-fg" />]}
-              />
+              <>
+                We sent a confirmation link to{' '}
+                <span className="font-medium text-fg">{queryEmail}</span>. Click it to
+                activate your account.
+              </>
             ) : (
-              t('verify.descriptionPlain')
+              'Open the email we sent you and click the confirmation link to activate your account.'
             )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <AuthBanner variant="info" title={t('verify.whyTitle')}>
-            {t('verify.whyBody')}
+          <AuthBanner variant="info" title="Why this step?">
+            TradeHub is built on verified identities. Confirming your email keeps fake
+            accounts out of the marketplace and protects the people you'll work with.
           </AuthBanner>
 
           {sent ? (
-            <AuthBanner variant="success" title={t('verify.sentTitle')}>
-              {t('verify.sentBody')}
+            <AuthBanner variant="success" title="Email sent">
+              If an account exists with that email, a fresh confirmation link is on its
+              way. The link is valid for 24 hours.
             </AuthBanner>
           ) : null}
 
           {error ? (
-            <AuthBanner variant="danger" title={t('verify.errorTitle')}>
+            <AuthBanner variant="danger" title="Could not send email">
               {error}
             </AuthBanner>
           ) : null}
 
           <form onSubmit={handleResend} className="space-y-3">
             <div className="flex flex-col gap-2.5">
-              <Label htmlFor="resend-email">{t('verify.resendTo')}</Label>
+              <Label htmlFor="resend-email">Resend to</Label>
               <Input
                 id="resend-email"
                 type="email"
@@ -107,20 +109,20 @@ export default function VerifyEmailPage() {
               disabled={sending || cooldown > 0}
             >
               {sending
-                ? t('verify.sending')
+                ? 'Sending…'
                 : cooldown > 0
-                  ? t('verify.tryAgainIn', { count: cooldown })
-                  : t('verify.resendConfirmation')}
+                  ? `Try again in ${cooldown}s`
+                  : 'Resend confirmation email'}
             </Button>
           </form>
 
           <p className="text-center text-sm text-fg-muted">
-            {t('verify.alreadyConfirmed')}{' '}
+            Already confirmed?{' '}
             <Link
               to="/login"
               className="font-medium text-primary underline-offset-4 hover:underline"
             >
-              {t('shared.signIn')}
+              Sign in
             </Link>
           </p>
         </CardContent>

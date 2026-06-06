@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { TranslateFn } from '@/i18n/types';
 import type { FormEvent } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { api, parseApiError, setTokens } from '../api';
 import { AuthShell } from '@/components/AppShell';
 import { AuthBanner, bannerFromReason } from '@/components/AuthBanner';
@@ -19,6 +17,8 @@ import {
   postAuthRedirect,
   type AccountSummary,
 } from '@/lib/auth-routing';
+
+// Auth pages are intentionally English-only (I18N decision): language is an authenticated-only setting, switched from the account menu.
 
 type LoginSuccess = {
   access_token: string;
@@ -45,7 +45,6 @@ type Props = { onLogin: () => void };
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
 
 export default function LoginPage({ onLogin }: Props) {
-  const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const next = searchParams.get('next');
@@ -124,7 +123,7 @@ export default function LoginPage({ onLogin }: Props) {
     } catch {
       setError({
         code: 'GOOGLE_UNAVAILABLE',
-        message: t('login.googleUnavailable'),
+        message: 'Google sign-in is not available right now. Try again or sign in with email.',
       });
     }
   }
@@ -133,7 +132,7 @@ export default function LoginPage({ onLogin }: Props) {
     <AuthShell>
       <Card>
         <CardHeader>
-          <CardTitle className="text-center text-xl sm:text-2xl">{t('login.title')}</CardTitle>
+          <CardTitle className="text-center text-xl sm:text-2xl">Log in to TradeHub</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
           {banner ? (
@@ -145,16 +144,16 @@ export default function LoginPage({ onLogin }: Props) {
           {error ? (
             <AuthBanner
               variant="danger"
-              title={errorTitle(error, t)}
-              action={errorAction(error, email, t)}
+              title={errorTitle(error)}
+              action={errorAction(error, email)}
             >
-              {error.message ?? t('shared.genericError')}
+              {error.message ?? 'Something went wrong. Please try again.'}
             </AuthBanner>
           ) : null}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex flex-col gap-2.5">
-              <Label htmlFor="login-email">{t('shared.email')}</Label>
+              <Label htmlFor="login-email">Email</Label>
               <Input
                 id="login-email"
                 type="email"
@@ -167,12 +166,12 @@ export default function LoginPage({ onLogin }: Props) {
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="login-password">{t('login.passwordLabel')}</Label>
+                <Label htmlFor="login-password">Password</Label>
                 <Link
                   to="/forgot-password"
                   className="text-xs text-fg-muted underline-offset-4 hover:text-fg hover:underline"
                 >
-                  {t('shared.forgotPassword')}
+                  Forgot password?
                 </Link>
               </div>
               <Input
@@ -191,7 +190,7 @@ export default function LoginPage({ onLogin }: Props) {
               className="w-full"
               disabled={loading}
             >
-              {loading ? t('login.signingIn') : t('shared.signIn')}
+              {loading ? 'Signing in…' : 'Sign in'}
             </Button>
           </form>
 
@@ -203,7 +202,7 @@ export default function LoginPage({ onLogin }: Props) {
                 </div>
                 <div className="relative flex justify-center">
                   <span className="bg-raised px-2 text-xs uppercase tracking-wide text-fg-subtle">
-                    {t('shared.or')}
+                    or
                   </span>
                 </div>
               </div>
@@ -215,17 +214,17 @@ export default function LoginPage({ onLogin }: Props) {
                 onClick={handleGoogle}
               >
                 <GoogleIcon />
-                {t('shared.continueWithGoogle')}
+                Continue with Google
               </Button>
             </>
           ) : null}
 
           <div className="space-y-3 border-t border-border-default pt-5">
             <p className="text-center text-sm text-fg-muted">
-              {t('login.noAccount')}
+              Don't have a TradeHub account?
             </p>
             <Button asChild variant="outline" size="lg" className="w-full">
-              <Link to="/register">{t('shared.signUp')}</Link>
+              <Link to="/register">Sign up</Link>
             </Button>
           </div>
         </CardContent>
@@ -254,23 +253,21 @@ function parseError(err: unknown): LoginError {
 
 function errorTitle(
   error: NonNullable<LoginError>,
-  t: TranslateFn,
 ): string {
   switch (error.code) {
     case 'ACCOUNT_DEACTIVATED':
-      return t('login.error.accountDeactivated');
+      return 'Account deactivated';
     case 'EMAIL_NOT_VERIFIED':
-      return t('login.error.emailNotVerified');
+      return 'Email not verified';
     case 'INVALID_CREDENTIALS':
     default:
-      return t('login.error.invalidCredentials');
+      return 'Sign in failed';
   }
 }
 
 function errorAction(
   error: NonNullable<LoginError>,
   email: string,
-  t: TranslateFn,
 ): React.ReactNode {
   if (error.code === 'EMAIL_NOT_VERIFIED' && (error.email || email)) {
     return (
@@ -278,7 +275,7 @@ function errorAction(
         to={`/verify-email?email=${encodeURIComponent(error.email ?? email)}`}
         className="font-medium underline-offset-4 hover:underline"
       >
-        {t('login.resendVerification')}
+        Resend verification email
       </Link>
     );
   }

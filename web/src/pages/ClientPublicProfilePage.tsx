@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { Users } from 'lucide-react';
 import { api, parseApiError } from '../api';
@@ -8,6 +7,9 @@ import { EmptyState } from '../components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+
+// Public profile for logged-out visitors — intentionally English-only
+// (not part of the i18n catalogs; see I18N task decision).
 
 type ClientProfile = {
   id: string | number;
@@ -21,7 +23,6 @@ type ClientProfile = {
 };
 
 export default function ClientPublicProfilePage() {
-  const { t } = useTranslation('common');
   const { slug } = useParams<{ slug: string }>();
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,10 +36,10 @@ export default function ClientPublicProfilePage() {
       .then(setProfile)
       .catch((err) => {
         const parsed = parseApiError(err);
-        setError(parsed?.message ?? t('directory.profileLoadError'));
+        setError(parsed?.message ?? 'Could not load this profile.');
       })
       .finally(() => setLoading(false));
-  }, [slug, t]);
+  }, [slug]);
 
   if (loading) {
     return (
@@ -53,11 +54,11 @@ export default function ClientPublicProfilePage() {
     return (
       <EmptyState
         icon={Users}
-        title={t('directory.profileNotFound')}
-        description={error || t('directory.profileRemoved')}
+        title="Profile not found"
+        description={error || 'This profile may have been removed.'}
         action={
           <Button asChild variant="outline">
-            <Link to="/clients">{t('directory.backToDirectory')}</Link>
+            <Link to="/clients">Back to directory</Link>
           </Button>
         }
       />
@@ -67,7 +68,7 @@ export default function ClientPublicProfilePage() {
   return (
     <div className="space-y-6">
       <ProfileHeader
-        displayName={profile.display_name ?? t('directory.member')}
+        displayName={profile.display_name ?? 'Member'}
         avatarUrl={profile.avatar_url}
         role="CLIENT"
         city={profile.city}
@@ -78,13 +79,13 @@ export default function ClientPublicProfilePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{t('directory.about')}</CardTitle>
+          <CardTitle>About</CardTitle>
         </CardHeader>
         <CardContent>
           {profile.bio ? (
             <p className="whitespace-pre-line text-sm text-fg">{profile.bio}</p>
           ) : (
-            <p className="text-sm text-fg-muted">{t('directory.noBio')}</p>
+            <p className="text-sm text-fg-muted">This member hasn’t added a bio yet.</p>
           )}
         </CardContent>
       </Card>

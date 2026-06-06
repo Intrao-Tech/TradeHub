@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '../api';
 import { AuthShell } from '@/components/AppShell';
 import { AuthBanner } from '@/components/AuthBanner';
@@ -21,8 +20,9 @@ import {
   MIN_LENGTH,
 } from '@/lib/password-policy';
 
+// Auth pages are intentionally English-only (I18N decision): language is an authenticated-only setting, switched from the account menu.
+
 export default function ResetPasswordPage() {
-  const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
@@ -40,18 +40,18 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setError(null);
     if (!token) {
-      setError({ title: t('reset.error.resetFailed'), message: t('reset.error.noToken') });
+      setError({ title: 'Reset failed', message: 'No reset token in this link.' });
       return;
     }
     if (!policy.ok) {
       setError({
-        title: t('reset.error.passwordRejected'),
-        message: policy.reasons.map((r) => describeReason(r, t)).join(' '),
+        title: 'Password rejected',
+        message: policy.reasons.map((r) => describeReason(r)).join(' '),
       });
       return;
     }
     if (!passwordsMatch) {
-      setError({ title: t('reset.error.mismatchTitle'), message: t('reset.error.mismatchBody') });
+      setError({ title: 'Password mismatch', message: 'The two passwords do not match.' });
       return;
     }
 
@@ -66,21 +66,21 @@ export default function ResetPasswordPage() {
       const parsed = parseApiError(err);
       if (parsed?.code === 'TOKEN_INVALID') {
         setError({
-          title: t('reset.error.linkExpiredTitle'),
-          message: t('reset.error.linkExpiredBody'),
+          title: 'Link expired',
+          message: 'This reset link is invalid or has already been used. Request a new one.',
         });
       } else if (parsed?.code === 'WEAK_PASSWORD') {
         const reasons = (parsed.body?.reasons as string[]) ?? [];
         setError({
-          title: t('reset.error.passwordRejected'),
+          title: 'Password rejected',
           message:
-            reasons.map((r) => describeReason(r as never, t)).join(' ') ||
-            (parsed.message ?? t('reset.error.pickStronger')),
+            reasons.map((r) => describeReason(r as never)).join(' ') ||
+            (parsed.message ?? 'Pick a stronger password.'),
         });
       } else {
         setError({
-          title: t('reset.error.resetFailed'),
-          message: parsed?.message ?? t('reset.error.generic'),
+          title: 'Reset failed',
+          message: parsed?.message ?? 'Something went wrong. Try again.',
         });
       }
     } finally {
@@ -92,17 +92,17 @@ export default function ResetPasswordPage() {
     <AuthShell>
       <Card>
         <CardHeader>
-          <CardTitle>{t('reset.title')}</CardTitle>
-          <CardDescription>{t('reset.description')}</CardDescription>
+          <CardTitle>Choose a new password</CardTitle>
+          <CardDescription>Pick a password you don't use anywhere else. After saving, all of your active TradeHub sessions will be signed out.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {!token ? (
             <>
-              <AuthBanner variant="danger" title={t('reset.missingTokenTitle')}>
-                {t('reset.missingTokenBody')}
+              <AuthBanner variant="danger" title="Missing token">
+                This URL doesn't have a reset token. Request a new reset email.
               </AuthBanner>
               <Button asChild variant="outline" className="w-full">
-                <Link to="/forgot-password">{t('reset.requestNewLink')}</Link>
+                <Link to="/forgot-password">Request new link</Link>
               </Button>
             </>
           ) : (
@@ -115,13 +115,13 @@ export default function ResetPasswordPage() {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="flex flex-col gap-2.5">
-                  <Label htmlFor="reset-password">{t('reset.newPasswordLabel')}</Label>
+                  <Label htmlFor="reset-password">New password</Label>
                   <Input
                     id="reset-password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder={t('shared.atLeastChars', { count: MIN_LENGTH })}
+                    placeholder={`At least ${MIN_LENGTH} characters`}
                     autoComplete="new-password"
                     required
                     minLength={MIN_LENGTH}
@@ -129,7 +129,7 @@ export default function ResetPasswordPage() {
                   <PasswordRules password={password} dirty={password.length > 0} />
                 </div>
                 <div className="flex flex-col gap-2.5">
-                  <Label htmlFor="reset-confirm">{t('reset.confirmLabel')}</Label>
+                  <Label htmlFor="reset-confirm">Confirm password</Label>
                   <Input
                     id="reset-confirm"
                     type="password"
@@ -139,7 +139,7 @@ export default function ResetPasswordPage() {
                     required
                   />
                   {confirm.length > 0 && !passwordsMatch ? (
-                    <p className="text-xs text-warning">{t('reset.passwordsDontMatch')}</p>
+                    <p className="text-xs text-warning">Passwords don't match.</p>
                   ) : null}
                 </div>
                 <Button
@@ -148,7 +148,7 @@ export default function ResetPasswordPage() {
                   className="w-full"
                   disabled={!canSubmit}
                 >
-                  {submitting ? t('reset.saving') : t('reset.save')}
+                  {submitting ? 'Saving…' : 'Save new password'}
                 </Button>
               </form>
             </>

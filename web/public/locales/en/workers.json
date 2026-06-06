@@ -71,38 +71,6 @@
     "subtitle": "Browse verified employers that hire on TradeHub.",
     "title": "Find employers"
   },
-  "publicEmployerSearch": {
-    "apply": "Apply",
-    "browseMore": "Want to browse more employers?",
-    "emptyTitle": "No employers yet",
-    "gateAction": "contact this employer",
-    "gateNameFallback": "this employer",
-    "heroTitle": "Find employers hiring across the UK",
-    "hiringPostJob": "Hiring? Post a job",
-    "loadMore": "Load more employers",
-    "statOpenJobs": "Open jobs",
-    "statTeam": "Team",
-    "verifiedEmployers": "Verified employers"
-  },
-  "publicSearch": {
-    "browseMore": "Want to browse more tradespeople?",
-    "emptyDesc": "Check back soon.",
-    "emptyTitle": "No workers yet",
-    "escrowPayments": "Escrow payments",
-    "gateAction": "contact this tradesperson",
-    "gateNameFallback": "this tradesperson",
-    "heroTitle": "Hire verified tradespeople in the UK",
-    "hire": "Hire",
-    "loadMore": "Load more workers",
-    "lookingForWork": "Looking for work?",
-    "signUp": "Sign up",
-    "statDayRate": "Day rate",
-    "statRating": "Rating",
-    "statReviews": "Reviews",
-    "twoWayReviews": "Two-way reviews",
-    "verifiedTradespeople": "Verified tradespeople",
-    "whyAria": "Why TradeHub"
-  },
   "search": {
     "anySpecialisation": "Any specialisation",
     "availableNow": "Available now",

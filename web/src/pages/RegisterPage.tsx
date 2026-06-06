@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { ArrowRight, Hammer, HardHat } from 'lucide-react';
 import { api, parseApiError } from '../api';
 import { AuthShell } from '@/components/AppShell';
@@ -18,6 +17,9 @@ import {
 } from '@/components/referral/pendingProjectRef';
 import { isSafeNext } from '@/lib/auth-routing';
 
+// Auth pages are intentionally English-only (I18N decision): language is an
+// authenticated-only setting, switched from the account menu.
+
 type RegisterResponse = {
   pending_verification: boolean;
   email: string;
@@ -30,7 +32,6 @@ type Props = { onRegister: () => void };
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
 
 export default function RegisterPage({ onRegister: _onRegister }: Props) {
-  const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const refCode = searchParams.get('ref')?.toUpperCase().trim() || null;
@@ -111,15 +112,15 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
     setError(null);
     if (!policy.ok) {
       setError({
-        title: t('register.error.passwordRejected'),
-        message: policy.reasons.map((r) => describeReason(r, t)).join(' '),
+        title: 'Password rejected',
+        message: policy.reasons.map((r) => describeReason(r)).join(' '),
       });
       return;
     }
     if (!passwordsMatch) {
       setError({
-        title: t('register.error.passwordsTitle'),
-        message: t('register.error.passwordsBody'),
+        title: "Passwords don't match",
+        message: 'Re-type the same password in the confirm field.',
       });
       return;
     }
@@ -127,15 +128,15 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
     // Role-specific name validation
     if (role === 'WORKER' && (!firstName.trim() || !surname.trim())) {
       setError({
-        title: t('register.error.missingNameTitle'),
-        message: t('register.error.missingNameBody'),
+        title: 'Missing name',
+        message: 'Please enter both your first name and surname.',
       });
       return;
     }
     if (role === 'EMPLOYER' && !companyName.trim()) {
       setError({
-        title: t('register.error.missingCompanyTitle'),
-        message: t('register.error.missingCompanyBody'),
+        title: 'Missing company name',
+        message: 'Please enter your company name.',
       });
       return;
     }
@@ -181,10 +182,10 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
       if (parsed?.code === 'WEAK_PASSWORD') {
         const reasons = (parsed.body?.reasons as string[]) ?? [];
         setError({
-          title: t('register.error.passwordRejected'),
+          title: 'Password rejected',
           message:
-            reasons.map((r) => describeReason(r as never, t)).join(' ') ||
-            (parsed.message ?? t('register.error.pickStronger')),
+            reasons.map((r) => describeReason(r as never)).join(' ') ||
+            (parsed.message ?? 'Pick a stronger password.'),
         });
       } else if (parsed?.code === 'EMAIL_TAKEN') {
         const emailFromBody =
@@ -192,14 +193,15 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
             ? (parsed.body.email as string)
             : email;
         setError({
-          title: t('register.error.emailTakenTitle'),
-          message: t('register.error.emailTakenBody'),
+          title: 'Account already exists',
+          message:
+            'There is already a TradeHub account for this email. Sign in to continue, or use "Forgot password" if you don\'t remember it.',
           emailTaken: emailFromBody,
         });
       } else {
         setError({
-          title: t('register.error.signUpFailed'),
-          message: parsed?.message ?? t('shared.genericError'),
+          title: 'Sign up failed',
+          message: parsed?.message ?? 'Something went wrong. Please try again.',
         });
       }
     } finally {
@@ -225,8 +227,8 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
       window.location.href = data.redirect_url;
     } catch {
       setError({
-        title: t('register.error.googleTitle'),
-        message: t('register.error.googleBody'),
+        title: 'Google unavailable',
+        message: 'Google sign-up is not available right now. Try again or use email + password.',
       });
     }
   }
@@ -238,35 +240,35 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
         headerGradient
         footer={
           <>
-            {t('register.alreadyHaveAccount')}{' '}
+            Already have an account?{' '}
             <Link
               to="/login"
               className="font-medium text-primary underline-offset-4 hover:underline"
             >
-              {t('shared.logIn')}
+              Log in
             </Link>
           </>
         }
       >
         <div className="text-center">
           <h1 className="text-3xl font-semibold tracking-tight text-fg sm:text-4xl">
-            {t('register.welcome')}
+            Welcome to TradeHub
           </h1>
           <p className="mt-3 text-base text-fg-muted">
-            {t('register.whichDescribes')}
+            Which describes you best?
           </p>
         </div>
         <div className="mt-12 grid gap-4 sm:grid-cols-2">
           <RoleCard
             icon={<Hammer className="h-12 w-12" />}
-            title={t('register.roleWorker')}
-            description={t('register.roleWorkerDesc')}
+            title="Tradesperson"
+            description="Find jobs and get paid"
             onClick={() => setRole('WORKER')}
           />
           <RoleCard
             icon={<HardHat className="h-12 w-12" />}
-            title={t('register.roleEmployer')}
-            description={t('register.roleEmployerDesc')}
+            title="Employer"
+            description="Post jobs and hire"
             onClick={() => setRole('EMPLOYER')}
           />
         </div>
@@ -279,13 +281,13 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
       contentClassName="max-w-xl"
       headerAction={
         <p className="text-sm text-fg">
-          {role === 'WORKER' ? t('register.hereToHire') : t('register.lookingForWork')}{' '}
+          {role === 'WORKER' ? 'Here to hire talent?' : 'Looking for work?'}{' '}
           <button
             type="button"
             onClick={() => setRole(role === 'WORKER' ? 'EMPLOYER' : 'WORKER')}
             className="font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {role === 'WORKER' ? t('register.joinAsEmployer') : t('register.applyAsTradesperson')}
+            {role === 'WORKER' ? 'Join as an Employer' : 'Apply as a Tradesperson'}
           </button>
         </p>
       }
@@ -304,13 +306,13 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
       <div className="space-y-6">
         <h1 className="text-center text-3xl font-semibold tracking-tight text-fg sm:text-4xl">
           {role === 'WORKER'
-            ? t('register.titleWorker')
-            : t('register.titleEmployer')}
+            ? 'Sign up to find work you love'
+            : 'Sign up to hire talent'}
         </h1>
 
         {referrerName ? (
-          <AuthBanner variant="info" title={t('register.referredBy', { name: referrerName })}>
-            {t('register.referredByBody')}
+          <AuthBanner variant="info" title={`Referred by ${referrerName}`}>
+            They'll get a small commission on your first projects — no cost to you.
           </AuthBanner>
         ) : null}
 
@@ -325,13 +327,13 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
                     to={`/login?email=${encodeURIComponent(error.emailTaken)}`}
                     className="font-medium underline-offset-4 hover:underline"
                   >
-                    {t('register.signInInstead')}
+                    Sign in instead
                   </Link>
                   <Link
                     to="/forgot-password"
                     className="font-medium underline-offset-4 hover:underline"
                   >
-                    {t('shared.forgotPassword')}
+                    Forgot password?
                   </Link>
                 </div>
               ) : null
@@ -351,7 +353,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
               onClick={handleGoogle}
             >
               <GoogleIcon />
-              {t('shared.continueWithGoogle')}
+              Continue with Google
             </Button>
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -359,7 +361,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
               </div>
               <div className="relative flex justify-center">
                 <span className="bg-page px-2 text-xs uppercase tracking-wide text-fg-subtle">
-                  {t('shared.or')}
+                  or
                 </span>
               </div>
             </div>
@@ -370,7 +372,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
             {role === 'WORKER' ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-2.5">
-                  <Label htmlFor="reg-firstname">{t('register.firstNameLabel')}</Label>
+                  <Label htmlFor="reg-firstname">First name</Label>
                   <Input
                     id="reg-firstname"
                     type="text"
@@ -384,7 +386,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
                   />
                 </div>
                 <div className="flex flex-col gap-2.5">
-                  <Label htmlFor="reg-surname">{t('register.surnameLabel')}</Label>
+                  <Label htmlFor="reg-surname">Surname</Label>
                   <Input
                     id="reg-surname"
                     type="text"
@@ -400,7 +402,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
               </div>
             ) : (
               <div className="flex flex-col gap-2.5">
-                <Label htmlFor="reg-company">{t('register.companyLabel')}</Label>
+                <Label htmlFor="reg-company">Company name</Label>
                 <Input
                   id="reg-company"
                   type="text"
@@ -415,7 +417,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
               </div>
             )}
             <div className="flex flex-col gap-2.5">
-              <Label htmlFor="reg-email">{t('shared.email')}</Label>
+              <Label htmlFor="reg-email">Email</Label>
               <Input
                 id="reg-email"
                 type="email"
@@ -427,13 +429,13 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
               />
             </div>
             <div className="flex flex-col gap-2.5">
-              <Label htmlFor="reg-password">{t('register.passwordLabel')}</Label>
+              <Label htmlFor="reg-password">Password</Label>
               <Input
                 id="reg-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={t('shared.atLeastChars', { count: MIN_LENGTH })}
+                placeholder={`At least ${MIN_LENGTH} characters`}
                 autoComplete="new-password"
                 required
                 minLength={MIN_LENGTH}
@@ -441,7 +443,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
               <PasswordRules password={password} dirty={password.length > 0} />
             </div>
             <div className="flex flex-col gap-2.5">
-              <Label htmlFor="reg-confirm-password">{t('register.confirmLabel')}</Label>
+              <Label htmlFor="reg-confirm-password">Confirm password</Label>
               <Input
                 id="reg-confirm-password"
                 type="password"
@@ -451,13 +453,13 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
                 required
               />
               {confirmPassword.length > 0 && !passwordsMatch ? (
-                <p className="text-xs text-warning">{t('register.passwordsDontMatch')}</p>
+                <p className="text-xs text-warning">Passwords don't match.</p>
               ) : null}
             </div>
             <div className="flex flex-col gap-2.5">
               <Label htmlFor="reg-phone">
-                {t('register.phoneLabel')}{' '}
-                <span className="text-fg-subtle">{t('register.optional')}</span>
+                Phone{' '}
+                <span className="text-fg-subtle">(optional)</span>
               </Label>
               <PhoneInput
                 inputId="reg-phone"
@@ -468,7 +470,7 @@ export default function RegisterPage({ onRegister: _onRegister }: Props) {
               />
             </div>
           <Button type="submit" size="lg" className="w-full" disabled={loading}>
-            {loading ? t('register.creatingAccount') : t('register.createAccount')}
+            {loading ? 'Creating account…' : 'Create account'}
           </Button>
         </form>
       </div>

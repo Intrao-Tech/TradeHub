@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import type { TranslateFn } from '@/i18n/types';
 import { Link } from 'react-router-dom';
 import { Building2, Lock, ShieldCheck, Star } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 import { api } from '../api';
 import { EmployerCard, type EmployerCardData } from '@/components/EmployerCard';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { SignupGatePopup, type SignupGateStat } from '@/components/SignupGatePopup';
+
+// Marketing surface for logged-out visitors — intentionally English-only
+// (not part of the i18n catalogs; see I18N task decision).
 
 type EmployerRow = EmployerCardData & {
   rating_avg?: string | number;
@@ -24,7 +25,6 @@ type EmployerSearchResponse = {
 const SAMPLE_LIMIT = 20;
 
 export default function PublicEmployerSearchPage() {
-  const { t } = useTranslation('workers');
   const [results, setResults] = useState<EmployerSearchResponse | null>(null);
   const [error, setError] = useState('');
   const [loadingMore, setLoadingMore] = useState(false);
@@ -81,31 +81,31 @@ export default function PublicEmployerSearchPage() {
           id="employer-search-hero-title"
           className="text-3xl font-semibold tracking-tight text-fg sm:text-4xl"
         >
-          {t('publicEmployerSearch.heroTitle')}
+          Find employers hiring across the UK
         </h1>
         <ul
           className="mx-auto mt-4 flex max-w-2xl flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-fg-muted"
-          aria-label={t('publicSearch.whyAria')}
+          aria-label="Why TradeHub"
         >
           <li className="inline-flex items-center gap-1.5">
             <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
-            {t('publicEmployerSearch.verifiedEmployers')}
+            Verified employers
           </li>
           <li className="inline-flex items-center gap-1.5">
             <Star className="h-4 w-4 text-primary" aria-hidden="true" />
-            {t('publicSearch.twoWayReviews')}
+            Two-way reviews
           </li>
           <li className="inline-flex items-center gap-1.5">
             <Lock className="h-4 w-4 text-primary" aria-hidden="true" />
-            {t('publicSearch.escrowPayments')}
+            Escrow payments
           </li>
         </ul>
         <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Button asChild size="lg" className="w-full sm:w-auto">
-            <Link to="/register?next=/jobs">{t('publicEmployerSearch.apply')}</Link>
+            <Link to="/register?next=/jobs">Apply</Link>
           </Button>
           <Button asChild size="lg" variant="outline" className="w-full sm:w-auto">
-            <Link to="/register?next=/my-jobs">{t('publicEmployerSearch.hiringPostJob')}</Link>
+            <Link to="/register?next=/my-jobs">Hiring? Post a job</Link>
           </Button>
         </div>
       </section>
@@ -134,12 +134,12 @@ export default function PublicEmployerSearchPage() {
           ) : (
             <EmptyState
               icon={Building2}
-              title={t('publicEmployerSearch.emptyTitle')}
-              description={t('publicSearch.emptyDesc')}
+              title="No employers yet"
+              description="Check back soon."
             />
           )
         ) : (
-          <p className="text-sm text-fg-muted">{t('search.loading')}</p>
+          <p className="text-sm text-fg-muted">Loading…</p>
         )}
 
         {canLoadMore ? (
@@ -152,7 +152,7 @@ export default function PublicEmployerSearchPage() {
               disabled={loadingMore}
               className="border-primary bg-transparent text-primary hover:bg-primary/5"
             >
-              {loadingMore ? t('search.loading') : t('publicEmployerSearch.loadMore')}
+              {loadingMore ? 'Loading…' : 'Load more employers'}
             </Button>
           </div>
         ) : null}
@@ -160,10 +160,10 @@ export default function PublicEmployerSearchPage() {
         {hasLoadedMore ? (
           <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row sm:gap-6">
             <p className="text-base font-medium text-fg">
-              {t('publicEmployerSearch.browseMore')}
+              Want to browse more employers?
             </p>
             <Button asChild size="lg">
-              <Link to="/register?next=/employers">{t('publicSearch.signUp')}</Link>
+              <Link to="/register?next=/employers">Sign up</Link>
             </Button>
           </div>
         ) : null}
@@ -175,18 +175,18 @@ export default function PublicEmployerSearchPage() {
           onOpenChange={(o) => {
             if (!o) setSelected(null);
           }}
-          action={t('publicEmployerSearch.gateAction')}
+          action="contact this employer"
           name={
             selected.company_name ??
             selected.client_profile?.display_name ??
-            t('publicEmployerSearch.gateNameFallback')
+            'this employer'
           }
           nextPath={`/employers/${String(selected.id)}`}
           avatarUrl={selected.client_profile?.avatar_url}
           avatarShape="square"
           subtitle={selected.industry ?? null}
           location={selected.postcode_area ?? selected.client_profile?.postcode_area ?? null}
-          stats={employerStats(selected, t)}
+          stats={employerStats(selected)}
           rating={selected.rating_average != null ? Number(selected.rating_average) : null}
         />
       ) : null}
@@ -194,25 +194,22 @@ export default function PublicEmployerSearchPage() {
   );
 }
 
-function employerStats(
-  e: EmployerRow,
-  t: TranslateFn,
-): SignupGateStat[] {
+function employerStats(e: EmployerRow): SignupGateStat[] {
   const out: SignupGateStat[] = [];
   if (e.rating_avg != null) {
-    out.push({ label: t('publicSearch.statRating'), value: Number(e.rating_avg).toFixed(1) });
+    out.push({ label: 'Rating', value: Number(e.rating_avg).toFixed(1) });
   } else if (e.rating_average != null) {
-    out.push({ label: t('publicSearch.statRating'), value: Number(e.rating_average).toFixed(1) });
+    out.push({ label: 'Rating', value: Number(e.rating_average).toFixed(1) });
   }
   if (e.rating_count != null && e.rating_count > 0) {
-    out.push({ label: t('publicSearch.statReviews'), value: String(e.rating_count) });
+    out.push({ label: 'Reviews', value: String(e.rating_count) });
   }
   const jobs = e.active_jobs_count ?? e._count?.job_posts;
   if (jobs != null) {
-    out.push({ label: t('publicEmployerSearch.statOpenJobs'), value: String(jobs) });
+    out.push({ label: 'Open jobs', value: String(jobs) });
   }
   if (e.team_size != null) {
-    out.push({ label: t('publicEmployerSearch.statTeam'), value: String(e.team_size) });
+    out.push({ label: 'Team', value: String(e.team_size) });
   }
   return out.slice(0, 3);
 }

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, parseApiError, setTokens } from '../api';
 import { AuthShell } from '@/components/AppShell';
@@ -20,6 +19,8 @@ import {
   type AccountSummary,
 } from '@/lib/auth-routing';
 
+// Auth pages are intentionally English-only (I18N decision): language is an authenticated-only setting, switched from the account menu.
+
 type LoginResponse = {
   access_token: string;
   refresh_token: string;
@@ -29,7 +30,6 @@ type LoginResponse = {
 type Props = { onLogin: () => void };
 
 export default function InternalLoginPage({ onLogin }: Props) {
-  const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -52,28 +52,28 @@ export default function InternalLoginPage({ onLogin }: Props) {
       const parsed = parseApiError(err);
       if (parsed?.code === 'INVALID_CREDENTIALS') {
         setError({
-          title: t('staffLogin.error.invalidTitle'),
-          message: t('staffLogin.error.invalidBody'),
+          title: 'Sign in failed',
+          message: 'Email or password is incorrect.',
         });
       } else if (parsed?.code === 'ACCOUNT_DEACTIVATED') {
         setError({
-          title: t('staffLogin.error.deactivatedTitle'),
-          message: t('staffLogin.error.deactivatedBody'),
+          title: 'Account deactivated',
+          message: 'This staff account has been deactivated.',
         });
       } else if (parsed?.code === 'INVITE_EXPIRED') {
         setError({
-          title: t('staffLogin.error.inviteExpiredTitle'),
-          message: t('staffLogin.error.inviteExpiredBody'),
+          title: 'Invite expired',
+          message: 'This invite link is older than 24 hours. Ask an admin to send you a fresh invite.',
         });
       } else if (parsed?.status === 404) {
         setError({
-          title: t('staffLogin.error.wrongHostTitle'),
-          message: t('staffLogin.error.wrongHostBody'),
+          title: 'Wrong host',
+          message: 'Staff sign-in is only available on the internal subdomain. Open this page on internal.tradehub.co.uk (or internal.localhost in dev).',
         });
       } else {
         setError({
-          title: t('staffLogin.error.invalidTitle'),
-          message: parsed?.message ?? t('staffLogin.error.genericBody'),
+          title: 'Sign in failed',
+          message: parsed?.message ?? 'Something went wrong. Try again.',
         });
       }
     } finally {
@@ -85,8 +85,10 @@ export default function InternalLoginPage({ onLogin }: Props) {
     <AuthShell>
       <Card className="border-t-4 border-t-danger">
         <CardHeader>
-          <CardTitle>{t('staffLogin.title')}</CardTitle>
-          <CardDescription>{t('staffLogin.description')}</CardDescription>
+          <CardTitle>Staff sign in</CardTitle>
+          <CardDescription>
+            Restricted area — TradeHub staff and moderators only. This entry point does not support Google sign-in.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {error ? (
@@ -97,7 +99,7 @@ export default function InternalLoginPage({ onLogin }: Props) {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="staff-email">{t('shared.email')}</Label>
+              <Label htmlFor="staff-email">Email</Label>
               <Input
                 id="staff-email"
                 type="email"
@@ -109,7 +111,7 @@ export default function InternalLoginPage({ onLogin }: Props) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="staff-password">{t('login.passwordLabel')}</Label>
+              <Label htmlFor="staff-password">Password</Label>
               <Input
                 id="staff-password"
                 type="password"
@@ -119,10 +121,12 @@ export default function InternalLoginPage({ onLogin }: Props) {
                 autoComplete="current-password"
                 required
               />
-              <p className="text-xs text-fg-muted">{t('staffLogin.forgotHint')}</p>
+              <p className="text-xs text-fg-muted">
+                Forgot your password? Ask an admin to reset it for you — staff accounts cannot self-reset.
+              </p>
             </div>
             <Button type="submit" size="lg" className="w-full" disabled={loading}>
-              {loading ? t('staffLogin.signingIn') : t('staffLogin.submit')}
+              {loading ? 'Signing in…' : 'Staff sign in'}
             </Button>
           </form>
         </CardContent>

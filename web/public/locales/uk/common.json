@@ -3,31 +3,6 @@
     "login": "Увійти",
     "signUp": "Зареєструватися"
   },
-  "directory": {
-    "about": "Про учасника",
-    "backToDirectory": "Назад до каталогу",
-    "member": "Учасник",
-    "nameContains": "Ім'я містить",
-    "namePlaceholder": "напр., Mike",
-    "next": "Далі",
-    "noBio": "Цей учасник ще не додав опис.",
-    "noneDesc": "Спробуйте розширити критерії пошуку.",
-    "noneTitle": "Учасників не знайдено",
-    "pageOf": "Сторінка {{page}} з {{pages}}",
-    "postcodeArea": "Район за індексом",
-    "previous": "Назад",
-    "profileLoadError": "Не вдалося завантажити цей профіль.",
-    "profileNotFound": "Профіль не знайдено",
-    "profileRemoved": "Можливо, цей профіль було видалено.",
-    "search": "Шукати",
-    "searchError": "Не вдалося виконати пошук.",
-    "searching": "Пошук…",
-    "searchTitle": "Пошук",
-    "startDesc": "Скористайтеся пошуком вище, щоб переглянути учасників.",
-    "startTitle": "Почніть пошук",
-    "subtitle": "Переглядайте всіх, хто має профіль TradeHub.",
-    "title": "Учасники"
-  },
   "language": {
     "en": "English",
     "label": "Мова",
@@ -272,15 +247,5 @@
   },
   "phone": {
     "dialCodeAria": "Телефонний код країни"
-  },
-  "signupGate": {
-    "title": "Зареєструйтеся, щоб {{action}}",
-    "defaultAction": "переглянути цей профіль",
-    "srDescription": "Зареєструйтеся або увійдіть, щоб переглянути повний профіль {{name}}.",
-    "signUp": "Зареєструватися",
-    "alreadyHave": "Вже маєте акаунт?",
-    "logIn": "Увійти",
-    "close": "Закрити",
-    "homeAria": "Головна TradeHub"
   }
 }

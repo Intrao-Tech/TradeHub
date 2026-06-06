@@ -1,5 +1,4 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { MapPin, Star, X } from 'lucide-react';
 import { Dialog, DialogOverlay, DialogPortal } from '@/components/ui/dialog';
@@ -7,12 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
+// Shown only on public marketing pages — intentionally English-only
+// (not part of the i18n catalogs; see I18N task decision).
+
 export type SignupGateStat = { label: string; value: string };
 
 type SignupGatePopupProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Localised action verb for the heading. Default: t('signupGate.defaultAction'). */
+  /** Action verb for the heading. Default: "view this profile". */
   action?: string;
   name: string;
   /** URL to return to after sign-up / login (e.g. /workers/123). */
@@ -38,7 +40,7 @@ function initials(name?: string | null): string {
 export function SignupGatePopup({
   open,
   onOpenChange,
-  action,
+  action = 'view this profile',
   name,
   nextPath,
   avatarUrl,
@@ -48,8 +50,6 @@ export function SignupGatePopup({
   stats,
   rating,
 }: SignupGatePopupProps) {
-  const { t } = useTranslation('common');
-  const actionText = action ?? t('signupGate.defaultAction');
   const signupHref = `/register?next=${encodeURIComponent(nextPath)}`;
   const loginHref = `/login?next=${encodeURIComponent(nextPath)}`;
   const avatarRounded = avatarShape === 'square' ? 'rounded-md' : '';
@@ -59,7 +59,7 @@ export function SignupGatePopup({
       <DialogPortal>
         <DialogOverlay />
         <DialogPrimitive.Content
-          aria-label={t('signupGate.title', { action: actionText })}
+          aria-label={`Sign up to ${action}`}
           className={cn(
             'fixed inset-0 z-50 grid h-screen w-screen grid-cols-1 bg-raised md:grid-cols-[3fr_2fr]',
             'data-[state=open]:animate-in data-[state=closed]:animate-out',
@@ -69,7 +69,7 @@ export function SignupGatePopup({
           <div className="relative flex flex-col px-6 py-10 sm:px-12">
             <Link
               to="/"
-              aria-label={t('signupGate.homeAria')}
+              aria-label="TradeHub home"
               className="inline-flex items-center gap-2 self-start font-semibold tracking-tight text-fg hover:opacity-90"
             >
               <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-fg text-base font-bold">
@@ -80,23 +80,23 @@ export function SignupGatePopup({
 
             <div className="m-auto w-full max-w-md space-y-6">
               <DialogPrimitive.Title className="text-center text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
-                {t('signupGate.title', { action: actionText })}
+                Sign up to {action}
               </DialogPrimitive.Title>
               <DialogPrimitive.Description className="sr-only">
-                {t('signupGate.srDescription', { name })}
+                Sign up or log in to view the full {name} profile.
               </DialogPrimitive.Description>
 
               <div className="space-y-3">
                 <Button asChild size="lg" className="w-full">
-                  <Link to={signupHref}>{t('signupGate.signUp')}</Link>
+                  <Link to={signupHref}>Sign up</Link>
                 </Button>
                 <p className="text-center text-sm text-fg-muted">
-                  {t('signupGate.alreadyHave')}{' '}
+                  Already have an account?{' '}
                   <Link
                     to={loginHref}
                     className="font-medium text-primary underline-offset-4 hover:underline"
                   >
-                    {t('signupGate.logIn')}
+                    Log in
                   </Link>
                 </p>
               </div>
@@ -153,7 +153,7 @@ export function SignupGatePopup({
           </div>
 
           <DialogPrimitive.Close
-            aria-label={t('signupGate.close')}
+            aria-label="Close"
             className={cn(
               'absolute right-4 top-4 rounded-sm text-fg-muted transition-opacity',
               'opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring',
@@ -161,7 +161,7 @@ export function SignupGatePopup({
             )}
           >
             <X className="h-6 w-6" />
-            <span className="sr-only">{t('signupGate.close')}</span>
+            <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         </DialogPrimitive.Content>
       </DialogPortal>

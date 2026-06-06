@@ -79,38 +79,6 @@
     "subtitle": "Перегляньте перевірених роботодавців, які наймають на TradeHub.",
     "title": "Пошук роботодавців"
   },
-  "publicEmployerSearch": {
-    "apply": "Відгукнутися",
-    "browseMore": "Хочете переглянути більше роботодавців?",
-    "emptyTitle": "Поки що немає роботодавців",
-    "gateAction": "зв'язатися з цим роботодавцем",
-    "gateNameFallback": "цей роботодавець",
-    "heroTitle": "Знайдіть роботодавців, які наймають у Великій Британії",
-    "hiringPostJob": "Наймаєте працівників? Опублікуйте вакансію",
-    "loadMore": "Завантажити ще",
-    "statOpenJobs": "Відкриті вакансії",
-    "statTeam": "Команда",
-    "verifiedEmployers": "Перевірені роботодавці"
-  },
-  "publicSearch": {
-    "browseMore": "Хочете переглянути більше працівників?",
-    "emptyDesc": "Зазирніть пізніше.",
-    "emptyTitle": "Поки що немає працівників",
-    "escrowPayments": "Платежі через ескроу",
-    "gateAction": "зв'язатися з цим працівником",
-    "gateNameFallback": "цей працівник",
-    "heroTitle": "Наймайте перевірених працівників у Великій Британії",
-    "hire": "Найняти",
-    "loadMore": "Завантажити ще",
-    "lookingForWork": "Шукаєте роботу?",
-    "signUp": "Зареєструватися",
-    "statDayRate": "Денна ставка",
-    "statRating": "Рейтинг",
-    "statReviews": "Відгуки",
-    "twoWayReviews": "Двосторонні відгуки",
-    "verifiedTradespeople": "Перевірені працівники",
-    "whyAria": "Чому TradeHub"
-  },
   "search": {
     "anySpecialisation": "Будь-яка спеціалізація",
     "availableNow": "Доступний зараз",

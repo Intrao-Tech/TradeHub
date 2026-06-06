@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Trans, useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { setTokens } from '../api';
 import { AuthShell } from '@/components/AppShell';
@@ -18,10 +17,11 @@ import {
   type AccountSummary,
 } from '@/lib/auth-routing';
 
+// Auth pages are intentionally English-only (I18N decision): language is an authenticated-only setting, switched from the account menu.
+
 type Props = { onLogin: () => void };
 
 export default function OAuthCallbackPage({ onLogin }: Props) {
-  const { t } = useTranslation('auth');
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const [view, setView] = useState<
@@ -71,7 +71,7 @@ export default function OAuthCallbackPage({ onLogin }: Props) {
       return;
     }
     if (!inputs.access || !inputs.refresh) {
-      setView({ kind: 'error', message: t('oauthCallback.missingTokens') });
+      setView({ kind: 'error', message: 'Missing tokens in callback URL.' });
       return;
     }
 
@@ -87,7 +87,7 @@ export default function OAuthCallbackPage({ onLogin }: Props) {
       verification_state: inputs.state ?? 'ACTIVE',
     };
     navigate(postAuthRedirect(account, inputs.next), { replace: true });
-  }, [inputs, navigate, onLogin, t]);
+  }, [inputs, navigate, onLogin]);
 
   return (
     <AuthShell>
@@ -95,9 +95,9 @@ export default function OAuthCallbackPage({ onLogin }: Props) {
         {view.kind === 'pending' ? (
           <>
             <CardHeader>
-              <CardTitle className="text-center">{t('oauthCallback.pendingTitle')}</CardTitle>
+              <CardTitle className="text-center">Signing you in…</CardTitle>
               <CardDescription className="text-center">
-                {t('oauthCallback.pendingDescription')}
+                One moment while we set up your session.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3" aria-live="polite">
@@ -112,32 +112,28 @@ export default function OAuthCallbackPage({ onLogin }: Props) {
             <CardHeader>
               <CardTitle>
                 {view.intent === 'register'
-                  ? t('oauthCallback.existsTitleRegister')
-                  : t('oauthCallback.existsTitleLogin')}
+                  ? 'You already have a TradeHub account'
+                  : 'We found an existing account'}
               </CardTitle>
               <CardDescription>
-                <Trans
-                  i18nKey="oauthCallback.existsFor"
-                  ns="auth"
-                  values={{ email: view.email }}
-                  components={[<span className="font-medium text-fg" />]}
-                />{' '}
+                There is already a TradeHub account for{' '}
+                <span className="font-medium text-fg">{view.email}</span>.{' '}
                 {view.intent === 'register'
-                  ? t('oauthCallback.existsBodyRegister')
-                  : t('oauthCallback.existsBodyLogin')}
+                  ? 'Sign in to that account instead of creating a new one.'
+                  : 'Sign in with your password to continue. You can link Google later in Settings → Security.'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <AuthBanner variant="info" title={t('oauthCallback.whyTitle')}>
+              <AuthBanner variant="info" title="Why this step?">
                 {view.intent === 'register'
-                  ? t('oauthCallback.whyRegister')
-                  : t('oauthCallback.whyLogin')}
+                  ? 'We never duplicate accounts. If you forgot your password, use "Forgot password" on the sign-in screen.'
+                  : 'We never automatically merge accounts based on email — that way nobody can take over your TradeHub account by signing into Google with the same address.'}
               </AuthBanner>
               <Button asChild size="lg" className="w-full">
                 <Link to={`/login?email=${encodeURIComponent(view.email)}`}>
                   {view.intent === 'register'
-                    ? t('oauthCallback.signInToAccount')
-                    : t('oauthCallback.signInWithPassword')}
+                    ? 'Sign in to your account'
+                    : 'Sign in with password'}
                 </Link>
               </Button>
             </CardContent>
@@ -147,20 +143,20 @@ export default function OAuthCallbackPage({ onLogin }: Props) {
         {view.kind === 'no_google_account' ? (
           <>
             <CardHeader>
-              <CardTitle>{t('oauthCallback.noAccountTitle')}</CardTitle>
+              <CardTitle>No TradeHub account yet</CardTitle>
               <CardDescription>
-                {t('oauthCallback.noAccountBody')}
+                We couldn't find a TradeHub account for this Google identity. Sign up first, then you can use Google to sign in.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <AuthBanner variant="info" title={t('oauthCallback.whyTitle')}>
-                {t('oauthCallback.whyNoSilent')}
+              <AuthBanner variant="info" title="Why this step?">
+                We never silently create accounts when you click "Sign in" — that way you always know when an account is being made for you.
               </AuthBanner>
               <Button asChild size="lg" className="w-full">
-                <Link to="/register">{t('oauthCallback.createAccount')}</Link>
+                <Link to="/register">Create a TradeHub account</Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="w-full">
-                <Link to="/login">{t('shared.backToSignIn')}</Link>
+                <Link to="/login">Back to sign in</Link>
               </Button>
             </CardContent>
           </>
@@ -169,14 +165,14 @@ export default function OAuthCallbackPage({ onLogin }: Props) {
         {view.kind === 'error' ? (
           <>
             <CardHeader>
-              <CardTitle>{t('oauthCallback.failedTitle')}</CardTitle>
+              <CardTitle>Sign-in failed</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <AuthBanner variant="danger" title={t('oauthCallback.failedBanner')}>
+              <AuthBanner variant="danger" title="Something went wrong">
                 {view.message}
               </AuthBanner>
               <Button asChild size="lg" className="w-full">
-                <Link to="/login">{t('shared.backToSignIn')}</Link>
+                <Link to="/login">Back to sign in</Link>
               </Button>
             </CardContent>
           </>

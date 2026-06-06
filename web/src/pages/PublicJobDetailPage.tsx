@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
-import type { TranslateFn } from '@/i18n/types';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
 import { formatDate as formatDateLib } from '@/lib/format';
-import { specLabel, tagLabel } from '@/lib/specialisations';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -21,7 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { EmptyState } from '@/components/EmptyState';
 import { VerificationBadge, verificationFromLevel } from '@/components/VerificationBadge';
-import { formatPay } from '@/components/jobs/PayLine';
+import { formatMoney } from '@/lib/format';
 import { formatRelative } from '@/lib/relative-time';
 
 type Specialisation = { id?: number; name?: string };
@@ -57,12 +55,36 @@ type JobDetail = {
   tags?: Array<{ tag?: TagItem }>;
 };
 
-type TFn = TranslateFn;
+// Marketing surface for logged-out visitors — intentionally English-only
+// (not part of the i18n catalogs; see I18N task decision). Shared i18n-driven
+// helpers (formatPay, spec/tag labels) are replaced with English equivalents;
+// relative time reuses the shared helper pinned to the English catalog.
 
-function payTypeLabel(payType: string | undefined, t: TFn): string {
-  if (payType === 'DAY_RATE') return t('card.payDayRate');
-  if (payType === 'FIXED_PRICE') return t('card.payFixed');
-  return t('detail.payLabel');
+const tEn = i18n.getFixedT('en');
+
+function payTypeLabel(payType: string | undefined): string {
+  if (payType === 'DAY_RATE') return 'Day rate';
+  if (payType === 'FIXED_PRICE') return 'Fixed price';
+  return 'Pay';
+}
+
+function formatPayEn(j: JobDetail): string {
+  if (j.pay_type === 'DAY_RATE') {
+    if (j.day_rate_min != null && j.day_rate_max != null) {
+      return `${formatMoney(Number(j.day_rate_min), { decimals: 0 })}–${formatMoney(Number(j.day_rate_max), { decimals: 0 })} / day`;
+    }
+    if (j.day_rate_min != null)
+      return `From ${formatMoney(Number(j.day_rate_min), { decimals: 0 })} / day`;
+    if (j.day_rate_max != null)
+      return `Up to ${formatMoney(Number(j.day_rate_max), { decimals: 0 })} / day`;
+    return 'Day rate';
+  }
+  if (j.pay_type === 'FIXED_PRICE') {
+    return j.fixed_price != null
+      ? `Fixed ${formatMoney(Number(j.fixed_price), { decimals: 0 })}`
+      : 'Fixed price';
+  }
+  return j.pay_type ?? '—';
 }
 
 function formatDate(iso: string): string {
@@ -80,7 +102,6 @@ function initials(name?: string | null): string {
 }
 
 export default function PublicJobDetailPage() {
-  const { t } = useTranslation('jobs');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -104,7 +125,7 @@ export default function PublicJobDetailPage() {
         const parsed = parseApiError(err);
         setError({
           status: parsed?.status ?? 0,
-          message: parsed?.message ?? t('detail.loadError'),
+          message: parsed?.message ?? 'Could not load this job.',
         });
       })
       .finally(() => {
@@ -130,11 +151,11 @@ export default function PublicJobDetailPage() {
     return (
       <EmptyState
         icon={Briefcase}
-        title={t('detail.notFoundTitle')}
-        description={t('detail.notFoundDesc')}
+        title="Job not found"
+        description="This job has been removed or never existed."
         action={
           <Button asChild variant="outline">
-            <Link to="/jobs">{t('detail.backToBoard')}</Link>
+            <Link to="/jobs">Back to job board</Link>
           </Button>
         }
       />
@@ -146,30 +167,30 @@ export default function PublicJobDetailPage() {
       <div className="space-y-4">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
           <ArrowLeft />
-          {t('detail.back')}
+          Back
         </Button>
         <div
           role="alert"
           className="rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger"
         >
-          {error?.message ?? t('detail.loadErrorGeneric')}
+          {error?.message ?? 'Something went wrong loading this job.'}
         </div>
       </div>
     );
   }
 
   const specs = (detail.specialisations ?? [])
-    .map((s) => (s.specialisation?.name ? specLabel(s.specialisation.name, t) : null))
+    .map((s) => s.specialisation?.name ?? null)
     .filter(Boolean) as string[];
   const tagNames = (detail.tags ?? [])
-    .map((tg) => (tg.tag?.name ? tagLabel(tg.tag.name, t) : null))
+    .map((tg) => tg.tag?.name ?? null)
     .filter(Boolean) as string[];
   const skills = [...specs, ...tagNames];
 
   const employerName =
     detail.employer?.company_name ??
     detail.employer?.client_profile?.display_name ??
-    t('detail.employerFallback');
+    'Employer';
   const employerAvatar = detail.employer?.client_profile?.avatar_url ?? undefined;
   const employerVerification = verificationFromLevel(
     detail.employer?.client_profile?.verification_level,
@@ -184,7 +205,7 @@ export default function PublicJobDetailPage() {
       <Button asChild variant="ghost" size="sm" className="-ml-2">
         <Link to="/jobs">
           <ArrowLeft />
-          {t('detail.backToJobs')}
+          Back to jobs
         </Link>
       </Button>
 
@@ -196,7 +217,7 @@ export default function PublicJobDetailPage() {
             </h1>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-fg-muted">
               {detail.created_at ? (
-                <span>{t('detail.posted', { time: formatRelative(detail.created_at, t) })}</span>
+                <span>{`Posted ${formatRelative(detail.created_at, tEn)}`}</span>
               ) : null}
               {detail.postcode_area ? (
                 <span className="inline-flex items-center gap-1">
@@ -207,7 +228,7 @@ export default function PublicJobDetailPage() {
               {detail.is_urgent ? (
                 <Badge variant="danger" className="gap-1">
                   <AlertTriangle className="h-3 w-3" />
-                  {t('card.urgent')}
+                  Urgent
                 </Badge>
               ) : null}
             </div>
@@ -215,42 +236,42 @@ export default function PublicJobDetailPage() {
 
           {detail.description ? (
             <section className="space-y-2">
-              <h2 className="text-base font-semibold text-fg">{t('detail.summary')}</h2>
+              <h2 className="text-base font-semibold text-fg">Summary</h2>
               <p className="whitespace-pre-wrap text-sm text-fg">{detail.description}</p>
             </section>
           ) : null}
 
           <section className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
-            <Stat icon={Tag} value={formatPay(detail, t)} label={payTypeLabel(detail.pay_type, t)} />
+            <Stat icon={Tag} value={formatPayEn(detail)} label={payTypeLabel(detail.pay_type)} />
             {detail.duration_days != null ? (
               <Stat
                 icon={Clock}
-                value={t('card.durationDays', { count: detail.duration_days })}
-                label={t('detail.duration')}
+                value={`${detail.duration_days} day${detail.duration_days === 1 ? '' : 's'}`}
+                label="Duration"
               />
             ) : null}
             {detail.postcode_area ? (
-              <Stat icon={MapPin} value={detail.postcode_area} label={t('detail.location')} />
+              <Stat icon={MapPin} value={detail.postcode_area} label="Location" />
             ) : null}
             {detail.start_date ? (
               <Stat
                 icon={Calendar}
                 value={formatDate(detail.start_date)}
-                label={t('detail.startDate')}
+                label="Start date"
               />
             ) : null}
             {detail.site_address ? (
               <Stat
                 icon={MapPin}
                 value={detail.site_address}
-                label={t('detail.siteAddress')}
+                label="Site address"
               />
             ) : null}
           </section>
 
           {skills.length > 0 ? (
             <section className="space-y-3">
-              <h2 className="text-base font-semibold text-fg">{t('detail.skills')}</h2>
+              <h2 className="text-base font-semibold text-fg">Skills and expertise</h2>
               <div className="flex flex-wrap gap-2">
                 {skills.map((s) => (
                   <Badge
@@ -266,7 +287,7 @@ export default function PublicJobDetailPage() {
           ) : null}
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-fg">{t('detail.aboutEmployer')}</h2>
+            <h2 className="text-base font-semibold text-fg">About the employer</h2>
             <div className="flex items-start gap-3">
               <Avatar className="h-12 w-12 shrink-0 rounded-md">
                 {employerAvatar ? (
@@ -291,18 +312,18 @@ export default function PublicJobDetailPage() {
           <Card>
             <CardContent className="space-y-4 p-6">
               <h3 className="text-lg font-semibold text-fg">
-                {t('detail.ctaTitle')}
+                Explore TradeHub opportunities for free
               </h3>
               <Button asChild size="lg" className="w-full">
-                <Link to={signupHref}>{t('detail.signUp')}</Link>
+                <Link to={signupHref}>Sign up</Link>
               </Button>
               <p className="text-center text-sm text-fg-muted">
-                {t('detail.alreadyHaveAccount')}{' '}
+                Already have an account?{' '}
                 <Link
                   to={loginHref}
                   className="font-medium text-primary underline-offset-4 hover:underline"
                 >
-                  {t('detail.logIn')}
+                  Log in
                 </Link>
               </p>
             </CardContent>

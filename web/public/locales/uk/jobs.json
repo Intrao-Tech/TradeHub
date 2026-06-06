@@ -156,27 +156,18 @@
     "yearsAgo_other": "{{count}} року тому"
   },
   "detail": {
-    "aboutEmployer": "Про роботодавця",
-    "alreadyHaveAccount": "Вже маєте акаунт?",
     "back": "Назад",
     "backToBoard": "Назад до дошки вакансій",
     "backToJobs": "Назад до вакансій",
-    "ctaTitle": "Досліджуйте можливості TradeHub безкоштовно",
     "duration": "Тривалість",
-    "employerFallback": "Роботодавець",
     "loadError": "Не вдалося завантажити цю вакансію.",
     "loadErrorGeneric": "Щось пішло не так під час завантаження вакансії.",
-    "location": "Локація",
-    "logIn": "Увійти",
     "notFoundDesc": "Цю вакансію видалено або вона ніколи не існувала.",
     "notFoundTitle": "Вакансію не знайдено",
     "payLabel": "Оплата",
     "posted": "Опубліковано {{time}}",
-    "signUp": "Зареєструватися",
-    "siteAddress": "Адреса об'єкта",
     "skills": "Навички та досвід",
-    "startDate": "Дата початку",
-    "summary": "Опис"
+    "startDate": "Дата початку"
   },
   "editJob": {
     "lockedNotice_one": "Ця вакансія має {{count}} заявку. Оплата, локація та спеціалізації заблоковані, щоб не дивувати тих, хто відгукнувся.",
@@ -310,25 +301,6 @@
     "fromPerDay": "Від {{rate}} / день",
     "perDayRange": "{{range}} / день",
     "upToPerDay": "До {{rate}} / день"
-  },
-  "publicBoard": {
-    "apply": "Відгукнутися",
-    "browseMore": "Хочете переглянути більше вакансій?",
-    "emptyDesc": "Зазирніть пізніше.",
-    "emptyTitle": "Поки що немає вакансій",
-    "escrowPayments": "Платежі через ескроу",
-    "heroTitle": "Знайдіть свою наступну роботу в будівництві у Великій Британії",
-    "hiringPostJob": "Наймаєте працівників? Опублікуйте вакансію",
-    "loadMore": "Завантажити ще",
-    "loadMoreError": "Не вдалося завантажити більше вакансій.",
-    "sample_one": "Перегляньте приклад із {{count}} вакансії на TradeHub",
-    "sample_few": "Перегляньте приклади з {{count}} вакансій на TradeHub",
-    "sample_many": "Перегляньте приклади з {{count}} вакансій на TradeHub",
-    "sample_other": "Перегляньте приклади з {{count}} вакансії на TradeHub",
-    "signUp": "Зареєструватися",
-    "twoWayReviews": "Двосторонні відгуки",
-    "verifiedEmployers": "Перевірені роботодавці",
-    "whyAria": "Чому TradeHub"
   },
   "saveBtn": {
     "saved": "Збережено",

@@ -40,7 +40,7 @@ import { useAccountMe } from "@/hooks/useAccountMe";
 import { publicFileUrl } from "@/lib/files";
 import { Footer } from "@/components/Footer";
 import { AuthFooter } from "@/components/AuthFooter";
-import { LanguageSubmenu, LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { LanguageSubmenu } from "@/components/LanguageSwitcher";
 
 export type NavItem = {
   to: string;
@@ -539,12 +539,9 @@ export function AuthShell({
           </span>
           <span className="text-lg">TradeHub</span>
         </NavLink>
-        <div className="flex items-center gap-2">
-          {headerAction ? (
-            <div className="flex items-center">{headerAction}</div>
-          ) : null}
-          <LanguageSwitcher />
-        </div>
+        {headerAction ? (
+          <div className="flex items-center">{headerAction}</div>
+        ) : null}
       </header>
       <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-12">
         <div className={cn("w-full max-w-md", contentClassName)}>

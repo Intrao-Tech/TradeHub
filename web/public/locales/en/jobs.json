@@ -140,27 +140,18 @@
     "yearsAgo_other": "{{count}} years ago"
   },
   "detail": {
-    "aboutEmployer": "About the employer",
-    "alreadyHaveAccount": "Already have an account?",
     "back": "Back",
     "backToBoard": "Back to job board",
     "backToJobs": "Back to jobs",
-    "ctaTitle": "Explore TradeHub opportunities for free",
     "duration": "Duration",
-    "employerFallback": "Employer",
     "loadError": "Could not load this job.",
     "loadErrorGeneric": "Something went wrong loading this job.",
-    "location": "Location",
-    "logIn": "Log in",
     "notFoundDesc": "This job has been removed or never existed.",
     "notFoundTitle": "Job not found",
     "payLabel": "Pay",
     "posted": "Posted {{time}}",
-    "signUp": "Sign up",
-    "siteAddress": "Site address",
     "skills": "Skills and expertise",
-    "startDate": "Start date",
-    "summary": "Summary"
+    "startDate": "Start date"
   },
   "editJob": {
     "lockedNotice_one": "This job has {{count}} application. Pay, location, and specialisations are locked so applicants aren't surprised.",
@@ -290,23 +281,6 @@
     "fromPerDay": "From {{rate}} / day",
     "perDayRange": "{{range}} / day",
     "upToPerDay": "Up to {{rate}} / day"
-  },
-  "publicBoard": {
-    "apply": "Apply",
-    "browseMore": "Want to browse more jobs?",
-    "emptyDesc": "Check back soon.",
-    "emptyTitle": "No jobs yet",
-    "escrowPayments": "Escrow payments",
-    "heroTitle": "Find your next trade job in the UK",
-    "hiringPostJob": "Hiring? Post a job",
-    "loadMore": "Load more jobs",
-    "loadMoreError": "Could not load more jobs.",
-    "sample_one": "Check out a sample of the {{count}} job posted on TradeHub",
-    "sample_other": "Check out a sample of the {{count}} jobs posted on TradeHub",
-    "signUp": "Sign up",
-    "twoWayReviews": "Two-way reviews",
-    "verifiedEmployers": "Verified employers",
-    "whyAria": "Why TradeHub"
   },
   "saveBtn": {
     "saved": "Saved",

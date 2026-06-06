@@ -18,7 +18,8 @@ async function registerEmployer(
   email: string,
 ) {
   await page.goto('/register');
-  await page.getByText(/I'm hiring/i).click();
+  // Role card title (en copy: register.roleEmployer).
+  await page.getByText('Employer', { exact: true }).click();
   await page.getByLabel(/Email/i).fill(email);
   await page.getByLabel(/^Password$/i).fill(TEST_PASSWORD);
   await page.getByLabel(/Confirm password/i).fill(TEST_PASSWORD);

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { api, parseApiError, setTokens } from '../api';
 import { AuthShell } from '@/components/AppShell';
 import { AuthBanner } from '@/components/AuthBanner';
@@ -19,6 +18,9 @@ import {
   type AccountSummary,
 } from '@/lib/auth-routing';
 
+// Auth pages are intentionally English-only (I18N decision): language is an
+// authenticated-only setting, switched from the account menu.
+
 type ConfirmResponse = {
   access_token: string;
   refresh_token: string;
@@ -34,7 +36,6 @@ type ConfirmState =
 type Props = { onLogin: () => void };
 
 export default function VerifyEmailConfirmPage({ onLogin }: Props) {
-  const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
@@ -50,7 +51,7 @@ export default function VerifyEmailConfirmPage({ onLogin }: Props) {
     if (!token) {
       setState({
         kind: 'error',
-        message: t('verifyConfirm.noToken'),
+        message: 'No confirmation token in this link.',
       });
       return;
     }
@@ -88,7 +89,7 @@ export default function VerifyEmailConfirmPage({ onLogin }: Props) {
         setState({
           kind: 'error',
           code: parsed?.code,
-          message: parsed?.message ?? t('verifyConfirm.invalidOrExpired'),
+          message: parsed?.message ?? 'This verification link is invalid or has expired.',
         });
       }
     })();
@@ -98,8 +99,8 @@ export default function VerifyEmailConfirmPage({ onLogin }: Props) {
     <AuthShell>
       <Card>
         <CardHeader>
-          <CardTitle>{t('verifyConfirm.title')}</CardTitle>
-          <CardDescription>{t('verifyConfirm.description')}</CardDescription>
+          <CardTitle>Confirming your email…</CardTitle>
+          <CardDescription>One moment while we activate your account.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {state.kind === 'pending' ? (
@@ -110,22 +111,22 @@ export default function VerifyEmailConfirmPage({ onLogin }: Props) {
           ) : null}
 
           {state.kind === 'success' ? (
-            <AuthBanner variant="success" title={t('verifyConfirm.successTitle')}>
-              {t('verifyConfirm.successBody')}
+            <AuthBanner variant="success" title="Email verified">
+              Welcome to TradeHub. Redirecting you to your profile…
             </AuthBanner>
           ) : null}
 
           {state.kind === 'error' ? (
             <>
-              <AuthBanner variant="danger" title={t('verifyConfirm.errorTitle')}>
+              <AuthBanner variant="danger" title="Verification failed">
                 {state.message}
               </AuthBanner>
               <div className="space-y-2">
                 <Button asChild className="w-full">
-                  <Link to="/verify-email">{t('verifyConfirm.sendNewLink')}</Link>
+                  <Link to="/verify-email">Send a new link</Link>
                 </Button>
                 <Button asChild variant="outline" className="w-full">
-                  <Link to="/login">{t('shared.backToSignIn')}</Link>
+                  <Link to="/login">Back to sign in</Link>
                 </Button>
               </div>
             </>
