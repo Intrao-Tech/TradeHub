@@ -17,7 +17,11 @@
       "Bash(npm install *)",
       "Bash(npm ls *)",
       "Bash(lsof *)",
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "mcp__surf__surf_reddit_post"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "shadcn"
+  ]
 }
