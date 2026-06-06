@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from 'vitest';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { extname, join } from 'node:path';
+import { join } from 'node:path';
 
 const ROOT = process.cwd();
 

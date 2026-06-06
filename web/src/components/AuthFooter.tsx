@@ -1,34 +1,38 @@
+import type { ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Apple, Smartphone } from 'lucide-react';
 
-type FooterLink = { to: string; label: string };
-type FooterColumn = FooterLink[];
+// Labels live in the `auth` namespace under `footer.*`.
+// `as const` keeps labelKey literal so the typed t() can check the keys.
+const COLUMNS = [
+  [
+    { to: '/', labelKey: 'footer.aboutUs' },
+    { to: '/', labelKey: 'footer.feedback' },
+    { to: '/', labelKey: 'footer.trustSafety' },
+  ],
+  [
+    { to: '/', labelKey: 'footer.helpSupport' },
+    { to: '/', labelKey: 'footer.terms' },
+    { to: '/', labelKey: 'footer.modernSlavery' },
+  ],
+  [
+    { to: '/', labelKey: 'footer.privacy' },
+    { to: '/', labelKey: 'footer.cookie' },
+    { to: '/', labelKey: 'footer.accessibility' },
+  ],
+  [
+    { to: '/', labelKey: 'footer.mobileApp' },
+    { to: '/', labelKey: 'footer.desktopApp' },
+    { to: '/', labelKey: 'footer.enterprise' },
+    { to: '/', labelKey: 'footer.releaseNotes' },
+  ],
+] as const;
 
-const COLUMNS: FooterColumn[] = [
-  [
-    { to: '/', label: 'About Us' },
-    { to: '/', label: 'Feedback' },
-    { to: '/', label: 'Trust, Safety & Security' },
-  ],
-  [
-    { to: '/', label: 'Help & Support' },
-    { to: '/', label: 'Terms of Service' },
-    { to: '/', label: 'Modern Slavery Statement' },
-  ],
-  [
-    { to: '/', label: 'Privacy Policy' },
-    { to: '/', label: 'Cookie Policy' },
-    { to: '/', label: 'Accessibility' },
-  ],
-  [
-    { to: '/', label: 'Mobile App' },
-    { to: '/', label: 'Desktop App' },
-    { to: '/', label: 'Enterprise' },
-    { to: '/', label: 'Release notes' },
-  ],
-];
-
-type SocialDef = { label: string; Icon: (props: { className?: string }) => JSX.Element };
+type SocialDef = {
+  label: string;
+  Icon: (props: { className?: string }) => ReactElement;
+};
 
 const SOCIALS: SocialDef[] = [
   { label: 'Facebook', Icon: FacebookIcon },
@@ -39,6 +43,7 @@ const SOCIALS: SocialDef[] = [
 ];
 
 export function AuthFooter() {
+  const { t } = useTranslation('auth');
   const year = new Date().getFullYear();
   return (
     <footer className="mx-auto w-full max-w-7xl px-4 pb-10 pt-8">
@@ -47,12 +52,12 @@ export function AuthFooter() {
           {COLUMNS.map((col, i) => (
             <ul key={i} className="space-y-3">
               {col.map((link) => (
-                <li key={link.label}>
+                <li key={link.labelKey}>
                   <Link
                     to={link.to}
                     className="text-sm text-fg-muted hover:text-fg"
                   >
-                    {link.label}
+                    {t(link.labelKey)}
                   </Link>
                 </li>
               ))}
@@ -62,7 +67,7 @@ export function AuthFooter() {
 
         <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-sm text-fg-muted">Follow Us</span>
+            <span className="text-sm text-fg-muted">{t('footer.followUs')}</span>
             <div className="flex items-center gap-1">
               {SOCIALS.map(({ label, Icon }) => (
                 <Link
@@ -78,18 +83,18 @@ export function AuthFooter() {
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="text-sm text-fg-muted">Mobile app</span>
+            <span className="text-sm text-fg-muted">{t('footer.mobileAppShort')}</span>
             <div className="flex items-center gap-1">
               <Link
                 to="/"
-                aria-label="iOS app"
+                aria-label={t('footer.iosApp')}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-subtle hover:text-fg"
               >
                 <Apple className="h-4 w-4" />
               </Link>
               <Link
                 to="/"
-                aria-label="Android app"
+                aria-label={t('footer.androidApp')}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-subtle hover:text-fg"
               >
                 <Smartphone className="h-4 w-4" />
@@ -98,7 +103,9 @@ export function AuthFooter() {
           </div>
         </div>
 
-        <div className="mt-6 text-xs text-fg-muted">© {year} TradeHub UK</div>
+        <div className="mt-6 text-xs text-fg-muted">
+          {t('footer.copyright', { year })}
+        </div>
       </div>
     </footer>
   );

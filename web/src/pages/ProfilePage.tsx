@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react';
+import type { ParseKeys } from 'i18next';
+import type { TranslateFn } from '@/i18n/types';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { MapPin, Pencil } from 'lucide-react';
@@ -68,7 +70,7 @@ function initialsFor(name: string): string {
     .join('') || 'TH';
 }
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
 function formatRate(
   min: string | number | null | undefined,
@@ -933,7 +935,6 @@ function AccountSection({
   emailVerifiedAt,
   phone,
   phoneVerified,
-  verificationState,
   onPhoneChanged,
 }: AccountSectionProps) {
   const { t } = useTranslation('profile');
@@ -1004,24 +1005,6 @@ function AccountSection({
     </Card>
   );
 }
-
-const VERIFICATION_STATE_LABEL: Record<
-  'PENDING_EMAIL_VERIFICATION' | 'ACTIVE' | 'DEACTIVATED',
-  string
-> = {
-  PENDING_EMAIL_VERIFICATION: 'Pending email verification',
-  ACTIVE: 'Active',
-  DEACTIVATED: 'Deactivated',
-};
-
-const VERIFICATION_STATE_VARIANT: Record<
-  'PENDING_EMAIL_VERIFICATION' | 'ACTIVE' | 'DEACTIVATED',
-  'success' | 'warning' | 'danger'
-> = {
-  PENDING_EMAIL_VERIFICATION: 'warning',
-  ACTIVE: 'success',
-  DEACTIVATED: 'danger',
-};
 
 function parseE164(phone: string | null): { iso: string; local: string } {
   if (!phone) return { iso: 'GB', local: '' };
@@ -1194,7 +1177,7 @@ type StripeIdentityStatus =
   | 'verified'
   | 'canceled';
 
-const VERIFICATION_LEVEL_LABEL_KEY: Record<string, string> = {
+const VERIFICATION_LEVEL_LABEL_KEY: Record<string, ParseKeys<'profile'>> = {
   UNVERIFIED: 'verification.levelUnverified',
   BASIC: 'verification.levelBasic',
   CERTIFIED: 'verification.levelCertified',

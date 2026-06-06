@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { parseApiError } from '@/api';
+import { formatRelative } from '@/lib/relative-time';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -34,13 +36,15 @@ type SubRatingKey =
   | 'payment_rating'
   | 'safety_rating';
 
-const SUB_RATINGS: Array<{ key: SubRatingKey; label: string }> = [
-  { key: 'quality_rating', label: 'Quality' },
-  { key: 'reliability_rating', label: 'Reliability' },
-  { key: 'communication_rating', label: 'Communication' },
-  { key: 'payment_rating', label: 'Payment' },
-  { key: 'safety_rating', label: 'Safety' },
-];
+// Labels reuse the read-side review keys in the `common` namespace.
+// `as const` keeps the keys as literals so the typed t() can check them.
+const SUB_RATINGS = [
+  { key: 'quality_rating', labelKey: 'common:review.quality' },
+  { key: 'reliability_rating', labelKey: 'common:review.reliability' },
+  { key: 'communication_rating', labelKey: 'common:review.communication' },
+  { key: 'payment_rating', labelKey: 'common:review.payment' },
+  { key: 'safety_rating', labelKey: 'common:review.safety' },
+] as const satisfies ReadonlyArray<{ key: SubRatingKey; labelKey: string }>;
 
 type DraftPayload = {
   overall: number;
@@ -91,21 +95,6 @@ function evictStaleDrafts() {
   }
 }
 
-function relativeTime(epochMs: number): string {
-  const diff = Date.now() - epochMs;
-  if (diff < 60_000) return 'just now';
-  if (diff < 3_600_000) {
-    const m = Math.floor(diff / 60_000);
-    return `${m} minute${m === 1 ? '' : 's'} ago`;
-  }
-  if (diff < 86_400_000) {
-    const h = Math.floor(diff / 3_600_000);
-    return `${h} hour${h === 1 ? '' : 's'} ago`;
-  }
-  const d = Math.floor(diff / 86_400_000);
-  return `${d} day${d === 1 ? '' : 's'} ago`;
-}
-
 export type LeaveReviewSheetProps = {
   collaborationId: string;
   clientProfileId: string | number;
@@ -121,6 +110,7 @@ export function LeaveReviewSheet({
   onOpenChange,
   onSubmitted,
 }: LeaveReviewSheetProps) {
+  const { t } = useTranslation(['collaborations', 'common']);
   const storageKey = useMemo(
     () => draftKey(collaborationId, clientProfileId),
     [collaborationId, clientProfileId],
@@ -227,21 +217,19 @@ export function LeaveReviewSheet({
 
       const review = await createReview(collaborationId, body);
       clearDraft();
-      toast.success(
-        'Review submitted — staff will review it before it appears publicly',
-      );
+      toast.success(t('leaveReview.submittedToast'));
       onSubmitted?.(review);
       onOpenChange(false);
     } catch (err) {
       const parsed = parseApiError(err);
       const status = parsed?.status ?? 0;
-      const message = parsed?.message ?? 'Could not submit review.';
+      const message = parsed?.message ?? t('leaveReview.submitError');
       const lower = message.toLowerCase();
 
       if (status === 400 && lower.includes('no client profile')) {
         setError({
           kind: 'inline',
-          message: 'Complete your profile first',
+          message: t('leaveReview.completeProfileFirst'),
           isProfile: true,
         });
         setSubmitting(false);
@@ -252,19 +240,19 @@ export function LeaveReviewSheet({
         lower.includes('completed collaborations')
       ) {
         clearDraft();
-        toast.warning('This collaboration is no longer eligible for review');
+        toast.warning(t('leaveReview.notEligibleToast'));
         onOpenChange(false);
         return;
       }
       if (status === 400 && lower.includes('already exists')) {
         clearDraft();
-        toast.info('A review already exists for this side');
+        toast.info(t('leaveReview.alreadyExistsToast'));
         onOpenChange(false);
         return;
       }
       if (status === 403 && lower.includes('not a participant')) {
         clearDraft();
-        toast.error("You can't review a collaboration you're not part of");
+        toast.error(t('leaveReview.notParticipantToast'));
         onOpenChange(false);
         return;
       }
@@ -281,11 +269,8 @@ export function LeaveReviewSheet({
         className="flex w-full flex-col overflow-y-auto sm:max-w-md"
       >
         <SheetHeader>
-          <SheetTitle>Leave a review</SheetTitle>
-          <SheetDescription>
-            Rate this collaboration. Only the overall rating is required —
-            sub-ratings and the comment are optional.
-          </SheetDescription>
+          <SheetTitle>{t('leaveReview.title')}</SheetTitle>
+          <SheetDescription>{t('leaveReview.description')}</SheetDescription>
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-5">
@@ -295,7 +280,9 @@ export function LeaveReviewSheet({
               className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-info/40 bg-info-subtle px-3 py-2 text-sm text-info"
             >
               <span>
-                Draft restored — last edited {relativeTime(restoredAt)}.
+                {t('leaveReview.draftRestored', {
+                  time: formatRelative(new Date(restoredAt), t),
+                })}
               </span>
               <Button
                 type="button"
@@ -303,34 +290,37 @@ export function LeaveReviewSheet({
                 size="sm"
                 onClick={discardDraft}
               >
-                Discard draft
+                {t('leaveReview.discardDraft')}
               </Button>
             </div>
           ) : null}
 
           <div className="flex flex-col gap-2.5">
-            <Label>Overall rating *</Label>
+            <Label>{t('leaveReview.overallLabel')}</Label>
             <div className="flex items-center gap-3">
               <StarRating
                 value={overall}
                 onChange={setOverall}
                 size="lg"
-                label="Overall rating"
+                label={t('leaveReview.overallAria')}
               />
               <span className="text-sm text-fg-muted">
-                {overall === 0 ? 'Not picked' : `${overall} / 5`}
+                {overall === 0
+                  ? t('leaveReview.notPicked')
+                  : t('leaveReview.outOfFive', { value: overall })}
               </span>
             </div>
-            <p className="text-xs text-fg-muted">1 to 5 stars</p>
+            <p className="text-xs text-fg-muted">{t('leaveReview.starsHint')}</p>
           </div>
 
           <details className="rounded-md border border-border-default p-3">
             <summary className="cursor-pointer text-sm font-medium text-fg">
-              Add detailed ratings (optional)
+              {t('leaveReview.detailedSummary')}
             </summary>
             <div className="mt-3 space-y-3">
-              {SUB_RATINGS.map(({ key, label }) => {
+              {SUB_RATINGS.map(({ key, labelKey }) => {
                 const value = subs[key];
+                const label = t(labelKey);
                 return (
                   <div
                     key={key}
@@ -352,7 +342,7 @@ export function LeaveReviewSheet({
                           size="sm"
                           onClick={() => setSub(key, 0)}
                         >
-                          Clear
+                          {t('leaveReview.clear')}
                         </Button>
                       ) : null}
                     </div>
@@ -363,13 +353,13 @@ export function LeaveReviewSheet({
           </details>
 
           <div className="flex flex-col gap-2.5">
-            <Label htmlFor="review-comment">Comment (optional)</Label>
+            <Label htmlFor="review-comment">{t('leaveReview.commentLabel')}</Label>
             <Textarea
               id="review-comment"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               rows={5}
-              placeholder="What went well? Anything other tradespeople should know?"
+              placeholder={t('leaveReview.commentPlaceholder')}
               aria-invalid={commentOver}
             />
             <p
@@ -394,7 +384,7 @@ export function LeaveReviewSheet({
               {error.isProfile ? (
                 <div className="flex flex-wrap gap-2">
                   <Button asChild variant="outline" size="sm">
-                    <Link to="/profile">Go to profile</Link>
+                    <Link to="/profile">{t('leaveReview.goToProfile')}</Link>
                   </Button>
                   <Button
                     type="button"
@@ -402,7 +392,7 @@ export function LeaveReviewSheet({
                     size="sm"
                     onClick={() => onOpenChange(false)}
                   >
-                    Cancel
+                    {t('leaveReview.cancel')}
                   </Button>
                 </div>
               ) : null}
@@ -416,10 +406,10 @@ export function LeaveReviewSheet({
               onClick={() => onOpenChange(false)}
               disabled={submitting}
             >
-              Cancel
+              {t('leaveReview.cancel')}
             </Button>
             <Button type="submit" disabled={!canSubmit}>
-              {submitting ? 'Submitting…' : 'Submit review'}
+              {submitting ? t('leaveReview.submitting') : t('leaveReview.submit')}
             </Button>
           </SheetFooter>
         </form>

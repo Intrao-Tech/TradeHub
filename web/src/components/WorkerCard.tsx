@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { TranslateFn } from '@/i18n/types';
 import { MapPin } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
@@ -63,7 +64,7 @@ function initials(name?: string | null): string {
     .join('');
 }
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
 function rateLine(w: WorkerCardData, t: TFn): string | null {
   if (w.day_rate_min != null || w.day_rate_max != null) {
@@ -87,7 +88,7 @@ export function WorkerCard({
   selected,
   className,
 }: WorkerCardProps) {
-  const { t } = useTranslation('workers');
+  const { t } = useTranslation(['workers', 'common']);
   const name = worker.client_profile?.display_name ?? t('card.fallbackName');
   const avatar =
     worker.avatar_url ?? worker.client_profile?.avatar_url ?? undefined;

@@ -33,7 +33,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { useTheme, useThemePreference, type ThemePreference } from "@/lib/theme";
+import { useThemePreference, type ThemePreference } from "@/lib/theme";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { useAccountMe } from "@/hooks/useAccountMe";
@@ -175,7 +175,6 @@ export function AppShell({
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            {/* <ThemeToggle /> */}
             {loggedIn ? <NotificationsBell /> : null}
             {loggedIn ? (
               <UserMenu onLogout={onLogout} isStaff={!!staffMember} isOnDuty={isOnDuty} />
@@ -499,26 +498,6 @@ function ThemeSubmenu() {
         })}
       </DropdownMenuSubContent>
     </DropdownMenuSub>
-  );
-}
-
-function ThemeToggle() {
-  const { theme, toggle } = useTheme();
-  return (
-    <Button
-      size="icon"
-      variant="ghost"
-      aria-label={
-        theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
-      }
-      onClick={toggle}
-    >
-      {theme === "dark" ? (
-        <Sun className="h-4 w-4" />
-      ) : (
-        <Moon className="h-4 w-4" />
-      )}
-    </Button>
   );
 }
 

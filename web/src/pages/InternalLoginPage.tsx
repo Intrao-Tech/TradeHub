@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, parseApiError, setTokens } from '../api';
 import { AuthShell } from '@/components/AppShell';
@@ -28,6 +29,7 @@ type LoginResponse = {
 type Props = { onLogin: () => void };
 
 export default function InternalLoginPage({ onLogin }: Props) {
+  const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -50,30 +52,28 @@ export default function InternalLoginPage({ onLogin }: Props) {
       const parsed = parseApiError(err);
       if (parsed?.code === 'INVALID_CREDENTIALS') {
         setError({
-          title: 'Sign in failed',
-          message: 'Email or password is incorrect.',
+          title: t('staffLogin.error.invalidTitle'),
+          message: t('staffLogin.error.invalidBody'),
         });
       } else if (parsed?.code === 'ACCOUNT_DEACTIVATED') {
         setError({
-          title: 'Account deactivated',
-          message: 'This staff account has been deactivated.',
+          title: t('staffLogin.error.deactivatedTitle'),
+          message: t('staffLogin.error.deactivatedBody'),
         });
       } else if (parsed?.code === 'INVITE_EXPIRED') {
         setError({
-          title: 'Invite expired',
-          message:
-            'This invite link is older than 24 hours. Ask an admin to send you a fresh invite.',
+          title: t('staffLogin.error.inviteExpiredTitle'),
+          message: t('staffLogin.error.inviteExpiredBody'),
         });
       } else if (parsed?.status === 404) {
         setError({
-          title: 'Wrong host',
-          message:
-            'Staff sign-in is only available on the internal subdomain. Open this page on internal.tradehub.co.uk (or internal.localhost in dev).',
+          title: t('staffLogin.error.wrongHostTitle'),
+          message: t('staffLogin.error.wrongHostBody'),
         });
       } else {
         setError({
-          title: 'Sign in failed',
-          message: parsed?.message ?? 'Something went wrong. Try again.',
+          title: t('staffLogin.error.invalidTitle'),
+          message: parsed?.message ?? t('staffLogin.error.genericBody'),
         });
       }
     } finally {
@@ -85,11 +85,8 @@ export default function InternalLoginPage({ onLogin }: Props) {
     <AuthShell>
       <Card className="border-t-4 border-t-danger">
         <CardHeader>
-          <CardTitle>Staff sign in</CardTitle>
-          <CardDescription>
-            Restricted area — TradeHub staff and moderators only. This entry
-            point does not support Google sign-in.
-          </CardDescription>
+          <CardTitle>{t('staffLogin.title')}</CardTitle>
+          <CardDescription>{t('staffLogin.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {error ? (
@@ -100,7 +97,7 @@ export default function InternalLoginPage({ onLogin }: Props) {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="staff-email">Email</Label>
+              <Label htmlFor="staff-email">{t('shared.email')}</Label>
               <Input
                 id="staff-email"
                 type="email"
@@ -112,7 +109,7 @@ export default function InternalLoginPage({ onLogin }: Props) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="staff-password">Password</Label>
+              <Label htmlFor="staff-password">{t('login.passwordLabel')}</Label>
               <Input
                 id="staff-password"
                 type="password"
@@ -122,13 +119,10 @@ export default function InternalLoginPage({ onLogin }: Props) {
                 autoComplete="current-password"
                 required
               />
-              <p className="text-xs text-fg-muted">
-                Forgot your password? Ask an admin to reset it for you — staff
-                accounts cannot self-reset.
-              </p>
+              <p className="text-xs text-fg-muted">{t('staffLogin.forgotHint')}</p>
             </div>
             <Button type="submit" size="lg" className="w-full" disabled={loading}>
-              {loading ? 'Signing in…' : 'Staff sign in'}
+              {loading ? t('staffLogin.signingIn') : t('staffLogin.submit')}
             </Button>
           </form>
         </CardContent>

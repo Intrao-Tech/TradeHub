@@ -1,1 +1,7 @@
-{}
+{
+  "file": {
+    "invalidType": "Використайте файл PDF, JPEG, PNG або WebP.",
+    "tooLarge": "Файли мають бути меншими за {{maxMb}} МБ.",
+    "tooMany": "До {{count}} файлів."
+  }
+}

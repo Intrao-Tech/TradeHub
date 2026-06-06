@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import type { ParseKeys } from 'i18next';
 import { Badge } from '@/components/ui/badge';
 
 type AppStatus =
@@ -19,7 +20,7 @@ const VARIANT_BY_STATUS: Record<string, 'success' | 'warning' | 'danger' | 'info
   WITHDRAWN: 'danger',
 };
 
-const LABEL_KEY_BY_STATUS: Record<string, string> = {
+const LABEL_KEY_BY_STATUS: Record<string, ParseKeys<'common'>> = {
   PENDING: 'appStatus.pending',
   REVIEWED: 'appStatus.reviewed',
   SHORTLISTED: 'appStatus.shortlisted',

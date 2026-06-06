@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { Users } from 'lucide-react';
 import { api, parseApiError } from '../api';
@@ -20,6 +21,7 @@ type ClientProfile = {
 };
 
 export default function ClientPublicProfilePage() {
+  const { t } = useTranslation('common');
   const { slug } = useParams<{ slug: string }>();
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,10 +35,10 @@ export default function ClientPublicProfilePage() {
       .then(setProfile)
       .catch((err) => {
         const parsed = parseApiError(err);
-        setError(parsed?.message ?? 'Could not load this profile.');
+        setError(parsed?.message ?? t('directory.profileLoadError'));
       })
       .finally(() => setLoading(false));
-  }, [slug]);
+  }, [slug, t]);
 
   if (loading) {
     return (
@@ -51,11 +53,11 @@ export default function ClientPublicProfilePage() {
     return (
       <EmptyState
         icon={Users}
-        title="Profile not found"
-        description={error || 'This profile may have been removed.'}
+        title={t('directory.profileNotFound')}
+        description={error || t('directory.profileRemoved')}
         action={
           <Button asChild variant="outline">
-            <Link to="/clients">Back to directory</Link>
+            <Link to="/clients">{t('directory.backToDirectory')}</Link>
           </Button>
         }
       />
@@ -65,7 +67,7 @@ export default function ClientPublicProfilePage() {
   return (
     <div className="space-y-6">
       <ProfileHeader
-        displayName={profile.display_name ?? 'Member'}
+        displayName={profile.display_name ?? t('directory.member')}
         avatarUrl={profile.avatar_url}
         role="CLIENT"
         city={profile.city}
@@ -76,15 +78,13 @@ export default function ClientPublicProfilePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>About</CardTitle>
+          <CardTitle>{t('directory.about')}</CardTitle>
         </CardHeader>
         <CardContent>
           {profile.bio ? (
             <p className="whitespace-pre-line text-sm text-fg">{profile.bio}</p>
           ) : (
-            <p className="text-sm text-fg-muted">
-              This member hasn’t added a bio yet.
-            </p>
+            <p className="text-sm text-fg-muted">{t('directory.noBio')}</p>
           )}
         </CardContent>
       </Card>

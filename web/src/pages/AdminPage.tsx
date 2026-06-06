@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo } from 'react';
+import type { ParseKeys } from 'i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAccountMe } from '@/hooks/useAccountMe';
@@ -50,7 +51,7 @@ const NotificationsPage = lazy(() => import('./NotificationsPage'));
 
 type TabDef = {
   id: string;
-  label: string;
+  label: ParseKeys<'admin'>;
   icon: React.ComponentType<{ className?: string }>;
   render: () => React.ReactNode;
   /**
@@ -64,7 +65,7 @@ type TabDef = {
 
 type Section = {
   id: string;
-  label: string;
+  label: ParseKeys<'admin'>;
   tabs: TabDef[];
 };
 

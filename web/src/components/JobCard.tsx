@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { TranslateFn } from '@/i18n/types';
 import { AlertTriangle, MapPin } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
@@ -53,7 +54,7 @@ type JobCardProps = {
   className?: string;
 };
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
 function payLine(j: JobCardData, t: TFn): string | null {
   if (j.pay_type === 'DAY_RATE') {
@@ -104,7 +105,7 @@ export function JobCard({
   selected,
   className,
 }: JobCardProps) {
-  const { t } = useTranslation('jobs');
+  const { t } = useTranslation(['jobs', 'common']);
   const specs = (job.specialisations ?? [])
     .map((s) => (s.specialisation?.name ? specLabel(s.specialisation.name, t) : null))
     .filter(Boolean) as string[];

@@ -1,3 +1,4 @@
+import type { TranslateFn } from '@/i18n/types';
 /**
  * Mirrors `backend/src/common/validators/password-policy.ts` for inline
  * client-side feedback. The server is the source of truth — this is just so
@@ -82,7 +83,7 @@ export function checkPassword(password: string): PasswordPolicyResult {
   return reasons.length === 0 ? { ok: true } : { ok: false, reasons };
 }
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
 /**
  * Human-readable copy for a failed rule. Pass the i18next `t` for a localized

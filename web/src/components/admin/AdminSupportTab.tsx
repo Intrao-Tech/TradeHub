@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ParseKeys } from 'i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Inbox, LifeBuoy, MessageCircle, Send } from 'lucide-react';
@@ -74,7 +75,7 @@ type StaffRow = {
   status: string;
 };
 
-const FILTER_LABEL_KEY: Record<'all' | 'mine' | 'unassigned' | 'unread', string> = {
+const FILTER_LABEL_KEY: Record<'all' | 'mine' | 'unassigned' | 'unread', ParseKeys<'admin'>> = {
   all: 'support.filterAll',
   mine: 'support.filterMine',
   unassigned: 'support.filterUnassigned',

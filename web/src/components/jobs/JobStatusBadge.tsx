@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import type { ParseKeys } from 'i18next';
 import { Badge } from '@/components/ui/badge';
 
 type JobStatus = 'OPEN' | 'CLOSED' | 'FILLED' | 'CANCELLED' | string;
@@ -10,7 +11,7 @@ const VARIANT_BY_STATUS: Record<string, 'success' | 'warning' | 'danger' | 'info
   CANCELLED: 'danger',
 };
 
-const LABEL_KEY_BY_STATUS: Record<string, string> = {
+const LABEL_KEY_BY_STATUS: Record<string, ParseKeys<'common'>> = {
   OPEN: 'jobStatus.open',
   FILLED: 'jobStatus.filled',
   CLOSED: 'jobStatus.closed',

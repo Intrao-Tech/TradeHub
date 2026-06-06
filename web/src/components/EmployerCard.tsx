@@ -60,7 +60,7 @@ export function EmployerCard({
   selected,
   className,
 }: EmployerCardProps) {
-  const { t } = useTranslation('workers');
+  const { t } = useTranslation(['workers', 'common']);
   const name =
     employer.company_name ??
     employer.client_profile?.display_name ??

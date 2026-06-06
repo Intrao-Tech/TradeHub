@@ -606,5 +606,30 @@
     "statusRejected": "Відхилені",
     "structured": "структуровано",
     "title": "Черга верифікації"
+  },
+  "publishQueue": {
+    "loadError": "Не вдалося завантажити чергу.",
+    "retry": "Повторити",
+    "title": "Черга публікації",
+    "emptyTitle": "Черга порожня",
+    "emptyDesc": "Немає відгуків, що очікують на публікацію.",
+    "pending_one": "{{count}} відгук очікує",
+    "pending_few": "{{count}} відгуки очікують",
+    "pending_many": "{{count}} відгуків очікують",
+    "pending_other": "{{count}} відгуку очікує",
+    "pageOf": "Сторінка {{page}} з {{pages}}",
+    "previous": "Назад",
+    "next": "Далі",
+    "publishedToast": "Відгук опубліковано — рейтинг контрагента перераховано",
+    "publishError": "Не вдалося опублікувати відгук.",
+    "reviewingCollab": "Відгук про співпрацю",
+    "submitted": "Надіслано {{time}}",
+    "overallAria": "Загальна оцінка",
+    "showLess": "Згорнути",
+    "readMore": "Читати далі",
+    "noComment": "Без коментаря",
+    "publishing": "Публікація…",
+    "publish": "Опублікувати",
+    "view": "Переглянути"
   }
 }

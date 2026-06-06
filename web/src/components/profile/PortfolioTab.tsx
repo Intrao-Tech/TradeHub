@@ -7,6 +7,7 @@ import {
   type FormEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TranslateFn } from '@/i18n/types';
 import {
   ArrowDown,
   ArrowUp,
@@ -395,7 +396,7 @@ export function PortfolioTab({ workerId, flash }: PortfolioTabProps) {
   );
 }
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
 function labelFor(type: string, t: TFn): string {
   if (type === 'EXPERIENCE') return t('portfolio.typeExperience');

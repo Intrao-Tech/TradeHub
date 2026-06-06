@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { ParseKeys } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { ListChecks, Plus, ShieldAlert } from 'lucide-react';
 import { api, parseApiError } from '../../api';
@@ -89,7 +90,7 @@ const ACTION_COMPATIBLE_CONDITIONS: Record<
   BROADCAST_MESSAGE: ['REQUESTING_STAFF_HAS_ROLE'],
 };
 
-const CONDITION_LABEL_KEY: Record<ConditionType, string> = {
+const CONDITION_LABEL_KEY: Record<ConditionType, ParseKeys<'admin'>> = {
   AMOUNT_GT: 'rules.condAmount',
   REQUESTING_STAFF_HAS_ROLE: 'rules.condRole',
   DOCUMENT_TYPE_EQUALS: 'rules.condDocType',

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { TranslateFn } from '@/i18n/types';
 import { Link } from 'react-router-dom';
 import { Lock, ShieldCheck, Star, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -199,7 +200,7 @@ export default function PublicWorkerSearchPage() {
 
 function workerStats(
   w: WorkerRow,
-  t: (key: string, opts?: Record<string, unknown>) => string,
+  t: TranslateFn,
 ): SignupGateStat[] {
   const out: SignupGateStat[] = [];
   if (w.day_rate_min != null && w.day_rate_max != null) {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { TranslateFn } from '@/i18n/types';
 import { useTranslation } from 'react-i18next';
 import { AlarmClock, Clock, Plus, ShieldAlert } from 'lucide-react';
 import { api, parseApiError } from '../../api';
@@ -33,7 +34,7 @@ import {
 } from '@/components/ui/table';
 import { EmptyState } from '../EmptyState';
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
 const QUEUES = [
   { value: 'DOCUMENT_PENDING', labelKey: 'sla.queueDocPending' },

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { TranslateFn } from '@/i18n/types';
 import { Link } from 'react-router-dom';
 import { Building2, Lock, ShieldCheck, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -195,7 +196,7 @@ export default function PublicEmployerSearchPage() {
 
 function employerStats(
   e: EmployerRow,
-  t: (key: string, opts?: Record<string, unknown>) => string,
+  t: TranslateFn,
 ): SignupGateStat[] {
   const out: SignupGateStat[] = [];
   if (e.rating_avg != null) {

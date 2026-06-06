@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { TranslateFn } from '@/i18n/types';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, MessageSquare } from 'lucide-react';
@@ -19,7 +20,7 @@ import { cn } from '@/lib/utils';
 
 function previewLine(
   message: ChatMessage | null,
-  t: (key: string, opts?: Record<string, unknown>) => string,
+  t: TranslateFn,
 ): string | null {
   if (!message) return null;
   if (message.content && message.content.trim().length > 0) {

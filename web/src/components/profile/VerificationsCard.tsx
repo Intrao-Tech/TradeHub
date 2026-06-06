@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ParseKeys } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
 import {
   BadgeCheck,
@@ -46,7 +47,7 @@ type PublicLevelResponse = {
   reviews?: { count?: number; average?: number | null };
 };
 
-type Row = { key: string; labelKey: string; icon: LucideIcon; verified: boolean };
+type Row = { key: string; labelKey: ParseKeys<'common'>; icon: LucideIcon; verified: boolean };
 
 function workerRows(
   flags: PublicLevelResponse['flags'] | undefined,

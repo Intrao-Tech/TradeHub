@@ -3,6 +3,31 @@
     "login": "Login",
     "signUp": "Sign up"
   },
+  "directory": {
+    "about": "About",
+    "backToDirectory": "Back to directory",
+    "member": "Member",
+    "nameContains": "Name contains",
+    "namePlaceholder": "e.g. Mike",
+    "next": "Next",
+    "noBio": "This member hasn’t added a bio yet.",
+    "noneDesc": "Try broadening your search.",
+    "noneTitle": "No members found",
+    "pageOf": "Page {{page}} of {{pages}}",
+    "postcodeArea": "Postcode area",
+    "previous": "Previous",
+    "profileLoadError": "Could not load this profile.",
+    "profileNotFound": "Profile not found",
+    "profileRemoved": "This profile may have been removed.",
+    "search": "Search",
+    "searchError": "Could not search.",
+    "searching": "Searching…",
+    "searchTitle": "Search",
+    "startDesc": "Use the search above to browse members.",
+    "startTitle": "Start searching",
+    "subtitle": "Browse everyone with a TradeHub profile.",
+    "title": "Members"
+  },
   "language": {
     "en": "English",
     "label": "Language",
@@ -218,5 +243,18 @@
     "drainage": "Drainage",
     "solar-panel-installation": "Solar Panel Installation",
     "smart-home-wiring": "Smart Home Wiring"
+  },
+  "phone": {
+    "dialCodeAria": "Country dial code"
+  },
+  "signupGate": {
+    "title": "Sign up to {{action}}",
+    "defaultAction": "view this profile",
+    "srDescription": "Sign up or log in to view the full {{name}} profile.",
+    "signUp": "Sign up",
+    "alreadyHave": "Already have an account?",
+    "logIn": "Log in",
+    "close": "Close",
+    "homeAria": "TradeHub home"
   }
 }

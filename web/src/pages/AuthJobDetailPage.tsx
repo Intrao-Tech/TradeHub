@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { TranslateFn } from '@/i18n/types';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { formatDate } from '@/lib/format';
 import { specLabel, tagLabel } from '@/lib/specialisations';
@@ -461,7 +462,7 @@ function ScopeStrip({ detail }: { detail: JobDetail }) {
   );
 }
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
 function payTypeLabel(payType: string | undefined, t: TFn): string {
   if (payType === 'DAY_RATE') return t('card.payDayRate');
@@ -635,7 +636,7 @@ function AboutClientCard({
 }: {
   employer: JobDetail['employer'] | null;
 }) {
-  const { t } = useTranslation('jobs');
+  const { t } = useTranslation(['jobs', 'common']);
   if (!employer) return null;
   const cp = employer.client_profile ?? null;
   const displayName =

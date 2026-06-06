@@ -598,5 +598,28 @@
     "statusRejected": "Rejected",
     "structured": "structured",
     "title": "Verification queue"
+  },
+  "publishQueue": {
+    "loadError": "Could not load the queue.",
+    "retry": "Retry",
+    "title": "Publish queue",
+    "emptyTitle": "Queue clear",
+    "emptyDesc": "No reviews waiting to be published.",
+    "pending_one": "{{count}} review pending",
+    "pending_other": "{{count}} reviews pending",
+    "pageOf": "Page {{page}} of {{pages}}",
+    "previous": "Previous",
+    "next": "Next",
+    "publishedToast": "Review published — counterparty rating recalculated",
+    "publishError": "Could not publish review.",
+    "reviewingCollab": "Reviewing collaboration",
+    "submitted": "Submitted {{time}}",
+    "overallAria": "Overall rating",
+    "showLess": "Show less",
+    "readMore": "Read more",
+    "noComment": "No comment",
+    "publishing": "Publishing…",
+    "publish": "Publish",
+    "view": "View"
   }
 }

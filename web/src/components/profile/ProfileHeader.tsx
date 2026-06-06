@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ParseKeys } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { MapPin, CalendarCheck } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -47,7 +48,7 @@ type PublicLevelResponse = {
   reviews?: { count?: number; average?: number | null };
 };
 
-const ROLE_LABEL_KEY: Record<ProfileHeaderProps['role'], string> = {
+const ROLE_LABEL_KEY: Record<ProfileHeaderProps['role'], ParseKeys<'common'>> = {
   WORKER: 'profileHeader.roleWorker',
   EMPLOYER: 'profileHeader.roleEmployer',
   CLIENT: 'profileHeader.roleClient',

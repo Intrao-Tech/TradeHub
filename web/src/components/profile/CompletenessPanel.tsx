@@ -4,6 +4,7 @@ import {
   CircleDashed,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import type { TranslateFn } from '@/i18n/types';
 import type {
   ClientProfile,
   WorkerProfile,
@@ -157,7 +158,7 @@ function buildRequirements({
   hasPortfolioItem,
   hasUploadedDocument,
 }: Omit<CompletenessPanelProps, 'onAction'>,
-  t: (key: string, opts?: Record<string, unknown>) => string,
+  t: TranslateFn,
 ): CompletenessRequirement[] {
   const cp = clientProfile;
   const reqs: CompletenessRequirement[] = [];

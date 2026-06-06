@@ -141,5 +141,26 @@
     "saveWorker": "Save worker",
     "unsaveWorker": "Unsave worker",
     "error": "Could not update saved worker"
+  },
+  "inviteToJob": {
+    "button": "Invite to job",
+    "titleNamed": "Invite {{name}} to a job",
+    "titleGeneric": "Invite this worker to a job",
+    "description": "Pick one of your open jobs and add an optional note. The worker will receive an invitation to apply.",
+    "jobLabel": "Job",
+    "jobPlaceholder": "Select a job",
+    "loadingJobs": "Loading your jobs…",
+    "noOpenJobs": "You have no open jobs. Post a job before inviting workers.",
+    "loadJobsError": "Could not load your open jobs.",
+    "pickJob": "Pick a job to invite this worker to.",
+    "invalidWorker": "Invalid worker.",
+    "messageLabel": "Message (optional)",
+    "messagePlaceholder": "A short note for the worker.",
+    "sendError": "Could not send invitation.",
+    "invitedNamed": "Invited {{name}} to the job",
+    "invitedGeneric": "Worker invited",
+    "cancel": "Cancel",
+    "sending": "Sending…",
+    "send": "Send invitation"
   }
 }

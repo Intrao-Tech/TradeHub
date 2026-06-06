@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { TranslateFn } from '@/i18n/types';
 import { useTranslation } from 'react-i18next';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import {
@@ -55,7 +56,7 @@ type Dispute = {
   };
 };
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
 function decisionBadge(d: 'PENDING' | 'ACCEPTED' | 'REJECTED', t: TFn) {
   if (d === 'ACCEPTED')

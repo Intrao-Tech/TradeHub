@@ -7,6 +7,8 @@ import {
   type DragEvent,
 } from 'react';
 import { formatDate } from '@/lib/format';
+import type { ParseKeys } from 'i18next';
+import type { TranslateFn } from '@/i18n/types';
 import {
   CircleCheck,
   CircleDashed,
@@ -56,9 +58,9 @@ type DocType =
   | 'COMPANY_LETTERHEAD'
   | 'OTHER';
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
-const DOC_LABEL_KEY: Record<DocType, string> = {
+const DOC_LABEL_KEY: Record<DocType, ParseKeys<'profile'>> = {
   INSURANCE: 'documents.labelInsurance',
   CSCS_CARD: 'documents.labelCscs',
   GAS_SAFE_CERT: 'documents.labelGasSafe',
@@ -68,7 +70,7 @@ const DOC_LABEL_KEY: Record<DocType, string> = {
   OTHER: 'documents.labelOther',
 };
 
-const DOC_FORMAT_HINT_KEY: Record<DocType, string> = {
+const DOC_FORMAT_HINT_KEY: Record<DocType, ParseKeys<'profile'>> = {
   INSURANCE: 'documents.hintInsurance',
   CSCS_CARD: 'documents.hintCscs',
   GAS_SAFE_CERT: 'documents.hintGasSafe',
@@ -100,7 +102,7 @@ const STATUS_VARIANT: Record<
   PENDING: 'warning',
 };
 
-const STATUS_LABEL_KEY: Record<string, string> = {
+const STATUS_LABEL_KEY: Record<string, ParseKeys<'profile'>> = {
   APPROVED: 'documents.statusApproved',
   REJECTED: 'documents.statusRejected',
   IN_REVIEW: 'documents.statusInReview',

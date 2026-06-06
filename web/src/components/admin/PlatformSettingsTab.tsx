@@ -35,10 +35,6 @@ export function PlatformSettingsTab() {
     'EMPLOYER_PAYS' | 'PLATFORM_ABSORBS' | 'WORKER_ABSORBS'
   >('EMPLOYER_PAYS');
 
-  useEffect(() => {
-    void load();
-  }, []);
-
   async function load() {
     setError('');
     try {
@@ -61,6 +57,11 @@ export function PlatformSettingsTab() {
       setError(parseApiError(err)?.message ?? t('settings.loadError'));
     }
   }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
+  }, []);
 
   async function save() {
     setError('');

@@ -1,3 +1,4 @@
+import type { TranslateFn } from '@/i18n/types';
 // Localised display name for a trade specialisation.
 //
 // Specialisation names live in the backend DB (seeded English), so they can't
@@ -8,7 +9,7 @@
 // seed does (`name.toLowerCase()` → non-alphanumerics to `-`), so passing just
 // the English name is enough at every call site.
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
 export function slugifySpec(name: string): string {
   return name

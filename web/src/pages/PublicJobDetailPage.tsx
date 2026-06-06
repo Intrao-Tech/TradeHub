@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { TranslateFn } from '@/i18n/types';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { formatDate as formatDateLib } from '@/lib/format';
@@ -56,7 +57,7 @@ type JobDetail = {
   tags?: Array<{ tag?: TagItem }>;
 };
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
 function payTypeLabel(payType: string | undefined, t: TFn): string {
   if (payType === 'DAY_RATE') return t('card.payDayRate');

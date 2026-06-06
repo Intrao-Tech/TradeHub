@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { TranslateFn } from '@/i18n/types';
 import { Link, useParams } from 'react-router-dom';
 import { Briefcase, Hammer, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -68,7 +69,7 @@ type WorkerDetail = {
   portfolio_items?: PortfolioItem[];
 };
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
 function formatRate(
   min: string | number | null | undefined,

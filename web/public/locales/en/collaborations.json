@@ -157,5 +157,71 @@
     "completed": "Completed",
     "canceled": "Canceled",
     "abandoned": "Abandoned"
+  },
+  "status": {
+    "PENDING": "Pending",
+    "CONFIRMED": "Confirmed",
+    "IN_PROGRESS": "In progress",
+    "COMPLETED": "Completed",
+    "REJECTED": "Rejected",
+    "DISPUTED": "Disputed",
+    "unknown": "Unknown"
+  },
+  "chip": {
+    "workerFallback": "Worker",
+    "employerFallback": "Employer",
+    "reviews_one": "{{count}} review",
+    "reviews_other": "{{count}} reviews"
+  },
+  "flag": {
+    "title": "Flag this collaboration",
+    "description": "Pick a reason category. Staff will review the flag and may contact either party.",
+    "category": {
+      "PAYMENT_LATE": "Payment is overdue",
+      "PAYMENT_REFUSED": "The other party refuses to pay",
+      "WORK_QUALITY": "Work quality is unacceptable",
+      "WORK_NOT_DONE": "Work was not completed as agreed",
+      "SAFETY_CONCERN": "Site safety / health concern",
+      "MISREPRESENTATION": "The other party misrepresented themselves",
+      "ABUSIVE_BEHAVIOUR": "Abusive / threatening behaviour",
+      "OTHER": "Something else (detail required)"
+    },
+    "categoryLabel": "Reason category",
+    "categoryPlaceholder": "Select a reason",
+    "detailLabel": "Detail",
+    "detailRequired": "(required, ≥ {{count}} chars)",
+    "detailOptional": "(optional)",
+    "detailPlaceholder": "Add anything that helps staff understand the situation.",
+    "detailTooShort": "Add at least {{count}} characters of detail when picking Other.",
+    "submitError": "Could not submit flag.",
+    "submitted": "Flag submitted — staff will review",
+    "cancel": "Cancel",
+    "submitting": "Submitting…",
+    "submit": "Submit flag"
+  },
+  "leaveReview": {
+    "title": "Leave a review",
+    "description": "Rate this collaboration. Only the overall rating is required — sub-ratings and the comment are optional.",
+    "draftRestored": "Draft restored — last edited {{time}}.",
+    "discardDraft": "Discard draft",
+    "overallLabel": "Overall rating *",
+    "overallAria": "Overall rating",
+    "notPicked": "Not picked",
+    "outOfFive": "{{value}} / 5",
+    "starsHint": "1 to 5 stars",
+    "detailedSummary": "Add detailed ratings (optional)",
+    "clear": "Clear",
+    "commentLabel": "Comment (optional)",
+    "commentPlaceholder": "What went well? Anything other tradespeople should know?",
+    "submitError": "Could not submit review.",
+    "completeProfileFirst": "Complete your profile first",
+    "goToProfile": "Go to profile",
+    "cancel": "Cancel",
+    "submitting": "Submitting…",
+    "submit": "Submit review",
+    "submittedToast": "Review submitted — staff will review it before it appears publicly",
+    "notEligibleToast": "This collaboration is no longer eligible for review",
+    "alreadyExistsToast": "A review already exists for this side",
+    "notParticipantToast": "You can't review a collaboration you're not part of"
   }
 }

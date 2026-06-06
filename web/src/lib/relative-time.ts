@@ -1,8 +1,9 @@
+import type { TranslateFn } from '@/i18n/types';
 // Localised relative time ("3 days ago", "in 2 hours"). Pass the i18next `t`
 // from any namespace — keys live in `common` (`rel.*`) with plural forms, so
 // Ukrainian's 4 plural categories are handled by i18next.
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
 export function formatRelative(
   input: string | Date | null | undefined,

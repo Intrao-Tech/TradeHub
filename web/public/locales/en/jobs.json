@@ -313,5 +313,36 @@
     "saveJob": "Save job",
     "unsaveJob": "Unsave job",
     "error": "Could not update saved job"
+  },
+  "inviteWorker": {
+    "title": "Invite a worker",
+    "description": "Worker IDs can be found on a worker's profile page. Search by name is coming soon.",
+    "workerIdLabel": "Worker ID",
+    "workerIdRequired": "Worker ID is required.",
+    "workerIdInvalid": "Worker ID must be a positive whole number.",
+    "messageLabel": "Message (optional)",
+    "messagePlaceholder": "A short note for the worker.",
+    "invited": "Worker invited",
+    "sendError": "Could not send invitation.",
+    "cancel": "Cancel",
+    "sending": "Sending…",
+    "send": "Send invitation"
+  },
+  "attachments": {
+    "title": "Attachments",
+    "limitHint": "Up to {{count}} files (max {{maxMb}} MB each)",
+    "attach": "Attach files",
+    "limitReached": "Limit reached — remove a file to add another.",
+    "listAria": "Attached files",
+    "removeAria": "Remove {{name}}",
+    "notAdded_one": "{{count}} file not added",
+    "notAdded_other": "{{count}} files not added",
+    "opening": "Opening…",
+    "download": "Download",
+    "previewSr": "Attachment preview",
+    "previewAria": "Preview {{name}}",
+    "noAccess": "You don't have access to this attachment.",
+    "notAvailable": "This attachment is no longer available.",
+    "openError": "Could not open attachment."
   }
 }

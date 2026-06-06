@@ -25,7 +25,7 @@ type OnboardingBannerProps = {
  * onboarding"; complete → success badge.
  */
 export function OnboardingBanner({ status, onRefresh }: OnboardingBannerProps) {
-  const { t } = useTranslation('wallet');
+  const { t } = useTranslation(['wallet', 'common']);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState('');
 

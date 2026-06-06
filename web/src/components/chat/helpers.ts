@@ -4,12 +4,14 @@
  */
 
 import { activeLocale } from '@/lib/format';
+import type { ParseKeys } from 'i18next';
+import type { TranslateFn } from '@/i18n/types';
 import type { ChatMessage } from './types';
 
 const SAME_SENDER_GROUP_MS = 60_000;
 
 /** Minimal `t` shape these helpers need — keeps them decoupled from react-i18next. */
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
 /**
  * Backend SYSTEM messages are English strings persisted on the row. The
@@ -18,7 +20,7 @@ type TFn = (key: string, opts?: Record<string, unknown>) => string;
  * raw content. Keep these in sync with the backend's static SYSTEM bodies
  * (conversation.service.ts, seed.ts).
  */
-const STATIC_SYSTEM_MESSAGES: Record<string, string> = {
+const STATIC_SYSTEM_MESSAGES: Record<string, ParseKeys<'chat'>> = {
   'Job accepted. Welcome to TradeHub.': 'system.jobAcceptedWelcome',
   'Collaboration confirmed. You can now message each other about the project.':
     'system.collaborationConfirmed',

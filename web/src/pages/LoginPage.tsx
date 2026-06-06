@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { TranslateFn } from '@/i18n/types';
 import type { FormEvent } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -253,7 +254,7 @@ function parseError(err: unknown): LoginError {
 
 function errorTitle(
   error: NonNullable<LoginError>,
-  t: (key: string) => string,
+  t: TranslateFn,
 ): string {
   switch (error.code) {
     case 'ACCOUNT_DEACTIVATED':
@@ -269,7 +270,7 @@ function errorTitle(
 function errorAction(
   error: NonNullable<LoginError>,
   email: string,
-  t: (key: string) => string,
+  t: TranslateFn,
 ): React.ReactNode {
   if (error.code === 'EMAIL_NOT_VERIFIED' && (error.email || email)) {
     return (

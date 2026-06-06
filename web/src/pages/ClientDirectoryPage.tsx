@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Search, Users } from 'lucide-react';
 import { api, parseApiError } from '../api';
@@ -50,6 +51,7 @@ function initials(name?: string | null): string {
 }
 
 export default function ClientDirectoryPage() {
+  const { t } = useTranslation('common');
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [postcodeArea, setPostcodeArea] = useState('');
@@ -74,7 +76,7 @@ export default function ClientDirectoryPage() {
       setResults(data);
     } catch (err) {
       const parsed = parseApiError(err);
-      setError(parsed?.message ?? 'Could not search.');
+      setError(parsed?.message ?? t('directory.searchError'));
     } finally {
       setLoading(false);
     }
@@ -83,10 +85,8 @@ export default function ClientDirectoryPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Members</h1>
-        <p className="text-sm text-fg-muted">
-          Browse everyone with a TradeHub profile.
-        </p>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t('directory.title')}</h1>
+        <p className="text-sm text-fg-muted">{t('directory.subtitle')}</p>
       </div>
 
       {error ? (
@@ -100,7 +100,7 @@ export default function ClientDirectoryPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Search</CardTitle>
+          <CardTitle>{t('directory.searchTitle')}</CardTitle>
         </CardHeader>
         <CardContent>
           <form
@@ -108,16 +108,16 @@ export default function ClientDirectoryPage() {
             className="grid gap-4 sm:grid-cols-[1fr_auto_auto]"
           >
             <div className="flex flex-col gap-2.5">
-              <Label htmlFor="cd-search">Name contains</Label>
+              <Label htmlFor="cd-search">{t('directory.nameContains')}</Label>
               <Input
                 id="cd-search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="e.g. Mike"
+                placeholder={t('directory.namePlaceholder')}
               />
             </div>
             <div className="flex flex-col gap-2.5 sm:w-40">
-              <Label htmlFor="cd-postcode">Postcode area</Label>
+              <Label htmlFor="cd-postcode">{t('directory.postcodeArea')}</Label>
               <Input
                 id="cd-postcode"
                 value={postcodeArea}
@@ -128,7 +128,7 @@ export default function ClientDirectoryPage() {
             <div className="self-end">
               <Button type="submit" disabled={loading}>
                 <Search />
-                {loading ? 'Searching…' : 'Search'}
+                {loading ? t('directory.searching') : t('directory.search')}
               </Button>
             </div>
           </form>
@@ -158,7 +158,7 @@ export default function ClientDirectoryPage() {
                   </Avatar>
                   <div className="min-w-0 flex-1 space-y-1">
                     <p className="truncate text-sm font-semibold text-fg">
-                      {p.display_name ?? 'Member'}
+                      {p.display_name ?? t('directory.member')}
                     </p>
                     {p.city || p.postcode_area ? (
                       <p className="flex items-center gap-1 text-xs text-fg-muted">
@@ -177,15 +177,15 @@ export default function ClientDirectoryPage() {
         ) : (
           <EmptyState
             icon={Users}
-            title="No members found"
-            description="Try broadening your search."
+            title={t('directory.noneTitle')}
+            description={t('directory.noneDesc')}
           />
         )
       ) : (
         <EmptyState
           icon={Search}
-          title="Start searching"
-          description="Use the search above to browse members."
+          title={t('directory.startTitle')}
+          description={t('directory.startDesc')}
         />
       )}
 
@@ -201,10 +201,13 @@ export default function ClientDirectoryPage() {
               await runSearch();
             }}
           >
-            Previous
+            {t('directory.previous')}
           </Button>
           <span className="text-xs text-fg-muted">
-            Page {results.page} of {Math.ceil(results.total / results.limit)}
+            {t('directory.pageOf', {
+              page: results.page,
+              pages: Math.ceil(results.total / results.limit),
+            })}
           </span>
           <Button
             type="button"
@@ -218,7 +221,7 @@ export default function ClientDirectoryPage() {
               await runSearch();
             }}
           >
-            Next
+            {t('directory.next')}
           </Button>
         </div>
       ) : null}

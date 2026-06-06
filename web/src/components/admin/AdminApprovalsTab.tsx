@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { TranslateFn } from '@/i18n/types';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Inbox, RefreshCw, ShieldAlert } from 'lucide-react';
@@ -414,7 +415,7 @@ function ContextTable({
   t,
 }: {
   context: unknown;
-  t: (key: string, opts?: Record<string, unknown>) => string;
+  t: TranslateFn;
 }) {
   if (context == null || typeof context !== 'object') {
     return <p className="text-xs text-fg-muted">{t('approvals.noContext')}</p>;

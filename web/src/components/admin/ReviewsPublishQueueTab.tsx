@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, MessageSquareQuote } from 'lucide-react';
 import { parseApiError } from '@/api';
+import { formatRelative } from '@/lib/relative-time';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,28 +21,11 @@ import {
 const PAGE_SIZE = 20;
 const COMMENT_PREVIEW_LIMIT = 200;
 
-function relativeTime(value?: string | null): string {
-  if (!value) return '—';
-  const t = new Date(value).getTime();
-  if (Number.isNaN(t)) return '—';
-  const diff = Date.now() - t;
-  if (diff < 60_000) return 'just now';
-  if (diff < 3_600_000) {
-    const m = Math.floor(diff / 60_000);
-    return `${m} minute${m === 1 ? '' : 's'} ago`;
-  }
-  if (diff < 86_400_000) {
-    const h = Math.floor(diff / 3_600_000);
-    return `${h} hour${h === 1 ? '' : 's'} ago`;
-  }
-  const d = Math.floor(diff / 86_400_000);
-  return `${d} day${d === 1 ? '' : 's'} ago`;
-}
-
 /**
  * REVIEW-040..044 — staff publish queue.
  */
 export function ReviewsPublishQueueTab() {
+  const { t } = useTranslation('admin');
   const [page, setPage] = useState(1);
   const [data, setData] = useState<ReviewListResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,11 +41,11 @@ export function ReviewsPublishQueueTab() {
       const res = await getUnpublishedReviews(page, PAGE_SIZE);
       setData(res);
     } catch (err) {
-      setError(parseApiError(err)?.message ?? 'Could not load the queue.');
+      setError(parseApiError(err)?.message ?? t('publishQueue.loadError'));
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, t]);
 
   useEffect(() => {
     void load();
@@ -79,12 +64,12 @@ export function ReviewsPublishQueueTab() {
     });
     try {
       await publishReview(id);
-      toast.success('Review published — counterparty rating recalculated');
+      toast.success(t('publishQueue.publishedToast'));
     } catch (err) {
       setData((cur) =>
         cur ? { ...cur, items: previousItems, total: cur.total + 1 } : cur,
       );
-      setActionError(parseApiError(err)?.message ?? 'Could not publish review.');
+      setActionError(parseApiError(err)?.message ?? t('publishQueue.publishError'));
     } finally {
       setPendingId(null);
     }
@@ -120,7 +105,7 @@ export function ReviewsPublishQueueTab() {
           variant="outline"
           onClick={() => setRefreshKey((k) => k + 1)}
         >
-          Retry
+          {t('publishQueue.retry')}
         </Button>
       </div>
     );
@@ -132,14 +117,14 @@ export function ReviewsPublishQueueTab() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <MessageSquareQuote className="h-4 w-4" />
-            Publish queue
+            {t('publishQueue.title')}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <EmptyState
             icon={CheckCircle2}
-            title="Queue clear"
-            description="No reviews waiting to be published."
+            title={t('publishQueue.emptyTitle')}
+            description={t('publishQueue.emptyDesc')}
           />
         </CardContent>
       </Card>
@@ -149,9 +134,9 @@ export function ReviewsPublishQueueTab() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-fg">Publish queue</h2>
+        <h2 className="text-lg font-semibold text-fg">{t('publishQueue.title')}</h2>
         <span className="text-sm text-fg-muted">
-          {data.total} review{data.total === 1 ? '' : 's'} pending
+          {t('publishQueue.pending', { count: data.total })}
         </span>
       </div>
 
@@ -178,7 +163,10 @@ export function ReviewsPublishQueueTab() {
 
       <footer className="flex flex-wrap items-center justify-between gap-3 pt-1 text-sm text-fg-muted">
         <span>
-          Page {data.page} of {Math.max(1, data.totalPages)}
+          {t('publishQueue.pageOf', {
+            page: data.page,
+            pages: Math.max(1, data.totalPages),
+          })}
         </span>
         <div className="flex gap-2">
           <Button
@@ -188,7 +176,7 @@ export function ReviewsPublishQueueTab() {
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={data.page <= 1}
           >
-            Previous
+            {t('publishQueue.previous')}
           </Button>
           <Button
             type="button"
@@ -197,7 +185,7 @@ export function ReviewsPublishQueueTab() {
             onClick={() => setPage((p) => p + 1)}
             disabled={data.page >= Math.max(1, data.totalPages)}
           >
-            Next
+            {t('publishQueue.next')}
           </Button>
         </div>
       </footer>
@@ -214,6 +202,7 @@ function QueueRow({
   onPublish: () => void;
   publishing: boolean;
 }) {
+  const { t } = useTranslation('admin');
   const collab = review.collaboration;
   const comment = review.comment ?? '';
   const truncated = comment.length > COMMENT_PREVIEW_LIMIT;
@@ -230,7 +219,7 @@ function QueueRow({
             <Badge variant="outline">{review.reviewer_role}</Badge>
             {collab?.id != null ? (
               <span className="text-sm text-fg-muted">
-                Reviewing collaboration{' '}
+                {t('publishQueue.reviewingCollab')}{' '}
                 <Button asChild variant="link" size="sm" className="px-0">
                   <Link to={`/collaborations/${collab.id}`}>
                     #{String(collab.id)}
@@ -240,7 +229,9 @@ function QueueRow({
             ) : null}
           </div>
           <span className="text-xs text-fg-muted">
-            Submitted {relativeTime(review.created_at)}
+            {t('publishQueue.submitted', {
+              time: formatRelative(review.created_at, t) || '—',
+            })}
           </span>
         </div>
 
@@ -248,7 +239,7 @@ function QueueRow({
           <StarRating
             value={review.overall_rating}
             size="sm"
-            label="Overall rating"
+            label={t('publishQueue.overallAria')}
           />
           <span className="text-sm text-fg">{review.overall_rating}/5</span>
         </div>
@@ -265,22 +256,22 @@ function QueueRow({
                   className="px-0"
                   onClick={() => setExpanded((e) => !e)}
                 >
-                  {expanded ? 'Show less' : 'Read more'}
+                  {expanded ? t('publishQueue.showLess') : t('publishQueue.readMore')}
                 </Button>
               ) : null}
             </>
           ) : (
-            <em className="text-fg-subtle">No comment</em>
+            <em className="text-fg-subtle">{t('publishQueue.noComment')}</em>
           )}
         </div>
 
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" onClick={onPublish} disabled={publishing}>
-            {publishing ? 'Publishing…' : 'Publish'}
+            {publishing ? t('publishQueue.publishing') : t('publishQueue.publish')}
           </Button>
           <Button asChild variant="outline" size="sm">
             <Link to={`/reviews/${review.id}`}>
-              View
+              {t('publishQueue.view')}
               <ArrowRight />
             </Link>
           </Button>

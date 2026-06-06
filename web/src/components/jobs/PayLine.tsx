@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
+import type { TranslateFn } from '@/i18n/types';
 import { formatMoney } from '@/lib/format';
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
+type TFn = TranslateFn;
 
 type PayInput = {
   pay_type?: string | null;

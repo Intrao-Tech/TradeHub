@@ -1,5 +1,6 @@
 import { BadgeCheck, Circle, ShieldCheck, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import type { ParseKeys } from 'i18next';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -22,7 +23,7 @@ type VerificationBadgeProps = {
 const CONFIG: Record<
   VerificationState,
   {
-    labelKey: string;
+    labelKey: ParseKeys<'common'>;
     variant: 'outline' | 'info' | 'warning' | 'success';
     icon: typeof BadgeCheck;
   }
