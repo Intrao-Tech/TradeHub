@@ -250,6 +250,30 @@ export class VerificationController {
     return { ok: true, assigned_to: user.accountId.toString() };
   }
 
+  // ─── Level reconciliation (staff) ─────────────────────────────
+
+  @Post('levels/:clientProfileId/recompute')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STAFF')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 60, ttl: 60 * 1000 } })
+  @ApiOperation({
+    summary:
+      'Resync a profile verification level from its evidence. Staff only. Fixes badge drift after a manual override or a milestone earned while inactive.',
+  })
+  recomputeLevel(
+    @Param('clientProfileId', ParseBigIntPipe) clientProfileId: bigint,
+    @CurrentUser() user: CurrentUserPayload,
+    @Ip() ip: string,
+  ) {
+    return this.verificationService.recomputeLevel(
+      clientProfileId,
+      user.accountId,
+      ip,
+    );
+  }
+
   // ─── Provider feature flag ────────────────────────────────────
 
   @Get('providers')

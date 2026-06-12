@@ -3,9 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { formatMoney, formatDate, formatDateTime } from '@/lib/format';
 import {
+  BadgeCheck,
   Briefcase,
   HardHat,
+  Mail,
+  MailCheck,
   MessageCircle,
+  RefreshCw,
   ScrollText,
   Search,
   ShieldCheck,
@@ -86,6 +90,7 @@ type UserDetail = {
   email: string;
   status: string;
   created_at: string;
+  email_verified_at: string | null;
   last_login_at: string | null;
   is_worker: boolean;
   is_employer: boolean;
@@ -273,6 +278,26 @@ export function AdminUsersTab() {
       } else {
         setActionMsg(t('users.executed', { id: res.audit_id }));
       }
+      void loadDetail(detail.id);
+    } catch (e) {
+      setActionErr(parseApiError(e)?.message ?? t('users.actionFailed'));
+    }
+  }
+
+  async function recomputeLevel() {
+    if (!detail?.client) return;
+    setActionErr('');
+    setActionMsg('');
+    try {
+      const res = await api<{ from: string; to: string; changed: boolean }>(
+        `/verification/levels/${detail.client.id}/recompute`,
+        { method: 'POST' },
+      );
+      setActionMsg(
+        res.changed
+          ? t('users.recomputeChanged', { from: res.from, to: res.to })
+          : t('users.recomputeNoChange', { level: res.to }),
+      );
       void loadDetail(detail.id);
     } catch (e) {
       setActionErr(parseApiError(e)?.message ?? t('users.actionFailed'));
@@ -521,6 +546,28 @@ export function AdminUsersTab() {
                     >
                       {detail.status}
                     </Badge>
+                    {/* Email confirmation is a SEPARATE axis from the KYC
+                        verification level below — surfacing it explicitly so
+                        "Verification: UNVERIFIED" (a trust tier) isn't misread
+                        as "account not activated". */}
+                    {detail.email_verified_at || detail.status === 'ACTIVE' ? (
+                      <Badge variant="success">
+                        <MailCheck className="h-3 w-3" />
+                        {detail.email_verified_at
+                          ? t('users.emailConfirmedOn', {
+                              date: formatDate(
+                                detail.email_verified_at,
+                                'short',
+                              ),
+                            })
+                          : t('users.emailConfirmed')}
+                      </Badge>
+                    ) : (
+                      <Badge variant="warning">
+                        <Mail className="h-3 w-3" />
+                        {t('users.emailNotConfirmed')}
+                      </Badge>
+                    )}
                     {detail.is_worker ? (
                       <Badge variant="outline">
                         <HardHat className="h-3 w-3" />
@@ -541,7 +588,8 @@ export function AdminUsersTab() {
                     ) : null}
                     {detail.client ? (
                       <Badge variant="outline">
-                        {t('users.verification', {
+                        <BadgeCheck className="h-3 w-3" />
+                        {t('users.kycLevel', {
                           level: detail.client.verification_level,
                         })}
                       </Badge>
@@ -752,6 +800,21 @@ export function AdminUsersTab() {
                       {t('users.apply')}
                     </Button>
                   </div>
+                  {detail.client ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-fg-muted">
+                        {t('users.recomputeHint')}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void recomputeLevel()}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        {t('users.recompute')}
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 

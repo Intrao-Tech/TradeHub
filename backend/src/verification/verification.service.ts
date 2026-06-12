@@ -395,6 +395,44 @@ export class VerificationService {
   }
 
   /**
+   * Staff tool: re-derive `client_profile.verification_level` from the live
+   * evidence (milestones + approved docs) and write it if it drifted from the
+   * cache. Drift happens after a manual `VERIFICATION_LEVEL_OVERRIDE`, or if a
+   * milestone was ever earned while the account wasn't ACTIVE (the promotion
+   * engine skips non-ACTIVE accounts). Idempotent — a no-op when already in sync.
+   *
+   * This is what reconciles the "badge says UNVERIFIED near the avatar but the
+   * verification rows below say Verified" inconsistency: the rows read live
+   * milestones, the badge reads the cached level.
+   */
+  async recomputeLevel(
+    clientProfileId: bigint,
+    staffMemberId: bigint,
+    ip?: string,
+  ) {
+    const profile = await this.prisma.clientProfile.findUnique({
+      where: { id: clientProfileId },
+      select: { id: true, verification_level: true },
+    });
+    if (!profile) {
+      throw new NotFoundException({ code: 'PROFILE_NOT_FOUND' });
+    }
+    const current = (profile.verification_level ??
+      'UNVERIFIED') as VerificationLevel;
+    const result = await this.promotionEngine.runPromotion(clientProfileId, {
+      milestoneIds: [],
+      staffMemberId,
+      ip,
+    });
+    return {
+      client_profile_id: clientProfileId.toString(),
+      from: result?.from ?? current,
+      to: result?.to ?? current,
+      changed: result != null,
+    };
+  }
+
+  /**
    * GET /verification/ladder/:clientProfileId — full ladder panel data
    * for the trust-ladder component. Owner OR staff only.
    */
