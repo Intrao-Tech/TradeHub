@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, MessageCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, MessageCircle, RefreshCw, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '@/api';
 import { useAccountMe } from '@/hooks/useAccountMe';
@@ -16,6 +16,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { NewContractSheet } from '@/components/contracts/NewContractSheet';
+import { LeaveReviewSheet } from '@/components/reviews/LeaveReviewSheet';
+import { getReviewsByCollaboration, type Review } from '@/components/reviews/api';
 
 type CounterpartyParty = {
   id: string | number;
@@ -81,8 +83,11 @@ const contractStatusVariant = (
 export default function CollaborationDetailPage() {
   const { t } = useTranslation('collaborations');
   const { id } = useParams<{ id: string }>();
-  const { account, isEmployer, clientProfile } = useAccountMe();
+  const { account, isEmployer, isStaff, clientProfile, verificationState } =
+    useAccountMe();
   const [collab, setCollab] = useState<CollaborationData | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -110,6 +115,23 @@ export default function CollaborationDetailPage() {
     collab != null &&
     (String(collab.worker_id) === myAccountId ||
       String(collab.employer_id) === myAccountId);
+
+  // Existing reviews (incl. the caller's own pending drafts) decide whether the
+  // "Leave a review" CTA still applies. Only participants may call this — staff
+  // viewers and outsiders skip the fetch. Failures are silent: the CTA simply
+  // stays hidden rather than blocking the page.
+  const loadReviews = useCallback(async () => {
+    if (!id || !isParty || isStaff) return;
+    try {
+      setReviews(await getReviewsByCollaboration(id));
+    } catch {
+      setReviews([]);
+    }
+  }, [id, isParty, isStaff]);
+
+  useEffect(() => {
+    void loadReviews();
+  }, [loadReviews]);
   const employerSide =
     myAccountId != null &&
     collab != null &&
@@ -130,6 +152,19 @@ export default function CollaborationDetailPage() {
   })();
   const counterpartyName =
     counterparty?.client_profile?.display_name ?? t('relationship.counterpartyFallback');
+
+  // Reviews are gated to a finished job. The backend resolves the latest ENDED
+  // contract and enforces one review per (contract, role); we mirror that here
+  // so the CTA only shows when it can actually succeed.
+  const meIsWorker =
+    collab != null && myAccountId != null && String(collab.worker_id) === myAccountId;
+  const myRole: Review['reviewer_role'] = meIsWorker ? 'WORKER' : 'EMPLOYER';
+  const hasCompletedContract = (collab?.contracts ?? []).some(
+    (c) => c.status === 'ENDED' && c.end_reason === 'COMPLETED',
+  );
+  const alreadyReviewed = reviews.some((r) => r.reviewer_role === myRole);
+  const canLeaveReview =
+    isParty && !isStaff && hasCompletedContract && !alreadyReviewed;
 
   return (
     <div className="space-y-6">
@@ -187,6 +222,17 @@ export default function CollaborationDetailPage() {
             initiator="EMPLOYER"
             onCreated={() => void load()}
           />
+        ) : null}
+        {canLeaveReview && verificationState === 'ACTIVE' ? (
+          <Button type="button" variant="outline" onClick={() => setReviewOpen(true)}>
+            <Star />
+            {t('leaveReview.title')}
+          </Button>
+        ) : canLeaveReview &&
+          verificationState === 'PENDING_EMAIL_VERIFICATION' ? (
+          <Button asChild variant="outline">
+            <Link to="/verify-email">{t('leaveReview.verifyCta')}</Link>
+          </Button>
         ) : null}
       </div>
 
@@ -298,6 +344,19 @@ export default function CollaborationDetailPage() {
 
       {!isParty && collab ? (
         <p className="text-xs text-fg-muted">{t('relationship.readOnly')}</p>
+      ) : null}
+
+      {id && clientProfile ? (
+        <LeaveReviewSheet
+          collaborationId={String(id)}
+          clientProfileId={clientProfile.id}
+          open={reviewOpen}
+          onOpenChange={setReviewOpen}
+          onSubmitted={() => {
+            setReviewOpen(false);
+            void loadReviews();
+          }}
+        />
       ) : null}
     </div>
   );

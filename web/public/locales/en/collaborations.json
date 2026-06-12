@@ -201,6 +201,7 @@
   },
   "leaveReview": {
     "title": "Leave a review",
+    "verifyCta": "Verify email to review",
     "description": "Rate this collaboration. Only the overall rating is required — sub-ratings and the comment are optional.",
     "draftRestored": "Draft restored — last edited {{time}}.",
     "discardDraft": "Discard draft",

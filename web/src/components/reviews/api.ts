@@ -58,6 +58,18 @@ export function createReview(
   });
 }
 
+/**
+ * All reviews (published + the caller's own pending drafts) across every
+ * contract under a collaboration. Backend guards on participation, so this is
+ * only callable by the worker or employer in the relationship. Used to detect
+ * whether the current user has already left a review for their side.
+ */
+export function getReviewsByCollaboration(
+  collaborationId: string | number,
+): Promise<Review[]> {
+  return api<Review[]>(`/reviews/collaboration/${collaborationId}`);
+}
+
 export function getReviewsByWorker(
   workerId: string | number,
   page = 1,
