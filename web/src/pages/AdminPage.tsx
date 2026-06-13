@@ -11,6 +11,7 @@ import {
   Hammer,
   LifeBuoy,
   ListChecks,
+  MessageSquareQuote,
   ScaleIcon,
   ScrollText,
   Settings,
@@ -44,6 +45,7 @@ import { AdminTagsTab } from '@/components/admin/AdminTagsTab';
 import { AdminPlansTab } from '@/components/admin/AdminPlansTab';
 import { AdminAuditTab } from '@/components/admin/AdminAuditTab';
 import { AdminRolesTab } from '@/components/admin/AdminRolesTab';
+import { ReviewsPublishQueueTab } from '@/components/admin/ReviewsPublishQueueTab';
 
 // Lazy — same chunk used by the standalone /notifications route, so this
 // doesn't ship a second copy.
@@ -166,6 +168,14 @@ const SECTIONS: Section[] = [
         icon: ScaleIcon,
         requiredPermission: 'escrow_disputes.read',
         render: () => <EscrowDisputesTab />,
+      },
+      {
+        id: 'reviews',
+        label: 'tabs.reviews',
+        icon: MessageSquareQuote,
+        // Publish queue list + publish are gated server-side on @Roles('STAFF')
+        // (no granular permission), so any staff member can moderate reviews.
+        render: () => <ReviewsPublishQueueTab />,
       },
     ],
   },
