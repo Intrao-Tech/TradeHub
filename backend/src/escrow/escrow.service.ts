@@ -16,6 +16,8 @@ import { AuditService } from '../audit/audit.service';
 import { ConversationService } from '../conversation/conversation.service';
 import { MailService } from '../mail/mail.service';
 import { ReferralService } from '../referral/referral.service';
+import { CisService } from '../cis/cis.service';
+import { cisTaxMonth } from '../cis/cis.constants';
 import { STRIPE_CLIENT } from '../stripe/stripe.module';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ESCROW_AUDIT_EVENTS, grossUpForStripeFee } from './escrow.constants';
@@ -52,6 +54,7 @@ export class EscrowService {
     private readonly mail: MailService,
     private readonly conversation: ConversationService,
     private readonly referrals: ReferralService,
+    private readonly cis: CisService,
     @Inject(STRIPE_CLIENT) private readonly stripe: Stripe | null,
   ) {
     const secret = this.config.get<string>('STRIPE_SECRET_KEY') ?? '';
@@ -475,10 +478,6 @@ export class EscrowService {
       freelancer_service_fee_percent: Prisma.Decimal | number;
       stripe_fee_passthrough: string;
     },
-    // Kept for back-compat with existing callers; ignored in current model
-    // (referral commissions are paid out of platform_fee at release time
-    // and never reduce the worker payout).
-    _hasReferral?: boolean,
   ) {
     const job = new Prisma.Decimal(amountPounds);
     const clientFeePct = new Prisma.Decimal(
@@ -490,6 +489,10 @@ export class EscrowService {
 
     const clientFee = job.mul(clientFeePct).div(100).toDecimalPlaces(2);
     const freelancerFee = job.mul(freelancerFeePct).div(100).toDecimalPlaces(2);
+
+    // Funding is always GROSS — CIS never enters at funding. The worker's share
+    // (job − our worker fee) is what's frozen; the CIS deduction is computed and
+    // applied at RELEASE, once the worker has declared materials at submission.
     const workerPayout = job.minus(freelancerFee);
 
     let stripeFeeEstimate = new Prisma.Decimal(0);
@@ -526,9 +529,44 @@ export class EscrowService {
     };
   }
 
-  async previewFee(amountPounds: string, _hasReferral?: boolean) {
+  async previewFee(amountPounds: string) {
     const settings = await this.getPlatformSetting();
     return this.computePayouts(amountPounds, settings);
+  }
+
+  /**
+   * CIS estimate for a milestone (used by the funding preview). At funding the
+   * worker hasn't declared materials yet, so this is an UPPER-BOUND estimate
+   * (assumes £0 materials) — the real figure is finalised at release. Never
+   * throws: a lookup failure degrades to "no CIS".
+   */
+  private async estimateMilestoneCis(milestoneId: bigint): Promise<{
+    applies: boolean;
+    mode: string | null;
+    rate: number;
+    deduction: Prisma.Decimal;
+  }> {
+    try {
+      const ctx = await this.cis.getMilestoneCisContext(milestoneId);
+      if (ctx?.applies && ctx.breakdown.deduction.gt(0)) {
+        return {
+          applies: true,
+          mode: ctx.mode,
+          rate: ctx.breakdown.rate,
+          deduction: ctx.breakdown.deduction,
+        };
+      }
+    } catch (err) {
+      this.logger.warn(
+        `CIS estimate lookup failed for milestone=${milestoneId}: ${(err as Error).message}`,
+      );
+    }
+    return {
+      applies: false,
+      mode: null,
+      rate: 0,
+      deduction: new Prisma.Decimal(0),
+    };
   }
 
   // ─── Milestones (Slice B) ──────────────────────────────────────
@@ -619,6 +657,48 @@ export class EscrowService {
    *   - PENDING when employer creates (immediately fundable)
    *   - REQUESTED when worker creates (employer must approve before fund)
    */
+  /**
+   * Resolve the optional CIS labour/materials split against the gross amount.
+   * Semantics: an empty string / null / undefined field is "absent". When both
+   * are absent → {null, null} (the calculator treats the whole amount as labour
+   * once CIS applies). When at least one is given, the missing side is derived
+   * so that labour + materials == amount; the result is validated non-negative
+   * and reconciled to the gross.
+   */
+  private resolveCisSplit(
+    amount: Prisma.Decimal,
+    labourRaw?: string | null,
+    materialsRaw?: string | null,
+  ): { labour: Prisma.Decimal | null; materials: Prisma.Decimal | null } {
+    const hasLabour = labourRaw != null && labourRaw !== '';
+    const hasMaterials = materialsRaw != null && materialsRaw !== '';
+    if (!hasLabour && !hasMaterials) {
+      return { labour: null, materials: null };
+    }
+    const labour = hasLabour ? new Prisma.Decimal(labourRaw as string) : null;
+    const materials = hasMaterials
+      ? new Prisma.Decimal(materialsRaw as string)
+      : null;
+
+    const resolvedMaterials =
+      materials ?? (labour ? amount.sub(labour) : new Prisma.Decimal(0));
+    const resolvedLabour = labour ?? amount.sub(resolvedMaterials);
+
+    if (resolvedLabour.lt(0) || resolvedMaterials.lt(0)) {
+      throw new BadRequestException({
+        code: 'INVALID_CIS_SPLIT',
+        message: 'Labour and materials must be zero or positive.',
+      });
+    }
+    if (!resolvedLabour.add(resolvedMaterials).equals(amount)) {
+      throw new BadRequestException({
+        code: 'INVALID_CIS_SPLIT',
+        message: 'Labour + materials must equal the milestone amount.',
+      });
+    }
+    return { labour: resolvedLabour, materials: resolvedMaterials };
+  }
+
   async createMilestone(
     contractId: bigint,
     callerClientProfileId: bigint,
@@ -627,6 +707,8 @@ export class EscrowService {
       amount: string;
       position?: number;
       description?: string | null;
+      labour_amount?: string;
+      materials_amount?: string;
     },
     ip?: string,
   ) {
@@ -641,6 +723,11 @@ export class EscrowService {
         message: 'Milestone amount must be at least £5.00.',
       });
     }
+    const cisSplit = this.resolveCisSplit(
+      amount,
+      dto.labour_amount,
+      dto.materials_amount,
+    );
 
     const existing = await this.prisma.escrowMilestone.findMany({
       where: { contract_id: contractId },
@@ -666,6 +753,8 @@ export class EscrowService {
         title: dto.title.trim(),
         description: dto.description?.trim() || null,
         amount,
+        labour_amount: cisSplit.labour,
+        materials_amount: cisSplit.materials,
         status: initialStatus,
         created_by_role: role,
       },
@@ -929,6 +1018,8 @@ export class EscrowService {
       amount?: string;
       position?: number;
       description?: string | null;
+      labour_amount?: string;
+      materials_amount?: string;
     },
     ip?: string,
   ) {
@@ -976,6 +1067,28 @@ export class EscrowService {
     }
     if (dto.description !== undefined) {
       data.description = dto.description?.trim() || null;
+    }
+
+    // CIS labour/materials split. If either field is supplied, resolve it
+    // against the effective amount (the new one if amount is changing). If the
+    // amount changes with no new split, clear the stale split so it can't drift.
+    const effectiveAmount =
+      data.amount instanceof Prisma.Decimal ? data.amount : milestone.amount;
+    if (dto.labour_amount !== undefined || dto.materials_amount !== undefined) {
+      const split = this.resolveCisSplit(
+        effectiveAmount,
+        dto.labour_amount !== undefined
+          ? dto.labour_amount
+          : (milestone.labour_amount?.toString() ?? null),
+        dto.materials_amount !== undefined
+          ? dto.materials_amount
+          : (milestone.materials_amount?.toString() ?? null),
+      );
+      data.labour_amount = split.labour;
+      data.materials_amount = split.materials;
+    } else if (dto.amount != null) {
+      data.labour_amount = null;
+      data.materials_amount = null;
     }
 
     const updated = await this.prisma.escrowMilestone.update({
@@ -1042,6 +1155,71 @@ export class EscrowService {
   }
 
   // ─── Funding (Slice B) ─────────────────────────────────────────
+
+  /**
+   * Itemised funding breakdown for a milestone, shown to the employer BEFORE
+   * Stripe Checkout so the charge is never a black box. Includes the CIS line
+   * when it applies (ASSIST: charge is net of CIS, employer remits; MANAGED:
+   * charge is gross, platform withholds at release). Read-only.
+   */
+  async getMilestoneFundingPreview(
+    milestoneId: bigint,
+    employerClientProfileId: bigint,
+  ) {
+    const milestone = await this.prisma.escrowMilestone.findUnique({
+      where: { id: milestoneId },
+      select: {
+        id: true,
+        amount: true,
+        status: true,
+        contract: {
+          select: { collaboration: { select: { employer_id: true } } },
+        },
+      },
+    });
+    if (!milestone) throw new NotFoundException({ code: 'MILESTONE_NOT_FOUND' });
+    if (
+      milestone.contract.collaboration.employer_id !== employerClientProfileId
+    ) {
+      throw new ForbiddenException({ code: 'NOT_EMPLOYER' });
+    }
+
+    const settings = await this.getPlatformSetting();
+    // Funding is GROSS — the charge does NOT depend on CIS. CIS is handled at
+    // release (V1: refunded to the employer to remit; V2: platform withholds +
+    // remits). The CIS figure here is an UPPER-BOUND estimate (materials not yet
+    // declared) shown for transparency only.
+    const b = this.computePayouts(milestone.amount.toString(), settings);
+    const cis = await this.estimateMilestoneCis(milestoneId);
+    const estWorkerReceives = cis.applies
+      ? Prisma.Decimal.max(
+          new Prisma.Decimal(b.worker_payout).sub(cis.deduction),
+          new Prisma.Decimal(0),
+        ).toFixed(2)
+      : b.worker_payout;
+
+    return {
+      milestone_id: String(milestoneId),
+      job_amount: b.job_amount,
+      cis_applies: cis.applies,
+      cis_mode: cis.applies ? cis.mode : null,
+      cis_rate: cis.applies ? cis.rate : null,
+      // Upper-bound estimate (assumes £0 materials); finalised at release.
+      cis_estimate: cis.applies ? cis.deduction.toFixed(2) : '0.00',
+      // Who sends the CIS to HMRC: PLATFORM (MANAGED) or EMPLOYER (ASSIST).
+      cis_remitter: cis.applies
+        ? cis.mode === 'MANAGED'
+          ? 'PLATFORM'
+          : 'EMPLOYER'
+        : null,
+      client_marketplace_fee: b.client_marketplace_fee,
+      freelancer_service_fee: b.freelancer_service_fee,
+      stripe_fee_estimate: b.stripe_fee_estimate,
+      employer_charge: b.employer_charge,
+      worker_share: b.worker_payout,
+      est_worker_receives: estWorkerReceives,
+    };
+  }
 
   async fundMilestone(
     milestoneId: bigint,
@@ -1124,10 +1302,7 @@ export class EscrowService {
     const workerOnboardingPending = !workerProfile.connect_payouts_enabled;
 
     const settings = await this.getPlatformSetting();
-    const breakdown = this.computePayouts(
-      milestone.amount.toString(),
-      settings,
-    );
+    const breakdown = this.computePayouts(milestone.amount.toString(), settings);
 
     const frontendUrl =
       this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
@@ -1209,12 +1384,10 @@ export class EscrowService {
       return;
     }
 
-    // Freeze fee snapshot
+    // Freeze fee snapshot. CIS is NOT frozen here — it is computed at release
+    // once the worker declares materials at submission.
     const settings = await this.getPlatformSetting();
-    const breakdown = this.computePayouts(
-      milestone.amount.toString(),
-      settings,
-    );
+    const breakdown = this.computePayouts(milestone.amount.toString(), settings);
     const chargedAmount = new Prisma.Decimal(
       pi.amount_received ?? pi.amount ?? 0,
     ).div(100);
@@ -1330,6 +1503,7 @@ export class EscrowService {
     milestoneId: bigint,
     workerClientProfileId: bigint,
     message: string | null,
+    materialsAmount: string | null,
     ip?: string,
   ) {
     const milestone = await this.prisma.escrowMilestone.findUnique({
@@ -1355,12 +1529,34 @@ export class EscrowService {
         message: `Cannot submit milestone in ${milestone.status} state.`,
       });
     }
+
+    // CIS materials: the worker declares, at submission, the cost of materials
+    // they supplied — excluded from the CIS deduction (CIS hits labour only).
+    // Must be 0 ≤ materials ≤ amount; labour is the remainder. The CIS itself is
+    // computed at release from this split.
+    let materials: Prisma.Decimal | null = null;
+    let labour: Prisma.Decimal | null = null;
+    if (materialsAmount != null && materialsAmount.trim() !== '') {
+      const m = new Prisma.Decimal(materialsAmount);
+      if (m.lt(0) || m.gt(milestone.amount)) {
+        throw new BadRequestException({
+          code: 'INVALID_MATERIALS',
+          message: `Materials must be between £0 and the milestone amount (£${milestone.amount.toFixed(2)}).`,
+        });
+      }
+      materials = m.toDecimalPlaces(2);
+      labour = milestone.amount.sub(materials);
+    }
+
     const updated = await this.prisma.escrowMilestone.update({
       where: { id: milestoneId },
       data: {
         status: 'SUBMITTED',
         worker_submitted_at: new Date(),
         submission_message: message?.trim() || null,
+        ...(materials != null
+          ? { materials_amount: materials, labour_amount: labour }
+          : {}),
       },
     });
     await this.audit.log(
@@ -1417,7 +1613,19 @@ export class EscrowService {
       });
       if (!m) return;
       const worker = m.contract.collaboration.worker.client_profile;
-      const amount = (m.frozen_worker_payout ?? m.amount).toFixed(2);
+      // Email the ACTUAL net paid — the WORKER_PAYOUT ledger row already has any
+      // V2 CIS deduction subtracted. frozen_worker_payout is the pre-CIS gross,
+      // so emailing it would overstate the worker's pay under MANAGED.
+      const payoutRow = await this.prisma.payment.findFirst({
+        where: { milestone_id: milestoneId, type: 'WORKER_PAYOUT' },
+        orderBy: { id: 'desc' },
+        select: { amount: true },
+      });
+      const amount = (
+        payoutRow?.amount ??
+        m.frozen_worker_payout ??
+        m.amount
+      ).toFixed(2);
       void this.mail.sendEscrowMilestoneReleased(
         worker.account.email,
         worker.display_name,
@@ -1545,8 +1753,44 @@ export class EscrowService {
     const workerOnboarded =
       !!workerConnectId && !!workerProfile.connect_payouts_enabled;
 
-    const workerPayoutAmount =
+    // ── CIS deduction — computed at RELEASE ──────────────────────
+    // By release the worker has declared materials at submission, so the
+    // labour/materials split (and thus the deduction) is final. The deduction
+    // is derived in ONE place — CisService — on the worker's labour income
+    // (share − materials) at their CIS rate. The worker always receives
+    // share − deduction. The mode decides where the deduction goes:
+    //  - MANAGED (V2): platform WITHHOLDS it → CIS_WITHHELD row → monthly CIS300.
+    //  - ASSIST  (V1): platform REFUNDS it to the employer (Stripe refund), who
+    //    remits it to HMRC themselves; we issue the PDS.
+    // The result is frozen onto the milestone so re-runs (retryRelease) match.
+    let cisDeduction = new Prisma.Decimal(0);
+    let cisRate = 0;
+    let cisMode: string | null = null;
+    let cisApplies = false;
+    try {
+      const ctx = await this.cis.getMilestoneCisContext(milestoneId);
+      if (ctx?.applies && ctx.breakdown.deduction.gt(0)) {
+        cisApplies = true;
+        cisMode = ctx.mode;
+        cisDeduction = ctx.breakdown.deduction;
+        cisRate = ctx.breakdown.rate;
+      }
+    } catch (err) {
+      this.logger.warn(
+        `CIS context lookup failed for milestone=${milestoneId} — releasing without CIS: ${(err as Error).message}`,
+      );
+    }
+    const cisManaged = cisApplies && cisMode === 'MANAGED';
+    const cisAssist = cisApplies && cisMode === 'ASSIST';
+
+    const grossWorkerPayout =
       milestone.frozen_worker_payout ?? milestone.amount;
+    // Clamp at zero — a deduction can never realistically exceed the payout
+    // (≤30% of labour vs the share), but guard anyway.
+    const workerPayoutAmount = Prisma.Decimal.max(
+      grossWorkerPayout.sub(cisDeduction),
+      new Prisma.Decimal(0),
+    );
     const workerPayoutPence = Math.round(
       workerPayoutAmount.mul(100).toNumber(),
     );
@@ -1605,6 +1849,126 @@ export class EscrowService {
       },
     });
 
+    // CIS_WITHHELD ledger row (V2 MANAGED) — the deduction parked with the
+    // platform on the worker's behalf, stamped with the UK tax month so the
+    // monthly CIS300 return can aggregate it. Stays PENDING until (mock-)remit.
+    //
+    // executeRelease can re-run (retryRelease / auto-retry on onboarding) and
+    // the CIS row has no stripe_id, so the transfer-failed sweep never flips it
+    // to FAILED. Guard against inserting a SECOND withheld row for the same
+    // milestone — otherwise the monthly return would double-count the deduction.
+    const existingCisWithheld =
+      cisManaged && cisDeduction.gt(0)
+        ? await this.prisma.payment.findFirst({
+            where: {
+              milestone_id: milestoneId,
+              type: 'CIS_WITHHELD',
+              status: { not: 'FAILED' },
+            },
+            select: { id: true },
+          })
+        : null;
+    if (cisManaged && cisDeduction.gt(0) && !existingCisWithheld) {
+      const { taxYear, taxMonth } = cisTaxMonth(new Date());
+      await this.prisma.payment.create({
+        data: {
+          milestone_id: milestoneId,
+          client_profile_id: collab.worker_id,
+          type: 'CIS_WITHHELD',
+          amount: cisDeduction,
+          currency: 'GBP',
+          status: 'PENDING',
+          cis_tax_year: taxYear,
+          cis_tax_month: taxMonth,
+        },
+      });
+      await this.audit.log(
+        collab.worker_id,
+        'escrow.cis_withheld',
+        'escrow_milestone',
+        milestoneId,
+        {
+          amount_withheld: cisDeduction.toFixed(2),
+          cis_rate: cisRate,
+          tax_year: taxYear,
+          tax_month: taxMonth,
+        },
+        ip,
+      );
+    }
+
+    // ── CIS employer refund (V1 ASSIST) ──────────────────────────
+    // The deduction belongs to the EMPLOYER to remit to HMRC. We hold the gross
+    // in escrow, so at release we refund the CIS amount back to the employer's
+    // card (Stripe refund on the original charge) and record a CIS_EMPLOYER_REMIT
+    // ledger row. Guard re-runs so we never double-refund.
+    const existingCisRefund =
+      cisAssist && cisDeduction.gt(0)
+        ? await this.prisma.payment.findFirst({
+            where: {
+              milestone_id: milestoneId,
+              type: 'CIS_EMPLOYER_REMIT',
+              status: { not: 'FAILED' },
+            },
+            select: { id: true },
+          })
+        : null;
+    if (cisAssist && cisDeduction.gt(0) && !existingCisRefund) {
+      const charge = await this.prisma.payment.findFirst({
+        where: { milestone_id: milestoneId, type: 'CHARGE', status: 'PAID' },
+        select: { stripe_id: true },
+      });
+      let refund: Stripe.Refund | null = null;
+      if (charge?.stripe_id) {
+        try {
+          refund = await this.stripe.refunds.create(
+            {
+              payment_intent: charge.stripe_id,
+              amount: Math.round(cisDeduction.mul(100).toNumber()),
+              metadata: {
+                milestone_id: milestoneIdStr,
+                kind: 'cis_employer_remit',
+              },
+            },
+            {
+              idempotencyKey: `escrow_milestone_${milestoneIdStr}_cis_refund${this.idemSuffix}`,
+            },
+          );
+        } catch (err) {
+          this.logger.warn(
+            `CIS employer refund (Stripe) failed for milestone ${milestoneIdStr} — writing PENDING row: ${(err as Error).message}`,
+          );
+        }
+      }
+      const { taxYear, taxMonth } = cisTaxMonth(new Date());
+      await this.prisma.payment.create({
+        data: {
+          milestone_id: milestoneId,
+          client_profile_id: collab.employer_id,
+          type: 'CIS_EMPLOYER_REMIT',
+          amount: cisDeduction,
+          currency: 'GBP',
+          status: refund ? 'PAID' : 'PENDING',
+          stripe_id: refund?.id ?? null,
+          cis_tax_year: taxYear,
+          cis_tax_month: taxMonth,
+          settled_at: refund ? new Date() : null,
+        },
+      });
+      await this.audit.log(
+        collab.employer_id,
+        'escrow.cis_employer_remit',
+        'escrow_milestone',
+        milestoneId,
+        {
+          amount: cisDeduction.toFixed(2),
+          cis_rate: cisRate,
+          refund_id: refund?.id ?? null,
+        },
+        ip,
+      );
+    }
+
     // ── Referral commissions ─────────────────────────────────────
     // Computed via ReferralService (account + project refs, capped at the
     // milestone's platform_fee). Each line becomes a REFERRAL_* payment row,
@@ -1633,6 +1997,7 @@ export class EscrowService {
     }
 
     // ── Advance milestone ────────────────────────────────────────
+    // Freeze the final CIS snapshot so the PDS + any re-run stay stable.
     const now = new Date();
     await this.prisma.escrowMilestone.update({
       where: { id: milestoneId },
@@ -1640,6 +2005,13 @@ export class EscrowService {
         status: 'RELEASED',
         released_at: now,
         employer_approved_at: actor === 'employer' ? now : null,
+        ...(cisApplies
+          ? {
+              frozen_cis_mode: cisMode,
+              frozen_cis_rate: new Prisma.Decimal(cisRate),
+              frozen_cis_amount: cisDeduction,
+            }
+          : {}),
       },
     });
 
@@ -1655,6 +2027,9 @@ export class EscrowService {
         worker_transfer_id: workerTransfer?.id ?? null,
         worker_payout_payment_id: String(workerPayoutRow.id),
         worker_payout_status: workerPayoutRow.status,
+        cis_deduction: cisApplies ? cisDeduction.toFixed(2) : null,
+        cis_rate: cisApplies ? cisRate : null,
+        cis_mode: cisMode,
       },
       ip,
     );
@@ -1666,9 +2041,18 @@ export class EscrowService {
     const workerLabel = workerTransfer
       ? `£${workerPayoutAmount.toFixed(2)} sent to worker`
       : `£${workerPayoutAmount.toFixed(2)} held in escrow — paid out automatically when worker completes Stripe Connect onboarding`;
+    // CIS at release:
+    //  - MANAGED (V2): withheld + parked (PENDING) for the monthly CIS300 — not
+    //    remitted to HMRC yet.
+    //  - ASSIST (V1): refunded to the employer, who remits it to HMRC themselves.
+    const cisLabel = cisManaged
+      ? ` £${cisDeduction.toFixed(2)} (${cisRate}%) withheld for CIS and held for the monthly HMRC return.`
+      : cisAssist
+        ? ` £${cisDeduction.toFixed(2)} (${cisRate}%) CIS refunded to the employer to remit to HMRC.`
+        : '';
     this.postChatSystemMessage(
       collab.id,
-      `✅ Milestone "${milestone.title}" ${releaseLabel}. ${workerLabel}.`,
+      `✅ Milestone "${milestone.title}" ${releaseLabel}. ${workerLabel}.${cisLabel}`,
       actor === 'employer' ? collab.employer_id : collab.worker_id,
     );
     void this.notifyMilestoneReleased(milestoneId, actor);
@@ -2744,7 +3128,8 @@ export class EscrowService {
   // ─── Wallet + Admin settings (Slice E) ────────────────────────
 
   async getWallet(workerProfileId: bigint) {
-    const [profile, milestones, pendingPayments] = await Promise.all([
+    const [profile, milestones, pendingPayments, payoutLedger] =
+      await Promise.all([
       this.prisma.clientProfile.findUnique({
         where: { id: workerProfileId },
         select: {
@@ -2769,6 +3154,8 @@ export class EscrowService {
           contract_id: true,
           released_at: true,
           frozen_worker_payout: true,
+          frozen_cis_amount: true,
+          frozen_cis_rate: true,
         },
       }),
       // Worker payouts + referral commissions still awaiting Stripe payout.
@@ -2790,8 +3177,50 @@ export class EscrowService {
           milestone: { select: { title: true, contract_id: true } },
         },
       }),
+      // Actual net payout + CIS withheld per milestone (any status) so released
+      // history reflects what the worker truly received, not the pre-CIS gross.
+      this.prisma.payment.findMany({
+        where: {
+          client_profile_id: workerProfileId,
+          type: { in: ['WORKER_PAYOUT', 'CIS_WITHHELD'] },
+        },
+        select: { id: true, milestone_id: true, type: true, amount: true, status: true },
+      }),
     ]);
     if (!profile) throw new NotFoundException({ code: 'PROFILE_NOT_FOUND' });
+
+    // Index the ledger by milestone: the net WORKER_PAYOUT (already CIS-reduced)
+    // and the CIS_WITHHELD amount, so the wallet shows net + the withheld tax.
+    // A milestone can have >1 WORKER_PAYOUT row (a failed transfer that was
+    // retried), so pick the authoritative one deterministically: PAID beats
+    // PENDING beats FAILED; ties break to the latest row id.
+    const payoutRank = (s: string) =>
+      s === 'PAID' ? 2 : s === 'PENDING' ? 1 : 0;
+    const bestPayout = new Map<
+      string,
+      { amount: Prisma.Decimal; status: string; id: bigint }
+    >();
+    const cisByMilestone = new Map<string, Prisma.Decimal>();
+    for (const p of payoutLedger) {
+      if (p.milestone_id == null) continue;
+      const key = String(p.milestone_id);
+      if (p.type === 'WORKER_PAYOUT') {
+        const cur = bestPayout.get(key);
+        const better =
+          !cur ||
+          payoutRank(p.status) > payoutRank(cur.status) ||
+          (payoutRank(p.status) === payoutRank(cur.status) && p.id > cur.id);
+        if (better)
+          bestPayout.set(key, { amount: p.amount, status: p.status, id: p.id });
+      } else if (p.type === 'CIS_WITHHELD') {
+        cisByMilestone.set(
+          key,
+          (cisByMilestone.get(key) ?? new Prisma.Decimal(0)).add(p.amount),
+        );
+      }
+    }
+    const netByMilestone = new Map<string, Prisma.Decimal>();
+    for (const [key, v] of bestPayout) netByMilestone.set(key, v.amount);
 
     const active = milestones.filter((m) =>
       ['FUNDED', 'SUBMITTED'].includes(m.status),
@@ -2806,11 +3235,24 @@ export class EscrowService {
       ['REFERRAL_ACCOUNT', 'REFERRAL_W2W', 'REFERRAL_E2E'].includes(p.type),
     );
 
+    // Total CIS deducted from this worker across all released milestones —
+    // advance tax paid toward their HMRC bill (reclaimable at year-end).
+    const cisTotalDeducted = released.reduce(
+      (sum, m) =>
+        sum.add(
+          m.frozen_cis_amount ??
+            cisByMilestone.get(String(m.id)) ??
+            new Prisma.Decimal(0),
+        ),
+      new Prisma.Decimal(0),
+    );
+
     return {
       onboarding: {
         has_account: !!profile.stripe_connect_account_id,
         payouts_enabled: profile.connect_payouts_enabled,
       },
+      cis_total_deducted: cisTotalDeducted.toFixed(2),
       active_escrow: active.map((m) => ({
         milestone_id: String(m.id),
         title: m.title,
@@ -2820,13 +3262,27 @@ export class EscrowService {
         expected_payout:
           m.frozen_worker_payout?.toString() ?? m.amount.toString(),
       })),
-      released_history: released.map((m) => ({
-        milestone_id: String(m.id),
-        title: m.title,
-        amount: m.frozen_worker_payout?.toString() ?? m.amount.toString(),
-        released_at: m.released_at?.toISOString() ?? null,
-        contract_id: String(m.contract_id),
-      })),
+      released_history: released.map((m) => {
+        const key = String(m.id);
+        const net = netByMilestone.get(key);
+        // CIS deducted from the worker's pay — canonical source is the frozen
+        // milestone snapshot (set at release for BOTH modes). Whether it was
+        // withheld by us (V2) or refunded to the employer to remit (V1), the
+        // worker had the same amount deducted as advance tax. Fall back to the
+        // CIS_WITHHELD ledger for any legacy row without a frozen snapshot.
+        const cis = m.frozen_cis_amount ?? cisByMilestone.get(key) ?? null;
+        return {
+          milestone_id: key,
+          title: m.title,
+          // The actual net paid (WORKER_PAYOUT row) already has CIS subtracted;
+          // fall back to the frozen gross only if no payout row exists.
+          amount: (net ?? m.frozen_worker_payout ?? m.amount).toString(),
+          cis_withheld: cis ? cis.toString() : null,
+          cis_rate: m.frozen_cis_rate ? m.frozen_cis_rate.toNumber() : null,
+          released_at: m.released_at?.toISOString() ?? null,
+          contract_id: String(m.contract_id),
+        };
+      }),
       // Money authorised by the employer (milestone RELEASED) but not yet
       // paid out — the worker hasn't completed Stripe Connect onboarding or
       // a live transfer hit a transient rejection. Auto-paid on the
@@ -2867,7 +3323,9 @@ export class EscrowService {
       this.prisma.payment.findMany({
         where: {
           client_profile_id: employerProfileId,
-          type: { in: ['CHARGE', 'REFUND'] },
+          // CHARGE + REFUND, plus the V1 CIS refund returned to the employer to
+          // remit to HMRC themselves (CIS_EMPLOYER_REMIT).
+          type: { in: ['CHARGE', 'REFUND', 'CIS_EMPLOYER_REMIT'] },
         },
         orderBy: { created_at: 'desc' },
         take: 200,
@@ -2930,7 +3388,7 @@ export class EscrowService {
         by: ['type', 'status'],
         where: {
           client_profile_id: employerProfileId,
-          type: { in: ['CHARGE', 'REFUND'] },
+          type: { in: ['CHARGE', 'REFUND', 'CIS_EMPLOYER_REMIT'] },
         },
         _sum: { amount: true },
         _count: true,

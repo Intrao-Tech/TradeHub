@@ -12,6 +12,7 @@ import 'i18next';
 import admin from '../../public/locales/en/admin.json';
 import auth from '../../public/locales/en/auth.json';
 import chat from '../../public/locales/en/chat.json';
+import cis from '../../public/locales/en/cis.json';
 import collaborations from '../../public/locales/en/collaborations.json';
 import common from '../../public/locales/en/common.json';
 import jobs from '../../public/locales/en/jobs.json';
@@ -30,6 +31,7 @@ declare module 'i18next' {
       admin: typeof admin;
       auth: typeof auth;
       chat: typeof chat;
+      cis: typeof cis;
       collaborations: typeof collaborations;
       common: typeof common;
       jobs: typeof jobs;

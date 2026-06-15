@@ -244,6 +244,7 @@
     "uploadedOn": "Завантажено {{date}}",
     "reason": "Причина: {{reason}}",
     "view": "Переглянути",
+    "structured": "Без файлу (структуровано)",
     "deleteAria": "Видалити документ",
     "chipDone": "Готово",
     "chipReupload": "Перезавантажити",
@@ -275,7 +276,9 @@
     "number": "Номер Companies House",
     "numberPlaceholder": "напр. 12345678",
     "teamSize": "Розмір команди",
-    "save": "Зберегти дані компанії"
+    "save": "Зберегти дані компанії",
+    "isCisContractor": "Ми є підрядником CIS",
+    "isCisContractorHint": "Позначте, якщо ваш бізнес працює за схемою HMRC Construction Industry Scheme. Якщо позначено, до оплати праці субпідрядників застосовуються утримання CIS."
   },
   "account": {
     "title": "Акаунт",

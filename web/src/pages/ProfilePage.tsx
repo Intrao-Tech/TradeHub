@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { PortfolioTab } from '../components/profile/PortfolioTab';
 import { DocumentsTab } from '../components/profile/DocumentsTab';
+import { WorkerCisCard } from '../components/cis/WorkerCisCard';
 import {
   VerificationBadge,
   verificationFromLevel,
@@ -132,6 +133,7 @@ export default function ProfilePage() {
   const [companyName, setCompanyName] = useState('');
   const [companyNumber, setCompanyNumber] = useState('');
   const [teamSize, setTeamSize] = useState('');
+  const [isCisContractor, setIsCisContractor] = useState(false);
 
   const cp = clientProfile;
   const workerId = cp?.id != null ? String(cp.id) : '';
@@ -214,6 +216,7 @@ export default function ProfilePage() {
       setCompanyName(ep.company_name ?? '');
       setCompanyNumber(ep.company_number ?? '');
       setTeamSize(ep.team_size != null ? String(ep.team_size) : '');
+      setIsCisContractor(ep.is_cis_contractor ?? false);
     }
   }, [cp]);
 
@@ -289,6 +292,7 @@ export default function ProfilePage() {
       if (companyName.trim() !== '') bodyObj.company_name = companyName;
       if (companyNumber.trim() !== '') bodyObj.company_number = companyNumber;
       if (teamSize.trim() !== '') bodyObj.team_size = Number(teamSize);
+      bodyObj.is_cis_contractor = isCisContractor;
       await api('/employer-profiles/me', {
         method: 'PATCH',
         body: JSON.stringify(bodyObj),
@@ -465,6 +469,8 @@ export default function ProfilePage() {
 
   const verificationsCard = cp ? <VerificationSection /> : null;
 
+  const cisCard = isWorker && cp ? <WorkerCisCard onChanged={refetch} /> : null;
+
   const accountCard = account ? (
     <AccountSection
       email={account.email}
@@ -520,6 +526,7 @@ export default function ProfilePage() {
             {statsCard}
             {availabilityCard}
             {languagesCard}
+            {cisCard}
             {verificationsCard}
             {accountCard}
           </aside>
@@ -886,6 +893,20 @@ export default function ProfilePage() {
                         onChange={(e) => setTeamSize(e.target.value)}
                         min={0}
                       />
+                    </div>
+                    <div className="flex flex-col gap-2.5 sm:col-span-2">
+                      <label className="flex items-center gap-2 text-sm text-fg">
+                        <input
+                          type="checkbox"
+                          checked={isCisContractor}
+                          onChange={(e) => setIsCisContractor(e.target.checked)}
+                          className="h-4 w-4 rounded border-border-default"
+                        />
+                        {t('company.isCisContractor')}
+                      </label>
+                      <p className="text-xs text-fg-muted">
+                        {t('company.isCisContractorHint')}
+                      </p>
                     </div>
                     <div className="sm:col-span-2">
                       <Button type="submit">{t('company.save')}</Button>

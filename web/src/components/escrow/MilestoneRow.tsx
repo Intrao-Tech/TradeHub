@@ -23,6 +23,7 @@ import {
   deleteMilestoneAttachment,
   fileDispute,
   fundMilestone,
+  getMilestoneFundingPreview,
   refundMilestone,
   retryRelease,
   submitMilestone,
@@ -30,8 +31,18 @@ import {
   uploadMilestoneAttachment,
   type Milestone,
   type MilestoneAttachment,
+  type MilestoneFundingPreview,
 } from './api';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { DisputeProposalView } from './DisputeProposalView';
+import { MilestoneCisInfo } from '../cis/MilestoneCisInfo';
 import { parseApiError } from '../../api';
 
 const API_BASE =
@@ -95,6 +106,7 @@ export function MilestoneRow({
   const [amount, setAmount] = useState(milestone.amount);
   const [description, setDescription] = useState(milestone.description ?? '');
   const [submitMsg, setSubmitMsg] = useState('');
+  const [submitMaterials, setSubmitMaterials] = useState('');
   const [submittingMilestone, setSubmittingMilestone] = useState(false);
   const [refundMode, setRefundMode] = useState(false);
   const [refundReason, setRefundReason] = useState('');
@@ -102,6 +114,11 @@ export function MilestoneRow({
   const [disputeReason, setDisputeReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [fundPreview, setFundPreview] = useState<MilestoneFundingPreview | null>(
+    null,
+  );
+  const [fundPreviewOpen, setFundPreviewOpen] = useState(false);
+  const [fundPreviewBusy, setFundPreviewBusy] = useState(false);
   const [uploading, setUploading] = useState<'CREATION' | 'SUBMISSION' | null>(
     null,
   );
@@ -173,6 +190,22 @@ export function MilestoneRow({
     }
   }
 
+  async function openFundPreview() {
+    setError('');
+    setFundPreviewBusy(true);
+    setFundPreviewOpen(true);
+    try {
+      const preview = await getMilestoneFundingPreview(milestone.id);
+      setFundPreview(preview);
+    } catch (err) {
+      setFundPreview(null);
+      setFundPreviewOpen(false);
+      setError(parseApiError(err)?.message ?? t('milestoneRow.checkoutError'));
+    } finally {
+      setFundPreviewBusy(false);
+    }
+  }
+
   async function fund() {
     setError('');
     setBusy(true);
@@ -197,9 +230,14 @@ export function MilestoneRow({
     setError('');
     setBusy(true);
     try {
-      await submitMilestone(milestone.id, submitMsg.trim() || undefined);
+      await submitMilestone(
+        milestone.id,
+        submitMsg.trim() || undefined,
+        submitMaterials.trim() || undefined,
+      );
       setSubmittingMilestone(false);
       setSubmitMsg('');
+      setSubmitMaterials('');
       onChanged();
     } catch (err) {
       setError(parseApiError(err)?.message ?? t('milestoneRow.submitError'));
@@ -425,6 +463,10 @@ export function MilestoneRow({
                   </span>
                 ) : null}
               </div>
+              <MilestoneCisInfo
+                milestoneId={milestone.id}
+                status={milestone.status}
+              />
             </>
           )}
         </div>
@@ -477,7 +519,7 @@ export function MilestoneRow({
             {isPending && isEmployer ? (
               <Button
                 type="button"
-                onClick={fund}
+                onClick={openFundPreview}
                 disabled={busy || fundLocked}
                 title={fundLocked && fundLockReason ? t('milestoneRow.releaseFirst', { title: fundLockReason }) : undefined}
               >
@@ -602,6 +644,23 @@ export function MilestoneRow({
             maxLength={2000}
             disabled={busy}
           />
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-fg-muted">
+              {t('milestoneRow.submitMaterialsLabel')}
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={submitMaterials}
+              onChange={(e) => setSubmitMaterials(e.target.value)}
+              placeholder={t('milestoneRow.submitMaterialsPlaceholder')}
+              disabled={busy}
+            />
+            <p className="text-[11px] text-fg-muted">
+              {t('milestoneRow.submitMaterialsHelp')}
+            </p>
+          </div>
           <div className="flex gap-2">
             <Button type="button" size="sm" onClick={doSubmit} disabled={busy}>
               {busy ? t('milestoneRow.submitting') : t('milestoneRow.confirmSubmit')}
@@ -613,6 +672,7 @@ export function MilestoneRow({
               onClick={() => {
                 setSubmittingMilestone(false);
                 setSubmitMsg('');
+                setSubmitMaterials('');
               }}
               disabled={busy}
             >
@@ -694,6 +754,103 @@ export function MilestoneRow({
           onCanceled={onChanged}
         />
       ) : null}
+
+      {/* Funding breakdown — shown before Stripe Checkout so the charge is
+          never a black box (shows the CIS line when it applies). */}
+      <Dialog
+        open={fundPreviewOpen}
+        onOpenChange={(o) => {
+          if (!busy) setFundPreviewOpen(o);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('milestoneRow.fundPreview.title')}</DialogTitle>
+            <DialogDescription>
+              {t('milestoneRow.fundPreview.desc')}
+            </DialogDescription>
+          </DialogHeader>
+          {fundPreviewBusy || !fundPreview ? (
+            <p className="text-sm text-fg-muted">
+              {t('milestoneRow.fundPreview.loading')}
+            </p>
+          ) : (
+            <dl className="space-y-1.5 text-sm">
+              <div className="flex items-center justify-between">
+                <dt className="text-fg-muted">
+                  {t('milestoneRow.fundPreview.job')}
+                </dt>
+                <dd className="text-fg">£{fundPreview.job_amount}</dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-fg-muted">
+                  {t('milestoneRow.fundPreview.clientFee')}
+                </dt>
+                <dd className="text-fg">
+                  £{fundPreview.client_marketplace_fee}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-fg-muted">
+                  {t('milestoneRow.fundPreview.stripe')}
+                </dt>
+                <dd className="text-fg">£{fundPreview.stripe_fee_estimate}</dd>
+              </div>
+              <div className="flex items-center justify-between border-t border-border-default pt-2 font-semibold">
+                <dt>{t('milestoneRow.fundPreview.total')}</dt>
+                <dd>£{fundPreview.employer_charge}</dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-fg-muted">
+                  {t('milestoneRow.fundPreview.workerShare')}
+                </dt>
+                <dd className="text-fg">£{fundPreview.worker_share}</dd>
+              </div>
+              {/* CIS is NOT part of the charge — it's handled at release once
+                  the worker declares materials. Show it as a note only. */}
+              <p className="pt-1 text-xs text-fg-muted">
+                {fundPreview.cis_applies
+                  ? fundPreview.cis_remitter === 'PLATFORM'
+                    ? t('milestoneRow.fundPreview.cisManagedNote', {
+                        amount: fundPreview.cis_estimate,
+                        rate: fundPreview.cis_rate,
+                      })
+                    : t('milestoneRow.fundPreview.cisAssistNote', {
+                        amount: fundPreview.cis_estimate,
+                        rate: fundPreview.cis_rate,
+                      })
+                  : t('milestoneRow.fundPreview.noCisNote')}
+              </p>
+            </dl>
+          )}
+          {error ? (
+            <p role="alert" className="text-xs text-danger">
+              {error}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setFundPreviewOpen(false)}
+              disabled={busy}
+            >
+              {t('milestoneRow.cancel')}
+            </Button>
+            <Button
+              type="button"
+              onClick={fund}
+              disabled={busy || fundPreviewBusy || !fundPreview}
+            >
+              {busy
+                ? t('milestoneRow.starting')
+                : t('milestoneRow.fundPreview.pay', {
+                    amount: fundPreview?.employer_charge ?? '',
+                  })}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsInt,
   IsOptional,
   IsString,
@@ -29,4 +30,12 @@ export class UpdateEmployerProfileDto {
   @Min(0)
   @Max(32767)
   team_size?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'CIS: declare this employer is a Construction Industry Scheme contractor (a construction business that operates CIS). Drives whether CIS applies to their jobs.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  is_cis_contractor?: boolean;
 }

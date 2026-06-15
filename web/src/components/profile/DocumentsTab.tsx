@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '../../api';
-import { publicFileUrl } from '../../lib/files';
+import { publicFileUrl, isStructuredOnly } from '../../lib/files';
 import { EmptyState } from '../EmptyState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -520,6 +520,7 @@ function DocumentRowItem({
 }) {
   const { t } = useTranslation('profile');
   const url = publicFileUrl(doc.file_url);
+  const structured = isStructuredOnly(doc.file_url);
   const ext = doc.file_url ? doc.file_url.split('.').pop()?.toUpperCase() : '';
   const isImage = /\.(jpe?g|png|webp|gif)$/i.test(doc.file_url ?? '');
   const isPdf = /\.pdf$/i.test(doc.file_url ?? '');
@@ -569,6 +570,10 @@ function DocumentRowItem({
               {t('documents.view')}
             </a>
           </Button>
+        ) : structured ? (
+          <span className="px-2 text-xs text-fg-muted">
+            {t('documents.structured')}
+          </span>
         ) : null}
         {doc.status === 'PENDING' ? (
           <Button

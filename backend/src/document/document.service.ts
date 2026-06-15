@@ -22,6 +22,12 @@ import {
 const UPLOAD_SUBDIR = 'uploads';
 const STRUCTURED_ONLY_DOC_TYPES = new Set(['HMRC_CIS_DOCUMENT']);
 
+// Doc types a worker may hold at most ONE of: they represent a single standing
+// fact (e.g. CIS status), not an append-only log. Re-submitting SUPERSEDES the
+// previous item so the queue + "My documents" never accumulate duplicates and
+// the same fact can't be approved twice.
+const SINGLETON_DOC_TYPES = new Set(['HMRC_CIS_DOCUMENT']);
+
 // Shape we return on the API. Aggregated from reviewable_item (owner, created)
 // + document (file/metadata) + latest review_item (workflow state).
 type DocumentRow = Prisma.DocumentGetPayload<{
@@ -93,6 +99,18 @@ export class DocumentService implements OnModuleInit {
     // in a single transaction. review_item's existence puts the document
     // into the staff verification queue immediately.
     const created = await this.prisma.$transaction(async (tx) => {
+      // Supersede any prior submission of a singleton type (e.g. CIS), so a
+      // worker ends up with exactly one — re-submit replaces, never stacks.
+      // Deleting the reviewable_item cascades to its document + review_items.
+      if (SINGLETON_DOC_TYPES.has(dto.doc_type)) {
+        await tx.reviewableItem.deleteMany({
+          where: {
+            client_profile_id: clientProfileId,
+            kind: 'DOCUMENT',
+            document: { doc_type: dto.doc_type },
+          },
+        });
+      }
       const reviewable = await tx.reviewableItem.create({
         data: {
           client_profile_id: clientProfileId,

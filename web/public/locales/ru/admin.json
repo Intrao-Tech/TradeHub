@@ -109,7 +109,7 @@
     "newAccounts": "Новые аккаунты за день (7д)",
     "newAccountsDesc": "Регистрации по всем типам аккаунтов.",
     "newUsers": "Новые (7д / 30д)",
-    "newUsersSubtitle": "{{workers}} работников · {{employers}} работодателей · {{staff}} сотрудников",
+    "newUsersSubtitle": "{{workers}} работников · {{employers}} работодателей · {{dual}} двойных · {{staff}} сотрудников",
     "noMilestones": "Этапов пока нет.",
     "noPayments": "Нет платёжной активности.",
     "openDisputes": "Открытые споры",
@@ -505,7 +505,8 @@
     "staff": "Сотрудники",
     "support": "Обращения поддержки",
     "tags": "Теги",
-    "users": "Пользователи"
+    "users": "Пользователи",
+    "cisReturns": "CIS"
   },
   "users": {
     "actionFailed": "Не удалось выполнить действие",
@@ -614,6 +615,8 @@
     "statusPending": "Только ожидают",
     "statusRejected": "Отклонённые",
     "structured": "структурировано",
+    "cisUtr": "UTR",
+    "cisNi": "Номер NI",
     "title": "Очередь верификации"
   },
   "publishQueue": {

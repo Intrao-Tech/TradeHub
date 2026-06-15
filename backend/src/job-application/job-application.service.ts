@@ -15,6 +15,7 @@ import { AuditService } from '../audit/audit.service';
 import { ReferralService } from '../referral/referral.service';
 import { REFERRAL_AUDIT_EVENTS } from '../referral/referral.constants';
 import { ConversationService } from '../conversation/conversation.service';
+import { NotificationService } from '../notification/notification.service';
 import type { ApplicationQueryDto } from './dto/application-query.dto';
 import type { ApplyJobDto } from './dto/apply-job.dto';
 
@@ -40,6 +41,7 @@ export class JobApplicationService {
     private readonly mail: MailService,
     private readonly audit: AuditService,
     private readonly referrals: ReferralService,
+    private readonly notifications: NotificationService,
     @Inject(forwardRef(() => ConversationService))
     private readonly conversations: ConversationService,
   ) {}
@@ -187,62 +189,51 @@ export class JobApplicationService {
       );
     }
 
-    const content =
-      message != null && message.trim().length > 0
-        ? message.trim()
-        : 'You have been invited to apply for this job.';
-
-    // Chat is collaboration-scoped now — find-or-create the worker<->employer
-    // relationship so the invitation lands in their shared conversation.
-    let collab = await this.prisma.collaboration.findFirst({
-      where: { worker_id: workerId, employer_id: employerId },
+    // Create the invitation only. The collaboration + persistent chat are NOT
+    // created here — they are spun up when the worker ACCEPTS the invitation
+    // (see updateStatus → spinUpRelationshipAndChat). An unanswered invite
+    // therefore leaves no dangling relationship or empty chat.
+    const application = await this.prisma.jobApplication.create({
+      data: {
+        job_post_id: jobPostId,
+        worker_id: workerId,
+        initiated_by: 'EMPLOYER',
+        cover_message: message?.trim() || null,
+      },
+      include: applicationInclude,
     });
-    if (!collab) {
-      collab = await this.prisma.collaboration.create({
-        data: { worker_id: workerId, employer_id: employerId },
-      });
-    }
-    const collabId = collab.id;
 
-    let newConvId: bigint | null = null;
-    const application = await this.prisma.$transaction(async (tx) => {
-      newConvId = await this.conversations.ensureCollaborationConversation(
-        tx,
-        collabId,
-      );
-
-      const createdMessage = await tx.message.create({
+    // Notify the invited worker (in-app). The employer's invite message is
+    // surfaced as the notification body so the worker sees it without having
+    // to open the job. Failure here must not roll back the invitation.
+    const employerName =
+      application.job_post?.employer?.client_profile?.display_name?.trim() ||
+      'An employer';
+    const jobTitle = application.job_post?.title?.trim() || 'a job';
+    const inviteMessage = application.cover_message?.trim();
+    try {
+      await this.notifications.create(workerId, {
+        type: 'JOB_INVITATION',
+        title: `${employerName} invited you to apply`.slice(0, 200),
+        body: (
+          inviteMessage ||
+          `You've been invited to "${jobTitle}". Open it to accept or decline.`
+        ).slice(0, 1000),
         data: {
-          conversation_id: collabId,
-          sender_id: employerId,
-          content,
-          message_type: 'JOB_INVITATION',
-          metadata: { job_post_id: jobPostId.toString() },
-        },
-      });
-
-      await tx.conversation.update({
-        where: { id: collabId },
-        data: { last_message_at: createdMessage.created_at },
-      });
-
-      return tx.jobApplication.create({
-        data: {
-          job_post_id: jobPostId,
-          worker_id: workerId,
+          job_post_id: String(jobPostId),
+          application_id: String(application.id),
           initiated_by: 'EMPLOYER',
-          cover_message: message?.trim() || null,
         },
-        include: applicationInclude,
+        channel: 'IN_APP',
       });
-    });
-
-    if (newConvId !== null) {
-      this.conversations.announceConversationCreated(newConvId, [
-        workerId,
-        employerId,
-      ]);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to create JOB_INVITATION notification for worker ${String(
+          workerId,
+        )}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
+
     return application;
   }
 
@@ -328,17 +319,35 @@ export class JobApplicationService {
 
     const isWorker = userId === application.worker_id;
     const isEmployer = userId === application.job_post.employer_id;
+    const isInvitation = application.initiated_by === 'EMPLOYER';
 
-    if (status === 'WITHDRAWN') {
-      if (!isWorker) {
-        throw new ForbiddenException('Only the worker can withdraw');
+    if (!isWorker && !isEmployer) {
+      throw new ForbiddenException('You are not a party to this application.');
+    }
+
+    if (status === 'ACCEPTED' || status === 'REJECTED') {
+      // The recipient decides: the invited worker accepts/declines an
+      // invitation; the employer accepts/rejects a worker's application.
+      const canDecide = isInvitation ? isWorker : isEmployer;
+      if (!canDecide) {
+        throw new ForbiddenException(
+          isInvitation
+            ? 'Only the invited worker can accept or decline this invitation.'
+            : 'Only the job owner can accept or reject this application.',
+        );
       }
-    } else if (
-      status === 'REVIEWED' ||
-      status === 'SHORTLISTED' ||
-      status === 'ACCEPTED' ||
-      status === 'REJECTED'
-    ) {
+    } else if (status === 'WITHDRAWN') {
+      // The initiator cancels: the worker withdraws their application; the
+      // employer cancels their invitation.
+      const canWithdraw = isInvitation ? isEmployer : isWorker;
+      if (!canWithdraw) {
+        throw new ForbiddenException(
+          isInvitation
+            ? 'Only the employer can cancel this invitation.'
+            : 'Only the worker can withdraw this application.',
+        );
+      }
+    } else if (status === 'REVIEWED' || status === 'SHORTLISTED') {
       if (!isEmployer) {
         throw new ForbiddenException('Only the job owner can set this status');
       }

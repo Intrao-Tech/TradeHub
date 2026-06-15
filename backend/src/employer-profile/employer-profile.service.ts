@@ -28,6 +28,8 @@ export class EmployerProfileService {
     if (dto.company_number !== undefined)
       data.company_number = dto.company_number;
     if (dto.team_size !== undefined) data.team_size = dto.team_size;
+    if (dto.is_cis_contractor !== undefined)
+      data.is_cis_contractor = dto.is_cis_contractor;
 
     try {
       return await this.prisma.employerProfile.update({

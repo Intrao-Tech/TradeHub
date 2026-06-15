@@ -146,10 +146,28 @@ describe('TEST-VER-171 HMRC_CIS_DOCUMENT — VER-146 / VER-149', () => {
     );
   });
 
-  test('VER-146 — missing NI field rejected as INVALID_NI', () => {
+  test('VER-146 — NI is optional: UTR alone returns { utr }', () => {
+    const result = validateDocumentMetadata('HMRC_CIS_DOCUMENT', {
+      utr: '1234567890',
+    });
+    expect(result).toEqual({ utr: '1234567890' });
+  });
+
+  test('VER-146 — empty/blank NI is treated as omitted', () => {
+    const result = validateDocumentMetadata('HMRC_CIS_DOCUMENT', {
+      utr: '1234567890',
+      ni_number: '   ',
+    });
+    expect(result).toEqual({ utr: '1234567890' });
+  });
+
+  test('VER-146 — malformed NI still rejected when supplied', () => {
     expectBadRequest(
       () =>
-        validateDocumentMetadata('HMRC_CIS_DOCUMENT', { utr: '1234567890' }),
+        validateDocumentMetadata('HMRC_CIS_DOCUMENT', {
+          utr: '1234567890',
+          ni_number: 'AB1234567',
+        }),
       'INVALID_NI',
     );
   });

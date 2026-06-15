@@ -32,6 +32,9 @@ export type Milestone = {
   description?: string | null;
   created_by_role?: 'WORKER' | 'EMPLOYER';
   amount: string;
+  /** CIS labour/materials split (null when not specified). */
+  labour_amount?: string | null;
+  materials_amount?: string | null;
   status:
     | 'REQUESTED'
     | 'PENDING'
@@ -98,6 +101,10 @@ export function createMilestone(
     amount: string;
     position?: number;
     description?: string | null;
+    /** CIS: labour portion (the part a deduction applies to). */
+    labour_amount?: string;
+    /** CIS: materials portion (never deducted). */
+    materials_amount?: string;
   },
 ) {
   return api<Milestone>(`/escrow/${contractId}/milestones`, {
@@ -113,6 +120,8 @@ export function updateMilestone(
     amount?: string;
     position?: number;
     description?: string | null;
+    labour_amount?: string;
+    materials_amount?: string;
   },
 ) {
   return api<Milestone>(`/escrow/milestones/${milestoneId}`, {
@@ -171,13 +180,44 @@ export function fundMilestone(milestoneId: string | number) {
   }>(`/escrow/milestones/${milestoneId}/fund`, { method: 'POST' });
 }
 
+export type MilestoneFundingPreview = {
+  milestone_id: string;
+  job_amount: string;
+  cis_applies: boolean;
+  cis_mode: 'ASSIST' | 'MANAGED' | null;
+  cis_rate: number | null;
+  /** Upper-bound CIS estimate (assumes £0 materials); finalised at release. */
+  cis_estimate: string;
+  cis_remitter: 'PLATFORM' | 'EMPLOYER' | null;
+  client_marketplace_fee: string;
+  freelancer_service_fee: string;
+  stripe_fee_estimate: string;
+  employer_charge: string;
+  /** Worker's share before CIS (job − our worker fee). */
+  worker_share: string;
+  /** Estimated net to worker after the CIS estimate. */
+  est_worker_receives: string;
+};
+
+export function getMilestoneFundingPreview(milestoneId: string | number) {
+  return api<MilestoneFundingPreview>(
+    `/escrow/milestones/${milestoneId}/funding-preview`,
+  );
+}
+
 export function submitMilestone(
   milestoneId: string | number,
   message?: string,
+  materialsAmount?: string,
 ) {
   return api<Milestone>(`/escrow/milestones/${milestoneId}/submit`, {
     method: 'POST',
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({
+      message,
+      ...(materialsAmount != null && materialsAmount !== ''
+        ? { materials_amount: materialsAmount }
+        : {}),
+    }),
   });
 }
 
@@ -369,6 +409,8 @@ export function initiateEndContract(contractId: string | number) {
 
 export type WalletData = {
   onboarding: { has_account: boolean; payouts_enabled: boolean };
+  /** Total CIS deducted from this worker across all released milestones. */
+  cis_total_deducted?: string;
   active_escrow: Array<{
     milestone_id: string;
     title: string;
@@ -381,6 +423,9 @@ export type WalletData = {
     milestone_id: string;
     title: string;
     amount: string;
+    /** CIS deducted from the worker's pay (advance tax to HMRC); null when none. */
+    cis_withheld?: string | null;
+    cis_rate?: number | null;
     released_at: string | null;
     contract_id: string;
   }>;
@@ -414,7 +459,7 @@ export function getWallet() {
 
 export type EmployerPaymentRow = {
   id: string;
-  type: 'CHARGE' | 'REFUND';
+  type: 'CHARGE' | 'REFUND' | 'CIS_EMPLOYER_REMIT';
   status: 'PENDING' | 'PAID' | 'FAILED' | 'CANCELED';
   amount: string;
   currency: string;

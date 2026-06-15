@@ -1,13 +1,17 @@
 import { type ReactNode, useEffect, useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
+  Briefcase,
   Check,
+  Hammer,
   LogOut,
   Menu,
   Monitor,
   Moon,
+  Plus,
   Power,
+  Repeat,
   Settings,
   Sun,
   User,
@@ -36,7 +40,7 @@ import {
 import { useThemePreference, type ThemePreference } from "@/lib/theme";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
-import { useAccountMe } from "@/hooks/useAccountMe";
+import { useAccountMe, type ActiveRole } from "@/hooks/useAccountMe";
 import { publicFileUrl } from "@/lib/files";
 import { Footer } from "@/components/Footer";
 import { AuthFooter } from "@/components/AuthFooter";
@@ -309,9 +313,26 @@ function UserMenu({
   isOnDuty: boolean;
 }) {
   const { t } = useTranslation("common");
-  const { account, clientProfile, refetch } = useAccountMe();
+  const navigate = useNavigate();
+  const {
+    account,
+    clientProfile,
+    refetch,
+    hasBothRoles,
+    hasWorkerProfile,
+    activeRole,
+    setActiveRole,
+  } = useAccountMe();
   const [dutyBusy, setDutyBusy] = useState(false);
   const [dutyErr, setDutyErr] = useState('');
+
+  function switchCabinet(role: ActiveRole) {
+    if (role === activeRole) return;
+    setActiveRole(role);
+    // Land on /profile — safe for both cabinets. Any page that's now in the
+    // other cabinet redirects itself via the route role-gate.
+    navigate('/profile');
+  }
   async function toggleDuty() {
     if (!isStaff || dutyBusy) return;
     setDutyBusy(true);
@@ -403,6 +424,64 @@ function UserMenu({
             <NavLink to="/profile" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               <span>{t("menu.profile")}</span>
+            </NavLink>
+          </DropdownMenuItem>
+        ) : null}
+        {/* Dual-role: cabinet switcher. Single-role with a client profile:
+            offer to add the other cabinet (Upwork-style). */}
+        {hasBothRoles ? (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="gap-2">
+              <Repeat className="h-4 w-4" />
+              <span>
+                {t('menu.cabinet', { defaultValue: 'Cabinet' })}:{' '}
+                {activeRole === 'employer'
+                  ? t('menu.employerCabinet', { defaultValue: 'Employer' })
+                  : t('menu.workerCabinet', { defaultValue: 'Tradesperson' })}
+              </span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-56">
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  switchCabinet('worker');
+                }}
+                className="items-center gap-2"
+              >
+                <Hammer className="h-4 w-4" />
+                <span className="flex-1">
+                  {t('menu.workerCabinet', { defaultValue: 'Tradesperson' })}
+                </span>
+                {activeRole === 'worker' ? (
+                  <Check className="h-4 w-4 text-primary" />
+                ) : null}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  switchCabinet('employer');
+                }}
+                className="items-center gap-2"
+              >
+                <Briefcase className="h-4 w-4" />
+                <span className="flex-1">
+                  {t('menu.employerCabinet', { defaultValue: 'Employer' })}
+                </span>
+                {activeRole === 'employer' ? (
+                  <Check className="h-4 w-4 text-primary" />
+                ) : null}
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ) : clientProfile ? (
+          <DropdownMenuItem asChild>
+            <NavLink to="/add-role" className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              <span>
+                {hasWorkerProfile
+                  ? t('menu.addEmployer', { defaultValue: 'Add employer account' })
+                  : t('menu.addWorker', { defaultValue: 'Add tradesperson account' })}
+              </span>
             </NavLink>
           </DropdownMenuItem>
         ) : null}

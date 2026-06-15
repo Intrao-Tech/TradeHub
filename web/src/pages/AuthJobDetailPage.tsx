@@ -90,6 +90,7 @@ type JobDetail = {
 type MyApplication = {
   id: string | number;
   status: string;
+  initiated_by?: string;
   job_post?: { id?: string | number } | null;
 };
 
@@ -390,6 +391,15 @@ export default function AuthJobDetailPage() {
               setRefreshKey((k) => k + 1);
               return 'handled';
             }
+            if (code === 'CIS_NOT_CONFIRMED') {
+              toast.error(parsed.message ?? t('authDetail.cisNotConfirmedToast'), {
+                action: {
+                  label: t('authDetail.cisConfirmLink'),
+                  onClick: () => navigate('/profile'),
+                },
+              });
+              return 'handled';
+            }
             if (code === 'EMAIL_NOT_VERIFIED' || status === 403) {
               toast.error(parsed.message ?? t('authDetail.verifyToApplyToast'));
               return 'handled';
@@ -554,7 +564,7 @@ function renderActionBody({
   nextHref,
   jobId,
   onApply,
-}: Omit<ActionCardProps, 'jobTitle'>, t: TFn): React.ReactNode {
+}: Omit<ActionCardProps, 'jobTitle' | 'initialSaved'>, t: TFn): React.ReactNode {
   if (!loggedIn) {
     return (
       <Button asChild className="w-full">
@@ -592,6 +602,17 @@ function renderActionBody({
       return (
         <Button disabled className="w-full">
           {t('authDetail.applicationWithdrawn')}
+        </Button>
+      );
+    }
+    // An employer INVITATION still awaiting the worker's response is NOT an
+    // application the worker submitted — prompt them to accept/decline.
+    if (myApp.initiated_by === 'EMPLOYER' && upper === 'PENDING') {
+      return (
+        <Button asChild className="w-full">
+          <Link to="/my-applications">
+            {t('authDetail.invitedRespond')}
+          </Link>
         </Button>
       );
     }

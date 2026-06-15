@@ -35,5 +35,24 @@
     "failMsg": "Could not sign you out — please try again.",
     "button": "Sign out everywhere",
     "busy": "Signing out…"
+  },
+  "methodsLoading": "Loading…",
+  "setPassword": {
+    "title": "Set a password",
+    "desc": "Add a password so you can sign in with your email and password as well.",
+    "googleTitle": "Signed in with Google",
+    "googleBody": "Your account currently uses Google sign-in only. Setting a password lets you sign in either way — Google stays linked.",
+    "newLabel": "New password",
+    "confirmLabel": "Confirm password",
+    "mismatchInline": "Passwords don't match.",
+    "mismatchTitle": "Password mismatch",
+    "mismatchMsg": "The password and confirmation do not match.",
+    "rejectedTitle": "Password rejected",
+    "save": "Set password",
+    "saving": "Saving…",
+    "successTitle": "Password set",
+    "successBody": "You can now sign in with your email and password, or keep using Continue with Google.",
+    "failTitle": "Could not set password",
+    "failMsg": "Something went wrong."
   }
 }

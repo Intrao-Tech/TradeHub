@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, parseApiError } from '../../api';
 import { useAccountMe } from '../../hooks/useAccountMe';
-import { publicFileUrl } from '../../lib/files';
+import { publicFileUrl, isStructuredOnly } from '../../lib/files';
 import { formatDate } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,7 +38,11 @@ type QueueItem = {
     file_url: string;
     status: 'PENDING' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED';
     rejection_reason: string | null;
-    metadata: { title?: string } | null;
+    metadata: {
+      title?: string;
+      utr?: string;
+      ni_number?: string;
+    } | null;
     created_at: string;
   };
   uploader: { id: string; display_name: string; role: string };
@@ -273,6 +277,32 @@ export function VerificationQueueTab() {
                           — {item.document.metadata.title}
                         </span>
                       ) : null}
+                      {item.document.doc_type === 'HMRC_CIS_DOCUMENT' &&
+                      (item.document.metadata?.utr ||
+                        item.document.metadata?.ni_number) ? (
+                        <div className="mt-1 space-y-0.5 text-xs text-fg-muted">
+                          {item.document.metadata?.utr ? (
+                            <div>
+                              <span className="font-medium">
+                                {t('verification.cisUtr')}:
+                              </span>{' '}
+                              <span className="font-mono">
+                                {item.document.metadata.utr}
+                              </span>
+                            </div>
+                          ) : null}
+                          {item.document.metadata?.ni_number ? (
+                            <div>
+                              <span className="font-medium">
+                                {t('verification.cisNi')}:
+                              </span>{' '}
+                              <span className="font-mono">
+                                {item.document.metadata.ni_number}
+                              </span>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       <Badge variant={statusVariant(item.document.status)}>
@@ -298,7 +328,7 @@ export function VerificationQueueTab() {
                       {formatDate(item.document.created_at, 'short')}
                     </TableCell>
                     <TableCell>
-                      {url && item.document.file_url !== '(structured-only)' ? (
+                      {url && !isStructuredOnly(item.document.file_url) ? (
                         <a
                           href={url}
                           target="_blank"

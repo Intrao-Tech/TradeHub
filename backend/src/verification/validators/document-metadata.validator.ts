@@ -46,21 +46,34 @@ export function validateDocumentMetadata(
     }
 
     case 'HMRC_CIS_DOCUMENT': {
+      // UTR is the primary HMRC CIS identifier and is always required. The
+      // National Insurance number is optional: HMRC uses it to match
+      // sole-trader / individual records, but limited-company subcontractors
+      // verify with a company registration number instead and have no personal
+      // NINO tied to the business. When supplied, it must be well-formed.
       const meta = requireObject(
         raw,
         'METADATA_REQUIRED',
-        'HMRC CIS submission requires UTR and NI number.',
+        'HMRC CIS submission requires a UTR.',
       );
       const utr = requireString(meta, 'utr', 'INVALID_UTR').trim();
-      const ni = requireString(meta, 'ni_number', 'INVALID_NI')
-        .toUpperCase()
-        .replace(/\s+/g, '');
       if (!UTR_REGEX.test(utr)) {
         throw new BadRequestException({
           code: 'INVALID_UTR',
           message: 'UTR must be exactly 10 digits.',
         });
       }
+      const rawNi = meta.ni_number;
+      if (rawNi == null || (typeof rawNi === 'string' && rawNi.trim() === '')) {
+        return { utr };
+      }
+      if (typeof rawNi !== 'string') {
+        throw new BadRequestException({
+          code: 'INVALID_NI',
+          message: 'National Insurance number must be in the format AB123456C.',
+        });
+      }
+      const ni = rawNi.toUpperCase().replace(/\s+/g, '');
       if (!NI_REGEX.test(ni)) {
         throw new BadRequestException({
           code: 'INVALID_NI',

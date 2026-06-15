@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
+import { cisTaxMonth } from '../src/cis/cis.constants';
 
 const adapter = new PrismaPg(process.env.DATABASE_URL!);
 const prisma = new PrismaClient({ adapter });
@@ -306,12 +307,15 @@ async function main() {
 
   // ── Worker Accounts ──────────────────────────────────────────
   // referral_code / referred_by_id / referred_at live on client_profile.
+  // `cis` seeds the HMRC Construction Industry Scheme standing so the full
+  // V1/V2 flow is testable: one of each confirmed rate (20/0/30) plus one left
+  // NONE to exercise the apply-gate (Emma cannot apply until she declares).
   const workers = [
-    { email: 'mike.builder@example.com', name: 'Mike Thompson', city: 'London', postcode: 'SW1', specIdx: [0, 7], yearsExp: 12, rateMin: 200, rateMax: 350, langs: ['en'] },
-    { email: 'sarah.sparks@example.com', name: 'Sarah Jenkins', city: 'Manchester', postcode: 'M1', specIdx: [1, 10], yearsExp: 8, rateMin: 250, rateMax: 400, langs: ['en', 'pl'] },
-    { email: 'dave.pipes@example.com', name: 'Dave Wilson', city: 'Birmingham', postcode: 'B1', specIdx: [2, 9], yearsExp: 15, rateMin: 220, rateMax: 380, langs: ['en'] },
-    { email: 'tom.wood@example.com', name: 'Tom Harris', city: 'Leeds', postcode: 'LS1', specIdx: [3, 5], yearsExp: 6, rateMin: 180, rateMax: 280, langs: ['en', 'uk'] },
-    { email: 'emma.tiles@example.com', name: 'Emma Clarke', city: 'Bristol', postcode: 'BS1', specIdx: [8, 5], yearsExp: 10, rateMin: 200, rateMax: 320, langs: ['en'] },
+    { email: 'mike.builder@example.com', name: 'Mike Thompson', city: 'London', postcode: 'SW1', specIdx: [0, 7], yearsExp: 12, rateMin: 200, rateMax: 350, langs: ['en'], cis: { status: 'REGISTERED', rate: 20, utr: 'V1000000001', verified: true } },
+    { email: 'sarah.sparks@example.com', name: 'Sarah Jenkins', city: 'Manchester', postcode: 'M1', specIdx: [1, 10], yearsExp: 8, rateMin: 250, rateMax: 400, langs: ['en', 'pl'], cis: { status: 'GROSS', rate: 0, utr: 'V1000000002', verified: true } },
+    { email: 'dave.pipes@example.com', name: 'Dave Wilson', city: 'Birmingham', postcode: 'B1', specIdx: [2, 9], yearsExp: 15, rateMin: 220, rateMax: 380, langs: ['en'], cis: { status: 'UNREGISTERED', rate: 30, utr: null, verified: true } },
+    { email: 'tom.wood@example.com', name: 'Tom Harris', city: 'Leeds', postcode: 'LS1', specIdx: [3, 5], yearsExp: 6, rateMin: 180, rateMax: 280, langs: ['en', 'uk'], cis: { status: 'REGISTERED', rate: 20, utr: 'V1000000004', verified: false } },
+    { email: 'emma.tiles@example.com', name: 'Emma Clarke', city: 'Bristol', postcode: 'BS1', specIdx: [8, 5], yearsExp: 10, rateMin: 200, rateMax: 320, langs: ['en'], cis: { status: 'NONE', rate: null, utr: null, verified: false } },
   ];
 
   const workerAccounts: { id: bigint; name: string; refCode: string }[] = [];
@@ -341,6 +345,10 @@ async function main() {
                 day_rate_min: w.rateMin,
                 day_rate_max: w.rateMax,
                 is_available: true,
+                cis_status: w.cis.status,
+                cis_rate: w.cis.rate,
+                cis_verification_number: w.cis.utr,
+                cis_verified_at: w.cis.verified ? new Date() : null,
               },
             },
           },
@@ -389,10 +397,13 @@ async function main() {
   console.log(`  Account-ref: Sarah <- referred by Mike (window 12mo)`);
 
   // ── Employer Accounts ────────────────────────────────────────
+  // `cisContractor` marks an employer that operates under CIS — their jobs
+  // trigger CIS deductions on confirmed subcontractors. Acme + QuickFix are
+  // CIS contractors; HomeWorks is not (no deduction applies to its jobs).
   const employers = [
-    { email: 'james@acmebuild.co.uk', name: 'James Crawford', company: 'Acme Build Ltd', companyNum: '12345678', teamSize: 25, city: 'London', postcode: 'EC1' },
-    { email: 'lisa@homeworks.co.uk', name: 'Lisa Morgan', company: 'HomeWorks Construction', companyNum: '87654321', teamSize: 12, city: 'Manchester', postcode: 'M2' },
-    { email: 'rob@quickfix.co.uk', name: 'Rob Patterson', company: 'QuickFix Services', companyNum: '11223344', teamSize: 8, city: 'Birmingham', postcode: 'B2' },
+    { email: 'james@acmebuild.co.uk', name: 'James Crawford', company: 'Acme Build Ltd', companyNum: '12345678', teamSize: 25, city: 'London', postcode: 'EC1', cisContractor: true },
+    { email: 'lisa@homeworks.co.uk', name: 'Lisa Morgan', company: 'HomeWorks Construction', companyNum: '87654321', teamSize: 12, city: 'Manchester', postcode: 'M2', cisContractor: false },
+    { email: 'rob@quickfix.co.uk', name: 'Rob Patterson', company: 'QuickFix Services', companyNum: '11223344', teamSize: 8, city: 'Birmingham', postcode: 'B2', cisContractor: true },
   ];
 
   const employerAccounts: { id: bigint; name: string; refCode: string }[] = [];
@@ -421,6 +432,7 @@ async function main() {
                 company_name: e.company,
                 company_number: e.companyNum,
                 team_size: e.teamSize,
+                is_cis_contractor: e.cisContractor,
               },
             },
           },
@@ -430,6 +442,51 @@ async function main() {
     employerAccounts.push({ id: acc.id, name: e.name, refCode });
     console.log(`  Employer: ${e.email} (id=${acc.id}) ref=${refCode}`);
   }
+
+  // ── Dual-role demo account (Upwork-style: ONE account, BOTH cabinets) ──
+  // Shows up in the admin user list with both Worker + Employer badges, so the
+  // dual-account distinction is visible out of the box.
+  await prisma.account.upsert({
+    where: { email: 'alex.dual@example.com' },
+    update: {},
+    create: {
+      email: 'alex.dual@example.com',
+      password_hash: hash,
+      status: 'ACTIVE',
+      email_verified_at: new Date(),
+      client_profile: {
+        create: {
+          display_name: 'Alex Dual',
+          slug: 'alex-dual-demo',
+          city: 'London',
+          postcode_area: 'E1',
+          verification_level: 'BASIC',
+          referral_code: makeRefCode('alex.dual@example.com'),
+          worker_profile: {
+            create: {
+              years_experience: 6,
+              day_rate_min: 220,
+              day_rate_max: 340,
+              is_available: true,
+              cis_status: 'REGISTERED',
+              cis_rate: 20,
+              cis_verification_number: 'V1000000099',
+              cis_verified_at: new Date(),
+            },
+          },
+          employer_profile: {
+            create: {
+              company_name: 'Alex Dual Builders',
+              company_number: '99887766',
+              team_size: 4,
+              is_cis_contractor: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  console.log('  Dual-role account: alex.dual@example.com (worker + employer)');
 
   // ── Portfolio Items (per worker) ─────────────────────────────
   for (const w of workerAccounts) {
@@ -788,6 +845,68 @@ async function main() {
     });
   }
   console.log('  Escrow milestone (RELEASED) + payment ledger for each ENDED contract');
+
+  // ── V2 (MANAGED) demo: seeded CIS_WITHHELD ledger rows ───────────
+  // Skipped by default — V2 (platform-managed withholding) isn't live yet, so
+  // the seed stays V1-only. Set SEED_V2_CIS_DEMO=1 to also seed a couple of
+  // CIS_WITHHELD rows (current UK tax month) so the admin "Build return" CIS300
+  // flow has data to aggregate. Mike (REGISTERED 20%) + Dave (UNREGISTERED 30%).
+  const SEED_V2_CIS_DEMO = process.env.SEED_V2_CIS_DEMO === '1';
+  if (SEED_V2_CIS_DEMO) {
+    const { taxYear: cisDemoYear, taxMonth: cisDemoMonth } = cisTaxMonth(
+      new Date(),
+    );
+    const cisDemo = [
+      { workerId: workerAccounts[0].id, rate: 20 }, // Mike Thompson
+      { workerId: workerAccounts[2].id, rate: 30 }, // Dave Wilson
+    ];
+    for (const d of cisDemo) {
+      const row = allContracts.find(
+        (r) => r.workerId === d.workerId && r.cfg.withEscrow,
+      );
+      if (!row) continue;
+      const milestone = await prisma.escrowMilestone.findFirst({
+        where: { contract_id: row.id },
+        orderBy: { id: 'asc' },
+      });
+      if (!milestone) continue;
+      // Split the milestone into labour/materials (materials ~20%, never deducted)
+      // and withhold rate% of labour — exactly what runtime MANAGED release does.
+      const gross = milestone.amount;
+      const materials = gross.mul(0.2).toDecimalPlaces(2);
+      const labour = gross.sub(materials);
+      const deducted = labour.mul(d.rate).div(100).toDecimalPlaces(2);
+      await prisma.escrowMilestone.update({
+        where: { id: milestone.id },
+        data: { labour_amount: labour, materials_amount: materials },
+      });
+      await prisma.payment.create({
+        data: {
+          milestone_id: milestone.id,
+          client_profile_id: d.workerId,
+          type: 'CIS_WITHHELD',
+          amount: deducted,
+          currency: 'GBP',
+          status: 'PENDING',
+          cis_tax_year: cisDemoYear,
+          cis_tax_month: cisDemoMonth,
+        },
+      });
+      // Reduce the worker payout by the withheld CIS so the wallet's net + the
+      // "CIS withheld" line reconcile, mirroring a real MANAGED release.
+      await prisma.payment.updateMany({
+        where: { milestone_id: milestone.id, type: 'WORKER_PAYOUT' },
+        data: { amount: { decrement: deducted } },
+      });
+    }
+    console.log(
+      `  V2 CIS_WITHHELD demo rows (tax ${cisDemoYear}/m${cisDemoMonth}) for Mike + Dave`,
+    );
+  } else {
+    console.log(
+      '  V2 CIS demo skipped (V1-only seed; set SEED_V2_CIS_DEMO=1 to include)',
+    );
+  }
 
   // ── Demo project-ref commission held (Sarah → Dave's contract) ──
   // Sarah isn't Stripe-onboarded → the REFERRAL_W2W payment sits PENDING.
@@ -1234,6 +1353,14 @@ async function main() {
                 day_rate_min: rateMin,
                 day_rate_max: rateMax,
                 is_available: i % 4 !== 0,
+                // Rotate confirmed CIS standings so bulk workers can apply and
+                // exercise all three deduction rates.
+                cis_status: (['REGISTERED', 'GROSS', 'UNREGISTERED'] as const)[
+                  i % 3
+                ],
+                cis_rate: [20, 0, 30][i % 3],
+                cis_verification_number: `V2${String(i + 1).padStart(9, '0')}`,
+                cis_verified_at: new Date(),
               },
             },
           },
@@ -1290,6 +1417,8 @@ async function main() {
                 company_name: company,
                 company_number: String(20000000 + i),
                 team_size: 5 + ((i * 7) % 50),
+                // Every other bulk employer is a CIS contractor.
+                is_cis_contractor: i % 2 === 0,
               },
             },
           },

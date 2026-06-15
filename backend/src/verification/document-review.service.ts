@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { CisService } from '../cis/cis.service';
 import { PromotionEngine } from './promotion-engine.service';
 import { milestoneForDocType, type MilestoneType } from './constants';
 
@@ -24,6 +25,7 @@ export class DocumentReviewService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly promotionEngine: PromotionEngine,
+    private readonly cis: CisService,
   ) {}
 
   async review(
@@ -123,6 +125,15 @@ export class DocumentReviewService {
         },
         actor.ip,
       );
+      // A rejected HMRC CIS document revokes the worker's CIS verification
+      // (their declaration stands, but it's no longer "verified" to employers).
+      if (doc.doc_type === 'HMRC_CIS_DOCUMENT') {
+        await this.cis.clearCisVerification(
+          clientProfileId,
+          actor.staffMemberId,
+          actor.ip,
+        );
+      }
       return {
         document: await this.serializeDocument(documentId),
         level_changed: null,
@@ -156,6 +167,19 @@ export class DocumentReviewService {
       },
       actor.ip,
     );
+
+    // An approved HMRC CIS document is the evidence behind CIS verification:
+    // stamp the worker's cis_verified_at + the verified UTR. (The declared
+    // status/rate were set when they submitted; this confirms them.)
+    if (doc.doc_type === 'HMRC_CIS_DOCUMENT') {
+      const utr = (doc.metadata as { utr?: string } | null)?.utr ?? null;
+      await this.cis.markCisVerifiedFromReview(
+        clientProfileId,
+        utr,
+        actor.staffMemberId,
+        actor.ip,
+      );
+    }
 
     const milestoneType = milestoneForDocType(doc.doc_type);
     const milestonesWritten: { type: MilestoneType; id: string }[] = [];

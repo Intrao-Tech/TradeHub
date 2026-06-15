@@ -242,6 +242,7 @@
     "uploadedOn": "Uploaded {{date}}",
     "reason": "Reason: {{reason}}",
     "view": "View",
+    "structured": "No file (structured)",
     "deleteAria": "Delete document",
     "chipDone": "Done",
     "chipReupload": "Re-upload",
@@ -273,7 +274,9 @@
     "number": "Companies House number",
     "numberPlaceholder": "e.g. 12345678",
     "teamSize": "Team size",
-    "save": "Save company details"
+    "save": "Save company details",
+    "isCisContractor": "We are a CIS contractor",
+    "isCisContractorHint": "Tick this if your business operates under HMRC's Construction Industry Scheme. When ticked, CIS deductions apply to your subcontractors' labour."
   },
   "account": {
     "title": "Account",

@@ -109,7 +109,7 @@
     "newAccounts": "New accounts per day (7d)",
     "newAccountsDesc": "Signups across all account types.",
     "newUsers": "New (7d / 30d)",
-    "newUsersSubtitle": "{{workers}} workers · {{employers}} employers · {{staff}} staff",
+    "newUsersSubtitle": "{{workers}} workers · {{employers}} employers · {{dual}} dual-role · {{staff}} staff",
     "noMilestones": "No milestones yet.",
     "noPayments": "No payment activity.",
     "openDisputes": "Open disputes",
@@ -499,7 +499,8 @@
     "staff": "Staff members",
     "support": "Support threads",
     "tags": "Tags",
-    "users": "Users"
+    "users": "Users",
+    "cisReturns": "CIS"
   },
   "users": {
     "actionFailed": "Action failed",
@@ -606,6 +607,8 @@
     "statusPending": "Pending only",
     "statusRejected": "Rejected",
     "structured": "structured",
+    "cisUtr": "UTR",
+    "cisNi": "NI number",
     "title": "Verification queue"
   },
   "publishQueue": {

@@ -18,6 +18,13 @@ const LABEL_KEY_BY_STATUS: Record<string, ParseKeys<'common'>> = {
   CANCELLED: 'jobStatus.cancelled',
 };
 
+const HINT_KEY_BY_STATUS: Record<string, ParseKeys<'common'>> = {
+  OPEN: 'jobStatus.hint.open',
+  FILLED: 'jobStatus.hint.filled',
+  CLOSED: 'jobStatus.hint.closed',
+  CANCELLED: 'jobStatus.hint.cancelled',
+};
+
 export function JobStatusBadge({ status }: { status: JobStatus | undefined }) {
   const { t } = useTranslation('common');
   if (!status) return null;
@@ -25,6 +32,14 @@ export function JobStatusBadge({ status }: { status: JobStatus | undefined }) {
   const variant = VARIANT_BY_STATUS[upper] ?? 'outline';
   const labelKey = LABEL_KEY_BY_STATUS[upper];
   const label = labelKey ? t(labelKey) : upper;
-  return <Badge variant={variant}>{label}</Badge>;
+  const hintKey = HINT_KEY_BY_STATUS[upper];
+  const tooltip = `${t('jobStatus.tooltipPrefix')}${
+    hintKey ? ` — ${t(hintKey)}` : ''
+  }`;
+  return (
+    <Badge variant={variant} title={tooltip}>
+      {label}
+    </Badge>
+  );
 }
 JobStatusBadge.displayName = 'JobStatusBadge';

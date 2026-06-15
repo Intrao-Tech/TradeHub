@@ -5,13 +5,20 @@ import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { ConversationModule } from '../conversation/conversation.module';
 import { NotificationModule } from '../notification/notification.module';
 import { ReferralModule } from '../referral/referral.module';
+import { CisModule } from '../cis/cis.module';
 import { EscrowAutoReleaseJob } from './escrow-auto-release.job';
 import { EscrowController } from './escrow.controller';
 import { EscrowService } from './escrow.service';
 import { DisputeProposalService } from './dispute-proposal.service';
 
 @Module({
-  imports: [AuditModule, ConversationModule, ReferralModule, NotificationModule],
+  imports: [
+    AuditModule,
+    ConversationModule,
+    ReferralModule,
+    NotificationModule,
+    CisModule,
+  ],
   controllers: [EscrowController],
   providers: [
     EscrowService,

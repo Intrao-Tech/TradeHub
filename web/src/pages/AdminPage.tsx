@@ -10,6 +10,7 @@ import {
   Gauge,
   Hammer,
   LifeBuoy,
+  Landmark,
   ListChecks,
   MessageSquareQuote,
   ScaleIcon,
@@ -46,6 +47,7 @@ import { AdminPlansTab } from '@/components/admin/AdminPlansTab';
 import { AdminAuditTab } from '@/components/admin/AdminAuditTab';
 import { AdminRolesTab } from '@/components/admin/AdminRolesTab';
 import { ReviewsPublishQueueTab } from '@/components/admin/ReviewsPublishQueueTab';
+import { AdminCisReturnsTab } from '@/components/admin/AdminCisReturnsTab';
 
 // Lazy — same chunk used by the standalone /notifications route, so this
 // doesn't ship a second copy.
@@ -168,6 +170,14 @@ const SECTIONS: Section[] = [
         icon: ScaleIcon,
         requiredPermission: 'escrow_disputes.read',
         render: () => <EscrowDisputesTab />,
+      },
+      {
+        id: 'cis',
+        label: 'tabs.cisReturns',
+        icon: Landmark,
+        // CIS endpoints are role-gated server-side (@Roles ADMIN/STAFF); no
+        // granular permission exists, so any staff member can open this tab.
+        render: () => <AdminCisReturnsTab />,
       },
       {
         id: 'reviews',

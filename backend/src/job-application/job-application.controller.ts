@@ -26,11 +26,15 @@ import { ApplyJobDto } from './dto/apply-job.dto';
 import { InviteWorkerDto } from './dto/invite-worker.dto';
 import { UpdateApplicationStatusDto } from './dto/update-application-status.dto';
 import { JobApplicationService } from './job-application.service';
+import { CisService } from '../cis/cis.service';
 
 @ApiTags('Job Applications')
 @Controller('job-applications')
 export class JobApplicationController {
-  constructor(private readonly jobApplicationService: JobApplicationService) {}
+  constructor(
+    private readonly jobApplicationService: JobApplicationService,
+    private readonly cis: CisService,
+  ) {}
 
   @Post('jobs/:jobPostId/apply')
   @UseGuards(JwtAuthGuard, RolesGuard, AccountStateGuard)
@@ -38,7 +42,7 @@ export class JobApplicationController {
   @RequiresVerifiedEmail()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Apply to a job post as a worker' })
-  apply(
+  async apply(
     @Param('jobPostId', ParseBigIntPipe) jobPostId: bigint,
     @CurrentUser() user: CurrentUserPayload,
     @Body() dto: ApplyJobDto,
@@ -46,6 +50,9 @@ export class JobApplicationController {
     if (user.clientProfileId == null) {
       throw new BadRequestException('No client profile for this account');
     }
+    // CIS apply-gate: a worker must have a confirmed CIS standing before
+    // applying for work (throws CIS_NOT_CONFIRMED while status is NONE).
+    await this.cis.assertWorkerCanApply(user.clientProfileId);
     return this.jobApplicationService.apply(
       jobPostId,
       user.clientProfileId,

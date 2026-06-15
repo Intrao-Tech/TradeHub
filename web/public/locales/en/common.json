@@ -1,4 +1,18 @@
 {
+  "addRole": {
+    "error": "Could not add the role. Try again.",
+    "employerTitle": "Add an employer account",
+    "workerTitle": "Add a tradesperson account",
+    "employerDesc": "Add an employer cabinet to your existing account. You keep one login, one wallet and one referral code — just switch cabinets from the account menu.",
+    "workerDesc": "Add a tradesperson cabinet to your existing account. You keep one login, one wallet and one referral code — just switch cabinets from the account menu.",
+    "companyName": "Company name",
+    "optional": "optional",
+    "companyPlaceholder": "e.g. Acme Builders Ltd",
+    "adding": "Adding…",
+    "confirmEmployer": "Add employer account",
+    "confirmWorker": "Add tradesperson account",
+    "cancel": "Cancel"
+  },
   "header": {
     "login": "Login",
     "signUp": "Sign up"
@@ -11,6 +25,11 @@
   },
   "menu": {
     "account": "Account",
+    "cabinet": "Cabinet",
+    "employerCabinet": "Employer",
+    "workerCabinet": "Tradesperson",
+    "addEmployer": "Add employer account",
+    "addWorker": "Add tradesperson account",
     "clickToGoOff": "Click to go off",
     "clickToGoOn": "Click to go on",
     "dutyError": "Failed to toggle duty",
@@ -140,7 +159,14 @@
     "open": "Open",
     "filled": "Filled",
     "closed": "Closed",
-    "cancelled": "Cancelled"
+    "cancelled": "Cancelled",
+    "tooltipPrefix": "Job status",
+    "hint": {
+      "open": "Accepting applications",
+      "filled": "A tradesperson has been hired for this job",
+      "closed": "No longer accepting applications",
+      "cancelled": "This job was cancelled"
+    }
   },
   "profileHeader": {
     "roleWorker": "Tradesperson",
@@ -196,7 +222,16 @@
     "shortlisted": "Shortlisted",
     "accepted": "Accepted",
     "rejected": "Rejected",
-    "withdrawn": "Withdrawn"
+    "withdrawn": "Withdrawn",
+    "tooltipPrefix": "Application status",
+    "hint": {
+      "pending": "Awaiting a decision — an application waits on the employer, an invitation waits on the tradesperson",
+      "reviewed": "The employer has reviewed this application",
+      "shortlisted": "Shortlisted by the employer",
+      "accepted": "Accepted — a collaboration has started",
+      "rejected": "Not taken forward",
+      "withdrawn": "Withdrawn by whoever started it"
+    }
   },
   "tag": {
     "commercial-wiring": "Commercial Wiring",

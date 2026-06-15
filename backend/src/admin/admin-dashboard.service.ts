@@ -21,6 +21,7 @@ export class AdminDashboardService {
       newAccounts30d,
       workersTotal,
       employersTotal,
+      dualTotal,
       staffTotal,
       staffActive,
       staffOnDuty,
@@ -41,6 +42,15 @@ export class AdminDashboardService {
       this.prisma.account.count({ where: { created_at: { gte: last30d } } }),
       this.prisma.workerProfile.count(),
       this.prisma.employerProfile.count(),
+      // Dual-role accounts: a client profile that has BOTH a worker and an
+      // employer profile (Upwork-style). Counted in both workers + employers
+      // above, so surface it separately.
+      this.prisma.clientProfile.count({
+        where: {
+          worker_profile: { isNot: null },
+          employer_profile: { isNot: null },
+        },
+      }),
       this.prisma.staffMember.count(),
       this.prisma.staffMember.count({
         where: { account: { status: 'ACTIVE' } },
@@ -101,6 +111,7 @@ export class AdminDashboardService {
         new_30d: newAccounts30d,
         workers: workersTotal,
         employers: employersTotal,
+        dual: dualTotal,
       },
       staff: {
         total: staffTotal,
