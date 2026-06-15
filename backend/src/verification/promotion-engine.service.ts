@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CERT_DOC_TYPES, type VerificationLevel } from './constants';
@@ -85,8 +86,8 @@ export class PromotionEngine {
     const profile = await this.prisma.clientProfile.findUnique({
       where: { id: clientProfileId },
       include: {
-        worker_profile: { select: { id: true } },
-        employer_profile: { select: { id: true } },
+        worker_profile: { select: { id: true, verification_level: true } },
+        employer_profile: { select: { id: true, verification_level: true } },
         account: { select: { status: true } },
       },
     });
@@ -96,21 +97,80 @@ export class PromotionEngine {
       return null;
     }
 
-    const ctx = await this.gatherEvidence(
-      clientProfileId,
-      !!profile.worker_profile,
-    );
-    const newLevel = this.evaluate(ctx);
-    const currentLevel = (profile.verification_level ??
+    // Evidence (identity / approved docs / Companies House) is account-wide —
+    // gather it once, then evaluate EACH role the account holds against it.
+    const ev = await this.gatherEvidence(clientProfileId);
+
+    // Dual-role model:
+    //   client_profile.verification_level = shared identity base (BASIC once
+    //     identity is verified — the "common part").
+    //   worker_profile.verification_level   = full worker tier (certs/reviews).
+    //   employer_profile.verification_level = full employer tier (insurance /
+    //     letterhead / Companies House / reviews).
+    // A single-role account simply has one of the two profile rows.
+    const baseLevel: VerificationLevel = ev.hasIdentityVerified
+      ? 'BASIC'
+      : 'UNVERIFIED';
+
+    type Scope = 'BASE' | 'WORKER' | 'EMPLOYER';
+    const changes: Array<{
+      scope: Scope;
+      from: VerificationLevel;
+      to: VerificationLevel;
+    }> = [];
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
+
+    const currentBase = (profile.verification_level ??
       'UNVERIFIED') as VerificationLevel;
+    if (baseLevel !== currentBase) {
+      changes.push({ scope: 'BASE', from: currentBase, to: baseLevel });
+      ops.push(
+        this.prisma.clientProfile.update({
+          where: { id: clientProfileId },
+          data: { verification_level: baseLevel },
+        }),
+      );
+    }
 
-    if (newLevel === currentLevel) return null;
+    if (profile.worker_profile) {
+      const workerLevel = this.evaluate({ ...ev, isWorker: true });
+      const currentWorker = (profile.worker_profile.verification_level ??
+        'UNVERIFIED') as VerificationLevel;
+      if (workerLevel !== currentWorker) {
+        changes.push({ scope: 'WORKER', from: currentWorker, to: workerLevel });
+        ops.push(
+          this.prisma.workerProfile.update({
+            where: { id: clientProfileId },
+            data: { verification_level: workerLevel },
+          }),
+        );
+      }
+    }
 
-    await this.prisma.$transaction([
-      this.prisma.clientProfile.update({
-        where: { id: clientProfileId },
-        data: { verification_level: newLevel },
-      }),
+    if (profile.employer_profile) {
+      const employerLevel = this.evaluate({ ...ev, isWorker: false });
+      const currentEmployer = (profile.employer_profile.verification_level ??
+        'UNVERIFIED') as VerificationLevel;
+      if (employerLevel !== currentEmployer) {
+        changes.push({
+          scope: 'EMPLOYER',
+          from: currentEmployer,
+          to: employerLevel,
+        });
+        ops.push(
+          this.prisma.employerProfile.update({
+            where: { id: clientProfileId },
+            data: { verification_level: employerLevel },
+          }),
+        );
+      }
+    }
+
+    if (changes.length === 0) return null;
+
+    // One LEVEL_PROMOTED milestone capturing every scope that moved (notes like
+    // "WORKER:CERTIFIED EMPLOYER:BASIC") for a single traceable evidence ref.
+    ops.push(
       this.prisma.verificationMilestone.create({
         data: {
           client_profile_id: clientProfileId,
@@ -120,10 +180,12 @@ export class PromotionEngine {
             evidence.milestoneIds.length > 0
               ? evidence.milestoneIds.map(String).join(',')
               : null,
-          notes: newLevel,
+          notes: changes.map((c) => `${c.scope}:${c.to}`).join(' '),
         },
       }),
-    ]);
+    );
+
+    await this.prisma.$transaction(ops);
 
     await this.audit.log(
       clientProfileId,
@@ -131,18 +193,25 @@ export class PromotionEngine {
       'client_profile',
       clientProfileId,
       {
-        from: currentLevel,
-        to: newLevel,
+        changes: changes.map((c) => ({
+          scope: c.scope,
+          from: c.from,
+          to: c.to,
+        })),
         evidence_milestones: evidence.milestoneIds.map(String),
       },
       evidence.ip,
     );
 
     this.logger.log(
-      `Promotion: client_profile=${clientProfileId} ${currentLevel} → ${newLevel}`,
+      `Promotion: client_profile=${clientProfileId} ` +
+        changes.map((c) => `${c.scope} ${c.from}→${c.to}`).join(', '),
     );
 
-    return { from: currentLevel, to: newLevel };
+    // Surface the most meaningful change to callers (role tier over identity
+    // base) — used for "you've been promoted" messaging.
+    const primary = changes.find((c) => c.scope !== 'BASE') ?? changes[0];
+    return { from: primary.from, to: primary.to };
   }
 
   /**
@@ -152,8 +221,7 @@ export class PromotionEngine {
    */
   private async gatherEvidence(
     clientProfileId: bigint,
-    isWorker: boolean,
-  ): Promise<EvaluationContext> {
+  ): Promise<Omit<EvaluationContext, 'isWorker'>> {
     const [milestones, approvedDocs] = await Promise.all([
       this.prisma.verificationMilestone.findMany({
         where: { client_profile_id: clientProfileId },
@@ -176,7 +244,6 @@ export class PromotionEngine {
     const milestoneTypes = new Set(milestones.map((m) => m.milestone_type));
 
     return {
-      isWorker,
       hasIdentityVerified: milestoneTypes.has('IDENTITY_VERIFIED'),
       approvedDocTypes: new Set(approvedDocs.map((d) => d.doc_type)),
       hasCompanyHouseVerified: milestoneTypes.has('COMPANY_HOUSE_VERIFIED'),

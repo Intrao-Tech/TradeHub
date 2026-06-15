@@ -123,7 +123,7 @@ export default function WalletPage() {
             wallet.active_escrow.map((m) => (
               <Link
                 key={m.milestone_id}
-                to={`/escrow/${m.contract_id}`}
+                to={`/contracts/${m.contract_id}/escrow`}
                 className="flex flex-col gap-2 rounded-md border border-border-default bg-raised px-3 py-2 hover:bg-subtle sm:flex-row sm:items-center sm:justify-between"
               >
                 <span className="min-w-0 truncate font-medium text-fg">{m.title}</span>
@@ -138,6 +138,20 @@ export default function WalletPage() {
           )}
         </CardContent>
       </Card>
+
+      {wallet && Number(wallet.cis_total_deducted ?? 0) > 0 ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{t('page.cisSummaryTitle')}</CardTitle>
+            <CardDescription>{t('page.cisSummaryDesc')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-semibold text-fg">
+              {fmt(wallet.cis_total_deducted ?? '0')}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -160,6 +174,11 @@ export default function WalletPage() {
                       {t('page.released', { date: formatDate(m.released_at, 'short') })}
                     </div>
                   ) : null}
+                  {m.cis_withheld ? (
+                    <div className="text-xs text-fg-muted">
+                      {t('page.cisWithheld', { amount: fmt(m.cis_withheld) })}
+                    </div>
+                  ) : null}
                 </div>
                 <span className="text-success font-semibold">{fmt(m.amount)}</span>
               </div>
@@ -178,7 +197,7 @@ export default function WalletPage() {
             {wallet.failed_transfers.map((m) => (
               <Link
                 key={m.milestone_id}
-                to={`/escrow/${m.contract_id}`}
+                to={`/contracts/${m.contract_id}/escrow`}
                 className="flex flex-col gap-2 rounded-md border border-danger/40 bg-danger-subtle px-3 py-2 text-danger sm:flex-row sm:items-center sm:justify-between"
               >
                 <span className="min-w-0 truncate font-medium">{m.title}</span>
@@ -199,7 +218,7 @@ export default function WalletPage() {
             {wallet.pending_worker_payouts.map((p) => (
               <Link
                 key={p.id}
-                to={`/escrow/${p.contract_id}`}
+                to={`/contracts/${p.contract_id}/escrow`}
                 className="flex flex-col gap-2 rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-warning hover:bg-warning-subtle/80 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
@@ -278,6 +297,7 @@ function EmployerPaymentsView() {
       chargesPending: get('CHARGE:PENDING'),
       chargesFailed: get('CHARGE:FAILED'),
       refundsPaid: get('REFUND:PAID'),
+      cisRefund: get('CIS_EMPLOYER_REMIT:PAID'),
     };
   })();
 
@@ -298,11 +318,16 @@ function EmployerPaymentsView() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <SummaryCard label={t('page.summaryCharged')} {...totals.chargesPaid} />
         <SummaryCard label={t('page.summaryPending')} {...totals.chargesPending} />
         <SummaryCard label={t('page.summaryFailed')} {...totals.chargesFailed} tone="danger" />
         <SummaryCard label={t('page.summaryRefunded')} {...totals.refundsPaid} />
+        <SummaryCard
+          label={t('page.summaryCisRefund')}
+          {...totals.cisRefund}
+          hint={t('page.summaryCisRefundHint')}
+        />
       </div>
 
       {data && data.open_disputes.length > 0 ? (
@@ -318,7 +343,7 @@ function EmployerPaymentsView() {
             {data.open_disputes.map((d) => (
               <Link
                 key={d.id}
-                to={`/escrow/${d.milestone.contract_id}`}
+                to={`/contracts/${d.milestone.contract_id}/escrow`}
                 className="flex items-center justify-between rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-warning hover:bg-warning-subtle/80"
               >
                 <div>
@@ -382,11 +407,13 @@ function SummaryCard({
   amount,
   count,
   tone,
+  hint,
 }: {
   label: string;
   amount: number;
   count: number;
   tone?: 'danger';
+  hint?: string;
 }) {
   const { t } = useTranslation('wallet');
   const toneCls = tone === 'danger' ? 'text-danger' : 'text-fg';
@@ -400,7 +427,7 @@ function SummaryCard({
           {fmt(String(amount))}
         </div>
         <div className="text-xs text-fg-muted">
-          {t('page.items', { count })}
+          {hint ?? t('page.items', { count })}
         </div>
       </CardContent>
     </Card>
@@ -408,6 +435,7 @@ function SummaryCard({
 }
 
 function PaymentRow({ payment: p }: { payment: EmployerPaymentRow }) {
+  const { t } = useTranslation('wallet');
   const statusVariant: 'success' | 'warning' | 'danger' | 'secondary' =
     p.status === 'PAID'
       ? 'success'
@@ -416,12 +444,19 @@ function PaymentRow({ payment: p }: { payment: EmployerPaymentRow }) {
         : p.status === 'FAILED'
           ? 'danger'
           : 'secondary';
+  const isCisRefund = p.type === 'CIS_EMPLOYER_REMIT';
+  const isMoneyBack = p.type === 'REFUND' || isCisRefund;
   return (
     <TableRow>
       <TableCell>
-        <Badge variant={p.type === 'REFUND' ? 'info' : 'default'}>
-          {p.type}
+        <Badge variant={isMoneyBack ? 'info' : 'default'}>
+          {isCisRefund ? t('page.cisRefundLabel') : p.type}
         </Badge>
+        {isCisRefund ? (
+          <div className="mt-1 text-[11px] text-fg-muted">
+            {t('page.cisRefundHint')}
+          </div>
+        ) : null}
       </TableCell>
       <TableCell>
         <Badge variant={statusVariant}>{p.status}</Badge>
@@ -431,7 +466,7 @@ function PaymentRow({ payment: p }: { payment: EmployerPaymentRow }) {
       </TableCell>
       <TableCell>
         <Link
-          to={`/escrow/${p.milestone.contract_id}`}
+          to={`/contracts/${p.milestone.contract_id}/escrow`}
           className="font-medium hover:underline"
         >
           {p.milestone.title}
@@ -442,9 +477,9 @@ function PaymentRow({ payment: p }: { payment: EmployerPaymentRow }) {
         {formatDate(p.created_at, 'short')}
       </TableCell>
       <TableCell
-        className={`text-right font-semibold ${p.type === 'REFUND' ? 'text-warning' : ''}`}
+        className={`text-right font-semibold ${isMoneyBack ? 'text-success' : 'text-danger'}`}
       >
-        {p.type === 'REFUND' ? '−' : ''}
+        {isMoneyBack ? '+' : '−'}
         {fmt(p.amount)}
       </TableCell>
     </TableRow>

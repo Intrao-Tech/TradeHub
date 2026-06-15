@@ -26,7 +26,31 @@ import {
 
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1h
-const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7d
+// Idle-session window for the refresh token. The token is rotated on every
+// refresh (issueTokens), so this is a SLIDING window: as long as the SPA
+// refreshes (which it does whenever the short access token expires) within
+// this window, the session lives on; after this much inactivity it expires.
+// Used as the DB-row TTL; the signed refresh JWT uses JWT_REFRESH_TTL — keep
+// the two aligned. Falls back to 15m when JWT_REFRESH_TTL is unset/unparsable.
+const REFRESH_TTL_FALLBACK_MS = 15 * 60 * 1000; // 15m
+
+/** Parse a `ms`-style duration ("15m", "5m", "1h", "7d", "30s") to ms. */
+function parseDurationToMs(value: string | undefined, fallbackMs: number): number {
+  if (!value) return fallbackMs;
+  const m = /^(\d+)\s*([smhd])$/.exec(value.trim());
+  if (!m) return fallbackMs;
+  const n = Number(m[1]);
+  const unit = m[2];
+  const mult =
+    unit === 's'
+      ? 1000
+      : unit === 'm'
+        ? 60_000
+        : unit === 'h'
+          ? 3_600_000
+          : 86_400_000;
+  return n * mult;
+}
 
 type AccountSummary = {
   id: string;
@@ -958,11 +982,12 @@ export class AuthService {
       where: { id: accountId },
     });
     if (!account || !account.password_hash) {
-      // No password to change — this is a Google-only account; instruct the user.
+      // No password to change — this is a Google-only account. Direct them to
+      // the dedicated "set a password" flow (no current password to confirm).
       throw new BadRequestException({
         code: 'NO_PASSWORD_SET',
         message:
-          'This account uses Google sign-in. Set a password from your Google account or use "Forgot password" first.',
+          'This account uses Google sign-in. Set a password in Settings → Security first, then you can sign in with email + password too.',
       });
     }
 
@@ -1022,6 +1047,89 @@ export class AuthService {
     );
 
     return { ok: true };
+  }
+
+  /**
+   * Set an INITIAL password for an OAuth-only (Google) account so the user can
+   * also sign in with email + password. No current password is required — the
+   * caller is already authenticated by their session. Refuses when a password
+   * already exists (those users must use changePassword). Does not revoke
+   * sessions: adding a sign-in method is not a credential reset.
+   */
+  async setPassword(accountId: bigint, newPassword: string, ip?: string) {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+      select: {
+        id: true,
+        password_hash: true,
+        staff_member: { select: { id: true } },
+      },
+    });
+    if (!account) {
+      throw new UnauthorizedException({ code: 'ACCOUNT_NOT_FOUND' });
+    }
+    // Staff/admin passwords are governed by an administrator (staff cannot
+    // self-reset either — see forgotPassword), so self-service set is denied.
+    if (account.staff_member) {
+      throw new ForbiddenException({
+        code: 'STAFF_PASSWORD_MANAGED',
+        message: 'Staff passwords are managed by an administrator.',
+      });
+    }
+    if (account.password_hash) {
+      throw new BadRequestException({
+        code: 'PASSWORD_ALREADY_SET',
+        message:
+          'A password is already set for this account. Use change password instead.',
+      });
+    }
+    const policy = checkPasswordPolicy(newPassword);
+    if (!policy.ok) {
+      throw new BadRequestException({
+        code: 'WEAK_PASSWORD',
+        message: 'Password does not meet the policy.',
+        reasons: policy.reasons,
+      });
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.account.update({
+      where: { id: accountId },
+      data: { password_hash: passwordHash },
+    });
+    await this.audit.log(
+      accountId,
+      'auth.password_set',
+      'account',
+      accountId,
+      { via: 'settings_oauth' },
+      ip,
+    );
+    return { ok: true };
+  }
+
+  /**
+   * Which sign-in methods the current account has. Drives Settings → Security
+   * (show "Set a password" for OAuth-only accounts, "Change password" otherwise).
+   */
+  async getAuthMethods(accountId: bigint) {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+      select: {
+        password_hash: true,
+        google_id: true,
+        staff_member: { select: { id: true } },
+      },
+    });
+    if (!account) {
+      throw new UnauthorizedException({ code: 'ACCOUNT_NOT_FOUND' });
+    }
+    return {
+      has_password: !!account.password_hash,
+      has_google: !!account.google_id,
+      // Staff/admin manage passwords via the admin tools, so the SPA hides the
+      // self-service "set a password" card for them.
+      is_staff: !!account.staff_member,
+    };
   }
 
   async logout(
@@ -1098,11 +1206,22 @@ export class AuthService {
     // land in the same wall-clock second (JWT iat is second-precision,
     // so without jti two same-second sign() calls produce identical
     // tokens and collide on the unique constraint of refresh_token.token).
+    // Sliding idle window: the JWT exp and the DB-row expiry are both driven
+    // from JWT_REFRESH_TTL so they stay aligned (the access token is short, so
+    // an active SPA refreshes — and re-slides this window — well before it
+    // lapses; idle past it ends the session).
+    // Untyped get() (matches @nestjs/jwt's expected `ms`-style expiresIn type);
+    // String()-coerced separately for the duration parser.
+    const refreshTtl = this.config.get('JWT_REFRESH_TTL', '15m');
+    const refreshTtlMs = parseDurationToMs(
+      typeof refreshTtl === 'string' ? refreshTtl : undefined,
+      REFRESH_TTL_FALLBACK_MS,
+    );
     const refreshToken = this.jwt.sign(
       { ...payload, jti: crypto.randomBytes(16).toString('hex') } as any,
       {
         secret: this.config.get<string>('JWT_REFRESH_SECRET'),
-        expiresIn: this.config.get('JWT_REFRESH_TTL', '7d'),
+        expiresIn: refreshTtl,
       },
     );
 
@@ -1110,7 +1229,7 @@ export class AuthService {
       data: {
         account_id: account.id,
         token: refreshToken,
-        expires_at: new Date(Date.now() + REFRESH_TTL_MS),
+        expires_at: new Date(Date.now() + refreshTtlMs),
       },
     });
 

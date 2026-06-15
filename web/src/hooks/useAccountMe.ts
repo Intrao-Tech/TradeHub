@@ -42,6 +42,10 @@ export type WorkerProfile = {
   is_available?: boolean;
   rating_avg?: string | number | null;
   rating_count?: number | null;
+  cis_status?: string | null;
+  cis_rate?: number | null;
+  cis_verification_number?: string | null;
+  cis_verified_at?: string | null;
   worker_specialisations?: SpecialisationLink[];
   worker_languages?: WorkerLanguageLink[];
   [key: string]: unknown;
@@ -54,6 +58,7 @@ export type EmployerProfile = {
   team_size?: number | null;
   rating_avg?: string | number | null;
   rating_count?: number | null;
+  is_cis_contractor?: boolean | null;
   [key: string]: unknown;
 };
 
@@ -153,11 +158,65 @@ function getSnapshot(): CacheState {
   return state;
 }
 
+// ── Active-role (cabinet) store — Upwork-style switcher ─────────────
+// Which cabinet a dual-role account is currently acting in. This is pure
+// view-state: the backend authorises by actual profile existence + action
+// intent, NEVER by this value, so localStorage is the correct home (no schema,
+// instant switch, no security surface). A primitive snapshot keeps
+// useSyncExternalStore happy (compared by value).
+const ACTIVE_ROLE_KEY = 'tradehub.active_role';
+export type ActiveRole = 'worker' | 'employer';
+
+function readStoredActiveRole(): ActiveRole | null {
+  if (typeof window === 'undefined') return null;
+  const v = window.localStorage.getItem(ACTIVE_ROLE_KEY);
+  return v === 'worker' || v === 'employer' ? v : null;
+}
+
+let storedActiveRole: ActiveRole | null = readStoredActiveRole();
+const activeRoleSubs = new Set<() => void>();
+
+function subscribeActiveRole(cb: () => void) {
+  activeRoleSubs.add(cb);
+  return () => {
+    activeRoleSubs.delete(cb);
+  };
+}
+
+function getActiveRoleSnapshot(): ActiveRole | null {
+  return storedActiveRole;
+}
+
+/** Persist + broadcast the chosen cabinet so every consumer re-renders. */
+export function setStoredActiveRole(role: ActiveRole) {
+  storedActiveRole = role;
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(ACTIVE_ROLE_KEY, role);
+  }
+  activeRoleSubs.forEach((cb) => cb());
+}
+
 export type UseAccountMe = {
   account: AccountMe | null;
   clientProfile: ClientProfile | null;
+  /**
+   * `isWorker` / `isEmployer` reflect the ACTIVE cabinet (Upwork-style), not
+   * raw profile existence. For a single-role account they equal "has that
+   * profile" (unchanged behaviour). For a dual-role account exactly one is
+   * true at a time — whichever cabinet is active. Use `hasWorkerProfile` /
+   * `hasEmployerProfile` when you need raw existence (e.g. the switcher).
+   */
   isWorker: boolean;
   isEmployer: boolean;
+  /** Raw profile existence (independent of the active cabinet). */
+  hasWorkerProfile: boolean;
+  hasEmployerProfile: boolean;
+  /** True when the account holds BOTH profiles → the switcher is shown. */
+  hasBothRoles: boolean;
+  /** The active cabinet, or null for accounts with no client profile (staff). */
+  activeRole: ActiveRole | null;
+  /** Switch the active cabinet (dual-role accounts). Persists to localStorage. */
+  setActiveRole: (role: ActiveRole) => void;
   isStaff: boolean;
   isAdmin: boolean;
   permissions: string[];
@@ -170,6 +229,11 @@ export type UseAccountMe = {
 
 export function useAccountMe(): UseAccountMe {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const storedRole = useSyncExternalStore(
+    subscribeActiveRole,
+    getActiveRoleSnapshot,
+    getActiveRoleSnapshot,
+  );
 
   useEffect(() => {
     if (state.kind === 'idle') {
@@ -183,11 +247,32 @@ export function useAccountMe(): UseAccountMe {
   const isAdmin = account?.staff_member?.staff_role === 'ADMIN';
   const permissions = account?.permissions ?? [];
 
+  const hasWorkerProfile = Boolean(clientProfile?.worker_profile);
+  const hasEmployerProfile = Boolean(clientProfile?.employer_profile);
+  const hasBothRoles = hasWorkerProfile && hasEmployerProfile;
+
+  // Effective active cabinet. Single-role → that role. Dual-role → stored
+  // preference, defaulting to worker. No client profile (staff) → null.
+  let activeRole: ActiveRole | null = null;
+  if (hasWorkerProfile && hasEmployerProfile) {
+    activeRole = storedRole ?? 'worker';
+  } else if (hasWorkerProfile) {
+    activeRole = 'worker';
+  } else if (hasEmployerProfile) {
+    activeRole = 'employer';
+  }
+
   return {
     account,
     clientProfile,
-    isWorker: Boolean(clientProfile?.worker_profile),
-    isEmployer: Boolean(clientProfile?.employer_profile),
+    // Active-cabinet semantics (see UseAccountMe doc). Single-role unchanged.
+    isWorker: activeRole === 'worker',
+    isEmployer: activeRole === 'employer',
+    hasWorkerProfile,
+    hasEmployerProfile,
+    hasBothRoles,
+    activeRole,
+    setActiveRole: setStoredActiveRole,
     isStaff: Boolean(account?.staff_member),
     isAdmin,
     permissions,

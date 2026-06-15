@@ -385,14 +385,25 @@ export function ConversationPanel({
         client_id: opt.client_id,
       });
       if (wsOk) return; // server new_message event reconciles
-      // REST fallback if WS is down.
-      await api(`/conversations/${conversationId}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({
-          content: opt.content,
-          client_id: opt.client_id,
-        }),
-      });
+      // REST fallback when WS is down: the `new_message` echo won't arrive over
+      // a dead socket, so reconcile right here — add the persisted message and
+      // drop the optimistic, otherwise it shows "Sending…" forever.
+      const created = await api<ChatMessage>(
+        `/conversations/${conversationId}/messages`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            content: opt.content,
+            client_id: opt.client_id,
+          }),
+        },
+      );
+      setMessages((prev) =>
+        prev.some((m) => String(m.id) === String(created.id))
+          ? prev
+          : [...prev, created],
+      );
+      setOptimistic((prev) => prev.filter((o) => o.client_id !== opt.client_id));
     } catch (err) {
       const parsed = parseApiError(err);
       if (

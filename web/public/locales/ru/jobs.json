@@ -56,6 +56,7 @@
     "applicationSubmitted": "Заявка отправлена · Посмотреть статус",
     "applicationSubmittedToast": "Заявка отправлена",
     "applicationWithdrawn": "Заявка отозвана",
+    "invitedRespond": "Вас пригласили · Ответить",
     "apply": "Откликнуться",
     "attachments": "Вложения",
     "clientFallback": "Клиент",
@@ -75,7 +76,9 @@
     "tags": "Теги",
     "verifyBody": "Подтвердите свою электронную почту, чтобы начать откликаться на вакансии.",
     "verifyTitle": "Подтвердите почту, чтобы откликнуться",
-    "verifyToApplyToast": "Подтвердите почту, чтобы откликнуться"
+    "verifyToApplyToast": "Подтвердите почту, чтобы откликнуться",
+    "cisNotConfirmedToast": "Задекларируйте свой статус CIS, прежде чем откликаться на работу.",
+    "cisConfirmLink": "В профиль"
   },
   "board": {
     "anySpecialisation": "Любая специализация",
@@ -248,6 +251,13 @@
     },
     "title": "Мои заявки",
     "untitledJob": "Вакансия без названия",
+    "acceptInvite": "Принять",
+    "declineInvite": "Отклонить",
+    "inviteAcceptedToast": "Приглашение принято — чат с работодателем открыт.",
+    "inviteDeclinedToast": "Приглашение отклонено.",
+    "inviteRespondError": "Не удалось ответить на приглашение.",
+    "messageFromEmployer": "Сообщение от работодателя",
+    "yourMessage": "Ваше сообщение",
     "viewJob": "Посмотреть вакансию",
     "withdraw": "Отозвать",
     "withdrawConfirmDesc": "Отзыв заявки необратим для этой вакансии — вы не сможете подать снова, пока работодатель не откроет объявление повторно.",

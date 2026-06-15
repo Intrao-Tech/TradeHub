@@ -109,7 +109,7 @@
     "newAccounts": "Нові акаунти за день (7д)",
     "newAccountsDesc": "Реєстрації за всіма типами акаунтів.",
     "newUsers": "Нові (7д / 30д)",
-    "newUsersSubtitle": "{{workers}} працівників · {{employers}} роботодавців · {{staff}} співробітників",
+    "newUsersSubtitle": "{{workers}} працівників · {{employers}} роботодавців · {{dual}} подвійних · {{staff}} співробітників",
     "noMilestones": "Етапів ще немає.",
     "noPayments": "Немає платіжної активності.",
     "openDisputes": "Відкриті спори",
@@ -505,7 +505,8 @@
     "staff": "Співробітники",
     "support": "Звернення підтримки",
     "tags": "Теги",
-    "users": "Користувачі"
+    "users": "Користувачі",
+    "cisReturns": "CIS"
   },
   "users": {
     "actionFailed": "Не вдалося виконати дію",
@@ -614,6 +615,8 @@
     "statusPending": "Лише очікують",
     "statusRejected": "Відхилені",
     "structured": "структуровано",
+    "cisUtr": "UTR",
+    "cisNi": "Номер NI",
     "title": "Черга верифікації"
   },
   "publishQueue": {

@@ -26,6 +26,7 @@ import {
 } from './dto/verify-email.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { SetPasswordDto } from './dto/set-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -155,6 +156,33 @@ export class AuthController {
       refreshToken,
       ip,
     );
+  }
+
+  @Post('set-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
+  @ApiOperation({
+    summary:
+      'Set an initial password for an OAuth-only account (no current password required)',
+  })
+  setPassword(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: SetPasswordDto,
+    @Ip() ip: string,
+  ) {
+    return this.authService.setPassword(user.accountId, dto.new_password, ip);
+  }
+
+  @Get('me/auth-methods')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Which sign-in methods this account has (password / Google)',
+  })
+  getAuthMethods(@CurrentUser() user: CurrentUserPayload) {
+    return this.authService.getAuthMethods(user.accountId);
   }
 
   // ── Providers ────────────────────────────────────────────────

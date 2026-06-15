@@ -35,6 +35,7 @@ import { MailModule } from './mail/mail.module';
 import { StaffModule } from './staff/staff.module';
 import { AdminModule } from './admin/admin.module';
 import { SupportModule } from './support/support.module';
+import { CisModule } from './cis/cis.module';
 // Conditionally appended when NODE_ENV === 'test' to expose the test-only
 // mailbox HTTP route used by the Playwright suite (Decisions Log 2026-05-03).
 // The TestOnlyModule throws on mount in any other environment, so production
@@ -77,6 +78,7 @@ const baseImports = [
   StaffModule,
   AdminModule,
   SupportModule,
+  CisModule,
 ];
 
 // `overrideGuard()` from @nestjs/testing does not replace APP_GUARD-bound

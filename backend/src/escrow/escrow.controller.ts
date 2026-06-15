@@ -346,7 +346,28 @@ export class EscrowController {
       'Preview fee breakdown (worker payout, platform fee, referral, Stripe estimate, employer total) for a given amount.',
   })
   previewFee(@Query() q: FeePreviewQueryDto) {
-    return this.escrowService.previewFee(q.amount, !!q.has_referral);
+    return this.escrowService.previewFee(q.amount);
+  }
+
+  @Get('milestones/:milestoneId/funding-preview')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('EMPLOYER')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Itemised funding breakdown for a milestone (job, CIS, fees, Stripe, total) shown before checkout.',
+  })
+  fundingPreview(
+    @Param('milestoneId', ParseBigIntPipe) milestoneId: bigint,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    if (user.clientProfileId == null) {
+      throw new BadRequestException({ code: 'NO_CLIENT_PROFILE' });
+    }
+    return this.escrowService.getMilestoneFundingPreview(
+      milestoneId,
+      user.clientProfileId,
+    );
   }
 
   // ─── Submission + Release (Slice C) ──────────────────────────
@@ -373,6 +394,7 @@ export class EscrowController {
       milestoneId,
       user.clientProfileId,
       dto.message ?? null,
+      dto.materials_amount ?? null,
       ip,
     );
   }

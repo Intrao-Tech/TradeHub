@@ -36,6 +36,7 @@ const EmployerDetailPage = lazy(() => import('./pages/EmployerDetailPage'));
 const ClientDirectoryPage = lazy(() => import('./pages/ClientDirectoryPage'));
 const ClientPublicProfilePage = lazy(() => import('./pages/ClientPublicProfilePage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const AddRolePage = lazy(() => import('./pages/AddRolePage'));
 const CollaborationsPage = lazy(() => import('./pages/CollaborationsPage'));
 const CollaborationDetailPage = lazy(() => import('./pages/CollaborationDetailPage'));
 const EscrowPlaceholderPage = lazy(() => import('./pages/EscrowPlaceholderPage'));
@@ -286,6 +287,7 @@ function MarketplaceRouter() {
           <Route path="/clients/:slug" element={<ClientPublicProfilePage />} />
           {/* Private */}
           <Route path="/profile" element={<Protected loggedIn={loggedIn}><ProfilePage /></Protected>} />
+          <Route path="/add-role" element={<Protected loggedIn={loggedIn}><AddRolePage /></Protected>} />
           <Route path="/collaborations" element={<Protected loggedIn={loggedIn}><CollaborationsPage /></Protected>} />
           <Route path="/collaborations/:id" element={<Protected loggedIn={loggedIn}><CollaborationDetailPage /></Protected>} />
           <Route path="/escrow/:id" element={<Protected loggedIn={loggedIn}><EscrowPlaceholderPage /></Protected>} />

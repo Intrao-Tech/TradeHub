@@ -152,6 +152,25 @@ export default function MyApplicationsPage() {
     }
   }
 
+  async function respondInvite(application: WorkerApplication, accept: boolean) {
+    try {
+      await api(`/job-applications/${application.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: accept ? 'ACCEPTED' : 'REJECTED' }),
+      });
+      toast.success(
+        accept
+          ? t('myApplications.inviteAcceptedToast')
+          : t('myApplications.inviteDeclinedToast'),
+      );
+      await load();
+    } catch (err) {
+      toast.error(
+        parseApiError(err)?.message ?? t('myApplications.inviteRespondError'),
+      );
+    }
+  }
+
   if (!accountLoading && !isWorker) {
     return (
       <div className="space-y-4">
@@ -191,6 +210,8 @@ export default function MyApplicationsPage() {
                 application={inv}
                 isInvitation
                 onWithdraw={() => setWithdrawTarget(inv)}
+                onAccept={() => respondInvite(inv, true)}
+                onDecline={() => respondInvite(inv, false)}
               />
             ))}
           </ul>
@@ -256,15 +277,22 @@ function ApplicationRow({
   application,
   isInvitation = false,
   onWithdraw,
+  onAccept,
+  onDecline,
 }: {
   application: WorkerApplication;
   isInvitation?: boolean;
   onWithdraw: () => void;
+  onAccept?: () => void;
+  onDecline?: () => void;
 }) {
   const { t } = useTranslation('jobs');
   const post = application.job_post ?? null;
   const status = (application.status ?? '').toUpperCase();
-  const canWithdraw = WITHDRAWABLE.has(status);
+  // An invitation is responded to (accept/decline) by the worker; a regular
+  // application is withdrawn. The worker never "withdraws" someone else's invite.
+  const canRespondInvite = isInvitation && status === 'PENDING';
+  const canWithdraw = !isInvitation && WITHDRAWABLE.has(status);
 
   return (
     <li className="flex flex-col gap-3 rounded-md border border-border-default bg-raised p-4 sm:flex-row sm:items-start sm:justify-between">
@@ -304,6 +332,16 @@ function ApplicationRow({
             </span>
           ) : null}
         </div>
+        {application.cover_message ? (
+          <div className="rounded-md border border-border bg-bg-subtle px-3 py-2 text-sm text-fg">
+            <p className="mb-1 text-xs font-medium text-fg-muted">
+              {isInvitation
+                ? t('myApplications.messageFromEmployer')
+                : t('myApplications.yourMessage')}
+            </p>
+            <p className="whitespace-pre-wrap break-words">{application.cover_message}</p>
+          </div>
+        ) : null}
         <AttachmentList
           heading={t('myApplications.yourAttachments')}
           attachments={application.attachments}
@@ -311,8 +349,23 @@ function ApplicationRow({
         />
       </div>
       <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+        {canRespondInvite ? (
+          <>
+            <Button type="button" size="sm" onClick={onAccept}>
+              {t('myApplications.acceptInvite')}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onDecline}
+            >
+              {t('myApplications.declineInvite')}
+            </Button>
+          </>
+        ) : null}
         {isInvitation && post?.id != null ? (
-          <Button asChild size="sm">
+          <Button asChild size="sm" variant="ghost">
             <Link to={`/jobs/${post.id}`}>{t('myApplications.viewJob')}</Link>
           </Button>
         ) : null}

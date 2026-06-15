@@ -29,6 +29,15 @@ const LABEL_KEY_BY_STATUS: Record<string, ParseKeys<'common'>> = {
   WITHDRAWN: 'appStatus.withdrawn',
 };
 
+const HINT_KEY_BY_STATUS: Record<string, ParseKeys<'common'>> = {
+  PENDING: 'appStatus.hint.pending',
+  REVIEWED: 'appStatus.hint.reviewed',
+  SHORTLISTED: 'appStatus.hint.shortlisted',
+  ACCEPTED: 'appStatus.hint.accepted',
+  REJECTED: 'appStatus.hint.rejected',
+  WITHDRAWN: 'appStatus.hint.withdrawn',
+};
+
 export function ApplicationStatusBadge({ status }: { status: AppStatus | undefined }) {
   const { t } = useTranslation('common');
   if (!status) return null;
@@ -36,6 +45,14 @@ export function ApplicationStatusBadge({ status }: { status: AppStatus | undefin
   const variant = VARIANT_BY_STATUS[upper] ?? 'outline';
   const labelKey = LABEL_KEY_BY_STATUS[upper];
   const label = labelKey ? t(labelKey) : upper;
-  return <Badge variant={variant}>{label}</Badge>;
+  const hintKey = HINT_KEY_BY_STATUS[upper];
+  const tooltip = `${t('appStatus.tooltipPrefix')}${
+    hintKey ? ` — ${t(hintKey)}` : ''
+  }`;
+  return (
+    <Badge variant={variant} title={tooltip}>
+      {label}
+    </Badge>
+  );
 }
 ApplicationStatusBadge.displayName = 'ApplicationStatusBadge';

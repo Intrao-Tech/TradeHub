@@ -1,6 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateAccountDto } from './dto/update-account.dto';
+import { AddRoleDto } from './dto/add-role.dto';
 
 @Injectable()
 export class AccountService {
@@ -65,6 +71,56 @@ export class AccountService {
       },
       permissions: Array.from(permissionSet),
     };
+  }
+
+  /**
+   * Dual-role: add the second marketplace profile (worker/employer) to an
+   * account that already has the other. Registration only ever creates one
+   * profile; this is the "become a client / start working" path (Upwork-style).
+   * The shared client_profile (and its referral_code, identity verification)
+   * is reused — only the missing role-specific profile row is created.
+   */
+  async addRole(accountId: bigint, dto: AddRoleDto) {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+      include: {
+        client_profile: {
+          include: { worker_profile: true, employer_profile: true },
+        },
+      },
+    });
+    if (!account) throw new NotFoundException('Account not found');
+
+    const cp = account.client_profile;
+    if (!cp) {
+      // Staff accounts have no client_profile and cannot hold marketplace roles.
+      throw new BadRequestException({
+        code: 'NO_CLIENT_PROFILE',
+        message: 'This account cannot hold marketplace roles.',
+      });
+    }
+
+    if (dto.role === 'WORKER') {
+      if (cp.worker_profile) {
+        throw new ConflictException({
+          code: 'ROLE_EXISTS',
+          message: 'This account already has a worker profile.',
+        });
+      }
+      await this.prisma.workerProfile.create({ data: { id: cp.id } });
+    } else {
+      if (cp.employer_profile) {
+        throw new ConflictException({
+          code: 'ROLE_EXISTS',
+          message: 'This account already has an employer profile.',
+        });
+      }
+      await this.prisma.employerProfile.create({
+        data: { id: cp.id, company_name: dto.company_name ?? null },
+      });
+    }
+
+    return this.getMe(accountId);
   }
 
   async updateAccount(accountId: bigint, dto: UpdateAccountDto) {

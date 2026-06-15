@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Patch,
+  Post,
   Delete,
   Body,
   UseGuards,
@@ -12,6 +13,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { AccountService } from './account.service';
 import { UpdateAccountDto } from './dto/update-account.dto';
+import { AddRoleDto } from './dto/add-role.dto';
 
 @ApiTags('Account')
 @Controller('account')
@@ -33,6 +35,18 @@ export class AccountController {
     @Body() dto: UpdateAccountDto,
   ) {
     return this.accountService.updateAccount(user.accountId, dto);
+  }
+
+  @Post('me/roles')
+  @ApiOperation({
+    summary:
+      'Add the second marketplace role (worker/employer) to the current account',
+  })
+  addRole(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: AddRoleDto,
+  ) {
+    return this.accountService.addRole(user.accountId, dto);
   }
 
   @Delete('me')

@@ -36,6 +36,7 @@ type DashboardStats = {
     new_30d: number;
     workers: number;
     employers: number;
+    dual: number;
   };
   staff: { total: number; active: number; on_duty: number };
   contracts: { total: number; active: number };
@@ -186,6 +187,7 @@ export function AdminDashboardTab() {
               subtitle={t('dashboard.newUsersSubtitle', {
                 workers: data.users.workers,
                 employers: data.users.employers,
+                dual: data.users.dual,
                 staff: data.staff.total,
               })}
               onClick={() => goto('users', { sort: 'newest' })}

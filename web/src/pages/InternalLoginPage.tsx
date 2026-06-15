@@ -105,7 +105,6 @@ export default function InternalLoginPage({ onLogin }: Props) {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@tradehub.co.uk"
                 autoComplete="email"
                 required
               />
@@ -117,7 +116,6 @@ export default function InternalLoginPage({ onLogin }: Props) {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
                 autoComplete="current-password"
                 required
               />

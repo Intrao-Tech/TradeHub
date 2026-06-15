@@ -43,10 +43,14 @@ const fmtGbp = (n: number) => formatMoney(n);
 export function NewContractSheet({
   collabId,
   initiator,
+  takenJobPostIds,
   onCreated,
 }: {
   collabId: string | number;
   initiator: 'WORKER' | 'EMPLOYER';
+  /** Job-post ids that already have an in-flight contract with this worker —
+   *  excluded from the picker (one in-flight contract per job post). */
+  takenJobPostIds?: Set<string>;
   onCreated?: () => void;
 }) {
   const { t } = useTranslation('collaborations');
@@ -119,6 +123,12 @@ export function NewContractSheet({
     }
   }
 
+  // Exclude job posts that already have an in-flight contract with this worker.
+  const eligibleJobs = (jobs ?? []).filter(
+    (j) => !takenJobPostIds?.has(String(j.id)),
+  );
+  const allJobsTaken = jobs != null && jobs.length > 0 && eligibleJobs.length === 0;
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -146,13 +156,17 @@ export function NewContractSheet({
               <Label htmlFor="picked-job">{t('newContract.jobPostLabel')} *</Label>
               {jobs && jobs.length === 0 ? (
                 <p className="text-sm text-fg-muted">{t('newContract.noJobs')}</p>
+              ) : allJobsTaken ? (
+                <p className="text-sm text-fg-muted">
+                  {t('newContract.allJobsTaken')}
+                </p>
               ) : (
                 <Select value={pickedJobId} onValueChange={pickJob}>
                   <SelectTrigger id="picked-job">
                     <SelectValue placeholder={t('newContract.pickJobPlaceholder')} />
                   </SelectTrigger>
                   <SelectContent>
-                    {(jobs ?? []).map((j) => (
+                    {eligibleJobs.map((j) => (
                       <SelectItem key={String(j.id)} value={String(j.id)}>
                         {j.title}
                         {j.fixed_price != null && j.fixed_price !== ''

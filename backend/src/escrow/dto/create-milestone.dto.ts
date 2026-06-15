@@ -35,4 +35,22 @@ export class CreateMilestoneDto {
   @IsString()
   @MaxLength(2000)
   description?: string;
+
+  @ApiPropertyOptional({
+    example: '400.00',
+    description:
+      'CIS: labour portion of the amount (the part a CIS deduction applies to). Optional — when omitted the whole amount is treated as labour.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  labour_amount?: string;
+
+  @ApiPropertyOptional({
+    example: '100.00',
+    description:
+      'CIS: materials portion of the amount (never subject to a CIS deduction). Optional, defaults to 0.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  materials_amount?: string;
 }

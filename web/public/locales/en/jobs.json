@@ -54,6 +54,7 @@
     "applicationSubmitted": "Application submitted · View status",
     "applicationSubmittedToast": "Application submitted",
     "applicationWithdrawn": "Application withdrawn",
+    "invitedRespond": "You're invited · Respond",
     "apply": "Apply",
     "attachments": "Attachments",
     "clientFallback": "Client",
@@ -73,7 +74,9 @@
     "tags": "Tags",
     "verifyBody": "Confirm your email address to start applying to jobs.",
     "verifyTitle": "Verify your email to apply",
-    "verifyToApplyToast": "Verify your email to apply"
+    "verifyToApplyToast": "Verify your email to apply",
+    "cisNotConfirmedToast": "Confirm your CIS status before applying for work.",
+    "cisConfirmLink": "Go to profile"
   },
   "board": {
     "anySpecialisation": "Any specialisation",
@@ -230,6 +233,13 @@
     },
     "title": "My applications",
     "untitledJob": "Untitled job",
+    "acceptInvite": "Accept",
+    "declineInvite": "Decline",
+    "inviteAcceptedToast": "Invitation accepted — a chat with the employer is now open.",
+    "inviteDeclinedToast": "Invitation declined.",
+    "inviteRespondError": "Could not respond to the invitation.",
+    "messageFromEmployer": "Message from employer",
+    "yourMessage": "Your message",
     "viewJob": "View job",
     "withdraw": "Withdraw",
     "withdrawConfirmDesc": "Withdrawing is permanent for this job — you won't be able to apply again unless the employer reopens the post.",

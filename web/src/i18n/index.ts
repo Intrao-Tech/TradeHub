@@ -29,6 +29,7 @@ export const NAMESPACES = [
   'chat',
   'support',
   'settings',
+  'cis',
 ] as const;
 
 void i18n

@@ -24,7 +24,10 @@ import { GoogleStrategy } from './strategies/google.strategy';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: config.get('JWT_ACCESS_TTL', '1h') },
+        // Short-lived access token: the SPA refreshes when it lapses, which
+        // slides the refresh (idle) window. Must stay shorter than
+        // JWT_REFRESH_TTL or an active session could expire mid-use.
+        signOptions: { expiresIn: config.get('JWT_ACCESS_TTL', '5m') },
       }),
     }),
   ],

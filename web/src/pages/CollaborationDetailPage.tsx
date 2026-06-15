@@ -33,6 +33,7 @@ type ContractRow = {
   id: string | number;
   position: number;
   status: 'DRAFT' | 'PROPOSED' | 'ACTIVE' | 'ENDED';
+  job_post_id?: string | number | null;
   end_reason?: string | null;
   agreed_amount?: string | null;
   project_type?: string | null;
@@ -137,8 +138,17 @@ export default function CollaborationDetailPage() {
     collab != null &&
     String(collab.employer_id) === myAccountId &&
     isEmployer;
-  const inFlight = collab?.contracts?.find((c) =>
-    ['DRAFT', 'PROPOSED', 'ACTIVE'].includes(c.status),
+  // Job posts that already have an active/pending contract with this worker —
+  // those can't be re-contracted until the current one ends, but OTHER job
+  // posts still can (one in-flight contract per job post, not per relationship).
+  const takenJobPostIds = new Set(
+    (collab?.contracts ?? [])
+      .filter(
+        (c) =>
+          ['DRAFT', 'PROPOSED', 'ACTIVE'].includes(c.status) &&
+          c.job_post_id != null,
+      )
+      .map((c) => String(c.job_post_id)),
   );
   const totalContracts = collab?.contracts?.length ?? 0;
   const totalReleased = (collab?.contracts ?? [])
@@ -216,10 +226,11 @@ export default function CollaborationDetailPage() {
             </Link>
           </Button>
         ) : null}
-        {employerSide && !inFlight ? (
+        {employerSide ? (
           <NewContractSheet
             collabId={collab.id}
             initiator="EMPLOYER"
+            takenJobPostIds={takenJobPostIds}
             onCreated={() => void load()}
           />
         ) : null}

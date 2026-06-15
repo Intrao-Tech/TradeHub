@@ -57,9 +57,16 @@ export class ContractService {
       throw new ForbiddenException('Not a participant of this relationship');
     }
 
+    // One active/pending contract PER JOB POST (not per relationship): an
+    // employer can run several contracts with the same worker at once, as long
+    // as each is tied to a different job post. Re-contracting the SAME job post
+    // while one is still in flight is blocked. (job_post_id = null is its own
+    // bucket — at most one "no job post" contract in flight.)
+    const jobPostId = dto.job_post_id != null ? BigInt(dto.job_post_id) : null;
     const inFlight = await this.prisma.contract.findFirst({
       where: {
         collaboration_id: collaborationId,
+        job_post_id: jobPostId,
         status: {
           in: [
             CONTRACT_STATUS.DRAFT,
@@ -71,7 +78,9 @@ export class ContractService {
     });
     if (inFlight) {
       throw new ConflictException(
-        'There is already an active or pending contract on this relationship',
+        jobPostId != null
+          ? 'There is already an active or pending contract for this job post with this worker'
+          : 'There is already an active or pending contract on this relationship',
       );
     }
 

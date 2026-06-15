@@ -33,4 +33,20 @@ export class UpdateMilestoneDto {
   @IsString()
   @MaxLength(2000)
   description?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'CIS: labour portion of the amount. Pass empty string to clear (whole amount treated as labour).',
+  })
+  @IsOptional()
+  @IsString()
+  labour_amount?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'CIS: materials portion of the amount (never deducted). Pass empty string to clear (0).',
+  })
+  @IsOptional()
+  @IsString()
+  materials_amount?: string;
 }

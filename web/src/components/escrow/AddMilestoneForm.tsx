@@ -89,6 +89,8 @@ export function AddMilestoneForm({ contractId, submitLabel, onAdded }: Props) {
     }
     setBusy(true);
     try {
+      // Materials are NOT set at creation — the worker declares them at
+      // submission (when actual costs are known), which drives the CIS split.
       const m = await createMilestone(contractId, {
         title: title.trim(),
         amount,
