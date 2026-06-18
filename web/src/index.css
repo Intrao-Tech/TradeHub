@@ -214,6 +214,20 @@ html, body, #root {
   min-height: 100%;
 }
 
+/* When any Radix popover (Select, DropdownMenu, Dialog…) opens, react-remove-scroll
+   locks the page by setting `overflow: hidden` + a scrollbar-width `margin-right`
+   on <body> (it marks it `[data-scroll-locked]`). That margin is meant to fill the
+   gap left by a removed scrollbar — but our scroll container is <html>, not <body>,
+   so no scrollbar is actually removed and the margin just shoves the whole page
+   ~15px sideways. The page scroll is already blocked via JS, so no compensation is
+   needed: cancel the offset so the layout stays put. See issue #40.
+   `html` prefix raises specificity so this beats react-remove-scroll's own
+   `body[data-scroll-locked]` rule, which is injected later into <head>. */
+html body[data-scroll-locked] {
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+}
+
 /* Sheets slide in from offscreen-right (translateX(100%)). iOS Safari lets the
    user pan/zoom toward content overflowing the right edge — even fixed
    elements — leaving the viewport stuck offset with the panel half cut.
