@@ -54,6 +54,7 @@ const MyApplicationsPage = lazy(() => import('./pages/MyApplicationsPage'));
 const InboxPage = lazy(() => import('./pages/InboxPage'));
 const SupportPage = lazy(() => import('./pages/SupportPage'));
 const RefLandingPage = lazy(() => import('./pages/RefLandingPage'));
+const HandoffLandingPage = lazy(() => import('./pages/HandoffLandingPage'));
 
 // ── Nav items ───────────────────────────────────────────────────────
 
@@ -277,6 +278,7 @@ function MarketplaceRouter() {
         <Routes>
           {/* Public */}
           <Route path="/r/:code" element={<RefLandingPage />} />
+          <Route path="/handoff/:token" element={<HandoffLandingPage />} />
           <Route path="/jobs" element={<HideForRole role="employer"><JobBoardPage /></HideForRole>} />
           <Route path="/jobs/:id" element={<JobDetailPage />} />
           <Route path="/workers" element={<HideForRole role="worker"><WorkerSearchPage /></HideForRole>} />

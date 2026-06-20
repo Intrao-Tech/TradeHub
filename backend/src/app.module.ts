@@ -22,6 +22,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
 import { AuditModule } from './audit/audit.module';
 import { JobPostModule } from './job-post/job-post.module';
 import { JobApplicationModule } from './job-application/job-application.module';
+import { HandoffModule } from './handoff/handoff.module';
 import { JobAttachmentModule } from './job-attachment/job-attachment.module';
 import { SavedJobModule } from './saved-job/saved-job.module';
 import { SavedWorkerModule } from './saved-worker/saved-worker.module';
@@ -69,6 +70,7 @@ const baseImports = [
   AuditModule,
   JobPostModule,
   JobApplicationModule,
+  HandoffModule,
   JobAttachmentModule,
   SavedJobModule,
   SavedWorkerModule,

@@ -2,6 +2,8 @@
   "applicant": {
     "accept": "Accept",
     "applied": "Applied {{time}}",
+    "handedOff": "Handed off",
+    "handedOffBy": "Handed off by {{name}}",
     "invitation": "Invitation",
     "markReviewed": "Mark reviewed",
     "noCover": "No cover message.",

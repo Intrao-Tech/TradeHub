@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { HandHelping } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { formatMoney } from '@/lib/format';
@@ -38,6 +39,14 @@ export type ApplicantApplication = {
     mime_type: string;
     size_bytes: number;
   }>;
+  // Provenance: set when this worker took an explicit job handoff.
+  handoff?: {
+    id: string | number;
+    from_worker?: {
+      id?: string | number;
+      client_profile?: { display_name?: string | null } | null;
+    } | null;
+  } | null;
 };
 
 type ApplicantCardProps = {
@@ -99,6 +108,17 @@ export function ApplicantCard({
           <ApplicationStatusBadge status={application.status} />
           {application.initiated_by === 'EMPLOYER' ? (
             <Badge variant="info">{t('applicant.invitation')}</Badge>
+          ) : null}
+          {application.handoff ? (
+            <Badge variant="secondary" className="gap-1">
+              <HandHelping className="h-3 w-3" />
+              {application.handoff.from_worker?.client_profile?.display_name
+                ? t('applicant.handedOffBy', {
+                    name: application.handoff.from_worker.client_profile
+                      .display_name,
+                  })
+                : t('applicant.handedOff')}
+            </Badge>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">

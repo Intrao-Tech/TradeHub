@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { TranslateFn } from '@/i18n/types';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { formatDate } from '@/lib/format';
 import { specLabel, tagLabel } from '@/lib/specialisations';
 import { useTranslation } from 'react-i18next';
@@ -34,6 +34,7 @@ import { SaveJobButton } from '@/components/jobs/SaveJobButton';
 import { formatRelative } from '@/lib/relative-time';
 import { toast } from '@/components/ui/toast';
 import { ShareForCommissionButton } from '@/components/referral/ShareForCommissionButton';
+import { HandoffButton } from '@/components/handoff';
 import { useRefAttribution } from '@/components/referral/useRefAttribution';
 import { StarRating } from '@/components/StarRating';
 import {
@@ -113,6 +114,7 @@ export default function AuthJobDetailPage() {
 
   const [myApp, setMyApp] = useState<MyApplication | null>(null);
   const [applyOpen, setApplyOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     if (!id) return;
@@ -166,6 +168,17 @@ export default function AuthJobDetailPage() {
       cancelled = true;
     };
   }, [id, loggedIn, isWorker, refreshKey]);
+
+  // `?apply=1` deep-link (used by the handoff "Take this job" flow) opens the
+  // apply sheet automatically once the job has loaded, so taking a handoff is
+  // genuinely one tap. The param is stripped so a refresh doesn't re-open it.
+  useEffect(() => {
+    if (searchParams.get('apply') !== '1' || !detail) return;
+    if (loggedIn && isWorker && !myApp) setApplyOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('apply');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, detail, loggedIn, isWorker, myApp, setSearchParams]);
 
   const ownsPost = useMemo(() => {
     if (!detail || !isEmployer) return false;
@@ -547,6 +560,9 @@ function ActionCard({
             targetTitle={jobTitle}
             className="w-full"
           />
+        ) : null}
+        {loggedIn && isWorker && !isClosed ? (
+          <HandoffButton jobId={jobId} jobTitle={jobTitle} className="w-full" />
         ) : null}
       </CardContent>
     </Card>
