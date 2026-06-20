@@ -562,6 +562,27 @@ export class MailService implements OnModuleInit {
     `;
     await this.send(to, subject, html);
   }
+
+  async sendJobHandoffReceived(
+    to: string,
+    recipientDisplayName: string,
+    handerDisplayName: string,
+    jobTitle: string,
+    handoffLink: string,
+  ): Promise<void> {
+    const subject = `${handerDisplayName} handed you a job: ${jobTitle}`;
+    const html = `
+      <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2 style="color: #0f766e;">A job was handed to you 🤝</h2>
+        <p>Hi ${escapeHtml(recipientDisplayName)},</p>
+        <p><strong>${escapeHtml(handerDisplayName)}</strong> thinks <strong>${escapeHtml(jobTitle)}</strong> is a good fit for you and has handed it over.</p>
+        <p>Open the job to take it or pass — applying is one tap from the link below.</p>
+        <p><a href="${escapeHtml(handoffLink)}" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;">View the job</a></p>
+        <p style="color:#64748b;font-size:13px;">This handoff link expires in 30 days.</p>
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
 }
 
 function escapeHtml(input: string): string {

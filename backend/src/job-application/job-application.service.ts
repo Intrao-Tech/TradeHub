@@ -14,6 +14,7 @@ import { MailService } from '../mail/mail.service';
 import { AuditService } from '../audit/audit.service';
 import { ReferralService } from '../referral/referral.service';
 import { REFERRAL_AUDIT_EVENTS } from '../referral/referral.constants';
+import { HandoffService } from '../handoff/handoff.service';
 import { ConversationService } from '../conversation/conversation.service';
 import { NotificationService } from '../notification/notification.service';
 import type { ApplicationQueryDto } from './dto/application-query.dto';
@@ -23,6 +24,18 @@ const applicationInclude = {
   job_post: { include: { employer: { include: { client_profile: true } } } },
   worker_profile: { include: { client_profile: true } },
   attachments: { orderBy: { created_at: 'asc' } },
+  // Employer-visible provenance: who handed this job to the applicant.
+  handoff: {
+    select: {
+      id: true,
+      from_worker: {
+        select: {
+          id: true,
+          client_profile: { select: { display_name: true } },
+        },
+      },
+    },
+  },
 } satisfies Prisma.JobApplicationInclude;
 
 const collaborationInclude = {
@@ -41,6 +54,7 @@ export class JobApplicationService {
     private readonly mail: MailService,
     private readonly audit: AuditService,
     private readonly referrals: ReferralService,
+    private readonly handoffs: HandoffService,
     private readonly notifications: NotificationService,
     @Inject(forwardRef(() => ConversationService))
     private readonly conversations: ConversationService,
@@ -70,9 +84,15 @@ export class JobApplicationService {
       });
     }
 
-    // Project-ref attribution: look up the latest active intent recorded
-    // for (this worker, target_role=WORKER, target_id=jobPostId). Replaces
-    // the prior cookie-based attribution.
+    // W2W project-ref attribution. TWO ordered sources, first wins:
+    //   1. An explicit JobHandoff (a worker handed this job to this worker) —
+    //      a targeted, employer-visible route. Takes priority over (2).
+    //   2. The latest active ?ref= intent for (worker, WORKER, jobPostId) —
+    //      the anonymous commission link.
+    // Either way the commission only fires for a NEW worker↔employer pairing:
+    // if the worker already collaborates with this job's employer, the
+    // referrer/hander introduced nothing, so we skip the attribution (but
+    // still record the handoff_id for provenance).
     let projectReferrerId: bigint | null = null;
     let projectReferrerRole: 'WORKER' | 'EMPLOYER' | null = null;
     let referrerForNotify: {
@@ -80,20 +100,42 @@ export class JobApplicationService {
       email: string;
       display_name: string;
     } | null = null;
-    const intent = await this.referrals.findActiveIntent(
+    let handoffId: bigint | null = null;
+    let handoffCommissionKept = false;
+
+    let priorCollab: { id: bigint } | null | undefined;
+    const isNewPairing = async (): Promise<boolean> => {
+      if (priorCollab === undefined) {
+        priorCollab = await this.prisma.collaboration.findFirst({
+          where: { worker_id: workerId, employer_id: jobPost.employer_id },
+          select: { id: true },
+        });
+      }
+      return priorCollab === null;
+    };
+
+    const handoff = await this.handoffs.consumeForApplication(
       workerId,
-      'WORKER',
       jobPostId,
     );
-    if (intent && intent.referrer_id !== workerId) {
-      // W2W referral rewards introducing a NEW worker↔employer pairing. If
-      // the worker already collaborates with this job's employer, the
-      // referrer introduced nothing — skip the attribution.
-      const priorCollab = await this.prisma.collaboration.findFirst({
-        where: { worker_id: workerId, employer_id: jobPost.employer_id },
-        select: { id: true },
-      });
-      if (!priorCollab) {
+    if (handoff) {
+      handoffId = handoff.id;
+      if (
+        handoff.earn_commission &&
+        handoff.from_worker_id !== workerId &&
+        (await isNewPairing())
+      ) {
+        projectReferrerId = handoff.from_worker_id;
+        projectReferrerRole = 'WORKER';
+        handoffCommissionKept = true;
+      }
+    } else {
+      const intent = await this.referrals.findActiveIntent(
+        workerId,
+        'WORKER',
+        jobPostId,
+      );
+      if (intent && intent.referrer_id !== workerId && (await isNewPairing())) {
         const referrerAcc = await this.prisma.account.findUnique({
           where: { id: intent.referrer_id },
           include: { client_profile: { select: { display_name: true } } },
@@ -123,9 +165,20 @@ export class JobApplicationService {
             : null,
         project_referrer_id: projectReferrerId,
         project_referrer_role: projectReferrerRole,
+        handoff_id: handoffId,
       },
       include: applicationInclude,
     });
+
+    // A handoff carries its own notification + audit (handoff.applied), so we
+    // do not also fire the generic referral-attributed email for that path.
+    if (handoffId) {
+      await this.handoffs.markApplied(
+        handoffId,
+        workerId,
+        handoffCommissionKept,
+      );
+    }
 
     if (referrerForNotify) {
       await this.audit.log(

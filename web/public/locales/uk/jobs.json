@@ -13,7 +13,9 @@
     "showLess": "Згорнути",
     "viewCollaboration": "Переглянути співпрацю",
     "workerFallback": "Працівник",
-    "workSamples": "Приклади робіт"
+    "workSamples": "Приклади робіт",
+    "handedOff": "Передано",
+    "handedOffBy": "Передав(ла) {{name}}"
   },
   "applicants": {
     "actionFailed": "Дію не виконано.",

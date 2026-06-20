@@ -121,21 +121,21 @@ model ClientProfile {
   created_at                 DateTime  @default(now()) @db.Timestamptz()
   updated_at                 DateTime  @updatedAt @db.Timestamptz()
 
-  account          Account         @relation(fields: [id], references: [id], onDelete: Cascade)
+  account          Account          @relation(fields: [id], references: [id], onDelete: Cascade)
   worker_profile   WorkerProfile?
   employer_profile EmployerProfile?
-  referrer         ClientProfile?  @relation("ClientReferrer", fields: [referred_by_id], references: [id], onDelete: SetNull)
-  referred_clients ClientProfile[] @relation("ClientReferrer")
+  referrer         ClientProfile?   @relation("ClientReferrer", fields: [referred_by_id], references: [id], onDelete: SetNull)
+  referred_clients ClientProfile[]  @relation("ClientReferrer")
 
   verification_milestones   VerificationMilestone[]
   user_subscriptions        UserSubscription[]
-  contract_project_refs     Contract[]       @relation("ContractProjectReferrer")
-  job_application_refs      JobApplication[] @relation("ApplicationProjectReferrer")
-  referral_intents_actor    ReferralIntent[] @relation("ReferralIntentActor")
-  referral_intents_referrer ReferralIntent[] @relation("ReferralIntentReferrer")
+  contract_project_refs     Contract[]              @relation("ContractProjectReferrer")
+  job_application_refs      JobApplication[]        @relation("ApplicationProjectReferrer")
+  referral_intents_actor    ReferralIntent[]        @relation("ReferralIntentActor")
+  referral_intents_referrer ReferralIntent[]        @relation("ReferralIntentReferrer")
   payments                  Payment[]
   // CIS (V2): monthly-return lines where this profile is the subcontractor.
-  cis_return_lines          CisReturnLine[] @relation("CisReturnLineSubcontractor")
+  cis_return_lines          CisReturnLine[]         @relation("CisReturnLineSubcontractor")
 
   // Admin panel: reviewable items (documents and future checks) are owned by client_profile via reviewable_item parent.
   // (Direct `documents Document[]` relation removed — go through reviewable_items.)
@@ -152,19 +152,19 @@ model ClientProfile {
 // ============================================
 
 model WorkerProfile {
-  id               BigInt    @id
-  years_experience Int?      @db.SmallInt
-  day_rate_min     Decimal?  @db.Decimal(8, 2)
-  day_rate_max     Decimal?  @db.Decimal(8, 2)
-  available_from   DateTime? @db.Timestamptz()
-  is_available     Boolean   @default(true)
-  rating_avg       Decimal   @default(0) @db.Decimal(3, 2)
-  rating_count     Int       @default(0)
+  id                      BigInt    @id
+  years_experience        Int?      @db.SmallInt
+  day_rate_min            Decimal?  @db.Decimal(8, 2)
+  day_rate_max            Decimal?  @db.Decimal(8, 2)
+  available_from          DateTime? @db.Timestamptz()
+  is_available            Boolean   @default(true)
+  rating_avg              Decimal   @default(0) @db.Decimal(3, 2)
+  rating_count            Int       @default(0)
   // Dual-role: per-role verification tier for the WORKER cabinet. The shared
   // identity base lives on client_profile.verification_level (BASIC); worker
   // trade credentials (CSCS / Gas Safe / NICEIC / RTW / CIS) elevate this to
   // CERTIFIED / PREMIUM independently of the employer cabinet.
-  verification_level String  @default("UNVERIFIED") @db.VarChar(30)
+  verification_level      String    @default("UNVERIFIED") @db.VarChar(30)
   // ── CIS (HMRC Construction Industry Scheme) — subcontractor side ──────
   // Worker's CIS standing, confirmed on the manual HMRC_CIS review (worker
   // declares, staff confirms) and recorded as a verification_milestone.
@@ -178,8 +178,8 @@ model WorkerProfile {
   // HMRC verification ref (V + 10 digits). Null in V1 (manual); set by the
   // HMRC verify API in V2 once the platform is HMRC-recognised.
   cis_verified_at         DateTime? @db.Timestamptz()
-  created_at       DateTime  @default(now()) @db.Timestamptz()
-  updated_at       DateTime  @updatedAt @db.Timestamptz()
+  created_at              DateTime  @default(now()) @db.Timestamptz()
+  updated_at              DateTime  @updatedAt @db.Timestamptz()
 
   client_profile ClientProfile @relation(fields: [id], references: [id], onDelete: Cascade)
 
@@ -192,6 +192,9 @@ model WorkerProfile {
   referral_intents         ReferralIntent[]
   saved_jobs               SavedJob[]
   saved_by                 SavedWorker[]
+  handoffs_made            JobHandoff[]           @relation("HandoffFromWorker")
+  handoffs_received        JobHandoff[]           @relation("HandoffToWorker")
+  handoffs_claimed         JobHandoff[]           @relation("HandoffClaimedBy")
 
   @@index([is_available, available_from])
   @@index([rating_avg(sort: Desc), rating_count(sort: Desc)])
@@ -203,28 +206,28 @@ model WorkerProfile {
 // ============================================
 
 model EmployerProfile {
-  id             BigInt   @id
-  company_name   String?  @db.VarChar(200)
-  company_number String?  @db.VarChar(20)
-  team_size      Int?     @db.SmallInt
-  rating_avg     Decimal  @default(0) @db.Decimal(3, 2)
-  rating_count   Int      @default(0)
+  id                         BigInt   @id
+  company_name               String?  @db.VarChar(200)
+  company_number             String?  @db.VarChar(20)
+  team_size                  Int?     @db.SmallInt
+  rating_avg                 Decimal  @default(0) @db.Decimal(3, 2)
+  rating_count               Int      @default(0)
   // Dual-role: per-role verification tier for the EMPLOYER cabinet. Shared
   // identity base lives on client_profile.verification_level (BASIC); employer
   // proofs (insurance + company letterhead + Companies House) elevate this to
   // CERTIFIED / PREMIUM independently of the worker cabinet.
-  verification_level String @default("UNVERIFIED") @db.VarChar(30)
+  verification_level         String   @default("UNVERIFIED") @db.VarChar(30)
   // ── CIS (HMRC Construction Industry Scheme) — contractor side ────────
   // Is this employer a CIS "contractor" (a construction business that must
   // operate CIS)? Employer self-declares; staff can override. false = private
   // homeowner / out-of-scope → CIS never applies to their jobs.
-  is_cis_contractor          Boolean @default(false)
+  is_cis_contractor          Boolean  @default(false)
   // Per-employer override of the global platform_setting.cis_handling_mode.
   // null = inherit global. 'MANAGED' here pilots V2 (we withhold + remit) on
   // this one employer without flipping the whole platform — the V1→V2 seam.
-  cis_handling_mode_override String? @db.VarChar(20)
-  created_at     DateTime @default(now()) @db.Timestamptz()
-  updated_at     DateTime @updatedAt @db.Timestamptz()
+  cis_handling_mode_override String?  @db.VarChar(20)
+  created_at                 DateTime @default(now()) @db.Timestamptz()
+  updated_at                 DateTime @updatedAt @db.Timestamptz()
 
   client_profile ClientProfile @relation(fields: [id], references: [id], onDelete: Cascade)
 
@@ -283,10 +286,10 @@ model StaffMember {
 // reviewed_by, reviewed_at, rejection_reason) lives on `review_item` and is
 // OPTIONAL — document can exist without a review.
 model Document {
-  id            BigInt @id
-  doc_type      String @db.VarChar(40)
-  file_url      String @db.VarChar(500)
-  metadata      Json?
+  id       BigInt @id
+  doc_type String @db.VarChar(40)
+  file_url String @db.VarChar(500)
+  metadata Json?
 
   reviewable_item          ReviewableItem          @relation(fields: [id], references: [id], onDelete: Cascade)
   portfolio_item_documents PortfolioItemDocument[]
@@ -567,51 +570,51 @@ model Review {
 // ============================================
 
 model EscrowMilestone {
-  id                   BigInt    @id @default(autoincrement())
-  contract_id          BigInt
-  position             Int
-  title                String    @db.VarChar(200)
-  description          String?   @db.VarChar(2000)
-  amount               Decimal   @db.Decimal(12, 2)
+  id                         BigInt    @id @default(autoincrement())
+  contract_id                BigInt
+  position                   Int
+  title                      String    @db.VarChar(200)
+  description                String?   @db.VarChar(2000)
+  amount                     Decimal   @db.Decimal(12, 2)
   // CIS labour/materials split. CIS deducts from LABOUR only — never materials.
   // Null when CIS doesn't apply (homeowner job) — milestone stays a single
   // `amount` as before. When CIS applies: labour_amount + materials_amount =
   // amount, and the deduction = labour_amount * worker.cis_rate.
-  labour_amount        Decimal?  @db.Decimal(12, 2)
-  materials_amount     Decimal?  @db.Decimal(12, 2)
-  status               String    @default("PENDING") @db.VarChar(20)
+  labour_amount              Decimal?  @db.Decimal(12, 2)
+  materials_amount           Decimal?  @db.Decimal(12, 2)
+  status                     String    @default("PENDING") @db.VarChar(20)
   // REQUESTED (worker proposed, awaiting employer approval) / PENDING (approved, employer can fund)
   // / FUNDED / SUBMITTED / RELEASED / DISPUTED / REFUNDED / CANCELED / DECLINED / RELEASE_FAILED
-  created_by_role      String    @default("EMPLOYER") @db.VarChar(10)
+  created_by_role            String    @default("EMPLOYER") @db.VarChar(10)
   // EMPLOYER (default) | WORKER (worker requested)
-  submission_message   String?   @db.VarChar(2000)
-  worker_submitted_at  DateTime? @db.Timestamptz()
-  employer_approved_at DateTime? @db.Timestamptz()
-  released_at          DateTime? @db.Timestamptz()
-  refunded_at          DateTime? @db.Timestamptz()
-  disputed_at          DateTime? @db.Timestamptz()
-  release_attempts     Int       @default(0)
-  refund_reason        String?   @db.VarChar(500)
+  submission_message         String?   @db.VarChar(2000)
+  worker_submitted_at        DateTime? @db.Timestamptz()
+  employer_approved_at       DateTime? @db.Timestamptz()
+  released_at                DateTime? @db.Timestamptz()
+  refunded_at                DateTime? @db.Timestamptz()
+  disputed_at                DateTime? @db.Timestamptz()
+  release_attempts           Int       @default(0)
+  refund_reason              String?   @db.VarChar(500)
   // Frozen at fund-time (so admin fee changes don't retroactively change in-flight)
-  frozen_client_fee_pct      Decimal? @db.Decimal(5, 2)
-  frozen_freelancer_fee_pct  Decimal? @db.Decimal(5, 2)
-  frozen_referral_fee_pct    Decimal? @db.Decimal(5, 2)
-  frozen_worker_payout       Decimal? @db.Decimal(12, 2)
-  frozen_referral_commission Decimal? @db.Decimal(12, 2)
-  frozen_platform_fee        Decimal? @db.Decimal(12, 2)
+  frozen_client_fee_pct      Decimal?  @db.Decimal(5, 2)
+  frozen_freelancer_fee_pct  Decimal?  @db.Decimal(5, 2)
+  frozen_referral_fee_pct    Decimal?  @db.Decimal(5, 2)
+  frozen_worker_payout       Decimal?  @db.Decimal(12, 2)
+  frozen_referral_commission Decimal?  @db.Decimal(12, 2)
+  frozen_platform_fee        Decimal?  @db.Decimal(12, 2)
   // Frozen CIS snapshot, locked at fund-time so a later change to the worker's
   // CIS status/verification can't retroactively alter an in-flight milestone.
   // mode = ASSIST (employer remits off-platform; frozen_worker_payout is ALREADY
   // net of CIS) | MANAGED (platform withholds at release; frozen_worker_payout is
   // the pre-CIS gross). rate is the worker's CIS rate at fund-time (0/20/30).
-  frozen_cis_mode            String?  @db.VarChar(10)
-  frozen_cis_rate            Decimal? @db.Decimal(5, 2)
-  frozen_cis_amount          Decimal? @db.Decimal(12, 2)
-  created_at           DateTime  @default(now()) @db.Timestamptz()
-  updated_at           DateTime  @updatedAt @db.Timestamptz()
+  frozen_cis_mode            String?   @db.VarChar(10)
+  frozen_cis_rate            Decimal?  @db.Decimal(5, 2)
+  frozen_cis_amount          Decimal?  @db.Decimal(12, 2)
+  created_at                 DateTime  @default(now()) @db.Timestamptz()
+  updated_at                 DateTime  @updatedAt @db.Timestamptz()
   // All Stripe object ids + money amounts live in the `payment` ledger.
 
-  contract    Contract                   @relation(fields: [contract_id], references: [id], onDelete: Restrict)
+  contract    Contract                    @relation(fields: [contract_id], references: [id], onDelete: Restrict)
   dispute     EscrowDispute?
   attachments EscrowMilestoneAttachment[]
   payments    Payment[]
@@ -738,17 +741,17 @@ model PlatformSetting {
 // ============================================
 
 model CisReturn {
-  id              BigInt    @id @default(autoincrement())
-  tax_year        Int       @db.SmallInt
+  id                  BigInt    @id @default(autoincrement())
+  tax_year            Int       @db.SmallInt
   // The tax year the month belongs to (UK tax year starting 6 Apr).
-  tax_month       Int       @db.SmallInt
+  tax_month           Int       @db.SmallInt
   // 1..12 — CIS tax month index within the tax year.
-  status          String    @default("DRAFT") @db.VarChar(20)
+  status              String    @default("DRAFT") @db.VarChar(20)
   // DRAFT / SUBMITTED / ACCEPTED / REJECTED / PAID
-  is_nil_return   Boolean   @default(false)
+  is_nil_return       Boolean   @default(false)
   // True when the month had no payments — HMRC still requires a nil return.
-  total_deducted  Decimal   @default(0) @db.Decimal(12, 2)
-  total_paid      Decimal   @default(0) @db.Decimal(12, 2)
+  total_deducted      Decimal   @default(0) @db.Decimal(12, 2)
+  total_paid          Decimal   @default(0) @db.Decimal(12, 2)
   // HMRC submission outcome.
   hmrc_irmark         String?   @db.VarChar(200)
   hmrc_submission_ref String?   @db.VarChar(100)
@@ -759,8 +762,8 @@ model CisReturn {
   remittance_ref      String?   @db.VarChar(100)
   // True while the submit/remit are simulated (no real HMRC / bank call).
   is_mocked           Boolean   @default(true)
-  created_at      DateTime  @default(now()) @db.Timestamptz()
-  updated_at      DateTime  @updatedAt @db.Timestamptz()
+  created_at          DateTime  @default(now()) @db.Timestamptz()
+  updated_at          DateTime  @updatedAt @db.Timestamptz()
 
   lines    CisReturnLine[]
   payments Payment[]
@@ -779,18 +782,18 @@ model CisReturn {
 // ============================================
 
 model CisReturnLine {
-  id                          BigInt   @id @default(autoincrement())
-  cis_return_id               BigInt
+  id                              BigInt   @id @default(autoincrement())
+  cis_return_id                   BigInt
   subcontractor_client_profile_id BigInt
-  verification_number         String?  @db.VarChar(20)
-  gross_paid                  Decimal  @db.Decimal(12, 2)
-  cost_of_materials           Decimal  @default(0) @db.Decimal(12, 2)
-  amount_deducted             Decimal  @db.Decimal(12, 2)
-  cis_rate                    Int      @db.SmallInt
-  created_at                  DateTime @default(now()) @db.Timestamptz()
+  verification_number             String?  @db.VarChar(20)
+  gross_paid                      Decimal  @db.Decimal(12, 2)
+  cost_of_materials               Decimal  @default(0) @db.Decimal(12, 2)
+  amount_deducted                 Decimal  @db.Decimal(12, 2)
+  cis_rate                        Int      @db.SmallInt
+  created_at                      DateTime @default(now()) @db.Timestamptz()
 
-  cis_return     CisReturn     @relation(fields: [cis_return_id], references: [id], onDelete: Cascade)
-  subcontractor  ClientProfile @relation("CisReturnLineSubcontractor", fields: [subcontractor_client_profile_id], references: [id], onDelete: Restrict)
+  cis_return    CisReturn     @relation(fields: [cis_return_id], references: [id], onDelete: Cascade)
+  subcontractor ClientProfile @relation("CisReturnLineSubcontractor", fields: [subcontractor_client_profile_id], references: [id], onDelete: Restrict)
 
   @@index([cis_return_id])
   @@index([subcontractor_client_profile_id])
@@ -823,9 +826,9 @@ model EscrowDispute {
   created_at           DateTime  @default(now()) @db.Timestamptz()
   updated_at           DateTime  @updatedAt @db.Timestamptz()
 
-  milestone EscrowMilestone @relation(fields: [milestone_id], references: [id], onDelete: Cascade)
-  resolver  StaffMember?    @relation("DisputeResolver", fields: [resolved_by], references: [id], onDelete: SetNull)
-  assignee  StaffMember?    @relation("DisputeAssignee", fields: [assigned_to_staff_id], references: [id], onDelete: SetNull)
+  milestone EscrowMilestone         @relation(fields: [milestone_id], references: [id], onDelete: Cascade)
+  resolver  StaffMember?            @relation("DisputeResolver", fields: [resolved_by], references: [id], onDelete: SetNull)
+  assignee  StaffMember?            @relation("DisputeAssignee", fields: [assigned_to_staff_id], references: [id], onDelete: SetNull)
   proposals EscrowDisputeProposal[]
 
   @@index([status])
@@ -1022,6 +1025,7 @@ model JobPost {
   attachments      JobAttachment[]
   referral_intents ReferralIntent[]
   saved_by         SavedJob[]
+  handoffs         JobHandoff[]
 
   @@index([employer_id])
   @@index([status, postcode_area])
@@ -1066,6 +1070,11 @@ model JobApplication {
   proposed_rate         Decimal?  @db.Decimal(8, 2)
   project_referrer_id   BigInt?
   project_referrer_role String?   @db.VarChar(10)
+  // Set when this application was created by a worker taking a JobHandoff
+  // (an explicit, targeted "I'm giving you this job" route, distinct from the
+  // anonymous ?ref= commission link). Drives the employer-visible
+  // "handed off by X" provenance. Unique: a handoff yields at most one app.
+  handoff_id            BigInt?   @unique
   responded_at          DateTime? @db.Timestamptz()
   created_at            DateTime  @default(now()) @db.Timestamptz()
   updated_at            DateTime  @updatedAt @db.Timestamptz()
@@ -1073,6 +1082,7 @@ model JobApplication {
   job_post         JobPost         @relation(fields: [job_post_id], references: [id], onDelete: Cascade)
   worker_profile   WorkerProfile   @relation(fields: [worker_id], references: [id], onDelete: Restrict)
   project_referrer ClientProfile?  @relation("ApplicationProjectReferrer", fields: [project_referrer_id], references: [id], onDelete: SetNull)
+  handoff          JobHandoff?     @relation(fields: [handoff_id], references: [id], onDelete: SetNull)
   attachments      JobAttachment[]
 
   @@unique([job_post_id, worker_id])
@@ -1080,6 +1090,53 @@ model JobApplication {
   @@index([worker_id, status])
   @@index([project_referrer_id])
   @@map("job_application")
+}
+
+// ============================================
+// 31B. JOB HANDOFF (explicit worker→worker "give this job to a mate")
+// A worker who won't take a job hands it to a SPECIFIC friend via a targeted
+// tokenised link (and optionally an in-app target worker who gets notified).
+// The recipient lands on a context page ("Mike handed you this job from
+// ACME"), claims it, and applies — at which point the resulting
+// JobApplication is stamped with `handoff_id` (employer-visible provenance)
+// and, when `earn_commission` is on, the hander is recorded as the W2W
+// project referrer so the existing commission rails pay out on hire.
+// Distinct from ReferralIntent: a handoff is a first-class, targeted,
+// employer-visible record with its own accept/decline/revoke lifecycle —
+// not an anonymous commission click.
+// ============================================
+
+model JobHandoff {
+  id              BigInt   @id @default(autoincrement())
+  job_post_id     BigInt
+  from_worker_id  BigInt
+  // Optional in-app target: a registered worker the hander picked, who gets a
+  // notification + email. NULL = open link the hander sends to anyone.
+  to_worker_id    BigInt?
+  token           String   @unique @db.VarChar(40)
+  // PENDING | VIEWED | CLAIMED | APPLIED | DECLINED | REVOKED | EXPIRED
+  status          String   @default("PENDING") @db.VarChar(20)
+  message         String?  @db.VarChar(1000)
+  // When true, the hander is recorded as the W2W project referrer on the
+  // resulting application/contract (the "optionally keeps commission" knob).
+  earn_commission Boolean  @default(true)
+  // The worker who actually claimed/took the handoff (resolves an open link).
+  claimed_by_id   BigInt?
+  expires_at      DateTime @db.Timestamptz()
+  created_at      DateTime @default(now()) @db.Timestamptz()
+  updated_at      DateTime @updatedAt @db.Timestamptz()
+
+  job_post    JobPost         @relation(fields: [job_post_id], references: [id], onDelete: Cascade)
+  from_worker WorkerProfile   @relation("HandoffFromWorker", fields: [from_worker_id], references: [id], onDelete: Cascade)
+  to_worker   WorkerProfile?  @relation("HandoffToWorker", fields: [to_worker_id], references: [id], onDelete: SetNull)
+  claimed_by  WorkerProfile?  @relation("HandoffClaimedBy", fields: [claimed_by_id], references: [id], onDelete: SetNull)
+  application JobApplication?
+
+  @@index([job_post_id])
+  @@index([from_worker_id])
+  @@index([to_worker_id, status])
+  @@index([claimed_by_id, job_post_id])
+  @@map("job_handoff")
 }
 
 // ============================================
@@ -1257,11 +1314,11 @@ model StaffRole {
   // permissions stay editable except for ADMIN which always has every perm.
   created_at  DateTime @default(now()) @db.Timestamptz()
 
-  staff_member_roles            StaffMemberRole[]
-  approval_rules_required       StaffApprovalRule[]     @relation("ApprovalRuleRequiredRole")
-  approval_condition_roles      ApprovalConditionRole[]
-  sla_rules_notify              StaffSlaRule[]
-  role_permissions              RolePermission[]
+  staff_member_roles       StaffMemberRole[]
+  approval_rules_required  StaffApprovalRule[]     @relation("ApprovalRuleRequiredRole")
+  approval_condition_roles ApprovalConditionRole[]
+  sla_rules_notify         StaffSlaRule[]
+  role_permissions         RolePermission[]
 
   @@map("staff_role")
 }
@@ -1464,9 +1521,9 @@ model StaffApprovalRule {
   created_at                DateTime @default(now()) @db.Timestamptz()
   updated_at                DateTime @updatedAt @db.Timestamptz()
 
-  target_action_type     AdminActionType @relation(fields: [target_action_type_id], references: [id], onDelete: Restrict)
-  required_approver_role StaffRole       @relation("ApprovalRuleRequiredRole", fields: [required_approver_role_id], references: [id], onDelete: Restrict)
-  created_by             StaffMember     @relation("StaffApprovalRuleCreatedBy", fields: [created_by_staff_id], references: [id], onDelete: Restrict)
+  target_action_type     AdminActionType              @relation(fields: [target_action_type_id], references: [id], onDelete: Restrict)
+  required_approver_role StaffRole                    @relation("ApprovalRuleRequiredRole", fields: [required_approver_role_id], references: [id], onDelete: Restrict)
+  created_by             StaffMember                  @relation("StaffApprovalRuleCreatedBy", fields: [created_by_staff_id], references: [id], onDelete: Restrict)
   conditions             StaffApprovalRuleCondition[]
   action_approvals       StaffActionApproval[]
 

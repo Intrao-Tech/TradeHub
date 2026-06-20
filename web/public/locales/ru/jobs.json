@@ -13,7 +13,9 @@
     "showLess": "Свернуть",
     "viewCollaboration": "Посмотреть сотрудничество",
     "workerFallback": "Работник",
-    "workSamples": "Примеры работ"
+    "workSamples": "Примеры работ",
+    "handedOff": "Передано",
+    "handedOffBy": "Передал(а) {{name}}"
   },
   "applicants": {
     "actionFailed": "Действие не выполнено.",
