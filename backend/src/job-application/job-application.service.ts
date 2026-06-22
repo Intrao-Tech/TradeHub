@@ -70,9 +70,10 @@ export class JobApplicationService {
       });
     }
 
-    // Project-ref attribution: look up the latest active intent recorded
-    // for (this worker, target_role=WORKER, target_id=jobPostId). Replaces
-    // the prior cookie-based attribution.
+    // Project-ref attribution: look up the latest active intent recorded for
+    // (this worker, target_id=jobPostId). The referrer may be a worker OR an
+    // employer who shared the job — either way, a worker applying earns the
+    // W2W commission. Replaces the prior cookie-based attribution.
     let projectReferrerId: bigint | null = null;
     let projectReferrerRole: 'WORKER' | 'EMPLOYER' | null = null;
     let referrerForNotify: {
@@ -80,12 +81,16 @@ export class JobApplicationService {
       email: string;
       display_name: string;
     } | null = null;
-    const intent = await this.referrals.findActiveIntent(
-      workerId,
-      'WORKER',
-      jobPostId,
-    );
-    if (intent && intent.referrer_id !== workerId) {
+    const intent = await this.referrals.findActiveIntent(workerId, jobPostId);
+    if (
+      intent &&
+      intent.referrer_id !== workerId &&
+      // The job's own employer cannot be the referrer — sharing your own
+      // posting to earn a referral cut on it is self-dealing. (referrer_id and
+      // employer_id are both client_profile ids, so this also covers the case
+      // where the referrer is a dual-role account that owns this job.)
+      intent.referrer_id !== jobPost.employer_id
+    ) {
       // W2W referral rewards introducing a NEW worker↔employer pairing. If
       // the worker already collaborates with this job's employer, the
       // referrer introduced nothing — skip the attribution.
@@ -136,7 +141,6 @@ export class JobApplicationService {
         {
           referrer_id: String(referrerForNotify.id),
           job_post_id: String(jobPostId),
-          target_role: 'WORKER',
         },
       );
       // Best-effort: tell the referrer that someone used their job link.
@@ -150,7 +154,6 @@ export class JobApplicationService {
             referrerForNotify.email,
             referrerForNotify.display_name,
             jobPost.title,
-            'JOB',
             applicant?.display_name ?? 'A worker',
           );
         } catch (err) {

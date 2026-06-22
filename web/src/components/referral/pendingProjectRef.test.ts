@@ -24,12 +24,10 @@ describe('pendingProjectRef storage', () => {
     savePendingProjectRef({
       code: 'BG8Y-4MES',
       target_id: 5,
-      target_role: 'WORKER',
     });
     expect(readPendingProjectRef()).toEqual({
       code: 'BG8Y-4MES',
       target_id: 5,
-      target_role: 'WORKER',
     });
   });
 
@@ -37,7 +35,6 @@ describe('pendingProjectRef storage', () => {
     savePendingProjectRef({
       code: 'ABCD-EFGH',
       target_id: 1,
-      target_role: 'EMPLOYER',
     });
     clearPendingProjectRef();
     expect(readPendingProjectRef()).toBeNull();
@@ -50,7 +47,6 @@ describe('pendingProjectRef storage', () => {
       JSON.stringify({
         code: 'OLD0-CODE',
         target_id: 2,
-        target_role: 'WORKER',
         savedAt: old,
       }),
     );
@@ -82,7 +78,6 @@ describe('replayPendingProjectRef', () => {
     savePendingProjectRef({
       code: 'BG8Y-4MES',
       target_id: 5,
-      target_role: 'WORKER',
     });
 
     await replayPendingProjectRef();
@@ -90,7 +85,6 @@ describe('replayPendingProjectRef', () => {
     expect(body).toEqual({
       code: 'BG8Y-4MES',
       target_id: 5,
-      target_role: 'WORKER',
     });
     expect(readPendingProjectRef()).toBeNull();
   });
@@ -124,7 +118,6 @@ describe('replayPendingProjectRef', () => {
     savePendingProjectRef({
       code: 'BAD0-CODE',
       target_id: 9,
-      target_role: 'WORKER',
     });
 
     await expect(replayPendingProjectRef()).resolves.toBeUndefined();

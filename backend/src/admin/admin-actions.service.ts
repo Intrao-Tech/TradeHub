@@ -598,7 +598,6 @@ export class AdminActionsService {
       'account_referral_pct',
       'account_referral_window_months',
       'project_referral_w2w_pct',
-      'project_referral_e2e_pct',
       'stripe_fee_passthrough',
     ];
     const data: Prisma.PlatformSettingUpdateInput = {};

@@ -64,7 +64,7 @@ describe('TEST-CR-110..112 useRefAttribution', () => {
     );
 
     renderHook(
-      () => useRefAttribution({ targetId: 5, targetRole: 'WORKER' }),
+      () => useRefAttribution({ targetId: 5 }),
       { wrapper: wrap('/jobs/5?ref=ABCD-EFGH') },
     );
 
@@ -73,7 +73,6 @@ describe('TEST-CR-110..112 useRefAttribution', () => {
       expect.objectContaining({
         code: 'ABCD-EFGH',
         target_id: 5,
-        target_role: 'WORKER',
       }),
     );
   });
@@ -91,7 +90,7 @@ describe('TEST-CR-110..112 useRefAttribution', () => {
     );
 
     renderHook(
-      () => useRefAttribution({ targetId: 5, targetRole: 'WORKER' }),
+      () => useRefAttribution({ targetId: 5 }),
       { wrapper: wrap('/jobs/5') },
     );
 
@@ -115,7 +114,7 @@ describe('TEST-CR-110..112 useRefAttribution', () => {
 
     expect(() =>
       renderHook(
-        () => useRefAttribution({ targetId: 5, targetRole: 'WORKER' }),
+        () => useRefAttribution({ targetId: 5 }),
         { wrapper: wrap('/jobs/5?ref=BAD-BAD0') },
       ),
     ).not.toThrow();
@@ -137,7 +136,7 @@ describe('TEST-CR-110..112 useRefAttribution', () => {
     );
 
     renderHook(
-      () => useRefAttribution({ targetId: null, targetRole: 'WORKER' }),
+      () => useRefAttribution({ targetId: null }),
       { wrapper: wrap('/jobs/5?ref=ABCD-EFGH') },
     );
 
@@ -159,7 +158,7 @@ describe('TEST-CR-110..112 useRefAttribution', () => {
     );
 
     renderHook(
-      () => useRefAttribution({ targetId: 7, targetRole: 'WORKER' }),
+      () => useRefAttribution({ targetId: 7 }),
       { wrapper: wrap('/jobs/7?ref=ABCD-EFGH') },
     );
 
@@ -173,7 +172,6 @@ describe('TEST-CR-110..112 useRefAttribution', () => {
     expect(stored).toMatchObject({
       code: 'ABCD-EFGH',
       target_id: 7,
-      target_role: 'WORKER',
     });
   });
 });

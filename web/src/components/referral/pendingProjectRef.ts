@@ -1,9 +1,9 @@
 // Bridges project-referral attribution across the auth gap.
 //
-// A logged-out visitor who opens `/jobs/:id?ref=` or `/workers/:id?ref=` has
-// no account yet, so no server-side `referral_intent` can be written (the row
-// needs an actor client_profile). We stash the click here; once the visitor
-// authenticates it is either:
+// A logged-out visitor who opens `/jobs/:id?ref=` has no account yet, so no
+// server-side `referral_intent` can be written (the row needs an actor
+// client_profile). We stash the click here; once the visitor authenticates
+// it is either:
 //   - replayed as a project intent  (existing user logs in), or
 //   - folded into `referred_by_code` (brand-new user registers → account ref).
 // No DB change is needed — the bridge is purely client-side.
@@ -17,7 +17,6 @@ const TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — matches the intent windo
 export type PendingProjectRef = {
   code: string;
   target_id: number;
-  target_role: 'WORKER' | 'EMPLOYER';
 };
 
 type Stored = PendingProjectRef & { savedAt: number };
@@ -41,7 +40,6 @@ export function readPendingProjectRef(): PendingProjectRef | null {
     if (
       typeof s.code !== 'string' ||
       typeof s.target_id !== 'number' ||
-      (s.target_role !== 'WORKER' && s.target_role !== 'EMPLOYER') ||
       typeof s.savedAt !== 'number'
     ) {
       return null;
@@ -50,7 +48,7 @@ export function readPendingProjectRef(): PendingProjectRef | null {
       clearPendingProjectRef();
       return null;
     }
-    return { code: s.code, target_id: s.target_id, target_role: s.target_role };
+    return { code: s.code, target_id: s.target_id };
   } catch {
     return null;
   }

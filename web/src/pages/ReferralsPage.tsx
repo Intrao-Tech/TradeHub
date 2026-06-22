@@ -7,7 +7,6 @@ import {
   getOwnReferralCode,
   getAccountReferralStats,
   getProjectShareStats,
-  getIncomingAttribution,
   getReferralPayments,
   type AccountReferralStats,
   type ProjectShare,
@@ -36,28 +35,22 @@ export default function ReferralsPage() {
   const [link, setLink] = useState<string | null>(null);
   const [stats, setStats] = useState<AccountReferralStats | null>(null);
   const [shares, setShares] = useState<ProjectShare | null>(null);
-  const [incoming, setIncoming] = useState<{
-    referrer: { account_id: string; display_name: string | null } | null;
-    total_paid_gbp: string;
-  } | null>(null);
   const [pending, setPending] = useState<ReferralPayment[]>([]);
   const [copied, setCopied] = useState(false);
 
   async function loadAll() {
     setError('');
     try {
-      const [c, s, p, i, pp] = await Promise.all([
+      const [c, s, p, pp] = await Promise.all([
         getOwnReferralCode(),
         getAccountReferralStats(),
         getProjectShareStats(),
-        getIncomingAttribution(),
         getReferralPayments(),
       ]);
       setCode(c.code);
       setLink(c.link);
       setStats(s);
       setShares(p);
-      setIncoming(i);
       setPending(pp);
     } catch (err) {
       const parsed = parseApiError(err);
@@ -189,7 +182,7 @@ export default function ReferralsPage() {
         </CardContent>
       </Card>
 
-      {/* 3. Job shares (W→W) — project shares from JobApplication */}
+      {/* 3. Job shares — project shares from JobApplication (worker or employer referrer) */}
       <Card>
         <CardHeader>
           <CardTitle>{t('jobSharesTitle')}</CardTitle>
@@ -218,69 +211,7 @@ export default function ReferralsPage() {
         </CardContent>
       </Card>
 
-      {/* 4. Worker shares (E→E) — project shares from Contract attribution */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('workerSharesTitle')}</CardTitle>
-          <CardDescription>{t('workerSharesDesc')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!shares?.contracts.length ? (
-            <p className="text-sm text-fg-muted">{t('noWorkerShares')}</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {shares.contracts.map((c) => (
-                <li
-                  key={c.id}
-                  className="flex flex-col gap-2 rounded-md border border-border-default bg-raised px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <span className="min-w-0 break-words">
-                    {c.collaboration.worker.client_profile.display_name} ·{' '}
-                    {c.project_type ?? t('untitled')}
-                  </span>
-                  <span className="flex flex-wrap items-center gap-2">
-                    <Badge variant="info">
-                      {t(`collaborations:contractStatus.${c.status.toLowerCase()}`, { defaultValue: c.status })}
-                    </Badge>
-                    {c.agreed_amount ? (
-                      <span className="text-fg-muted">
-                        {fmtGbp(c.agreed_amount)}
-                      </span>
-                    ) : null}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 5. Incoming attribution */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('incomingTitle')}</CardTitle>
-          <CardDescription>{t('incomingDesc')}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          {incoming?.referrer ? (
-            <>
-              <p>
-                {t('referredBy')}{' '}
-                <strong>
-                  {incoming.referrer.display_name ?? t('unknown')}
-                </strong>
-              </p>
-              <p className="text-fg-muted">
-                {t('totalFromActivity')} {fmtGbp(incoming.total_paid_gbp)}
-              </p>
-            </>
-          ) : (
-            <p className="text-fg-muted">{t('directSignup')}</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 6. Referral commission payments */}
+      {/* 4. Referral commission payments */}
       <Card>
         <CardHeader>
           <div>
@@ -299,7 +230,12 @@ export default function ReferralsPage() {
                   className="flex flex-col gap-2 rounded-md border border-border-default bg-raised px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <span className="min-w-0 break-words">
-                    {t('milestoneLine', { type: p.type, id: p.milestone_id })}
+                    {t('milestoneLine', {
+                      type: t(`commissionType.${p.type}`, {
+                        defaultValue: p.type,
+                      }),
+                      id: p.milestone_id,
+                    })}
                   </span>
                   <span className="flex flex-wrap items-center gap-2">
                     <Badge

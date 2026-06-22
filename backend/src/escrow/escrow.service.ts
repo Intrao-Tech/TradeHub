@@ -1980,7 +1980,6 @@ export class EscrowService {
         agreedAmount: milestone.amount,
         platformFee: milestone.frozen_platform_fee ?? new Prisma.Decimal(0),
         workerClientProfileId: collab.worker_id,
-        employerClientProfileId: collab.employer_id,
         projectReferrerId: contract.project_referrer_id,
         projectReferrerRole:
           (contract.project_referrer_role as 'WORKER' | 'EMPLOYER' | null) ??

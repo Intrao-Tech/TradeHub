@@ -104,7 +104,7 @@ export default function AuthJobDetailPage() {
   const navigate = useNavigate();
   const loggedIn = !!getToken();
   const { isWorker, isEmployer, clientProfile, verificationState } = useAccountMe();
-  useRefAttribution({ targetId: id ?? null, targetRole: 'WORKER' });
+  useRefAttribution({ targetId: id ?? null });
 
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [error, setError] = useState<{ status: number; message: string } | null>(null);
@@ -528,7 +528,12 @@ function ActionCard({
     },
     t,
   );
-  if (!body) return null;
+  // "Share job for commission" is open to any logged-in client — worker OR
+  // employer — who does NOT own the post. (Sharing your own posting would let
+  // the owner earn a referral cut on their own job, so owners are excluded.)
+  // Workers never own a post, so `!ownsPost` only gates employers.
+  const canShare = loggedIn && (isWorker || isEmployer) && !ownsPost;
+  if (!body && !canShare) return null;
   return (
     <Card>
       <CardContent className="space-y-3 p-5">
@@ -540,9 +545,8 @@ function ActionCard({
             variant="pill"
           />
         ) : null}
-        {loggedIn && isWorker ? (
+        {canShare ? (
           <ShareForCommissionButton
-            kind="JOB"
             targetId={jobId}
             targetTitle={jobTitle}
             className="w-full"

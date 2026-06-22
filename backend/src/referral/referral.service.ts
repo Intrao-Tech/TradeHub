@@ -12,6 +12,10 @@ import { MailService } from '../mail/mail.service';
  * Payment `type` values for referral commissions — these are the values
  * stored on `payment.type`. The release flow in EscrowService turns each
  * CommissionLine into a `payment` row of this type.
+ *
+ * REFERRAL_E2E is retained only so historical rows created before the
+ * employer-to-employer flow was removed still display and aggregate. No new
+ * REFERRAL_E2E commissions are ever created.
  */
 export type ReferralPaymentType =
   | 'REFERRAL_ACCOUNT'
@@ -23,10 +27,12 @@ type CommissionInput = {
   contractId: bigint;
   agreedAmount: Prisma.Decimal;
   platformFee: Prisma.Decimal;
-  // worker / employer of the contract — these are client_profile ids.
+  // The contract's worker (client_profile id). Account ref pays the worker
+  // side only, so the employer id is not an input.
   workerClientProfileId: bigint;
-  employerClientProfileId: bigint;
-  // Project ref attribution copied onto the Contract at hire-time.
+  // Project ref attribution copied onto the Contract at hire-time. The role is
+  // a 3-value union because historical contract rows may carry 'EMPLOYER'
+  // (legacy E2E); the W2W block only fires for 'WORKER', so legacy rows pay 0.
   projectReferrerId: bigint | null;
   projectReferrerRole: 'WORKER' | 'EMPLOYER' | null;
 };
@@ -76,6 +82,8 @@ export class ReferralService {
         ]);
         if (!referrer) return;
         // Map ledger `payment.type` -> the mail template's referral enum.
+        // PROJECT_E2E only ever maps a historical REFERRAL_E2E row; no new
+        // E2E commissions are created.
         const refType =
           type === 'REFERRAL_ACCOUNT'
             ? 'ACCOUNT'
@@ -150,27 +158,17 @@ export class ReferralService {
     };
   }
 
-  /** Project-share attributions originating from this user's link. */
+  /**
+   * Project-share attributions originating from this user's link. A share is
+   * always a job post; the referrer earns when a worker applies to it.
+   */
   async getProjectShares(clientProfileId: bigint) {
     const apps = await this.prisma.jobApplication.findMany({
       where: { project_referrer_id: clientProfileId },
       orderBy: { created_at: 'desc' },
       include: { job_post: { select: { id: true, title: true } } },
     });
-    const contracts = await this.prisma.contract.findMany({
-      where: { project_referrer_id: clientProfileId },
-      orderBy: { created_at: 'desc' },
-      include: {
-        collaboration: {
-          select: {
-            worker: {
-              include: { client_profile: { select: { display_name: true } } },
-            },
-          },
-        },
-      },
-    });
-    return { applications: apps, contracts };
+    return { applications: apps };
   }
 
   async getIncomingAttribution(clientProfileId: bigint) {
@@ -215,9 +213,11 @@ export class ReferralService {
    *
    * Commission sources can stack:
    *  - account ref on the worker   — paid only on the worker's FIRST REVENUE
-   *    contract (first contract with a released milestone), every milestone
-   *  - account ref on the employer — same rule, evaluated for the employer
-   *  - project ref on the contract — W2W only (E2E is disabled for now)
+   *    contract (first contract with a released milestone), every milestone.
+   *    Account referral pays out ONLY when the referred signup is a worker;
+   *    an employer signup never triggers an account commission.
+   *  - project ref on the contract — paid when a WORKER applies to the shared
+   *    job, regardless of whether the referrer is a worker or an employer.
    */
   async computeMilestoneCommissions(
     input: CommissionInput,
@@ -260,7 +260,9 @@ export class ReferralService {
       return firstRevenueContractId === input.contractId;
     };
 
-    // Account ref for the worker — first contract only.
+    // Account ref pays out ONLY when the referred signup is a worker, on that
+    // worker's first revenue contract. Employer signups never pay an account
+    // commission, so the employer's referred_by_id is intentionally ignored.
     const worker = await this.prisma.clientProfile.findUnique({
       where: { id: input.workerClientProfileId },
       select: { referred_by_id: true },
@@ -278,26 +280,9 @@ export class ReferralService {
       });
     }
 
-    // Account ref for the employer — first contract only.
-    const employer = await this.prisma.clientProfile.findUnique({
-      where: { id: input.employerClientProfileId },
-      select: { referred_by_id: true },
-    });
-    if (
-      employer?.referred_by_id &&
-      (await isFirstRevenueContract(input.employerClientProfileId))
-    ) {
-      lines.push({
-        referrerClientProfileId: employer.referred_by_id,
-        type: 'REFERRAL_ACCOUNT',
-        grossAmount: input.platformFee
-          .mul(setting.account_referral_pct)
-          .div(100),
-      });
-    }
-
-    // Project ref — W2W only. The W→W referrer is paid on every milestone of
-    // every contract tied to the referred job post. E2E is disabled for now.
+    // Project ref — the job-share referrer (worker OR employer) is paid on
+    // every milestone of every contract tied to the referred job post. The
+    // commission only fires when a WORKER applied to that job.
     if (input.projectReferrerId && input.projectReferrerRole === 'WORKER') {
       lines.push({
         referrerClientProfileId: input.projectReferrerId,
@@ -340,7 +325,6 @@ export class ReferralService {
     code: string;
     actor_client_profile_id: bigint;
     target_id: bigint;
-    target_role: 'WORKER' | 'EMPLOYER';
   }) {
     const referrer = await this.lookupReferrerByCode(input.code);
     if (!referrer) {
@@ -350,22 +334,14 @@ export class ReferralService {
       return { referrer_display_name: null, recorded: false };
     }
 
-    let targetTitle = '';
-    if (input.target_role === 'WORKER') {
-      const jp = await this.prisma.jobPost.findUnique({
-        where: { id: input.target_id },
-        select: { id: true, title: true },
-      });
-      if (!jp) throw new BadRequestException('Job not found');
-      targetTitle = jp.title;
-    } else {
-      const wp = await this.prisma.workerProfile.findUnique({
-        where: { id: input.target_id },
-        include: { client_profile: { select: { display_name: true } } },
-      });
-      if (!wp) throw new BadRequestException('Worker not found');
-      targetTitle = wp.client_profile?.display_name ?? 'Worker';
-    }
+    // A project intent is always a job-post share. The referrer may be a
+    // worker or an employer; the commission only fires when a WORKER applies
+    // to this job (see computeMilestoneCommissions).
+    const jp = await this.prisma.jobPost.findUnique({
+      where: { id: input.target_id },
+      select: { id: true, title: true },
+    });
+    if (!jp) throw new BadRequestException('Job not found');
 
     // 30-day intent window.
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -373,10 +349,7 @@ export class ReferralService {
       data: {
         actor_id: input.actor_client_profile_id,
         referrer_id: referrer.id,
-        target_job_post_id:
-          input.target_role === 'WORKER' ? input.target_id : null,
-        target_worker_id:
-          input.target_role === 'EMPLOYER' ? input.target_id : null,
+        target_job_post_id: input.target_id,
         expires_at: expiresAt,
       },
     });
@@ -384,9 +357,9 @@ export class ReferralService {
     return {
       referrer_display_name: referrer.display_name,
       target: {
-        type: input.target_role === 'WORKER' ? 'JOB' : 'WORKER',
+        type: 'JOB',
         id: String(input.target_id),
-        title: targetTitle,
+        title: jp.title,
       },
       recorded: true,
     };
@@ -400,15 +373,12 @@ export class ReferralService {
    */
   async findActiveIntent(
     actorClientProfileId: bigint,
-    targetRole: 'WORKER' | 'EMPLOYER',
-    targetId: bigint,
+    jobPostId: bigint,
   ): Promise<{ referrer_id: bigint } | null> {
     const intent = await this.prisma.referralIntent.findFirst({
       where: {
         actor_id: actorClientProfileId,
-        ...(targetRole === 'WORKER'
-          ? { target_job_post_id: targetId }
-          : { target_worker_id: targetId }),
+        target_job_post_id: jobPostId,
         expires_at: { gt: new Date() },
       },
       orderBy: { created_at: 'desc' },

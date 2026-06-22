@@ -46,7 +46,7 @@ describe('TEST-CR-060..066 Referral attribution e2e', () => {
     expect(res.headers.location ?? '').not.toContain('ref=');
   });
 
-  test('TEST-CR-062 (CR-035) — POST /referral/intent rejects an unknown target', async () => {
+  test('TEST-CR-062 (CR-035) — POST /referral/intent rejects an unknown target job', async () => {
     const referrer = await seedActiveWorker(h.prisma);
     const actor = await seedActiveWorker(h.prisma);
     const code = (
@@ -62,21 +62,7 @@ describe('TEST-CR-060..066 Referral attribution e2e', () => {
       .request()
       .post('/api/referral/intent')
       .set(...bearer(token))
-      .send({ code, target_id: 999999, target_role: 'WORKER' })
-      .expect(400);
-  });
-
-  test('TEST-CR-062 (CR-035) — POST /referral/intent bad role → 400', async () => {
-    const actor = await seedActiveWorker(h.prisma);
-    const token = signAccessTokenFor(h, {
-      accountId: actor.id,
-      email: actor.email,
-    });
-    await h
-      .request()
-      .post('/api/referral/intent')
-      .set(...bearer(token))
-      .send({ code: 'AAAA-AAAA', target_id: 1, target_role: 'INVALID' })
+      .send({ code, target_id: 999999 })
       .expect(400);
   });
 
@@ -85,7 +71,7 @@ describe('TEST-CR-060..066 Referral attribution e2e', () => {
     await h
       .request()
       .post('/api/referral/intent')
-      .send({ code: 'AAAA-AAAA', target_id: 1, target_role: 'WORKER' })
+      .send({ code: 'AAAA-AAAA', target_id: 1 })
       .expect(401);
   });
 
@@ -108,7 +94,7 @@ describe('TEST-CR-060..066 Referral attribution e2e', () => {
       .request()
       .post('/api/referral/intent')
       .set(...bearer(token))
-      .send({ code, target_id: Number(job.id), target_role: 'WORKER' })
+      .send({ code, target_id: Number(job.id) })
       .expect(201);
     expect(res.body.recorded).toBe(true);
     expect(res.body.referrer_display_name).toBeTruthy();

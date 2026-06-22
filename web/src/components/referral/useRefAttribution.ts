@@ -6,8 +6,8 @@ import { toast } from '@/components/ui/toast';
 import { savePendingProjectRef } from './pendingProjectRef';
 
 /**
- * On mount, if `?ref=CODE` is present in the URL on `/jobs/:id` or
- * `/workers/:id`, attribute the project referral and strip the param.
+ * On mount, if `?ref=CODE` is present in the URL on `/jobs/:id`, attribute
+ * the project (job-share) referral and strip the param.
  *
  * - Logged in  → record the project intent server-side immediately.
  * - Logged out → stash the click (pendingProjectRef); it is materialised
@@ -17,7 +17,6 @@ import { savePendingProjectRef } from './pendingProjectRef';
  */
 export function useRefAttribution(opts: {
   targetId: string | number | null | undefined;
-  targetRole: 'WORKER' | 'EMPLOYER';
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -37,7 +36,6 @@ export function useRefAttribution(opts: {
       savePendingProjectRef({
         code: ref.toUpperCase(),
         target_id: Number(opts.targetId),
-        target_role: opts.targetRole,
       });
       stripParam();
       return;
@@ -47,7 +45,6 @@ export function useRefAttribution(opts: {
     void recordProjectIntent({
       code: ref.toUpperCase(),
       target_id: Number(opts.targetId),
-      target_role: opts.targetRole,
     })
       .then((r) => {
         if (cancelled) return;
@@ -64,5 +61,5 @@ export function useRefAttribution(opts: {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opts.targetId, opts.targetRole]);
+  }, [opts.targetId]);
 }

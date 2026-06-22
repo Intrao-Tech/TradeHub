@@ -59,3 +59,12 @@ page_*.png
 
 # Local dev / planning notes (not for the repo)
 .dev-notes/
+
+# Local generated artifacts from dev/analysis sessions — keep locally, never
+# commit. Schema source-of-truth is the Prisma migrations; the *.pdf rule above
+# already covers tradehub-pds.pdf.
+/current-schema.sql
+/tradehub-pds.html
+
+# TypeScript incremental build cache (emitted by `tsc --build`)
+*.tsbuildinfo

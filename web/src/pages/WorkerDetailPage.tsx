@@ -21,8 +21,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ShareForCommissionButton } from '@/components/referral/ShareForCommissionButton';
-import { useRefAttribution } from '@/components/referral/useRefAttribution';
 import { useAccountMe } from '@/hooks/useAccountMe';
 import { InviteToJobButton } from '@/components/workers/InviteToJobButton';
 import { SaveWorkerButton } from '@/components/workers/SaveWorkerButton';
@@ -92,7 +90,6 @@ export default function WorkerDetailPage() {
   const { t } = useTranslation('workers');
   const { id } = useParams<{ id: string }>();
   const { isEmployer } = useAccountMe();
-  useRefAttribution({ targetId: id ?? null, targetRole: 'EMPLOYER' });
   const [worker, setWorker] = useState<WorkerDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -199,11 +196,6 @@ export default function WorkerDetailPage() {
               initialSaved={!!worker.is_saved}
               variant="pill"
               className="w-auto"
-            />
-            <ShareForCommissionButton
-              kind="WORKER"
-              targetId={id}
-              targetTitle={displayName}
             />
             <InviteToJobButton workerId={id} workerName={displayName} />
           </div>
