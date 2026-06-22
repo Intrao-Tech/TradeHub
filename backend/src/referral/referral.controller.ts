@@ -52,10 +52,10 @@ export class ReferralController {
   }
 
   /**
-   * Called by frontend on `/jobs/:id?ref=` and `/workers/:id?ref=` page
-   * mounts to record server-side click intent. Auth-required: anonymous
-   * traffic is ignored on these pages (anonymous users hit `/r/:code`
-   * for the account-ref flow instead).
+   * Called by frontend on `/jobs/:id?ref=` page mount to record server-side
+   * click intent for a job share. Auth-required: anonymous traffic is ignored
+   * on these pages (anonymous users hit `/r/:code` for the account-ref flow
+   * instead).
    */
   @Post('referral/intent')
   @UseGuards(JwtAuthGuard)
@@ -67,7 +67,6 @@ export class ReferralController {
       code: dto.code.toUpperCase(),
       actor_client_profile_id: user.accountId,
       target_id: BigInt(dto.target_id),
-      target_role: dto.target_role,
     });
   }
 

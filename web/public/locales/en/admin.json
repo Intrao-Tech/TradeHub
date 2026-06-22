@@ -339,8 +339,6 @@
     "accountWindowHint": "How long the referrer keeps earning from the referree's contracts after signup. Default 12 months.",
     "clientFee": "Client marketplace fee %",
     "clientFeeHint": "Charged to employer on top of agreed amount (Upwork pattern). Default 5%.",
-    "e2eRef": "Project referral E→E % (of agreed)",
-    "e2eRefHint": "Employer shares a worker profile → another employer hires the same worker. Default 2%.",
     "feesDesc": "These percentages drive escrow fee math. Changes apply to NEW milestone funding only — in-flight contracts use the snapshot frozen at first-fund. Audit-logged.",
     "feesTitle": "Platform fees",
     "freelancerFee": "Freelancer service fee %",
@@ -360,8 +358,8 @@
     "saved": "Settings saved.",
     "saveFailed": "Save failed",
     "saving": "Saving…",
-    "w2wRef": "Project referral W→W % (of agreed)",
-    "w2wRefHint": "Worker shares a job link → another worker wins. Default 2%."
+    "w2wRef": "Job-share referral % (of agreed)",
+    "w2wRefHint": "A worker or employer shares a job link → a worker applies and is hired. Default 2%."
   },
   "sla": {
     "adminOnlyNote": " Only admins can create or deactivate rules.",

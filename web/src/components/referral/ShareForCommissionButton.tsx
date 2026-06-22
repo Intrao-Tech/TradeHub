@@ -13,15 +13,11 @@ import {
 } from '@/components/ui/dialog';
 import { getOwnReferralCode } from '@/components/escrow';
 
-type Kind = 'JOB' | 'WORKER';
-
 export function ShareForCommissionButton({
-  kind,
   targetId,
   targetTitle,
   className,
 }: {
-  kind: Kind;
   targetId: string | number;
   targetTitle?: string | null;
   className?: string;
@@ -38,9 +34,7 @@ export function ShareForCommissionButton({
 
   const base =
     typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-  const path =
-    kind === 'JOB' ? `/jobs/${targetId}` : `/workers/${targetId}`;
-  const link = code ? `${base}${path}?ref=${code}` : '';
+  const link = code ? `${base}/jobs/${targetId}?ref=${code}` : '';
 
   async function copyLink() {
     if (!link) return;
@@ -49,8 +43,8 @@ export function ShareForCommissionButton({
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const label = kind === 'JOB' ? t('share.jobLabel') : t('share.workerLabel');
-  const description = kind === 'JOB' ? t('share.jobDesc') : t('share.workerDesc');
+  const label = t('share.jobLabel');
+  const description = t('share.jobDesc');
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

@@ -116,9 +116,7 @@
   },
   "share": {
     "jobLabel": "Share for commission",
-    "workerLabel": "Share with another employer",
-    "jobDesc": "Send this link to a worker. If they apply and get hired, you earn the W→W referral % of the agreed amount, paid from platform fee.",
-    "workerDesc": "Send this link to another employer. If they hire this same worker, you earn the E→E referral % of the agreed amount, paid from platform fee.",
+    "jobDesc": "Send this link. If a worker applies and gets hired, you earn the referral % of the agreed amount, paid from platform fee.",
     "sharingPre": "Sharing: ",
     "loadingLink": "Loading link…",
     "copied": "Copied",

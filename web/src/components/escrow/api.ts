@@ -504,6 +504,7 @@ export type PlatformSettings = {
   account_referral_pct: string;
   account_referral_window_months: number | null;
   project_referral_w2w_pct: string;
+  /** @deprecated employer-to-employer referrals were removed; column retained for historical rows only. */
   project_referral_e2e_pct: string;
   stripe_fee_passthrough: 'EMPLOYER_PAYS' | 'PLATFORM_ABSORBS' | 'WORKER_ABSORBS';
   updated_at?: string;
@@ -521,7 +522,6 @@ export function updatePlatformSettings(
     account_referral_pct: number;
     account_referral_window_months: number | null;
     project_referral_w2w_pct: number;
-    project_referral_e2e_pct: number;
     stripe_fee_passthrough: 'EMPLOYER_PAYS' | 'PLATFORM_ABSORBS' | 'WORKER_ABSORBS';
   }>,
 ) {
@@ -653,13 +653,6 @@ export type ProjectShare = {
     status: string;
     created_at: string;
   }>;
-  contracts: Array<{
-    id: string;
-    status: string;
-    agreed_amount: string | null;
-    project_type: string | null;
-    collaboration: { worker: { client_profile: { display_name: string } } };
-  }>;
 };
 
 export function getOwnReferralCode() {
@@ -712,11 +705,10 @@ export function getReferralPayments() {
 export function recordProjectIntent(body: {
   code: string;
   target_id: number;
-  target_role: 'WORKER' | 'EMPLOYER';
 }) {
   return api<{
     referrer_display_name: string | null;
-    target?: { type: 'JOB' | 'WORKER'; id: string; title: string };
+    target?: { type: 'JOB'; id: string; title: string };
     recorded: boolean;
   }>('/referral/intent', {
     method: 'POST',

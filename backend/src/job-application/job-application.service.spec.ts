@@ -18,6 +18,7 @@ import { PrismaService } from '../prisma/prisma.service';
 function build(): {
   service: JobApplicationService;
   prisma: DeepMockProxy<PrismaService>;
+  referrals: { findActiveIntent: jest.Mock };
 } {
   const prisma = mockDeep<PrismaService>();
   // Stub MailService + AuditService — these are fire-and-forget side
@@ -30,7 +31,7 @@ function build(): {
   } as unknown as ConstructorParameters<typeof JobApplicationService>[2];
   const referrals = {
     findActiveIntent: jest.fn().mockResolvedValue(null),
-  } as unknown as ConstructorParameters<typeof JobApplicationService>[3];
+  };
   const conversations = {
     ensureCollaborationConversation: jest.fn().mockResolvedValue(null),
     announceConversationCreated: jest.fn(),
@@ -40,10 +41,12 @@ function build(): {
     prisma,
     mail,
     audit,
-    referrals,
+    referrals as unknown as ConstructorParameters<
+      typeof JobApplicationService
+    >[3],
     conversations,
   );
-  return { service, prisma };
+  return { service, prisma, referrals };
 }
 
 const JOB_ID = 100n;
@@ -78,6 +81,72 @@ describe('TEST-JOBS-020 JobApplicationService.apply() — JOBS-012 / BE-JOBS-2 /
     expect(args.data.worker_id).toBe(WORKER_ID);
     expect(args.data.initiated_by).toBe('WORKER');
     expect(args.data.cover_message).toBe('Hi');
+  });
+
+  test('CR — employer (non-owner) shared the job → worker applies → W2W attribution recorded', async () => {
+    // The job-share referrer may be an employer; a worker applying still earns
+    // the W2W commission (project_referrer_role is the WORKER application
+    // context, not the referrer's role).
+    const REFERRER_EMPLOYER_ID = 555n;
+    const { service, prisma, referrals } = build();
+    prisma.jobPost.findUnique.mockResolvedValueOnce({
+      id: JOB_ID,
+      status: 'OPEN',
+      employer_id: EMPLOYER_ID,
+    } as never);
+    prisma.jobApplication.findUnique.mockResolvedValueOnce(null as never);
+    referrals.findActiveIntent.mockResolvedValueOnce({
+      referrer_id: REFERRER_EMPLOYER_ID,
+    });
+    // No prior worker↔employer collaboration → the referrer introduced a new
+    // pairing, so the attribution stands.
+    prisma.collaboration.findFirst.mockResolvedValueOnce(null as never);
+    prisma.account.findUnique.mockResolvedValueOnce({
+      id: REFERRER_EMPLOYER_ID,
+      email: 'ref@x.test',
+      client_profile: { display_name: 'Ref Co' },
+    } as never);
+    prisma.jobApplication.create.mockResolvedValueOnce({
+      id: 1n,
+      status: 'PENDING',
+    } as never);
+
+    await service.apply(JOB_ID, WORKER_ID, {});
+
+    const args = prisma.jobApplication.create.mock.calls[0][0] as {
+      data: Record<string, unknown>;
+    };
+    expect(args.data.project_referrer_id).toBe(REFERRER_EMPLOYER_ID);
+    expect(args.data.project_referrer_role).toBe('WORKER');
+  });
+
+  test('CR — job owner self-refers (referrer === job employer) → NO attribution', async () => {
+    // A dual-role account that owns the job cannot earn a referral cut on its
+    // own posting, even with a hand-built ?ref= link.
+    const { service, prisma, referrals } = build();
+    prisma.jobPost.findUnique.mockResolvedValueOnce({
+      id: JOB_ID,
+      status: 'OPEN',
+      employer_id: EMPLOYER_ID,
+    } as never);
+    prisma.jobApplication.findUnique.mockResolvedValueOnce(null as never);
+    referrals.findActiveIntent.mockResolvedValueOnce({
+      referrer_id: EMPLOYER_ID, // the job's own employer
+    });
+    prisma.jobApplication.create.mockResolvedValueOnce({
+      id: 1n,
+      status: 'PENDING',
+    } as never);
+
+    await service.apply(JOB_ID, WORKER_ID, {});
+
+    const args = prisma.jobApplication.create.mock.calls[0][0] as {
+      data: Record<string, unknown>;
+    };
+    expect(args.data.project_referrer_id).toBeNull();
+    expect(args.data.project_referrer_role).toBeNull();
+    // The self-referral guard short-circuits before the prior-collab lookup.
+    expect(prisma.collaboration.findFirst).not.toHaveBeenCalled();
   });
 
   test('BE-JOBS-3 / JOBS-013 — apply on CLOSED post → 400 with code JOB_CLOSED', async () => {

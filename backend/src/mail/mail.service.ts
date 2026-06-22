@@ -497,10 +497,10 @@ export class MailService implements OnModuleInit {
     to: string,
     referrerDisplayName: string,
     targetTitle: string,
-    targetKind: 'JOB' | 'WORKER',
     actorDisplayName: string,
   ): Promise<void> {
-    const noun = targetKind === 'JOB' ? 'job link' : 'worker link';
+    // A project referral is always a job share — see ReferralService.
+    const noun = 'job link';
     const subject = `Your ${noun} was used by ${actorDisplayName}`;
     const html = `
       <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto;">

@@ -89,9 +89,9 @@ export class ContractService {
       ? CONTRACT_STATUS.PROPOSED
       : CONTRACT_STATUS.DRAFT;
 
-    // Project-ref attribution. E2E (employer-to-employer) is disabled for now
-    // — project referrals pay out for the W2W flow only. The W→W referrer is
-    // backfilled below from the matching JobApplication.
+    // Project-ref attribution. Project referrals pay out for the job-share
+    // (W2W) flow only — the referrer is backfilled below from the matching
+    // JobApplication captured when the worker applied.
     let projectReferrerId: bigint | null = null;
     let projectReferrerRole: 'WORKER' | 'EMPLOYER' | null = null;
     let referrerForNotify: {
@@ -103,7 +103,7 @@ export class ContractService {
     // W→W project ref backfill: when contract is created from a JobPost the
     // worker applied to, copy any project_referrer_id captured on the matching
     // JobApplication. Otherwise the chain (link click → application → hire →
-    // commission) is broken at the hire step. E→E intent above takes priority.
+    // commission) is broken at the hire step.
     if (!projectReferrerId && dto.job_post_id) {
       const app = await this.prisma.jobApplication.findUnique({
         where: {
@@ -188,7 +188,6 @@ export class ContractService {
           referrerForNotify.email,
           referrerForNotify.display_name,
           workerName,
-          projectReferrerRole === 'WORKER' ? 'JOB' : 'WORKER',
           actorName,
         )
         .catch(() => undefined);

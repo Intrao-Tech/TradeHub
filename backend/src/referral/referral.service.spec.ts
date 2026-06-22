@@ -2,18 +2,18 @@
 // Pure-logic tests with deep-mocked Prisma; no DB, no Stripe calls.
 //
 // Rules under test:
-//  - account ref pays out on the referred user's FIRST REVENUE contract —
-//    the first contract on which a milestone was actually released (money
-//    moved + commission computed). There is no time window. It then pays on
-//    every milestone of that contract. Worker and employer sides are
-//    evaluated independently.
+//  - account ref pays out ONLY when the referred signup is a worker, on that
+//    worker's FIRST REVENUE contract — the first contract on which a milestone
+//    was actually released (money moved + commission computed). There is no
+//    time window. It then pays on every milestone of that contract. An
+//    employer's referred_by_id never produces a commission line.
 //  - "first revenue contract" is resolved from escrow_milestone: the contract
 //    of the earliest RELEASED milestone under any of the user's
 //    collaborations. No prior release anywhere → the current contract IS the
 //    first revenue contract (so the very first release on a fresh contract
 //    still pays).
-//  - project ref is W2W only — E2E is disabled, so an EMPLOYER project ref
-//    produces no commission line.
+//  - project ref is W2W only — an EMPLOYER-role project ref produces no
+//    commission line (the employer-to-employer flow was removed).
 //  - the sum of all lines is capped at the milestone's platform_fee.
 
 import { mockDeep, type DeepMockProxy } from 'jest-mock-extended';
@@ -53,7 +53,6 @@ const DEFAULT_SETTING = {
 };
 
 const WORKER_ACC = 100n;
-const EMPLOYER_ACC = 200n;
 const REFERRER_W = 300n;
 const REFERRER_E = 400n;
 const PROJECT_REF = 500n;
@@ -66,7 +65,6 @@ const baseInput = {
   agreedAmount: D('1000'),
   platformFee: D('50'),
   workerClientProfileId: WORKER_ACC,
-  employerClientProfileId: EMPLOYER_ACC,
   projectReferrerId: null as bigint | null,
   projectReferrerRole: null as 'WORKER' | 'EMPLOYER' | null,
 };
@@ -105,23 +103,23 @@ describe('TEST-CR-010..021 ReferralService.computeMilestoneCommissions', () => {
     expect(lines[0].cappedAmount.toString()).toBe('5');
   });
 
-  test('TEST-CR-012 — employer account ref on the FIRST REVENUE contract → 1 ACCOUNT line', async () => {
+  test('TEST-CR-012 — employer account ref → no line (account ref pays workers only)', async () => {
     const { service, prisma } = build();
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
     );
+    // Worker has no referrer; only the employer was referred. The employer's
+    // referred_by_id must NOT produce a commission.
     prisma.clientProfile.findUnique
       .mockResolvedValueOnce({ referred_by_id: null } as never)
       .mockResolvedValueOnce({ referred_by_id: REFERRER_E } as never);
     prisma.escrowMilestone.findFirst.mockResolvedValue(null as never);
 
     const lines = await service.computeMilestoneCommissions({ ...baseInput });
-    expect(lines).toHaveLength(1);
-    expect(lines[0].referrerClientProfileId).toBe(REFERRER_E);
-    expect(lines[0].type).toBe('REFERRAL_ACCOUNT');
+    expect(lines).toEqual([]);
   });
 
-  test('TEST-CR-013 — both account refs, both on the first revenue contract → 2 ACCOUNT lines', async () => {
+  test('TEST-CR-013 — both worker AND employer referred → only the worker account ref pays (1 line)', async () => {
     const { service, prisma } = build();
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
@@ -132,11 +130,9 @@ describe('TEST-CR-010..021 ReferralService.computeMilestoneCommissions', () => {
     prisma.escrowMilestone.findFirst.mockResolvedValue(null as never);
 
     const lines = await service.computeMilestoneCommissions({ ...baseInput });
-    expect(lines).toHaveLength(2);
-    expect(lines.map((l) => l.referrerClientProfileId).sort()).toEqual(
-      [REFERRER_W, REFERRER_E].sort(),
-    );
-    expect(lines.every((l) => l.type === 'REFERRAL_ACCOUNT')).toBe(true);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].referrerClientProfileId).toBe(REFERRER_W);
+    expect(lines[0].type).toBe('REFERRAL_ACCOUNT');
   });
 
   test('TEST-CR-014 — project ref WORKER → 1 REFERRAL_W2W line', async () => {
@@ -176,7 +172,7 @@ describe('TEST-CR-010..021 ReferralService.computeMilestoneCommissions', () => {
     expect(lines).toEqual([]);
   });
 
-  test('TEST-CR-016 — full stack (worker acc + employer acc + project W2W) on first revenue contract → 3 lines, uncapped', async () => {
+  test('TEST-CR-016 — full stack (worker acc + project W2W) on first revenue contract → 2 lines, uncapped', async () => {
     const { service, prisma } = build();
     prisma.platformSetting.findUnique.mockResolvedValueOnce(
       DEFAULT_SETTING as never,
@@ -191,9 +187,10 @@ describe('TEST-CR-010..021 ReferralService.computeMilestoneCommissions', () => {
       projectReferrerId: PROJECT_REF,
       projectReferrerRole: 'WORKER',
     });
-    expect(lines).toHaveLength(3);
+    // Employer account ref no longer pays → worker acc (5) + W2W (20) only.
+    expect(lines).toHaveLength(2);
     const total = lines.reduce((s, l) => s.add(l.cappedAmount), D(0));
-    expect(total.toString()).toBe('30'); // 5 + 5 + 20, < 50 → no cap
+    expect(total.toString()).toBe('25'); // 5 + 20, < 50 → no cap
     for (const l of lines) {
       expect(l.cappedAmount.toString()).toBe(l.grossAmount.toString());
     }
@@ -204,6 +201,7 @@ describe('TEST-CR-010..021 ReferralService.computeMilestoneCommissions', () => {
     prisma.platformSetting.findUnique.mockResolvedValueOnce({
       ...DEFAULT_SETTING,
       account_referral_pct: D('80'),
+      project_referral_w2w_pct: D('5'),
     } as never);
     prisma.clientProfile.findUnique
       .mockResolvedValueOnce({ referred_by_id: REFERRER_W } as never)
@@ -215,8 +213,9 @@ describe('TEST-CR-010..021 ReferralService.computeMilestoneCommissions', () => {
       projectReferrerId: PROJECT_REF,
       projectReferrerRole: 'WORKER',
     });
-    // gross 40 + 40 + 20 = 100 → factor 50/100 → capped total ≤ 50
-    expect(lines).toHaveLength(3);
+    // gross: worker acc 50*80/100 = 40, W2W 1000*5/100 = 50 → 90 > 50 →
+    // factor 50/90 → capped total ≤ 50.
+    expect(lines).toHaveLength(2);
     const total = lines.reduce((s, l) => s.add(l.cappedAmount), D(0));
     expect(total.toNumber()).toBeLessThanOrEqual(50);
   });

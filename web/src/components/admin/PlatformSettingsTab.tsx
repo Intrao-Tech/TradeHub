@@ -30,7 +30,6 @@ export function PlatformSettingsTab() {
   const [windowMonths, setWindowMonths] = useState<string>('');
   const [lifetimeWindow, setLifetimeWindow] = useState(false);
   const [w2wPct, setW2wPct] = useState('');
-  const [e2ePct, setE2ePct] = useState('');
   const [passthrough, setPassthrough] = useState<
     'EMPLOYER_PAYS' | 'PLATFORM_ABSORBS' | 'WORKER_ABSORBS'
   >('EMPLOYER_PAYS');
@@ -51,7 +50,6 @@ export function PlatformSettingsTab() {
         setWindowMonths(String(res.account_referral_window_months));
       }
       setW2wPct(res.project_referral_w2w_pct);
-      setE2ePct(res.project_referral_e2e_pct);
       setPassthrough(res.stripe_fee_passthrough);
     } catch (err) {
       setError(parseApiError(err)?.message ?? t('settings.loadError'));
@@ -76,7 +74,6 @@ export function PlatformSettingsTab() {
           ? null
           : Number(windowMonths),
         project_referral_w2w_pct: Number(w2wPct),
-        project_referral_e2e_pct: Number(e2ePct),
         stripe_fee_passthrough: passthrough,
       });
       setSettings(res);
@@ -222,20 +219,6 @@ export function PlatformSettingsTab() {
                 disabled={saving}
               />
               <p className="text-xs text-fg-muted">{t('settings.w2wRefHint')}</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="e2e-ref">{t('settings.e2eRef')}</Label>
-              <Input
-                id="e2e-ref"
-                type="number"
-                step="0.1"
-                min="0"
-                max="100"
-                value={e2ePct}
-                onChange={(e) => setE2ePct(e.target.value)}
-                disabled={saving}
-              />
-              <p className="text-xs text-fg-muted">{t('settings.e2eRefHint')}</p>
             </div>
           </div>
         </CardContent>
